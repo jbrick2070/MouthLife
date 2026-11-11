@@ -1,3 +1,4 @@
+import { getWorldDentalLesson } from '../config/dentalChart';
 import { GUM_TENDER_THRESHOLD, SURGE_MAX } from '../config/gameConfig';
 import { findNearestZipMouth, sampleTerrainHeight } from '../engine/physics/CollisionSystem';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
@@ -949,6 +950,8 @@ export class TelemetryHudOverlay implements OverlayView {
         ? 'Scramble: clean the pulp chamber to 85% before the clock hits zero — time-out only applies a gentle Calcium-Hydroxide stabilization, never permadeath.'
         : this.session.cartridge.challengeBlurb ??
           'Scrub enamel to 100%, restore every Commensal Site, and seal each district in fluorapatite.';
+    const dentalLesson = getWorldDentalLesson(this.session.cartridge.id, this.mode);
+    const escTxt = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const muted = a.isMuted();
     const reduced = a.isReducedMotion();
     const steer = this.input.isPointerSteerEnabled();
@@ -962,7 +965,11 @@ export class TelemetryHudOverlay implements OverlayView {
           <h3 id="pause-sheet-title" style="margin:0;font-size:1rem;">⏸ Paused</h3>
           <button type="button" id="btn-pause-resume-x" class="btn btn-sm btn-icon" aria-label="Resume Game">✕</button>
         </div>
-        <p id="pause-tip" style="margin:0 0 10px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.4;">🎯 ${tip.replace(/</g, '&lt;')}</p>
+        <p id="pause-tip" style="margin:0 0 8px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.4;">🎯 ${escTxt(tip)}</p>
+        <div id="pause-dental-lesson" style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.28);border-radius:10px;padding:7px 10px;margin-bottom:10px;">
+          <div style="font-size:0.69rem;font-weight:700;color:#5eead4;">🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</div>
+          <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;margin-top:2px;">${escTxt(dentalLesson.lesson)}</div>
+        </div>
         <div class="audio-block">
           <div class="row-between" style="margin-bottom:6px;">
             <span style="font-size:0.78rem;color:#e0f2fe;">Audio</span>

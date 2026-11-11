@@ -141,6 +141,10 @@ function bootstrapMouthLife(): void {
       return true;
     }
 
+    if (currentMode === 'HUB') {
+      activeHub?.notifyToothTouched(hit.toothIndex);
+    }
+
     const save = saveSys.getSave();
     const smoothness = currentMode === 'REPORT' ? 98 : save.companion.smoothnessIndex;
     const fb = touch.registerTouch(
@@ -554,6 +558,7 @@ function bootstrapMouthLife(): void {
           switchMode('COSMIC_INTRO');
         },
         onPlaySparkleSfx: () => sound.playSmoothBaskSparkle(),
+        onPlayToothChime: (step) => sound.playGlassHarpNote(step),
         onPlayTreatSfx: () => sound.playTreatSnack(),
         onTreatSplat: () => splatRegionalTreatOnTeeth(),
         getSplatCount: () => touch.activeSplatCount,

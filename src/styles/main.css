@@ -101,6 +101,7 @@ body {
   font-family: inherit;
   font-size: 0.84rem;
   font-weight: 600;
+  text-decoration: none;
   min-width: 40px;
   min-height: 40px;
   padding: 9px 14px;
@@ -114,6 +115,8 @@ body {
 }
 
 .btn:focus-visible,
+a:focus-visible,
+.tooth-cell:focus-visible,
 .seg-tab:focus-visible,
 .city-pill:focus-visible,
 .mohs-item:focus-visible,
@@ -346,6 +349,8 @@ textarea:focus-visible {
 .cosmic-card {
   max-width: 640px;
   width: 100%;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
   margin: 0 auto;
   padding: 14px 16px;
 }
@@ -865,5 +870,172 @@ textarea:focus-visible {
 @media (max-width: 520px) {
   #btn-hud-steer {
     display: none;
+  }
+}
+
+/* ---- SmileOnU Humanitarian Dental Charity Integration ---- */
+.btn-charity-pill {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(56, 36, 12, 0.68);
+  color: #fef3c7;
+}
+
+.btn-charity-pill:hover {
+  border-color: #fde68a;
+  background: rgba(92, 56, 14, 0.84);
+}
+
+.charity-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.charity-cta-strip {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(6, 20, 32, 0.76);
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.charity-cta-copy {
+  font-size: 0.74rem;
+  color: #e2e8f0;
+  line-height: 1.35;
+  flex: 1 1 200px;
+}
+
+.charity-cta-copy strong {
+  color: #fde68a;
+}
+
+@media (max-width: 440px) {
+  .charity-stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .cosmic-card {
+    padding: 11px 12px;
+  }
+}
+
+/* ---- Interactive 32-Tooth Dental Numbering Chart & 3D Crown Readout ---- */
+.modal-sheet-wide {
+  max-width: 640px;
+}
+
+.tooth-readout-pill {
+  border-color: rgba(94, 234, 212, 0.55);
+  background: rgba(6, 28, 42, 0.86);
+  color: #ecfeff;
+  border-radius: var(--radius-pill);
+  padding: 6px 13px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.dental-arch-cross {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dental-quad-box {
+  background: rgba(4, 16, 28, 0.8);
+  border: 1px solid rgba(94, 234, 212, 0.24);
+  border-radius: 12px;
+  padding: 8px 9px;
+}
+
+.dental-quad-teeth {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.tooth-cell {
+  appearance: none;
+  min-width: 40px;
+  min-height: 42px;
+  padding: 4px 3px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 184, 204, 0.28);
+  background: rgba(11, 34, 52, 0.82);
+  color: var(--text-main);
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tooth-cell:hover {
+  border-color: var(--cyan);
+  background: rgba(20, 62, 90, 0.92);
+}
+
+.tooth-cell-code {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.tooth-cell-role {
+  font-size: 0.58rem;
+  font-weight: 700;
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+}
+
+.tooth-cell.cat-incisor {
+  border-color: rgba(103, 232, 249, 0.42);
+  color: #cffafe;
+}
+
+.tooth-cell.cat-canine {
+  border-color: rgba(251, 191, 36, 0.48);
+  color: #fef3c7;
+}
+
+.tooth-cell.cat-premolar {
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #dbeafe;
+}
+
+.tooth-cell.cat-molar {
+  border-color: rgba(192, 132, 252, 0.42);
+  color: #f3e8ff;
+}
+
+.tooth-cell.is-wisdom {
+  border-style: dashed;
+}
+
+.tooth-cell.selected {
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.65), rgba(2, 132, 199, 0.65));
+  border: 2px solid #5eead4;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.25);
+}
+
+.dental-bite-divider {
+  margin: 6px 0;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 600px) {
+  .dental-arch-cross {
+    grid-template-columns: 1fr;
   }
 }

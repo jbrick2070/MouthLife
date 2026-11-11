@@ -1,3 +1,12 @@
+import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
+import {
+  formatToothBadge,
+  getCompanionCrownSummary,
+  getToothByUniversal,
+  QUADRANT_NUMBERING_META,
+  TOOTH_SURFACES_GUIDE,
+  type ToothNumberingSystem,
+} from '../config/dentalChart';
 import { SMOOTH_BASK_THRESHOLD } from '../config/gameConfig';
 import {
   getHistoryNoteById,
@@ -15,10 +24,10 @@ import type { OverlayView } from '../engine/types';
 import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
 import { loadSeenHints, saveSeenHints, shouldShowHubWelcome } from './hudHelpers';
 
-type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync';
+type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync' | 'charity' | 'chart';
 
 const FOCUSABLE_SEL =
-  'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function escapeHtml(raw: string): string {
   return raw
@@ -38,6 +47,9 @@ export class CompanionHubOverlay implements OverlayView {
   private statusBanner = '';
   private seenHints = loadSeenHints();
   private modalOpenerSelector: string | null = null;
+  private chartSystem: ToothNumberingSystem = 'universal';
+  private selectedUniversalTooth = 3;
+  private lastTouchedCrownIdx: number | null = null;
 
   private keyHandler = (e: KeyboardEvent): void => {
     if (this.activeModal === 'none') return;
@@ -76,6 +88,7 @@ export class CompanionHubOverlay implements OverlayView {
       onLaunchBrushAlong: () => void;
       onReplayCosmicIntro: () => void;
       onPlaySparkleSfx: () => void;
+      onPlayToothChime?: (step: number) => void;
       onPlayTreatSfx: () => void;
       onTreatSplat?: () => number;
       getSplatCount?: () => number;
@@ -173,6 +186,58 @@ export class CompanionHubOverlay implements OverlayView {
   setStatusBanner(text: string): void {
     this.statusBanner = text;
     if (this.activeModal === 'none') this.render();
+  }
+
+  /**
+   * Live educational readout when the player taps or rubs a sculpted 3D crown on the Companion Arch.
+   * Updates only the lightweight readout slot (`O(1)` when staying on the same crown) so rubbing never
+   * interrupts pointer tracking or rebuilds the Hub DOM.
+   */
+  notifyToothTouched(toothIndex: number): void {
+    if (this.tab !== 'companion' || this.activeModal !== 'none') return;
+    if (this.lastTouchedCrownIdx === toothIndex) return;
+    this.lastTouchedCrownIdx = toothIndex;
+    const summary = getCompanionCrownSummary(toothIndex);
+    this.selectedUniversalTooth = summary.upperTooth.universal;
+
+    const slot = this.container?.querySelector<HTMLElement>('#hub-tooth-readout-slot');
+    if (slot) {
+      slot.innerHTML = this.buildTouchedCrownPillHtml();
+      this.bindTouchedCrownPill();
+    }
+  }
+
+  private buildTouchedCrownPillHtml(): string {
+    if (this.tab !== 'companion' || this.lastTouchedCrownIdx === null) return '';
+    const s = getCompanionCrownSummary(this.lastTouchedCrownIdx);
+    return `
+      <div style="margin-top:6px;">
+        <button
+          type="button"
+          id="btn-inspect-touched-tooth"
+          class="btn btn-sm tooth-readout-pill ui-interactive"
+          title="Open Interactive 32-Tooth Dental Chart on this tooth"
+        >
+          <span>🦷 <strong>${escapeHtml(s.toothTypeLabel)}</strong> • US #${s.upperTooth.universal}/#${s.lowerTooth.universal} • FDI ${s.upperTooth.fdi}/${s.lowerTooth.fdi}</span>
+          <span style="color:#fde68a;font-weight:700;">Chart →</span>
+        </button>
+      </div>
+    `;
+  }
+
+  private bindTouchedCrownPill(): void {
+    this.container?.querySelector('#btn-inspect-touched-tooth')?.addEventListener('click', () => {
+      this.actions.onPlayUiTap();
+      this.openModal('chart', '#btn-open-chart');
+    });
+  }
+
+  private rerenderModalKeepingScroll(focusSel: string): void {
+    const prevScroll = this.container?.querySelector<HTMLElement>('.modal-sheet')?.scrollTop ?? 0;
+    this.render();
+    const nextSheet = this.container?.querySelector<HTMLElement>('.modal-sheet');
+    if (nextSheet) nextSheet.scrollTop = prevScroll;
+    this.container?.querySelector<HTMLElement>(focusSel)?.focus();
   }
 
   private render(): void {
@@ -279,6 +344,7 @@ export class CompanionHubOverlay implements OverlayView {
         <div class="bask-floating-pill">
           ${floatingStatusText}
         </div>
+        <div id="hub-tooth-readout-slot">${this.buildTouchedCrownPillHtml()}</div>
         ${splatHint}${globeHint}
         ${welcomeTipHtml}
         ${
@@ -373,8 +439,10 @@ export class CompanionHubOverlay implements OverlayView {
         <div class="row-wrap">
           <button type="button" id="btn-open-lab" class="btn btn-sm">🔬 Lab</button>
           <button type="button" id="btn-open-history" class="btn btn-sm">📜 History</button>
+          <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart (Universal #1–32, FDI & Palmer)">🦷 Chart</button>
           <button type="button" id="btn-open-sync" class="btn btn-sm">☁️ Sync</button>
           <button type="button" id="btn-replay-cosmic" class="btn btn-sm" title="Replay Cosmic Enamel & Diamond Intro">✦ Cosmic</button>
+          <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Charitable Dental Care">💛 SmileOnU</button>
         </div>
       </div>
     `;
@@ -396,8 +464,14 @@ export class CompanionHubOverlay implements OverlayView {
     };
 
     return `
-      <div class="campaign-progress" id="campaign-progress">
-        ${cleared}/5 Worlds Cleared • ${save.unlockedHistoryNotes.length}/${HISTORICAL_FIELD_NOTES.length} Field Notes • ${save.unlockedUpgrades.length}/${UPGRADE_CATALOG.length} Lab Upgrades${cleared >= campaignIds.length ? ' • 🛰️ Campaign Mastered!' : ''}
+      <div class="row-between" style="flex-wrap:wrap;">
+        <div class="campaign-progress" id="campaign-progress" style="margin-bottom:0;">
+          ${cleared}/5 Worlds Cleared • ${save.unlockedHistoryNotes.length}/${HISTORICAL_FIELD_NOTES.length} Field Notes • ${save.unlockedUpgrades.length}/${UPGRADE_CATALOG.length} Lab Upgrades${cleared >= campaignIds.length ? ' • 🛰️ Campaign Mastered!' : ''}
+        </div>
+        <div class="row-wrap">
+          <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart">🦷 Chart</button>
+          <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Global Dental Relief">💛 SmileOnU</button>
+        </div>
       </div>
       <div class="city-strip">
         ${HOST_CITIES.map(
@@ -623,6 +697,144 @@ export class CompanionHubOverlay implements OverlayView {
       `;
     }
 
+    if (this.activeModal === 'chart') {
+      return this.buildChartModalHtml();
+    }
+
+    if (this.activeModal === 'charity') {
+      const c = SMILE_ON_U_CHARITY;
+      return `
+        <div class="modal-backdrop" id="modal-bg">
+          <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
+            <div class="row-between" style="margin-bottom:10px;">
+              <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">💛 Enjoyed MouthLife? Support Real Smiles!</h3>
+              <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
+            </div>
+
+            <div style="background:rgba(4,16,28,0.84);border:1px solid rgba(251,191,36,0.42);border-radius:12px;padding:11px 12px;margin-bottom:10px;">
+              <div class="row-wrap" style="margin-bottom:6px;">
+                <span class="pill-badge" style="border-color:rgba(251,191,36,0.55);color:#fde68a;">🦷 ${escapeHtml(c.name)}</span>
+                <span class="pill-badge">${escapeHtml(c.legalStatus)}</span>
+              </div>
+              <div style="font-size:0.76rem;color:#5eead4;font-weight:700;margin-bottom:4px;">${escapeHtml(c.tagline)}</div>
+              <p style="margin:0 0 10px 0;font-size:0.79rem;color:#e2e8f0;line-height:1.44;">
+                ${escapeHtml(c.missionSummary)}
+              </p>
+              <div class="hub-actions-primary">
+                <a
+                  id="lnk-charity-donate"
+                  class="btn btn-gold"
+                  href="${escapeHtml(c.donateUrl)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  💛 Donate at SmileOnU.org ↗
+                </a>
+                <a
+                  id="lnk-charity-site"
+                  class="btn"
+                  href="${escapeHtml(c.websiteUrl)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  🌐 Visit SmileOnU.org ↗
+                </a>
+              </div>
+            </div>
+
+            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🌍 Why Humanitarian Dental Care Matters</div>
+            <div class="charity-stat-grid" style="margin-bottom:10px;">
+              ${c.needHighlights
+                .map(
+                  (n) => `
+                  <div class="mini-meter" style="padding:7px 8px;">
+                    <strong style="display:block;font-size:0.82rem;color:#fde68a;margin-bottom:2px;">${escapeHtml(n.stat)}</strong>
+                    <span style="font-size:0.69rem;color:#cbd5e1;line-height:1.3;display:block;">${escapeHtml(n.detail)}</span>
+                  </div>
+                `
+                )
+                .join('')}
+            </div>
+
+            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🏥 Core Charitable Programs</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">
+              ${c.programs
+                .map(
+                  (p) => `
+                  <div style="background:rgba(4,16,28,0.8);border:1px solid rgba(94,234,212,0.25);border-radius:12px;padding:9px 11px;">
+                    <div class="row-between" style="flex-wrap:wrap;">
+                      <div>
+                        <strong style="font-size:0.85rem;color:#fff;">${p.emoji} ${escapeHtml(p.title)}</strong>
+                        <div style="font-size:0.69rem;color:#38bdf8;font-weight:600;">${escapeHtml(p.regionLabel)}</div>
+                      </div>
+                      <a
+                        class="btn btn-sm"
+                        href="${escapeHtml(p.url)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Learn more about ${escapeHtml(p.title)} on SmileOnU.org"
+                      >
+                        Learn More ↗
+                      </a>
+                    </div>
+                    <p style="margin:5px 0 0 0;font-size:0.75rem;color:#cbd5e1;line-height:1.38;">
+                      ${escapeHtml(p.summary)}
+                    </p>
+                  </div>
+                `
+                )
+                .join('')}
+            </div>
+
+            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🤝 Get Involved, Volunteer &amp; Reach Out</div>
+            <div class="row-wrap" style="margin-bottom:8px;">
+              ${c.involvementLinks
+                .map(
+                  (l) => `
+                  <a
+                    class="btn btn-sm"
+                    href="${escapeHtml(l.url)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    ${escapeHtml(l.label)} ↗
+                  </a>
+                `
+                )
+                .join('')}
+              <a
+                class="btn btn-sm"
+                href="${escapeHtml(c.contactMailto)}"
+              >
+                ✉️ ${escapeHtml(c.contactEmail)}
+              </a>
+            </div>
+
+            <div class="row-wrap" style="margin-bottom:10px;">
+              ${c.socialLinks
+                .map(
+                  (s) => `
+                  <a
+                    class="btn btn-sm"
+                    href="${escapeHtml(s.url)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    🔗 ${escapeHtml(s.label)} ↗
+                  </a>
+                `
+                )
+                .join('')}
+            </div>
+
+            <p style="margin:0;font-size:0.71rem;color:var(--text-muted);line-height:1.38;">
+              ${escapeHtml(c.independenceNote)}
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
     // Sync Code Backup Modal
     const syncCode = this.saveSys.exportSyncCode();
     return `
@@ -661,9 +873,179 @@ export class CompanionHubOverlay implements OverlayView {
     `;
   }
 
+  private buildChartModalHtml(): string {
+    const sel = getToothByUniversal(this.selectedUniversalTooth);
+    const shortPosTag: Record<number, string> = {
+      1: 'CI',
+      2: 'LI',
+      3: 'C',
+      4: '1P',
+      5: '2P',
+      6: '1M',
+      7: '2M',
+      8: '3M',
+    };
+    const catLabel: Record<string, string> = {
+      incisor: 'Incisor (Cutting)',
+      canine: 'Canine / Cuspid (Cornerstone)',
+      premolar: 'Premolar / Bicuspid (Crushing)',
+      molar: sel.isWisdomTooth ? '3rd Molar • Wisdom Tooth' : 'Molar (Heavy Grinding)',
+    };
+
+    const renderQuadBox = (qMeta: (typeof QUADRANT_NUMBERING_META)[number]) => {
+      const rangeBadge =
+        this.chartSystem === 'universal'
+          ? qMeta.universalRange
+          : this.chartSystem === 'fdi'
+            ? qMeta.fdiRange
+            : `Palmer ${qMeta.palmerSymbol}`;
+      return `
+        <div class="dental-quad-box">
+          <div class="row-between" style="margin-bottom:5px;flex-wrap:wrap;gap:4px;">
+            <strong style="font-size:0.73rem;color:#e0f2fe;">${escapeHtml(qMeta.title)}</strong>
+            <span class="pill-badge" style="font-size:0.65rem;padding:2px 7px;">${escapeHtml(rangeBadge)}</span>
+          </div>
+          <div class="dental-quad-teeth">
+            ${qMeta.chartOrderUniversal
+              .map((uNum) => {
+                const t = getToothByUniversal(uNum);
+                const isSel = t.universal === sel.universal;
+                const badge = formatToothBadge(t, this.chartSystem);
+                return `
+                  <button
+                    type="button"
+                    class="tooth-cell cat-${t.category} ${t.isWisdomTooth ? 'is-wisdom' : ''} ${isSel ? 'selected' : ''}"
+                    data-tooth-num="${t.universal}"
+                    aria-pressed="${isSel ? 'true' : 'false'}"
+                    aria-label="${escapeHtml(t.clinicalName)} — US #${t.universal}, FDI ${t.fdi}, Palmer ${t.palmer}"
+                    title="${escapeHtml(t.clinicalName)} (${escapeHtml(t.commonNickname)})"
+                  >
+                    <span class="tooth-cell-code">${escapeHtml(badge)}</span>
+                    <span class="tooth-cell-role">${shortPosTag[t.positionFromMidline]}</span>
+                  </button>
+                `;
+              })
+              .join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    // Clinical cross order: Top = Q1 (UR) | Q2 (UL); Bottom = Q4 (LR) | Q3 (LL) so Patient's Right stays on the left!
+    const q1 = QUADRANT_NUMBERING_META[0];
+    const q2 = QUADRANT_NUMBERING_META[1];
+    const q3 = QUADRANT_NUMBERING_META[2];
+    const q4 = QUADRANT_NUMBERING_META[3];
+
+    return `
+      <div class="modal-backdrop" id="modal-bg">
+        <div class="modal-sheet modal-sheet-wide" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
+          <div class="row-between" style="margin-bottom:8px;">
+            <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🦷 How Dentists Number Teeth (32-Tooth Chart)</h3>
+            <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
+          </div>
+
+          <div class="row-between" style="flex-wrap:wrap;margin-bottom:8px;">
+            <div class="seg-tabs" role="tablist" aria-label="Dental Numbering System">
+              <button
+                type="button"
+                role="tab"
+                data-num-sys="universal"
+                aria-selected="${this.chartSystem === 'universal' ? 'true' : 'false'}"
+                class="seg-tab ${this.chartSystem === 'universal' ? 'active' : ''}"
+              >🇺🇸 US (#1–32)</button>
+              <button
+                type="button"
+                role="tab"
+                data-num-sys="fdi"
+                aria-selected="${this.chartSystem === 'fdi' ? 'true' : 'false'}"
+                class="seg-tab ${this.chartSystem === 'fdi' ? 'active' : ''}"
+              >🌍 FDI (11–48)</button>
+              <button
+                type="button"
+                role="tab"
+                data-num-sys="palmer"
+                aria-selected="${this.chartSystem === 'palmer' ? 'true' : 'false'}"
+                class="seg-tab ${this.chartSystem === 'palmer' ? 'active' : ''}"
+              >┼ Palmer</button>
+            </div>
+            <span style="font-size:0.71rem;color:var(--text-muted);">
+              👀 Chart faces the patient: <strong>Patient’s Right</strong> is on the left!
+            </span>
+          </div>
+
+          <div id="chart-selected-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+            <div class="row-between" style="flex-wrap:wrap;margin-bottom:5px;">
+              <div>
+                <strong id="chart-tooth-name" style="font-size:0.92rem;color:#fff;">${escapeHtml(sel.clinicalName)}</strong>
+                <span style="font-size:0.75rem;color:#5eead4;margin-left:6px;">• ${escapeHtml(sel.commonNickname)}</span>
+              </div>
+              <span class="pill-badge">${escapeHtml(catLabel[sel.category])}</span>
+            </div>
+            <div class="row-wrap" style="margin-bottom:6px;">
+              <span class="pill-badge" style="border-color:#fbbf24;color:#fde68a;">🇺🇸 US <strong>#${sel.universal}</strong></span>
+              <span class="pill-badge" style="border-color:#38bdf8;color:#bae6fd;">🌍 FDI <strong>${escapeHtml(sel.fdi)}</strong> (“${escapeHtml(sel.fdiSpoken)}”)</span>
+              <span class="pill-badge" style="border-color:#c084fc;color:#e9d5ff;">┼ Palmer <strong>${escapeHtml(sel.palmer)}</strong></span>
+              <span class="pill-badge">Q${sel.quadrant} • Tooth ${sel.positionFromMidline} from Midline</span>
+            </div>
+            <p style="margin:0 0 4px 0;font-size:0.76rem;color:#e2e8f0;line-height:1.38;">
+              ${escapeHtml(sel.anatomyFact)}
+            </p>
+            <div style="font-size:0.73rem;color:#99f6e4;line-height:1.35;">
+              🪥 <strong>Care Tip:</strong> ${escapeHtml(sel.careTip)}
+            </div>
+          </div>
+
+          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:4px;">
+            ▲ UPPER ARCH (MAXILLARY) — Tap Any Tooth to Hear &amp; Inspect
+          </div>
+          <div class="dental-arch-cross">
+            ${renderQuadBox(q1)}
+            ${renderQuadBox(q2)}
+          </div>
+
+          <div class="dental-bite-divider">── Occlusal Bite Plane • Central Midline │ ──</div>
+
+          <div class="dental-arch-cross" style="margin-bottom:4px;">
+            ${renderQuadBox(q4)}
+            ${renderQuadBox(q3)}
+          </div>
+          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:10px;">
+            ▼ LOWER ARCH (MANDIBULAR) — <span style="color:#67e8f9;">CI/LI Incisors</span> • <span style="color:#fde68a;">C Canine</span> • <span style="color:#93c5fd;">1P/2P Premolars</span> • <span style="color:#d8b4fe;">1M–3M Molars</span>
+          </div>
+
+          <div style="background:rgba(4,16,28,0.78);border:1px solid rgba(148,184,204,0.22);border-radius:12px;padding:9px 11px;margin-bottom:8px;">
+            <strong style="font-size:0.8rem;color:#fff;display:block;margin-bottom:4px;">🎓 30-Second Dentistry Decoder</strong>
+            <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.42;display:flex;flex-direction:column;gap:4px;">
+              <div>• <strong>🇺🇸 Universal (#1–#32):</strong> Starts at Upper Right Wisdom Tooth <strong>#1</strong>, sweeps across to Upper Left <strong>#16</strong>, drops down to Lower Left <strong>#17</strong>, and finishes at Lower Right <strong>#32</strong>. <em>(20 baby/primary teeth use letters <strong>A–T</strong> in the same clockwise loop!)</em></div>
+              <div>• <strong>🌍 FDI Two-Digit (ISO 3950):</strong> Used across Canada, Europe &amp; WHO. First digit = Quadrant (<strong>1</strong>=UR, <strong>2</strong>=UL, <strong>3</strong>=LL, <strong>4</strong>=LR; baby teeth <strong>5–8</strong>). Second digit = Tooth from midline (<strong>1</strong>=Central Incisor … <strong>6</strong>=1st Molar … <strong>8</strong>=Wisdom Tooth).</div>
+              <div>• <strong>┼ Palmer Brackets:</strong> Draws the cross of the mouth (<strong>┘ └ ┌ ┐</strong>) with <strong>1–8</strong> counting out from the front midline (<strong>A–E</strong> for baby teeth).</div>
+            </div>
+          </div>
+
+          <div style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.22);border-radius:12px;padding:9px 11px;">
+            <strong style="font-size:0.8rem;color:#fff;display:block;margin-bottom:5px;">🧭 The 5 Clinical Tooth Surfaces (Why Dentists Say “MOD on #19”)</strong>
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              ${TOOTH_SURFACES_GUIDE.map(
+                (s) => `
+                <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.35;">
+                  <span class="pill-badge" style="font-size:0.66rem;padding:1px 7px;margin-right:4px;color:#5eead4;">${escapeHtml(s.code)}</span>
+                  <strong style="color:#fff;">${escapeHtml(s.name)}:</strong> ${escapeHtml(s.whereItFaces)} <span style="color:#99f6e4;">(${escapeHtml(s.howToClean)})</span>
+                </div>
+              `
+              ).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private bindEvents(): void {
     if (!this.container) return;
     const save = this.saveSys.getSave();
+
+    this.bindTouchedCrownPill();
 
     this.container.querySelector('#btn-dismiss-welcome')?.addEventListener('click', () => {
       this.dismissWelcome();
@@ -771,9 +1153,46 @@ export class CompanionHubOverlay implements OverlayView {
       this.actions.onPlayUiTap();
       this.openModal('history', '#btn-open-history');
     });
+    this.container.querySelector('#btn-open-chart')?.addEventListener('click', () => {
+      this.actions.onPlayUiTap();
+      this.openModal('chart', '#btn-open-chart');
+    });
     this.container.querySelector('#btn-open-sync')?.addEventListener('click', () => {
       this.actions.onPlayUiTap();
       this.openModal('sync', '#btn-open-sync');
+    });
+    this.container.querySelector('#btn-open-charity')?.addEventListener('click', () => {
+      this.actions.onPlayUiTap();
+      this.openModal('charity', '#btn-open-charity');
+    });
+    this.container.querySelectorAll<HTMLAnchorElement>('.modal-sheet a[href]').forEach((lnk) => {
+      lnk.addEventListener('click', () => this.actions.onPlayUiTap());
+    });
+
+    // Interactive 32-Tooth Chart modal handlers
+    this.container.querySelectorAll<HTMLButtonElement>('[data-num-sys]').forEach((tabBtn) => {
+      tabBtn.addEventListener('click', () => {
+        const sys = tabBtn.dataset.numSys as ToothNumberingSystem | undefined;
+        if (!sys || sys === this.chartSystem) return;
+        this.chartSystem = sys;
+        this.actions.onPlayUiTap();
+        this.rerenderModalKeepingScroll(`[data-num-sys="${sys}"]`);
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('[data-tooth-num]').forEach((toothBtn) => {
+      toothBtn.addEventListener('click', () => {
+        const num = Number(toothBtn.dataset.toothNum ?? 3);
+        this.selectedUniversalTooth = num;
+        const t = getToothByUniversal(num);
+        const step = (8 - t.positionFromMidline) + (t.arch === 'upper' ? 4 : 0);
+        if (this.actions.onPlayToothChime) {
+          this.actions.onPlayToothChime(step);
+        } else {
+          this.actions.onPlayUiTap();
+        }
+        this.rerenderModalKeepingScroll(`[data-tooth-num="${num}"]`);
+      });
     });
 
     this.container.querySelector('#btn-close-modal')?.addEventListener('click', () => this.closeActiveModal());

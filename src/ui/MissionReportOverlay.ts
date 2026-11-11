@@ -1,3 +1,5 @@
+import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
+import { getWorldDentalLesson } from '../config/dentalChart';
 import { getHistoryNoteById } from '../config/hostsAndHistory';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import type { OverlayView, ScoreBreakdown } from '../engine/types';
@@ -66,6 +68,7 @@ export class MissionReportOverlay implements OverlayView {
     const note = this.report.unlockedHistoryNoteId
       ? getHistoryNoteById(this.report.unlockedHistoryNoteId)
       : undefined;
+    const dentalLesson = getWorldDentalLesson(this.report.worldId, mode);
 
     const headline = esc(buildReportHeadline(this.report));
     const upgrades = this.report.unlockedUpgradeNames ?? [];
@@ -147,17 +150,43 @@ export class MissionReportOverlay implements OverlayView {
         ${
           note
             ? `<div style="background:rgba(4,16,28,0.78);border:1px solid rgba(45,212,191,0.35);border-radius:10px;padding:8px 10px;margin-bottom:10px;">
-                <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">📜 HISTORICAL FIELD NOTE UNLOCKED • ${note.yearLabel}</div>
-                <div style="font-size:0.82rem;font-weight:700;color:#fff;margin:2px 0;">${note.title}</div>
-                <div style="font-size:0.74rem;color:#cbd5e1;">${note.enamelLesson}</div>
+                <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">📜 HISTORICAL FIELD NOTE UNLOCKED • ${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
+                <div style="font-size:0.82rem;font-weight:700;color:#fff;margin:2px 0;">${esc(note.title)}</div>
+                <div style="font-size:0.74rem;color:#cbd5e1;">${esc(note.enamelLesson)}</div>
               </div>`
-            : ''
+            : `<div id="report-dental-lesson" style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.3);border-radius:10px;padding:8px 10px;margin-bottom:10px;">
+                <div style="font-size:0.7rem;color:#5eead4;font-weight:700;">🦷 CLINICAL DENTAL PEARL • ${esc(dentalLesson.focusTeethBadge)}</div>
+                <div style="font-size:0.8rem;font-weight:700;color:#fff;margin:2px 0;">${esc(dentalLesson.headline)}</div>
+                <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;">${esc(dentalLesson.lesson)}</div>
+              </div>`
         }
 
         <div class="hub-actions-primary">
           ${nextDive}
           <button type="button" id="btn-report-replay" class="btn">↻ Replay Stage</button>
           <button type="button" id="btn-report-hub" class="btn ${nextDive ? '' : 'btn-primary'}">Smooth Bask Hub →</button>
+        </div>
+
+        <div id="report-charity-cta" class="charity-cta-strip">
+          <span class="charity-cta-copy">
+            💛 <strong>Enjoyed MouthLife?</strong> Help fund free 501(c)(3) dental relief through <strong>${esc(SMILE_ON_U_CHARITY.name)}</strong>.
+          </span>
+          <div class="row-wrap">
+            <a
+              id="lnk-report-donate"
+              class="btn btn-sm btn-charity-pill"
+              href="${esc(SMILE_ON_U_CHARITY.donateUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >💛 Donate ↗</a>
+            <a
+              id="lnk-report-site"
+              class="btn btn-sm"
+              href="${esc(SMILE_ON_U_CHARITY.websiteUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >SmileOnU.org ↗</a>
+          </div>
         </div>
       </div>
     `;

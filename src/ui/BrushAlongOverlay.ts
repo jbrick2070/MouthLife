@@ -1,3 +1,4 @@
+import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   BRUSH_ALONG_FLOSS_BONUS_SEC,
   BRUSH_ALONG_TOTAL_SEC,
@@ -9,16 +10,16 @@ import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
 
 const QUADRANT_NAMES = [
-  'Quadrant 1/4 • Upper Right Arch',
-  'Quadrant 2/4 • Upper Left Arch',
-  'Quadrant 3/4 • Lower Left Arch',
-  'Quadrant 4/4 • Lower Right Arch',
+  'Quadrant 1/4 • Upper Right (US #1–#8 • FDI 18–11)',
+  'Quadrant 2/4 • Upper Left (US #9–#16 • FDI 21–28)',
+  'Quadrant 3/4 • Lower Left (US #17–#24 • FDI 38–31)',
+  'Quadrant 4/4 • Lower Right (US #25–#32 • FDI 41–48)',
 ];
 
 const SURFACE_PROMPTS = [
-  'Outer Cheek Surface — Gentle 45° Bass Sweep along the gumline',
-  'Chewing Cusps & Fissures — Short brisk strokes across molar pits',
-  'Inner Tongue Surface — Tilt brush vertically behind front incisors',
+  'Buccal / Facial (B/F) — Gentle 45° Bass sweep along outer cheek & lip gumline',
+  'Occlusal / Incisal (O/I) — Short brisk strokes across chewing cusps & molar pits',
+  'Lingual / Palatal (L/P) — Sweep inner tongue side & tilt vertically behind incisors',
 ];
 
 export class BrushAlongOverlay implements OverlayView {
@@ -212,7 +213,7 @@ export class BrushAlongOverlay implements OverlayView {
             ${isFloss ? '20s Interdental Bonus' : 'Quadrant 1/4 • Surface 1/3'}
           </div>
           <div id="pacer-quad" style="font-size:0.78rem;font-weight:700;color:#38bdf8;">
-            ${isFloss ? 'Interproximal Contacts • Hug Each Tooth in a C-Shape' : QUADRANT_NAMES[0]}
+            ${isFloss ? 'Mesial & Distal Contacts (M/D) • Hug Each Tooth (#1–#32) in a C-Shape' : QUADRANT_NAMES[0]}
           </div>
           <div id="pacer-clock" style="font-size:2.7rem;font-weight:800;letter-spacing:0.04em;margin:4px 0;color:#fff;font-variant-numeric:tabular-nums;">
             ${this.formatClock(initialSec - this.clock.getPacerElapsedSec())}
@@ -308,6 +309,28 @@ export class BrushAlongOverlay implements OverlayView {
         <button type="button" id="btn-done-pacer" class="btn btn-primary" style="width:100%;">
           Bask in Smooth Teeth (Return to Hub) ✦
         </button>
+
+        <div id="pacer-charity-cta" class="charity-cta-strip" style="text-align:left;">
+          <span class="charity-cta-copy">
+            💛 <strong>Enjoying MouthLife?</strong> Support 501(c)(3) charitable dental care with <strong>${SMILE_ON_U_CHARITY.name}</strong>.
+          </span>
+          <div class="row-wrap">
+            <a
+              id="lnk-pacer-donate"
+              class="btn btn-sm btn-charity-pill"
+              href="${SMILE_ON_U_CHARITY.donateUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >💛 Donate ↗</a>
+            <a
+              id="lnk-pacer-site"
+              class="btn btn-sm"
+              href="${SMILE_ON_U_CHARITY.websiteUrl}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >SmileOnU.org ↗</a>
+          </div>
+        </div>
       </div>
     `;
 
