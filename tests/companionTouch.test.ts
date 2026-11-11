@@ -93,4 +93,11 @@ describe('CompanionTouchSystem — touch-the-teeth Smooth Bask toy', () => {
     CompanionArchSim.applyMiniPolish(state, 4);
     expect(state.smoothnessIndex).toBe(100);
   });
+
+  it('does not stack treat splats when only a few crown anchors are reachable', () => {
+    const touch = new CompanionTouchSystem();
+    const splats = touch.spawnTreatSplats(ANCHORS.slice(0, 2), 3, 1234);
+    expect(splats).toHaveLength(2);
+    expect(new Set(splats.map(s => s.x)).size).toBe(2);
+  });
 });

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { ORAL_LIGHTING_GLSL } from './OralLighting';
+import { pickAcidWashTint, pickEpsDomeTint, pickSulcusTint } from './landmarkContrast';
 import type { BChannelMode, WorldVisualPalette } from '../types';
 
 const B_MODE_INDEX: Record<BChannelMode, number> = {
@@ -21,12 +23,13 @@ const VERTEX_SHADER = /* glsl */ `
     vToothId = aToothId;
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPos = worldPosition.xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * normal);
+    vWorldNormal = mat3(modelMatrix) * normal;
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
+  ${ORAL_LIGHTING_GLSL}
   uniform sampler2D uSurfaceTex;
   uniform vec2 uWorldSize;
   uniform float uTime;
@@ -34,6 +37,9 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uEnamelBase;
   uniform vec3 uPellicleColor;
   uniform vec3 uBiofilmColor;
+  uniform vec3 uSulcusTint;
+  uniform vec3 uAcidWashTint;
+  uniform vec3 uEpsDomeTint;
   uniform int uBChannelMode;
 
   uniform vec2 uDiscloseOrigin;
@@ -43,6 +49,11 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec2 uRinseOrigin;
   uniform float uRinseRadius;
   uniform float uRinseStrength;
+  uniform bool uBufferedRinse;
+
+  // District seal: box = (minX, minZ, maxX, maxZ); age = seconds since sealed (<0 = open).
+  uniform vec4 uDistrictBox[4];
+  uniform float uSealAge[4];
 
   uniform float uGlobalSmoothnessOverride;
   uniform float uGlobalFluorideGlow;
@@ -110,29 +121,39 @@ const FRAGMENT_SHADER = /* glsl */ `
       }
     }
 
-    // Crisp liquid-to-glassy contour magnification right around CLEAN_THRESHOLD = 0.10
-    float plaqueMask = smoothstep(0.085, 0.135, rawPlaque);
-    float matureBiofilm = smoothstep(0.42, 0.85, rawPlaque);
+    // Crisp liquid-to-glassy contour magnification right around CLEAN_THRESHOLD = 0.10,
+    // while keeping thin morning pellicle semi-translucent so enamel landmarks & scrubbing progress read clearly.
+    float cleanEdge = smoothstep(0.085, 0.135, rawPlaque);
+    float matureBiofilm = smoothstep(0.52, 0.84, rawPlaque);
+    float plaqueMask = cleanEdge * mix(0.68, 0.98, smoothstep(0.18, 0.72, rawPlaque));
 
     // Procedural micro-bump normal perturbation ONLY where plaque exists
-    float n1 = valueNoise(vWorldPos.xz * 3.8);
-    float n2 = valueNoise(vWorldPos.xz * 9.5 + vec2(4.2, 1.9));
+    vec3 V = safeUnit(cameraPosition - vWorldPos);
+    vec2 plaqueUv = vWorldPos.xz + vec2(0.31, 0.58) * vWorldPos.y;
+    float n1 = 0.5;
+    float n2 = 0.5;
+    if (plaqueMask > 0.01) {
+      n1 = valueNoise(plaqueUv * 3.8);
+      if (uDetail > 0) {
+        vec2 relief = plaqueUv + V.xz * (n1 - 0.5) * matureBiofilm * 0.17;
+        n2 = valueNoise(relief * 9.5 + vec2(4.2, 1.9));
+      }
+    }
     float microTex = n1 * 0.65 + n2 * 0.35;
 
-    vec3 N = normalize(vWorldNormal);
+    vec3 N = safeUnit(vWorldNormal);
     if (plaqueMask > 0.01) {
       vec3 bumpOffset = vec3(n1 - 0.5, 0.0, n2 - 0.5) * (0.38 * plaqueMask);
-      N = normalize(N + bumpOffset);
+      N = safeUnit(N + bumpOffset);
     }
 
-    vec3 V = normalize(cameraPosition - vWorldPos);
     vec3 L1 = normalize(vec3(0.36, 0.86, 0.35));
     vec3 L2 = normalize(vec3(-0.48, 0.62, -0.62));
-    vec3 H1 = normalize(L1 + V);
-    vec3 H2 = normalize(L2 + V);
+    vec3 H1 = safeUnit(L1 + V);
+    vec3 H2 = safeUnit(L2 + V);
 
     float NdotL1 = max(dot(N, L1), 0.0);
-    float NdotV = max(dot(N, V), 0.0);
+    float NdotV = clamp(dot(N, V), 0.0, 1.0);
 
     // Subsurface hydroxyapatite wrap illumination
     float wrapDiff = max(0.0, (dot(N, L1) + 0.45) / 1.45);
@@ -157,7 +178,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec3 opalBlue = cleanEnamel * vec3(0.62, 0.78, 0.98)
                   + vec3(0.09, 0.20, 0.34) * (0.55 + fresnel * 2.1)
                   + vec3(0.16, 0.09, 0.04) * backScatter * 0.55;
-    cleanEnamel = mix(cleanEnamel, opalBlue, incisal * 0.86 * cleanFactor);
+    cleanEnamel = mix(cleanEnamel, opalBlue, incisal * (0.65 + 0.35 * fresnel) * cleanFactor);
 
     // Translucent bluish-ivory enamel edge scattering
     cleanEnamel += vec3(0.16, 0.28, 0.38) * fresnel * (1.0 - plaqueMask);
@@ -177,50 +198,68 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     // Fluorapatite crystalline iridescent mint-cyan sheen
     if (fluorideSeal > 0.05) {
-      float hexShimmer = 0.5 + 0.5 * sin(vWorldPos.x * 5.2 + vWorldPos.z * 5.2 + uTime * 2.1);
+      float hexShimmer = 0.5 + 0.5 * sin(vWorldPos.x * 5.2 + vWorldPos.z * 5.2 + uMotionTime * 2.1);
       cleanEnamel += vec3(0.08, 0.40, 0.36) * fluorideSeal * (0.40 + 0.65 * fresnel) * (0.72 + 0.28 * hexShimmer);
     }
 
-    // Plaque & mature biofilm albedo
-    vec3 slimeAlbedo = mix(uPellicleColor, uBiofilmColor, matureBiofilm);
+    // Plaque & mature biofilm albedo: clearer local contrast between thin pellicle and thick fissure/margin biofilm
+    vec3 slimeAlbedo = mix(uPellicleColor, uBiofilmColor * 0.84, matureBiofilm);
     slimeAlbedo *= (0.78 + 0.34 * microTex);
     vec3 plaqueLit = slimeAlbedo * (0.34 + 0.62 * NdotL1 + 0.20 * fillDiff);
 
+    if (uDetail > 0) {
+      vec3 sheen = mix(vec3(0.12, 0.24, 0.28), vec3(0.33, 0.16, 0.26), n2);
+      plaqueLit += sheen * (0.16 + 0.72 * fresnel) * matureBiofilm;
+    }
     vec3 baseColor = mix(cleanEnamel, plaqueLit, plaqueMask);
+    baseColor *= 1.0 + headlamp(vWorldPos, N);
 
-    // B-channel biophysical cue tinting
+    // B-channel biophysical cue tinting (palette-contrasted per world)
     if (uBChannelMode == 0 && bVal > 0.1 && plaqueMask > 0.2) {
       // Cervical margin / fissure amber density cue
       baseColor = mix(baseColor, vec3(0.86, 0.68, 0.20), bVal * 0.22 * plaqueMask);
-    } else if (uBChannelMode == 1 && bVal > 0.05) {
-      // Gingival irritation warm coral flush
-      baseColor = mix(baseColor, vec3(0.95, 0.32, 0.42), bVal * 0.45);
-    } else if (uBChannelMode == 2 && bVal > 0.05) {
-      // Acidic demineralization warning glow (pH < 5.5); Fluorapatite (pH 4.5 stable) repels it!
-      float pulse = 0.65 + 0.35 * sin(uTime * 5.5);
-      float unsealedAcid = bVal * (1.0 - fluorideSeal * 0.85);
-      baseColor = mix(baseColor, vec3(0.98, 0.42, 0.22), unsealedAcid * 0.44 * pulse);
-      baseColor += vec3(0.10, 0.50, 0.46) * (bVal * fluorideSeal * 0.30 * pulse);
+    } else if (uBChannelMode == 1 && bVal > 0.02) {
+      // Gingival sulcus band: clearly findable at calm baseline (0.16), flushing vivid coral when tender
+      float sulcusBand = smoothstep(0.03, 0.14, bVal);
+      float sulcusEdge = smoothstep(0.035, 0.085, bVal) * (1.0 - smoothstep(0.085, 0.145, bVal));
+      float inflamed = smoothstep(0.18, 0.65, bVal);
+      float dash = 0.62 + 0.38 * step(0.0, sin(vWorldPos.x * 5.2));
+      float tenderPulse = 1.0 + inflamed * 0.32 * sin(uMotionTime * 7.5);
+      vec3 sulcusCol = mix(uSulcusTint, vec3(1.0, 0.22, 0.34), inflamed * 0.7);
+      baseColor = mix(baseColor, sulcusCol, clamp((sulcusBand * 0.36 + inflamed * 0.34) * tenderPulse, 0.0, 0.78));
+      baseColor = mix(baseColor, mix(sulcusCol, vec3(1.0, 0.90, 0.94), 0.42), sulcusEdge * dash * 0.72);
+    } else if (uBChannelMode == 2 && bVal > 0.36) {
+      // Critical acidic demineralization wash (pH < 5.5 Stephan dip & World 4 Hibiscus pH 4.95); Fluorapatite repels it!
+      float pulse = 0.84 + 0.16 * sin(uMotionTime * 4.6);
+      float unsealedAcid = bVal * (1.0 - fluorideSeal * 0.88);
+      float acidCore = smoothstep(0.38, 0.64, unsealedAcid);
+      float acidRim = smoothstep(0.36, 0.50, unsealedAcid) * (1.0 - smoothstep(0.52, 0.69, unsealedAcid));
+      float wave = 0.5 + 0.5 * sin(vWorldPos.x * 3.4 + cos(vWorldPos.z * 3.1) * 1.8 - uMotionTime * 4.2);
+      vec3 acidCol = mix(uAcidWashTint * 0.88, uAcidWashTint * 1.38 + vec3(0.24, 0.05, 0.18), wave);
+      baseColor = mix(baseColor, acidCol, clamp(acidCore * (0.76 + 0.12 * wave) * pulse, 0.0, 0.88));
+      baseColor = mix(baseColor, mix(uAcidWashTint, vec3(1.0, 0.82, 0.96), 0.62), acidRim * 0.92);
+      baseColor += vec3(0.12, 0.62, 0.56) * (bVal * fluorideSeal * 0.38 * pulse);
     } else if (uBChannelMode == 3 && bVal > 0.04) {
-      // Zero-G quorum-sensing EPS polymer dome: bioluminescent matrix + glowing Floss fracture rim
-      float qHex = 0.5 + 0.5 * (sin(vWorldPos.x * 4.6 + uTime * 1.8) * cos(vWorldPos.z * 4.6 - uTime * 1.4));
-      float domeCore = smoothstep(0.35, 0.92, bVal);
+      // Zero-G quorum-sensing EPS polymer dome: rigid hexagonal shield armor + crisp Floss fracture rim
+      float hexA = abs(sin(vWorldPos.x * 4.8) * cos(vWorldPos.z * 4.8));
+      float qHex = smoothstep(0.12, 0.55, hexA);
+      float domeCore = smoothstep(0.32, 0.90, bVal);
       float fractureRim = smoothstep(0.05, 0.42, bVal) * (1.0 - smoothstep(0.48, 0.88, bVal));
-      vec3 epsTint = mix(vec3(0.10, 0.62, 0.56), vec3(0.44, 0.26, 0.88), qHex * 0.65);
-      baseColor = mix(baseColor, epsTint, domeCore * (0.50 + 0.16 * qHex));
-      float domeSpec = pow(max(dot(N, H1), 0.0), 42.0) * 0.55 * domeCore;
-      baseColor += vec3(0.45, 1.0, 0.88) * (fractureRim * 0.72 + domeSpec + fresnel * domeCore * 0.28);
+      vec3 epsCell = mix(uEpsDomeTint * 0.72, uEpsDomeTint * 1.28 + vec3(0.14, 0.18, 0.32), qHex);
+      baseColor = mix(baseColor, epsCell, domeCore * 0.74);
+      float domeSpec = pow(max(dot(N, H1), 0.0), 46.0) * 0.62 * domeCore;
+      baseColor += vec3(0.76, 0.84, 1.0) * (fractureRim * 0.82 + domeSpec + fresnel * domeCore * 0.34);
     }
 
     // Companion acid stress visual warning when shields are eroded
     if (uAcidStress > 0.01) {
-      float stressPulse = 0.55 + 0.45 * sin(uTime * 4.2 + vWorldPos.x * 0.4);
+      float stressPulse = 0.55 + 0.45 * sin(uMotionTime * 4.2 + vWorldPos.x * 0.4);
       baseColor = mix(baseColor, vec3(0.94, 0.36, 0.24), uAcidStress * 0.36 * stressPulse);
     }
 
     // Mirror-wet saliva dual-lobe specular on clean hydroxyapatite vs dull sheen on plaque
     float cleanSpec1 = pow(max(dot(N, H1), 0.0), 92.0) * 0.92;
-    float cleanSpec2 = pow(max(dot(N, H2), 0.0), 48.0) * 0.32;
+    float cleanSpec2 = uDetail > 0 ? pow(max(dot(N, H2), 0.0), 34.0) * 0.32 : 0.0;
     float dullSpec = pow(max(dot(N, H1), 0.0), 9.0) * 0.14;
     float spec = mix(cleanSpec1 + cleanSpec2, dullSpec, plaqueMask);
     baseColor += vec3(0.94, 0.99, 1.0) * spec;
@@ -235,17 +274,17 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     // Enamel prism / perikymata micro-shimmer on glassy clean enamel (smoothness >= 85%)
     float shimmerGate = (uGlobalSmoothnessOverride >= 0.0 ? smoothstep(0.84, 0.9, uGlobalSmoothnessOverride) : 1.0) * (1.0 - plaqueMask);
-    if (shimmerGate > 0.01) {
+    if (uDetail > 1 && shimmerGate > 0.01) {
       float perik = 0.5 + 0.5 * sin(dot(vWorldPos, vec3(0.35, 1.0, 0.22)) * 44.0 + valueNoise(vWorldPos.xz * 1.8) * 4.0);
       float prism = valueNoise(vWorldPos.xz * 31.0 + vWorldPos.y * 17.0);
       float glint = pow(max(dot(N, H1), 0.0), 20.0) + pow(max(dot(N, H2), 0.0), 26.0) * 0.5;
-      float sparkle = smoothstep(0.84, 0.97, prism) * (0.55 + 0.45 * sin(uTime * 3.2 + prism * 23.0));
+      float sparkle = smoothstep(0.84, 0.97, prism) * (0.55 + 0.45 * sin(uMotionTime * 3.2 + prism * 23.0));
       baseColor += vec3(0.78, 0.93, 1.0) * shimmerGate * (perik * glint * 0.16 + sparkle * (0.12 + glint * 0.9));
     }
 
     // Bubbling white-cyan foam trails along recently scrubbed boundaries
     float foam = 0.0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 12; i += (uDetail == 0 ? 2 : 1)) {
       vec4 fm = uFoam[i];
       if (fm.w <= 0.0) continue;
       float age = uTime - fm.z;
@@ -255,7 +294,7 @@ const FRAGMENT_SHADER = /* glsl */ `
       foam = max(foam, fall * (1.0 - age / 2.4) * fm.w);
     }
     if (foam > 0.01) {
-      vec2 q = vWorldPos.xz * 5.5 + vec2(uTime * 0.35, -uTime * 0.22);
+      vec2 q = vWorldPos.xz * 5.5 + vec2(uMotionTime * 0.35, -uMotionTime * 0.22);
       float b1 = valueNoise(q);
       float b2 = valueNoise(q * 2.4 + 4.1);
       float bub = b1 * 0.62 + b2 * 0.5;
@@ -280,6 +319,11 @@ const FRAGMENT_SHADER = /* glsl */ `
       baseColor += vec3(0.72, 1.0, 0.96) * (ring * fade * (0.28 + cleanSpec1 * 1.2) + flash * 0.65) * smoothGain;
     }
 
+    float recess = 1.0 - smoothstep(0.08, 0.55, hFrac);
+    float side = 1.0 - smoothstep(0.05, 0.78, N.y);
+    float ao = clamp(vVertColor.r, 0.33, 1.0) * (1.0 - 0.24 * recess * side);
+    baseColor = attenuateOralLight(baseColor * ao, vWorldPos);
+
     // Two-Tone Clinical Erythrosine Disclosing Bio-Scan (Pink thin pellicle / Violet thick biofilm)
     if (uDiscloseStrength > 0.001) {
       float distD = distance(vWorldPos.xz, uDiscloseOrigin);
@@ -287,13 +331,16 @@ const FRAGMENT_SHADER = /* glsl */ `
       float ringLine = smoothstep(uDiscloseRadius - 0.9, uDiscloseRadius - 0.2, distD) *
                        (1.0 - smoothstep(uDiscloseRadius - 0.2, uDiscloseRadius + 0.5, distD));
 
-      vec3 thinPink = vec3(1.0, 0.26, 0.62);
-      vec3 thickViolet = vec3(0.58, 0.16, 0.96);
-      vec3 dyeColor = mix(thinPink, thickViolet, smoothstep(0.38, 0.72, rawPlaque));
+      vec3 thinPink = vec3(1.0, 0.32, 0.66);
+      vec3 thickViolet = vec3(0.54, 0.14, 0.96);
+      float violetBlend = smoothstep(0.54, 0.80, rawPlaque);
+      vec3 dyeColor = mix(thinPink, thickViolet, violetBlend);
+      float dyeShade = clamp(0.70 + 0.34 * NdotL1 + 0.14 * fillDiff, 0.64, 1.12) * mix(1.0, ao, 0.42);
+      float dyeAlpha = mix(0.58, 0.80, violetBlend);
 
-      float dyeAmount = smoothstep(0.10, 0.22, rawPlaque) * waveMask * uDiscloseStrength;
-      baseColor = mix(baseColor, dyeColor, dyeAmount * 0.78);
-      baseColor += vec3(0.95, 0.38, 0.82) * ringLine * uDiscloseStrength * 0.65;
+      float dyeAmount = smoothstep(0.10, 0.24, rawPlaque) * waveMask * uDiscloseStrength;
+      baseColor = mix(baseColor, dyeColor * dyeShade, dyeAmount * dyeAlpha);
+      baseColor += vec3(0.98, 0.44, 0.84) * ringLine * uDiscloseStrength * 0.65;
     }
 
     // Expanding Turquoise Fluoride-Bicarb Ion Rinse Wave
@@ -302,13 +349,42 @@ const FRAGMENT_SHADER = /* glsl */ `
       float rinseBand = smoothstep(uRinseRadius - 1.8, uRinseRadius - 0.3, distR) *
                         (1.0 - smoothstep(uRinseRadius - 0.3, uRinseRadius + 0.4, distR));
       baseColor += vec3(0.18, 0.96, 0.86) * rinseBand * uRinseStrength * 0.85;
+      if (uBufferedRinse) {
+        float echoRadius = uRinseRadius - 2.4;
+        float echo = 1.0 - smoothstep(0.14, 0.56, abs(distR - echoRadius));
+        baseColor += vec3(0.68, 0.93, 1.0) * echo * smoothstep(0.0, 1.1, echoRadius) * uRinseStrength;
+      }
+    }
+
+    // District Seal: a mint sweep crosses the district once, then a steady 24k gold crown boundary stays.
+    for (int di = 0; di < 4; di++) {
+      float age = uSealAge[di];
+      if (age < 0.0) continue;
+      vec4 bx = uDistrictBox[di];
+      vec2 q = vWorldPos.xz;
+      if (q.x < bx.x - 0.4 || q.x > bx.z + 0.4 || q.y < bx.y - 0.4 || q.y > bx.w + 0.4) continue;
+      // Inset onto the elevated crown above the coral gingiva collar so all 4 edges stay visible.
+      vec2 center = 0.5 * (bx.xy + bx.zw);
+      vec2 halfSpan = max(vec2(1.5), 0.5 * (bx.zw - bx.xy) - vec2(1.55));
+      float cornerR = min(2.1, min(halfSpan.x, halfSpan.y) * 0.45);
+      vec2 dVec = abs(q - center) - (halfSpan - vec2(cornerR));
+      float sd = length(max(dVec, 0.0)) + min(max(dVec.x, dVec.y), 0.0) - cornerR;
+      float bevel = 1.0 - smoothstep(0.18, 0.64, abs(sd));
+      float core = 1.0 - smoothstep(0.0, 0.30, abs(sd));
+      float goldGlint = 0.90 + 0.10 * sin(q.x * 1.5 + q.y * 1.5 + uMotionTime * 2.4);
+      baseColor = mix(baseColor, baseColor * vec3(0.94, 1.04, 1.04), 0.45);
+      baseColor = mix(baseColor, vec3(0.58, 0.36, 0.04), bevel * 0.62);
+      baseColor = mix(baseColor, vec3(1.0, 0.80, 0.14) * goldGlint, core * 0.92);
+      float sweepX = mix(bx.x, bx.z, clamp(age / 1.3, 0.0, 1.0));
+      float sweep = (1.0 - smoothstep(0.0, 2.3, abs(q.x - sweepX))) * (1.0 - step(1.5, age));
+      baseColor = mix(baseColor, vec3(0.78, 1.0, 0.93), sweep * 0.72);
     }
 
     // 2-Minute Sink Brush-Along Quadrant Coaching Highlight (encoded in vVertColor.g: 0.1, 0.3, 0.5, 0.7)
     if (uActiveQuadrant >= 0) {
       int vertQuad = int(floor(vVertColor.g * 4.0 + 0.01));
       if (vertQuad == uActiveQuadrant) {
-        float coachPulse = 0.55 + 0.45 * sin(uTime * 5.0);
+        float coachPulse = 0.55 + 0.45 * sin(uMotionTime * 5.0);
         baseColor += vec3(0.10, 0.68, 0.75) * (0.18 + 0.18 * coachPulse);
       } else {
         baseColor *= 0.76;
@@ -317,15 +393,13 @@ const FRAGMENT_SHADER = /* glsl */ `
 
     // Tapped / inspected Companion crown: soft pearlescent mint-gold rim light
     if (uHighlightedTooth > -0.5 && vToothId > 0.5 && abs(vToothId - 1.0 - uHighlightedTooth) < 0.5) {
-      float rim = pow(1.0 - NdotV, 2.2);
-      float breathe = 0.78 + 0.22 * sin(uTime * 3.4);
-      vec3 mintGold = mix(vec3(0.45, 1.0, 0.82), vec3(1.0, 0.86, 0.40), 0.5 + 0.5 * sin(uTime * 1.3 + vWorldPos.x * 0.8));
-      baseColor += mintGold * (rim * 1.1 + 0.2) * uHighlightPulse * breathe;
+      // Tint the entire crown, then add a bright gold grazing-angle rim.
+      float rim = pow(1.0 - NdotV, 1.65);
+      vec3 mint = vec3(0.12, 0.84, 0.56);
+      vec3 gold = vec3(1.0, 0.81, 0.29);
+      vec3 selected = mix(mint, gold, smoothstep(0.07, 0.68, rim));
+      baseColor = mix(baseColor, selected, uHighlightPulse * (0.59 + 0.36 * rim));
     }
-
-    // Apply baked vertex cavity AO stored in vVertColor.r
-    float ao = clamp(vVertColor.r, 0.38, 1.0);
-    baseColor *= ao;
 
     gl_FragColor = vec4(baseColor, 1.0);
   }
@@ -355,9 +429,16 @@ export class EnamelBiophysicsMaterial {
         uSurfaceTex: { value: this.surfaceTexture },
         uWorldSize: { value: new THREE.Vector2(64, 32) },
         uTime: { value: 0 },
+        uMotionTime: { value: 0 },
+        uHeadlamp: { value: new THREE.Vector4() },
+        uDepthCue: { value: new THREE.Vector2(18, 0.085) },
+        uDetail: { value: 1 },
         uEnamelBase: { value: new THREE.Color(0xf4fbff) },
         uPellicleColor: { value: new THREE.Color(0xd9e35b) },
         uBiofilmColor: { value: new THREE.Color(0x9fb82c) },
+        uSulcusTint: { value: new THREE.Color(0xe11d48) },
+        uAcidWashTint: { value: new THREE.Color(0xa21caf) },
+        uEpsDomeTint: { value: new THREE.Color(0x4338ca) },
         uBChannelMode: { value: 0 },
         uDiscloseOrigin: { value: new THREE.Vector2(0, 0) },
         uDiscloseRadius: { value: 0 },
@@ -365,6 +446,9 @@ export class EnamelBiophysicsMaterial {
         uRinseOrigin: { value: new THREE.Vector2(0, 0) },
         uRinseRadius: { value: 0 },
         uRinseStrength: { value: 0 },
+        uBufferedRinse: { value: false },
+        uDistrictBox: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) },
+        uSealAge: { value: [-1, -1, -1, -1] },
         uGlobalSmoothnessOverride: { value: -1 },
         uGlobalFluorideGlow: { value: 0 },
         uAcidStress: { value: 0 },
@@ -436,6 +520,9 @@ export class EnamelBiophysicsMaterial {
     (u.uEnamelBase.value as THREE.Color).setHex(palette.enamelBaseHex);
     (u.uPellicleColor.value as THREE.Color).setHex(palette.pellicleSlimeHex);
     (u.uBiofilmColor.value as THREE.Color).setHex(palette.matureBiofilmHex);
+    (u.uSulcusTint.value as THREE.Color).setHex(pickSulcusTint(palette));
+    (u.uAcidWashTint.value as THREE.Color).setHex(pickAcidWashTint(palette));
+    (u.uEpsDomeTint.value as THREE.Color).setHex(pickEpsDomeTint(palette));
     u.uBChannelMode.value = B_MODE_INDEX[bChannelMode];
   }
 
@@ -483,6 +570,7 @@ export class EnamelBiophysicsMaterial {
     rinseOriginZ: number;
     rinseRadius: number;
     rinseStrength: number;
+    bufferedRinse?: boolean;
     acidStress?: number;
   }): void {
     const u = this.material.uniforms;
@@ -496,8 +584,23 @@ export class EnamelBiophysicsMaterial {
     (u.uRinseOrigin.value as THREE.Vector2).set(params.rinseOriginX, params.rinseOriginZ);
     u.uRinseRadius.value = params.rinseRadius;
     u.uRinseStrength.value = params.rinseStrength;
+    u.uBufferedRinse.value = params.bufferedRinse ?? false;
     if (params.acidStress !== undefined) {
       u.uAcidStress.value = params.acidStress;
+    }
+  }
+
+  /** Publishes district rectangles and seal ages (seconds, negative = still open). */
+  setDistrictSeals(
+    boxes: ReadonlyArray<{ minX: number; minZ: number; maxX: number; maxZ: number }>,
+    ages: ReadonlyArray<number>
+  ): void {
+    const boxArr = this.material.uniforms.uDistrictBox.value as THREE.Vector4[];
+    const ageArr = this.material.uniforms.uSealAge.value as number[];
+    for (let i = 0; i < 4; i++) {
+      const b = boxes[i];
+      if (b) boxArr[i].set(b.minX, b.minZ, b.maxX, b.maxZ);
+      ageArr[i] = b && ages[i] !== undefined ? ages[i] : -1;
     }
   }
 

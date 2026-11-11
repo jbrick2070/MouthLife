@@ -38,7 +38,7 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
     id: 'bicarb_buffer_jet',
     slot: 'rinse',
     name: 'Salivary Bicarbonate + F⁻ Infusion',
-    tagline: 'Ion Rinse immediately stabilizes acidic zones at pH 7.15 for 8s.',
+    tagline: 'Ion Rinse buffers nearby enamel to pH 7.2.',
     scientificNote:
       'Salivary bicarbonate (HCO₃⁻) neutralizes bacterial lactic acid so calcium, phosphate, and fluoride ions can re-precipitate into fluorapatite.',
     stampUnlockThreshold: 15,

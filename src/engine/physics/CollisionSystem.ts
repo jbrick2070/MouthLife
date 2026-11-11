@@ -146,6 +146,27 @@ export function resolveCircleCollisions(
   return { x, z };
 }
 
+/** Small steps let the circle follow the rounded ends of ridges without crossing a wall. */
+export function moveCircleWithSlide(
+  pos: Vec2,
+  delta: Vec2,
+  radius: number,
+  worldWidth: number,
+  worldDepth: number,
+  walls: readonly AABB2D[]
+): Vec2 {
+  const steps = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.z) / (radius * 0.12)));
+  const dx = delta.x / steps;
+  const dz = delta.z / steps;
+  let next = pos;
+  for (let i = 0; i < steps; i++) {
+    next = resolveCircleCollisions(
+      { x: next.x + dx, z: next.z + dz }, radius, worldWidth, worldDepth, walls
+    );
+  }
+  return next;
+}
+
 export function tryStartCapillaryZip(
   probePos: Vec2,
   aimDir: Vec2,
@@ -160,6 +181,9 @@ export function tryStartCapillaryZip(
   const az = aimDir.z / aimLen;
   const cosLimit = Math.cos(maxAngleRad);
 
+  let best: { zip: ProbeZipState; alley: InterdentalAlleyDef } | null = null;
+  let bestDist = Infinity;
+
   for (const alley of alleys) {
     const pairs: Array<[Vec2, Vec2]> = [
       [alley.endpointA, alley.endpointB],
@@ -167,7 +191,10 @@ export function tryStartCapillaryZip(
     ];
     for (const [startEp, endEp] of pairs) {
       const distToEntry = Math.hypot(probePos.x - startEp.x, probePos.z - startEp.z);
-      if (distToEntry > entryDist) continue;
+      if (distToEntry > entryDist || distToEntry >= bestDist) continue;
+
+      const distToExit = Math.hypot(probePos.x - endEp.x, probePos.z - endEp.z);
+      if (distToExit < distToEntry) continue;
 
       const vx = endEp.x - startEp.x;
       const vz = endEp.z - startEp.z;
@@ -183,7 +210,8 @@ export function tryStartCapillaryZip(
       );
       if (blocked) continue;
 
-      return {
+      bestDist = distToEntry;
+      best = {
         alley,
         zip: {
           from: { x: probePos.x, z: probePos.z },
@@ -195,7 +223,7 @@ export function tryStartCapillaryZip(
     }
   }
 
-  return null;
+  return best;
 }
 
 export interface ZipMouthHint {

@@ -1,3 +1,12 @@
+import {
+  pickAcidPoolTint,
+  pickAlleyReticleTint,
+  pickBridgeTint,
+  pickColonyBeaconTint,
+  pickColonyRestoredTint,
+  pickSpringTint,
+  pickSucroseTint,
+} from './landmarkContrast';
 import * as THREE from 'three';
 import {
   BRUSH_BASE_ARC_RAD,
@@ -16,6 +25,7 @@ import { mergeBufferGeometriesSimple } from './CartridgeMeshBuilder';
 
 interface ParticleSlot {
   active: boolean;
+  ambient: boolean;
   x: number;
   y: number;
   z: number;
@@ -54,6 +64,17 @@ const MAX_SHARDS = 48;
 // iridescence & emissive glow) — zero extra passes, zero shadow maps.
 // ---------------------------------------------------------------------------------------------
 const LIT_PROP_VERT = /* glsl */ `
+  #ifdef HYDRA_PARTS
+    attribute float aProbePart;
+    uniform float uRingSpin;
+    uniform float uCoreScale;
+    varying float vProbePart;
+
+    mat2 spinRing(float angle) {
+      return mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+    }
+  #endif
+
   varying vec3 vWorldNormal;
   varying vec3 vWorldPos;
   varying vec3 vInstColor;
@@ -68,6 +89,17 @@ const LIT_PROP_VERT = /* glsl */ `
 
     vec4 localPos = vec4(position, 1.0);
     vec3 localNorm = normal;
+    #ifdef HYDRA_PARTS
+      vProbePart = aProbePart;
+      if (aProbePart == 3.0) {
+        localPos.xyz = position * uCoreScale + vec3(0.24, 0.30, 0.0);
+      } else if (aProbePart > 0.0) {
+        mat2 spin = spinRing(uRingSpin * (aProbePart == 1.0 ? 1.0 : -1.35));
+        localPos.yz = spin * localPos.yz;
+        localNorm.yz = spin * localNorm.yz;
+        localPos.xyz += vec3(-0.78, 0.02, 0.0);
+      }
+    #endif
     #ifdef USE_INSTANCING
       localPos = instanceMatrix * localPos;
       localNorm = mat3(instanceMatrix) * localNorm;
@@ -80,6 +112,11 @@ const LIT_PROP_VERT = /* glsl */ `
 `;
 
 const LIT_PROP_FRAG = /* glsl */ `
+  #ifdef HYDRA_PARTS
+    uniform vec3 uCoreColor;
+    varying float vProbePart;
+  #endif
+
   uniform vec3 uBaseColor;
   uniform float uOpacity;
   uniform float uIridescence;
@@ -89,6 +126,13 @@ const LIT_PROP_FRAG = /* glsl */ `
   varying vec3 vWorldPos;
   varying vec3 vInstColor;
   void main() {
+    #ifdef HYDRA_PARTS
+      if (vProbePart > 2.5) {
+        gl_FragColor = linearToOutputTexel(vec4(uCoreColor, 1.0));
+        return;
+      }
+    #endif
+
     vec3 N = normalize(vWorldNormal);
     vec3 V = normalize(cameraPosition - vWorldPos);
     vec3 L = normalize(vec3(0.42, 0.85, 0.38));
@@ -398,15 +442,15 @@ function buildZipReticleGeometry(): THREE.BufferGeometry {
   const segs = 10;
   for (let i = 0; i < segs; i++) {
     const a0 = (i / segs) * Math.PI * 2;
-    const arc = new THREE.RingGeometry(0.78, 0.92, 6, 1, a0, (Math.PI * 2) / segs * 0.62);
+    const arc = new THREE.RingGeometry(0.76, 0.96, 6, 1, a0, ((Math.PI * 2) / segs) * 0.64);
     arc.rotateX(-Math.PI / 2);
-    parts.push(paint(arc, 0x67e8f9));
+    parts.push(paint(arc, 0xffffff));
   }
   for (const off of [0.55, 1.05]) {
     const chev = new THREE.BufferGeometry();
     const v = new Float32Array([
-      off, 0, 0, off - 0.32, 0, -0.26, off - 0.18, 0, 0,
-      off, 0, 0, off - 0.18, 0, 0, off - 0.32, 0, 0.26,
+      off, 0, 0, off - 0.34, 0, -0.28, off - 0.18, 0, 0,
+      off, 0, 0, off - 0.18, 0, 0, off - 0.34, 0, 0.28,
     ]);
     chev.setAttribute('position', new THREE.BufferAttribute(v, 3));
     chev.computeVertexNormals();
@@ -423,14 +467,9 @@ export class EntityBatchRenderer {
 
   // HYDRA-1 articulated micro-dental craft
   private probeGroup = new THREE.Group();
-  private probeHullMesh: THREE.Mesh;
   private probeHullMat: THREE.ShaderMaterial;
   private bristleTuftInst: THREE.InstancedMesh;
-  private sonicRingOuter: THREE.Mesh;
-  private sonicRingInner: THREE.Mesh;
   private cockpitDome: THREE.Mesh;
-  private surgeCore: THREE.Mesh;
-  private surgeCoreMat: THREE.MeshBasicMaterial;
   private ringSpin = 0;
   private tuftRest: Array<{ x: number; z: number }> = [];
   private bristleArcMesh: THREE.Mesh;
@@ -472,32 +511,47 @@ export class EntityBatchRenderer {
   private particleCursor = 0;
   private activeParticleCap = QUALITY_TIER_SPECS.medium.particleCap;
   private breezeEmitTimer = 0;
+  private motePhase = 0;
+  private qualityTier: QualityTier = 'medium';
 
   private dummy = new THREE.Object3D();
   private tmpColor = new THREE.Color();
+  private tmpColorB = new THREE.Color();
+  private activeSucroseHex = 0xf9a8d4;
   private tmpMat = new THREE.Matrix4();
   private timedMaterials: THREE.ShaderMaterial[] = [];
 
   constructor() {
-    // 1. HYDRA-1 hull (1 draw call)
+    // The hull, counter-rotating rings and Surge core share one opaque draw.
+    const parts = [
+      buildHydraHullGeometry(),
+      buildSonicRingGeometry(0.27, 12, 0x22d3ee, 0x67e8f9),
+      buildSonicRingGeometry(0.16, 8, 0x0ea5e9, 0xa5f3fc),
+      new THREE.IcosahedronGeometry(0.11, 1),
+    ];
+    const hull = mergeBufferGeometriesSimple(parts);
+    const partIds = new Float32Array(hull.attributes.position.count);
+    let offset = 0;
+    parts.forEach((geometry, id) => {
+      const count = geometry.index?.count ?? geometry.attributes.position.count;
+      partIds.fill(id, offset, offset + count);
+      offset += count;
+      geometry.dispose();
+    });
+    hull.setAttribute('aProbePart', new THREE.BufferAttribute(partIds, 1));
+    // Keep all articulated positions inside the conservative hull bounds.
+    hull.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.5);
+
     this.probeHullMat = createCrystalLitMaterial(0xffffff, 1, { vertexColors: true });
-    this.probeHullMesh = new THREE.Mesh(buildHydraHullGeometry(), this.probeHullMat);
-    this.probeGroup.add(this.probeHullMesh);
+    this.probeHullMat.defaultAttributeValues.aProbePart = [0];
+    const uniforms = this.probeHullMat.uniforms;
+    uniforms.uRingSpin = { value: 0 };
+    uniforms.uCoreScale = { value: 1 };
+    uniforms.uCoreColor = { value: new THREE.Color(0x5eead4) };
+    this.probeHullMat.defines.HYDRA_PARTS = 1;
+    this.probeGroup.add(new THREE.Mesh(hull, this.probeHullMat));
 
-    // Articulated counter-rotating sonic bristle rings (spin faster while scrubbing)
-    const ringMat = createCrystalLitMaterial(0xffffff, 1, { vertexColors: true });
-    this.sonicRingOuter = new THREE.Mesh(buildSonicRingGeometry(0.27, 12, 0x22d3ee, 0x67e8f9), ringMat);
-    this.sonicRingOuter.position.set(-0.78, 0.02, 0);
-    this.probeGroup.add(this.sonicRingOuter);
-    this.sonicRingInner = new THREE.Mesh(buildSonicRingGeometry(0.16, 8, 0x0ea5e9, 0xa5f3fc), ringMat);
-    this.sonicRingInner.position.set(-0.78, 0.02, 0);
-    this.probeGroup.add(this.sonicRingInner);
-
-    // Translucent cockpit dome with a reactive Surge core inside
-    this.surgeCoreMat = new THREE.MeshBasicMaterial({ color: 0x5eead4 });
-    this.surgeCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), this.surgeCoreMat);
-    this.surgeCore.position.set(0.24, 0.3, 0);
-    this.probeGroup.add(this.surgeCore);
+    // Translucent cockpit dome renders after the opaque core.
     const domeGeo = new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2);
     domeGeo.scale(1.25, 0.9, 0.92);
     this.cockpitDome = new THREE.Mesh(
@@ -561,12 +615,12 @@ export class EntityBatchRenderer {
     this.wakeRingInst.frustumCulled = false;
     this.arcadeEntitiesGroup.add(this.wakeRingInst);
 
-    // Projected aim / zip reticle at interdental alley mouths
+    // Projected aim / zip reticle at interdental alley mouths (alpha-blended so it stays legible on white enamel)
     this.zipReticleMat = new THREE.MeshBasicMaterial({
+      color: 0x06b6d4,
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.88,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -598,7 +652,11 @@ export class EntityBatchRenderer {
     this.arcadeEntitiesGroup.add(this.flossMesh);
 
     // 2. World entity batches
-    this.bridgeInst = this.makeInst(new THREE.CapsuleGeometry(0.15, 0.7, 4, 8).rotateZ(Math.PI / 2), createCrystalLitMaterial(0xcbd83b), 8);
+    this.bridgeInst = this.makeInst(
+      new THREE.CapsuleGeometry(0.15, 0.7, 4, 8).rotateZ(Math.PI / 2),
+      createCrystalLitMaterial(0xffffff, 1, { emissive: 0.12 }),
+      8
+    );
 
     this.mutansInst = this.makeInst(buildStreptoChainGeometry(), createCrystalLitMaterial(0xffffff, 1, { vertexColors: true }), 16);
 
@@ -638,9 +696,9 @@ export class EntityBatchRenderer {
       this.shardInst.setColorAt(i, this.tmpColor.setHex(i % 2 ? 0xfbcfe8 : 0xf9a8d4));
     }
 
-    const springGeo = new THREE.TorusGeometry(0.85, 0.12, 8, 24);
+    const springGeo = new THREE.TorusGeometry(0.85, 0.14, 8, 24);
     springGeo.rotateX(Math.PI / 2);
-    this.springInst = this.makeInst(springGeo, createCrystalLitMaterial(0x38bdf8, 1, { emissive: 0.15 }), 8);
+    this.springInst = this.makeInst(springGeo, createCrystalLitMaterial(0xffffff, 1, { emissive: 0.2 }), 8);
 
     this.beaconInst = this.makeInst(new THREE.OctahedronGeometry(0.62, 0), createCrystalLitMaterial(0xfde047, 1, { emissive: 0.25 }), 8);
 
@@ -648,7 +706,7 @@ export class EntityBatchRenderer {
     poolGeo.rotateX(-Math.PI / 2);
     this.acidPoolInst = this.makeInst(
       poolGeo,
-      new THREE.MeshBasicMaterial({ color: 0xa3e635, transparent: true, opacity: 0.48, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.64, depthWrite: false }),
       12
     );
 
@@ -673,7 +731,7 @@ export class EntityBatchRenderer {
     this.particleInst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.particleInst.frustumCulled = false;
     for (let i = 0; i < MAX_PARTICLES_ULTRA; i++) {
-      this.particles.push({ active: false, x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0, age: 0, life: 1, size: 1, r: 1, g: 1, b: 1 });
+      this.particles.push({ active: false, ambient: false, x: 0, y: -999, z: 0, vx: 0, vy: 0, vz: 0, age: 0, life: 1, size: 1, r: 1, g: 1, b: 1 });
       this.dummy.position.set(0, -999, 0);
       this.dummy.scale.setScalar(0.001);
       this.dummy.updateMatrix();
@@ -699,6 +757,7 @@ export class EntityBatchRenderer {
   }
 
   setQualityTier(tier: QualityTier): void {
+    this.qualityTier = tier;
     this.activeParticleCap = QUALITY_TIER_SPECS[tier].particleCap;
     this.particleInst.count = this.activeParticleCap;
   }
@@ -723,6 +782,7 @@ export class EntityBatchRenderer {
       const ang = (i / Math.max(1, params.count)) * Math.PI * 2 + idx * 0.37;
       const spd = params.speed * (0.55 + ((idx * 17) % 10) * 0.08);
       slot.active = true;
+      slot.ambient = false;
       slot.x = params.x;
       slot.y = params.y;
       slot.z = params.z;
@@ -760,7 +820,16 @@ export class EntityBatchRenderer {
       s.size = 0.7 + Math.random() * 0.8;
       s.floorY = y;
     }
-    this.spawnBurst({ x, y: y + 0.5, z, count: 10, speed: 4.5, colorHex: 0xfbcfe8, size: 0.6, life: 0.5 });
+    this.spawnBurst({
+      x,
+      y: y + 0.5,
+      z,
+      count: 10,
+      speed: 4.5,
+      colorHex: this.activeSucroseHex,
+      size: 0.6,
+      life: 0.5,
+    });
   }
 
   update(params: {
@@ -770,18 +839,19 @@ export class EntityBatchRenderer {
     session: WorldSession;
     scrubbingActive: boolean;
     companionSmoothness: number;
+    reducedMotion: boolean;
+    companionVisible: boolean;
   }): void {
     const { dt, nowSec, mode, session } = params;
-    for (const m of this.timedMaterials) m.uniforms.uTime.value = nowSec;
+    for (const m of this.timedMaterials) m.uniforms.uTime.value = params.reducedMotion ? 0 : nowSec;
     const inArcade = (mode === 'ARCADE' || mode === 'PULP_RESCUE') && Boolean(session.cartridge);
-    this.arcadeEntitiesGroup.visible = inArcade;
 
     if (inArcade) {
       if (this.trackedCartridge !== session.cartridge) {
         this.trackedCartridge = session.cartridge;
         this.siteRestoredAt.clear();
       }
-      this.syncArcadeEntities(dt, nowSec, session, params.scrubbingActive);
+      this.syncArcadeEntities(dt, nowSec, session, params.scrubbingActive, params.reducedMotion);
     }
 
     // Cool-Mint Smooth Bask sparkle breeze ribbons around the Companion Arch
@@ -790,38 +860,43 @@ export class EntityBatchRenderer {
       mode === 'BRUSH_ALONG' ||
       mode === 'REPORT';
 
-    if (inCompanionShow) {
+    const showMotes = !params.reducedMotion && (inArcade || params.companionVisible) && this.qualityTier !== 'low';
+    if (showMotes) {
       this.breezeEmitTimer -= dt;
       if (this.breezeEmitTimer <= 0) {
-        this.breezeEmitTimer = 0.075;
-        const ang = (nowSec * 1.65) % (Math.PI * 2);
-        const rx = 32 + Math.sin(ang) * 10.4;
-        const rz = 16 + Math.cos(ang) * 8.8 - 1.6;
+        this.breezeEmitTimer = this.qualityTier === 'ultra' ? 0.12 : 0.23;
+        const ang = this.motePhase;
+        this.motePhase = (ang + 2.39996) % (Math.PI * 2);
+        const rx = (inArcade ? session.probePos.x : 32) + Math.sin(ang) * (inArcade ? 8 : 10.4);
+        const rz = (inArcade ? session.probePos.z : 14.4) + Math.cos(ang) * 8.8;
         const slotIdx = this.particleCursor % Math.max(1, this.activeParticleCap);
         this.particleCursor = (this.particleCursor + 1) % Math.max(1, this.activeParticleCap);
         const p = this.particles[slotIdx];
         p.active = true;
+        p.ambient = true;
         p.x = rx;
-        p.y = 1.6 + Math.sin(nowSec * 3.1) * 0.7;
+        p.y = (inArcade ? session.probeY : 1.4) + 0.65 + Math.sin(ang) * 0.6;
         p.z = rz;
-        p.vx = Math.cos(ang) * 1.6;
-        p.vy = 1.15;
-        p.vz = -Math.sin(ang) * 1.6;
+        p.vx = Math.cos(ang) * 0.38;
+        p.vy = 0.27;
+        p.vz = -Math.sin(ang) * 0.38;
         p.age = 0;
-        p.life = 1.35;
-        p.size = 0.95;
-        this.tmpColor.setHex(slotIdx % 2 === 0 ? 0x5eead4 : 0xe0f2fe);
+        p.life = 3.8;
+        p.size = inCompanionShow ? 0.66 : 0.49;
+        this.tmpColor.setHex(inCompanionShow ? 0x8ddacc : 0x8dafc3);
         p.r = this.tmpColor.r;
         p.g = this.tmpColor.g;
         p.b = this.tmpColor.b;
       }
     }
 
-    this.stepParticles(dt);
+    this.stepParticles(dt, showMotes);
     this.stepShards(dt);
   }
 
-  private syncArcadeEntities(dt: number, nowSec: number, session: WorldSession, scrubbingActive: boolean): void {
+  private syncArcadeEntities(
+    dt: number, nowSec: number, session: WorldSession, scrubbingActive: boolean, reducedMotion: boolean
+  ): void {
     const cart = session.cartridge;
     let shadowCount = 0;
     const pushShadow = (x: number, y: number, z: number, scale: number) => {
@@ -835,10 +910,11 @@ export class EntityBatchRenderer {
 
     // 1. HYDRA-1 craft: hover bob, banking into turns, sonic tuft oscillation
     const zipping = Boolean(session.probeZip);
-    const hover = Math.sin(nowSec * 6.5) * 0.08;
+    const motionTime = reducedMotion ? 0 : nowSec;
+    const hover = Math.sin(motionTime * 6.5) * 0.08;
     const bank = Math.max(-0.35, Math.min(0.35, (session.probeSpeed / 9.2) * 0.22));
     this.probeGroup.position.set(session.probePos.x, session.probeY + 0.62 + hover, session.probePos.z);
-    this.probeGroup.rotation.set(zipping ? 0.25 : bank * Math.sin(nowSec * 2.0) * 0.3, -session.probeFacingRad, zipping ? -0.18 : 0);
+    this.probeGroup.rotation.set(zipping ? 0.25 : bank * Math.sin(motionTime * 2.0) * 0.3, -session.probeFacingRad, zipping ? -0.18 : 0);
     const zipStretch = zipping ? 1.25 : 1.0;
     this.probeGroup.scale.set(zipStretch, zipping ? 0.85 : 1.0, zipping ? 0.9 : 1.0);
 
@@ -846,7 +922,7 @@ export class EntityBatchRenderer {
     const sonicFreq = scrubbingActive ? 62 : 9;
     for (let i = 0; i < this.tuftRest.length; i++) {
       const r = this.tuftRest[i];
-      const ph = nowSec * sonicFreq + i * 1.7;
+      const ph = motionTime * sonicFreq + i * 1.7;
       this.dummy.position.set(r.x + Math.sin(ph) * 0.02 * (scrubbingActive ? 1 : 0.3), -0.42, r.z);
       this.dummy.rotation.set(Math.sin(ph) * sonicAmp, 0, Math.cos(ph * 0.9) * sonicAmp * 0.6);
       this.dummy.scale.set(1, scrubbingActive ? 1.08 + Math.sin(ph * 1.3) * 0.08 : 1, 1);
@@ -856,35 +932,36 @@ export class EntityBatchRenderer {
     this.bristleTuftInst.instanceMatrix.needsUpdate = true;
 
     // Counter-rotating sonic rings (fast + blurred while scrubbing) and reactive Surge core
-    this.ringSpin += dt * (scrubbingActive ? 34 : 3.2);
-    this.sonicRingOuter.rotation.x = this.ringSpin;
-    this.sonicRingInner.rotation.x = -this.ringSpin * 1.35;
+    if (!reducedMotion) this.ringSpin = (this.ringSpin + dt * (scrubbingActive ? 34 : 3.2)) % (Math.PI * 40);
+    const hullUniforms = this.probeHullMat.uniforms;
+    hullUniforms.uRingSpin.value = this.ringSpin;
     const surge01 = Math.max(0, Math.min(1, session.surgeMeter / SURGE_MAX));
     const surgeReady = surge01 >= 1;
-    const corePulse = surgeReady ? 1.0 + Math.sin(nowSec * 14) * 0.28 : 0.55 + surge01 * 0.45;
-    this.surgeCore.scale.setScalar(corePulse);
-    this.surgeCoreMat.color.setHex(0x14b8a6).lerp(this.tmpColor.setHex(surgeReady ? 0xfde047 : 0x67e8f9), surgeReady ? 1 : surge01);
+    const corePulse = surgeReady && !reducedMotion ? 1.0 + Math.sin(nowSec * 14) * 0.28 : 0.55 + surge01 * 0.45;
+    hullUniforms.uCoreScale.value = corePulse;
+    (hullUniforms.uCoreColor.value as THREE.Color).setHex(0x14b8a6).lerp(this.tmpColor.setHex(surgeReady ? 0xfde047 : 0x67e8f9), surgeReady ? 1 : surge01);
 
     const arcScale = session.hasBassUpgrade ? BRUSH_BASS_ARC_RAD / BRUSH_BASE_ARC_RAD : 1.0;
     const overdriveScale = session.overdriveActive ? 1.25 : 1.0;
     this.bristleArcMesh.scale.set(
       overdriveScale / zipStretch,
       1,
-      overdriveScale * arcScale * (scrubbingActive ? 1.08 + Math.sin(nowSec * 36) * 0.08 : 0.92)
+      overdriveScale * arcScale * (scrubbingActive ? 1.08 + Math.sin(motionTime * 36) * 0.08 : 0.92)
     );
     (this.bristleArcMesh.material as THREE.MeshBasicMaterial).opacity = zipping ? 0 : scrubbingActive ? 0.62 : 0.22;
 
     // Hover wake rings expanding beneath the craft
+    const hydroSonic = scrubbingActive && !zipping && session.hasHydroSonicUpgrade;
     for (let i = 0; i < 3; i++) {
-      const phase = (nowSec * (scrubbingActive ? 1.9 : 1.1) + i / 3) % 1;
-      const scale = 0.55 + phase * (zipping ? 2.4 : 1.7);
+      const phase = (motionTime * (scrubbingActive ? 1.9 : 1.1) + i / 3) % 1;
+      const scale = 0.55 + phase * (hydroSonic ? 2.8 : zipping ? 2.4 : 1.7);
       this.dummy.position.set(session.probePos.x, session.probeY + 0.07, session.probePos.z);
       this.dummy.rotation.set(0, 0, 0);
       this.dummy.scale.set(scale, 1, scale);
       this.dummy.updateMatrix();
       this.wakeRingInst.setMatrixAt(i, this.dummy.matrix);
       const fade = (1 - phase) * (scrubbingActive ? 0.85 : 0.5);
-      this.wakeRingInst.setColorAt(i, this.tmpColor.setRGB(fade * 0.6, fade, fade));
+      this.wakeRingInst.setColorAt(i, this.tmpColor.setRGB(hydroSonic ? fade : fade * 0.6, fade, fade));
     }
     this.wakeRingInst.instanceMatrix.needsUpdate = true;
     if (this.wakeRingInst.instanceColor) this.wakeRingInst.instanceColor.needsUpdate = true;
@@ -905,6 +982,7 @@ export class EntityBatchRenderer {
     }
 
     // Projected aim / zip reticle when HYDRA-1 nears an interdental alley mouth
+    const alleyHex = pickAlleyReticleTint(cart.palette);
     const hint = zipping ? null : findNearestZipMouth(session.probePos, cart.interdentalAlleys, cart.wallBoxes);
     if (hint) {
       const ex = hint.exit.x - hint.entry.x;
@@ -913,9 +991,13 @@ export class EntityBatchRenderer {
       this.zipReticle.visible = true;
       this.zipReticle.position.set(hint.entry.x, y, hint.entry.z);
       this.zipReticle.rotation.set(0, -Math.atan2(ez, ex), 0);
-      const pulse = hint.inZipRange ? 1.0 + Math.sin(nowSec * 10) * 0.12 : 0.85 + Math.sin(nowSec * 4) * 0.05;
+      const pulse = hint.inZipRange ? 1.04 + Math.sin(motionTime * 10) * 0.12 : 0.88 + Math.sin(motionTime * 4) * 0.05;
       this.zipReticle.scale.setScalar(pulse);
-      this.zipReticleMat.opacity = hint.inZipRange ? 1.0 : 0.5;
+      this.zipReticleMat.color.setHex(alleyHex);
+      if (hint.inZipRange) {
+        this.zipReticleMat.color.lerp(this.tmpColorB.setHex(0xffffff), 0.16);
+      }
+      this.zipReticleMat.opacity = hint.inZipRange ? 1.0 : 0.82;
     } else {
       this.zipReticle.visible = false;
     }
@@ -944,7 +1026,8 @@ export class EntityBatchRenderer {
       this.flossMesh.visible = false;
     }
 
-    // 2. Biofilm bridges (pulsing slime cords)
+    // 2. Biofilm bridges (pulsing slime cords tinted for per-world contrast)
+    const bridgeHex = pickBridgeTint(cart.palette);
     let bCount = 0;
     for (const br of session.bridges) {
       if (!br.intact || bCount >= 8) continue;
@@ -956,10 +1039,12 @@ export class EntityBatchRenderer {
       const my = sampleTerrainHeight(cart, mx, mz) + 0.35;
       this.dummy.position.set(mx, my, mz);
       this.dummy.rotation.set(0, -Math.atan2(dz, dx), 0);
-      const throb = 1 + Math.sin(nowSec * 5 + bCount) * 0.15;
+      const throb = 1 + Math.sin(motionTime * 5 + bCount) * 0.15;
       this.dummy.scale.set(len, throb, throb);
       this.dummy.updateMatrix();
-      this.bridgeInst.setMatrixAt(bCount++, this.dummy.matrix);
+      this.bridgeInst.setMatrixAt(bCount, this.dummy.matrix);
+      this.bridgeInst.setColorAt(bCount, this.tmpColor.setHex(bridgeHex));
+      bCount++;
     }
     this.commit(this.bridgeInst, bCount);
 
@@ -969,20 +1054,21 @@ export class EntityBatchRenderer {
       if (mCount >= 16) break;
       const y = sampleTerrainHeight(cart, m.pos.x, m.pos.z);
       const stunned = m.stunRemaining > 0;
-      const hopRaw = Math.abs(Math.sin(m.hopPhase));
+      const hopPhase = reducedMotion ? 0 : m.hopPhase;
+      const hopRaw = Math.abs(Math.sin(hopPhase));
       const hop = stunned ? 0.05 : hopRaw * 0.55;
       const landing = stunned ? 0 : Math.pow(1 - hopRaw, 6);
       const squash = stunned ? 0.7 : 1.0 - 0.32 * landing + 0.18 * hopRaw;
       const stretch = 1 / Math.sqrt(Math.max(0.4, squash));
       this.dummy.position.set(m.pos.x, y + 0.36 + hop, m.pos.z);
-      this.dummy.rotation.set(Math.sin(m.hopPhase * 0.5) * 0.25, Math.atan2(-m.vel.z, m.vel.x), Math.sin(m.hopPhase) * 0.18);
-      const wob = stunned ? 1 : 1 + Math.sin(nowSec * 9.5 + m.id * 1.9) * 0.07;
+      this.dummy.rotation.set(Math.sin(hopPhase * 0.5) * 0.25, Math.atan2(-m.vel.z, m.vel.x), Math.sin(hopPhase) * 0.18);
+      const wob = stunned ? 1 : 1 + Math.sin(motionTime * 9.5 + m.id * 1.9) * 0.07;
       this.dummy.scale.set(stretch * 1.05 * wob, squash / wob, stretch * 1.05 * (2 - wob));
       this.dummy.updateMatrix();
       this.mutansInst.setMatrixAt(mCount, this.dummy.matrix);
       this.mutansInst.setColorAt(mCount, this.tmpColor.setHex(stunned ? 0x67e8f9 : 0xa3e635));
 
-      const auraPhase = (nowSec * 1.4 + m.id * 0.31) % 1;
+      const auraPhase = (motionTime * 1.4 + m.id * 0.31) % 1;
       this.dummy.position.set(m.pos.x, y + 0.08, m.pos.z);
       this.dummy.rotation.set(0, 0, 0);
       this.dummy.scale.setScalar(0.7 + auraPhase * 1.1);
@@ -998,46 +1084,56 @@ export class EntityBatchRenderer {
     this.commit(this.mutansAuraInst, mCount);
 
     // 4. Commensal S. sanguinis sites + blooming pearlescent crystal halos once restored
+    const colonyBeaconHex = pickColonyBeaconTint(cart.palette);
+    const colonyRestoredHex = pickColonyRestoredTint(cart.palette);
     let sCount = 0;
     let hCount = 0;
     for (const site of session.sites) {
       if (sCount >= 16) break;
       const y = sampleTerrainHeight(cart, site.pos.x, site.pos.z);
-      const floatY = site.restored ? 0.78 + Math.sin(nowSec * 3.4 + sCount) * 0.18 : 0.38;
+      const floatY = site.restored ? 0.78 + Math.sin(motionTime * 3.4 + sCount) * 0.18 : 0.38;
       this.dummy.position.set(site.pos.x, y + floatY, site.pos.z);
-      this.dummy.rotation.set(0, nowSec * (site.restored ? 1.6 : 0.35), 0);
-      this.dummy.scale.setScalar(site.restored ? 1.12 : 0.82 + site.localCleanRatio * 0.2);
+      this.dummy.rotation.set(0, motionTime * (site.restored ? 1.6 : 0.35), 0);
+      this.dummy.scale.setScalar(site.restored ? 1.14 : 0.9 + site.localCleanRatio * 0.22);
       this.dummy.updateMatrix();
       this.siteInst.setMatrixAt(sCount, this.dummy.matrix);
-      this.tmpColor.setHex(0x94a3b8).lerp(new THREE.Color(0x5eead4), site.restored ? 1 : site.localCleanRatio * 0.5);
+      this.tmpColor
+        .setHex(colonyBeaconHex)
+        .lerp(this.tmpColorB.setHex(colonyRestoredHex), site.restored ? 1 : 0.15 + site.localCleanRatio * 0.72);
       this.siteInst.setColorAt(sCount, this.tmpColor);
       pushShadow(site.pos.x, y, site.pos.z, 1.25);
       sCount++;
 
       if (!site.restored && hCount < 16) {
-        // Partial bloom: a faint pearlescent halo grows with local cleanliness (0% -> 100%)
+        // Always-visible target beacon patch that expands & shifts from beacon tint toward restored hue as scrubbed
         const frac = Math.max(0, Math.min(1, site.localCleanRatio / SITE_RESTORE_CLEAN_RATIO));
-        if (frac > 0.08) {
-          this.dummy.position.set(site.pos.x, y + 0.3, site.pos.z);
-          this.dummy.rotation.set(0, -nowSec * 0.3 + hCount, 0);
-          this.dummy.scale.set(frac * 1.05, frac * 0.7 + 0.05, frac * 1.05);
-          this.dummy.updateMatrix();
-          this.siteHaloInst.setMatrixAt(hCount, this.dummy.matrix);
-          this.siteHaloInst.setColorAt(hCount, this.tmpColor.setRGB(0.25 + 0.5 * frac, 0.45 + 0.4 * frac, 0.45 + 0.4 * frac));
-          hCount++;
-        }
+        const pulse = 1 + Math.sin(motionTime * 3.0 + hCount * 1.1) * 0.06;
+        const ringScale = (0.68 + frac * 0.52) * pulse;
+        this.dummy.position.set(site.pos.x, y + 0.26, site.pos.z);
+        this.dummy.rotation.set(0, -motionTime * 0.35 + hCount, 0);
+        this.dummy.scale.set(ringScale, 0.24 + frac * 0.68, ringScale);
+        this.dummy.updateMatrix();
+        this.siteHaloInst.setMatrixAt(hCount, this.dummy.matrix);
+        this.siteHaloInst.setColorAt(
+          hCount,
+          this.tmpColor.setHex(colonyBeaconHex).lerp(this.tmpColorB.setHex(colonyRestoredHex), frac * 0.65)
+        );
+        hCount++;
       }
       if (site.restored) {
         if (!this.siteRestoredAt.has(site.id)) this.siteRestoredAt.set(site.id, nowSec);
-        const age = nowSec - (this.siteRestoredAt.get(site.id) ?? nowSec);
-        const bloom = age < 0.9 ? 1 - Math.pow(1 - age / 0.9, 3) * Math.cos(age * 9) : 1;
-        const breathe = 1 + Math.sin(nowSec * 2.2 + hCount) * 0.06;
+        const age = Math.max(0, nowSec - (this.siteRestoredAt.get(site.id) ?? nowSec));
+        const bloom = !reducedMotion && age < 0.9 ? 1 - Math.pow(1 - age / 0.9, 3) * Math.cos(age * 9) : 1;
+        const breathe = 1 + Math.sin(motionTime * 2.2 + hCount) * 0.06;
         this.dummy.position.set(site.pos.x, y + 0.32, site.pos.z);
-        this.dummy.rotation.set(0, -nowSec * 0.6 + hCount, 0);
+        this.dummy.rotation.set(0, -motionTime * 0.6 + hCount, 0);
         this.dummy.scale.set(bloom * breathe * 1.25, Math.max(0.05, bloom) * 1.1, bloom * breathe * 1.25);
         this.dummy.updateMatrix();
         this.siteHaloInst.setMatrixAt(hCount, this.dummy.matrix);
-        this.siteHaloInst.setColorAt(hCount, this.tmpColor.setHex(0xffffff));
+        this.siteHaloInst.setColorAt(
+          hCount,
+          this.tmpColor.setHex(colonyRestoredHex).lerp(this.tmpColorB.setHex(0xffffff), 0.35)
+        );
         hCount++;
       }
     }
@@ -1045,35 +1141,41 @@ export class EntityBatchRenderer {
     this.commit(this.siteHaloInst, hCount);
 
     // 5. Faceted refractive Sucrose crystal clusters (cracking jitter as HP drops)
+    const sucroseHex = pickSucroseTint(cart.palette);
+    this.activeSucroseHex = sucroseHex;
     let cCount = 0;
     for (const c of session.sucroseCrystals) {
       if (!c.intact || cCount >= 8) continue;
       const y = sampleTerrainHeight(cart, c.pos.x, c.pos.z);
       const damage = 1 - Math.max(0, Math.min(1, c.hp / 4));
-      const jitter = damage > 0.05 ? Math.sin(nowSec * 60 + cCount) * 0.04 * damage : 0;
+      const jitter = damage > 0.05 ? Math.sin(motionTime * 60 + cCount) * 0.04 * damage : 0;
       this.dummy.position.set(c.pos.x + jitter, y + 0.32, c.pos.z);
-      this.dummy.rotation.set(0.12, nowSec * 0.6 + cCount, 0.08);
-      this.dummy.scale.setScalar((1.15 - damage * 0.25) * (1 + Math.sin(nowSec * 3.1 + cCount * 1.3) * 0.03));
+      this.dummy.rotation.set(0.12, motionTime * 0.6 + cCount, 0.08);
+      this.dummy.scale.setScalar((1.15 - damage * 0.25) * (1 + Math.sin(motionTime * 3.1 + cCount * 1.3) * 0.03));
       this.dummy.updateMatrix();
       this.sucroseInst.setMatrixAt(cCount, this.dummy.matrix);
-      this.sucroseInst.setColorAt(cCount, this.tmpColor.setHex(0xf9a8d4).lerp(new THREE.Color(0xffffff), 0.25 - damage * 0.2));
+      this.sucroseInst.setColorAt(
+        cCount,
+        this.tmpColor.setHex(sucroseHex).lerp(this.tmpColorB.setHex(0xffffff), 0.25 - damage * 0.2)
+      );
       pushShadow(c.pos.x, y, c.pos.z, 1.5);
       cCount++;
     }
     this.commit(this.sucroseInst, cCount);
 
-    // 6. Salivary Bicarbonate springs
+    // 6. Salivary Bicarbonate / Miswak springs
+    const springHex = pickSpringTint(cart.palette);
     let spCount = 0;
     for (let i = 0; i < cart.salivaSprings.length && spCount < 8; i++) {
       const sp = cart.salivaSprings[i];
       const y = sampleTerrainHeight(cart, sp.x, sp.z);
-      this.dummy.position.set(sp.x, y + 0.14, sp.z);
-      this.dummy.rotation.set(0, nowSec * 1.2, 0);
+      this.dummy.position.set(sp.x, y + 0.15, sp.z);
+      this.dummy.rotation.set(0, motionTime * 1.2, 0);
       const ready = (session.springCooldowns[i] ?? 0) <= 0;
-      this.dummy.scale.setScalar(ready ? 1.0 + Math.sin(nowSec * 4.0 + i) * 0.12 : 0.72);
+      this.dummy.scale.setScalar(ready ? 1.02 + Math.sin(motionTime * 4.0 + i) * 0.12 : 0.72);
       this.dummy.updateMatrix();
       this.springInst.setMatrixAt(spCount, this.dummy.matrix);
-      this.springInst.setColorAt(spCount, this.tmpColor.setHex(ready ? 0xffffff : 0x64748b));
+      this.springInst.setColorAt(spCount, this.tmpColor.setHex(ready ? springHex : 0x64748b));
       spCount++;
     }
     this.commit(this.springInst, spCount);
@@ -1083,8 +1185,8 @@ export class EntityBatchRenderer {
     for (const bc of session.beacons) {
       if (bc.collected || bcCount >= 8) continue;
       const y = sampleTerrainHeight(cart, bc.pos.x, bc.pos.z);
-      this.dummy.position.set(bc.pos.x, y + 0.88 + Math.sin(nowSec * 4.2 + bc.index) * 0.18, bc.pos.z);
-      this.dummy.rotation.set(0, nowSec * 2.2, 0);
+      this.dummy.position.set(bc.pos.x, y + 0.88 + Math.sin(motionTime * 4.2 + bc.index) * 0.18, bc.pos.z);
+      this.dummy.rotation.set(0, motionTime * 2.2, 0);
       this.dummy.scale.setScalar(1.05);
       this.dummy.updateMatrix();
       this.beaconInst.setMatrixAt(bcCount++, this.dummy.matrix);
@@ -1092,16 +1194,19 @@ export class EntityBatchRenderer {
     }
     this.commit(this.beaconInst, bcCount);
 
-    // 8. Acid pools
+    // 8. Acid pools (palette-contrasting corrosive tint)
+    const acidPoolHex = pickAcidPoolTint(cart.palette);
     let apCount = 0;
     for (const ap of session.acidPools) {
       if (apCount >= 12) break;
       const y = sampleTerrainHeight(cart, ap.pos.x, ap.pos.z);
       this.dummy.position.set(ap.pos.x, y + 0.06, ap.pos.z);
-      this.dummy.rotation.set(0, nowSec * 0.5, 0);
-      this.dummy.scale.setScalar(ap.radius * (1 + Math.sin(nowSec * 3 + ap.id) * 0.05));
+      this.dummy.rotation.set(0, motionTime * 0.5, 0);
+      this.dummy.scale.setScalar(ap.radius * (1 + Math.sin(motionTime * 3 + ap.id) * 0.05));
       this.dummy.updateMatrix();
-      this.acidPoolInst.setMatrixAt(apCount++, this.dummy.matrix);
+      this.acidPoolInst.setMatrixAt(apCount, this.dummy.matrix);
+      this.acidPoolInst.setColorAt(apCount, this.tmpColor.setHex(acidPoolHex));
+      apCount++;
     }
     this.commit(this.acidPoolInst, apCount);
 
@@ -1143,7 +1248,7 @@ export class EntityBatchRenderer {
       this.dummy.scale.setScalar(Math.max(0.01, s.size * (1 - u * u)));
       this.dummy.updateMatrix();
       this.tmpMat.copy(this.dummy.matrix);
-      const shardTints = [0xffffff, 0xfdf2f8, 0xe0f2fe, 0xfbcfe8];
+      const shardTints = [0xffffff, this.activeSucroseHex, 0xe0f2fe, this.activeSucroseHex];
       this.shardInst.setMatrixAt(live, this.tmpMat);
       const flash = 1.0 + 0.35 * (1.0 - u);
       this.tmpColor.setHex(shardTints[i & 3]).multiplyScalar(flash);
@@ -1157,15 +1262,16 @@ export class EntityBatchRenderer {
     }
   }
 
-  private stepParticles(dt: number): void {
+  private stepParticles(dt: number, showMotes: boolean): void {
     const cap = this.activeParticleCap;
     let dirty = false;
+    let anyActive = false;
     for (let i = 0; i < cap; i++) {
       const p = this.particles[i];
       if (!p.active) continue;
       dirty = true;
       p.age += dt;
-      if (p.age >= p.life) {
+      if (p.age >= p.life || (p.ambient && !showMotes)) {
         p.active = false;
         this.dummy.position.set(0, -999, 0);
         this.dummy.scale.setScalar(0.001);
@@ -1173,12 +1279,14 @@ export class EntityBatchRenderer {
         this.particleInst.setMatrixAt(i, this.dummy.matrix);
         continue;
       }
+      anyActive = true;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
-      p.vy -= 1.8 * dt;
+      if (!p.ambient) p.vy -= 1.8 * dt;
       const u = p.age / p.life;
-      const s = Math.max(0.01, p.size * (1 - u * 0.85));
+      const fade = p.ambient ? Math.min(1, u * 6, (1 - u) * 4) : 1 - u * 0.85;
+      const s = Math.max(0.01, p.size * fade);
       this.dummy.position.set(p.x, p.y, p.z);
       this.dummy.rotation.set(p.age * 3, p.age * 2, 0);
       this.dummy.scale.setScalar(s);
@@ -1187,6 +1295,7 @@ export class EntityBatchRenderer {
       this.tmpColor.setRGB(p.r, p.g, p.b);
       this.particleInst.setColorAt(i, this.tmpColor);
     }
+    this.particleInst.visible = anyActive;
     if (dirty) {
       this.particleInst.instanceMatrix.needsUpdate = true;
       if (this.particleInst.instanceColor) this.particleInst.instanceColor.needsUpdate = true;

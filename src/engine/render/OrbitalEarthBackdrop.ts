@@ -732,9 +732,13 @@ export class OrbitalEarthBackdrop {
     this.autoSpin = true;
   }
 
+  /** When true, decorative spin, pulse and shader time stay frozen. */
+  reducedMotion = false;
+
   update(dt: number, nowSec: number): void {
-    this.earthMaterial.uniforms.uTime.value = nowSec;
-    this.stationMarkerPivot.rotation.z = nowSec * 0.38;
+    const t = this.reducedMotion ? 0 : nowSec;
+    this.earthMaterial.uniforms.uTime.value = t;
+    this.stationMarkerPivot.rotation.z = t * 0.38;
 
     // Pulse the selected host city pin
     if (this.rootGroup.visible) {
@@ -744,16 +748,16 @@ export class OrbitalEarthBackdrop {
         const base = city.playableInSlice ? 1.35 : 0.95;
         this.tmpDummy.position.copy(dir).multiplyScalar(EARTH_BACKDROP_RADIUS + 0.35);
         this.tmpDummy.rotation.set(0, 0, 0);
-        this.tmpDummy.scale.setScalar(selected ? base * (1.18 + 0.12 * Math.sin(nowSec * 5)) : base);
+        this.tmpDummy.scale.setScalar(selected ? base * (1.18 + 0.12 * Math.sin(t * 5)) : base);
         this.tmpDummy.updateMatrix();
         this.pinInst.setMatrixAt(idx, this.tmpDummy.matrix);
       });
       this.pinInst.instanceMatrix.needsUpdate = true;
-      this.stationMesh.scale.setScalar(this.selectedCityId === 'orbit_aurora' ? 1.6 + 0.2 * Math.sin(nowSec * 5) : 1);
+      this.stationMesh.scale.setScalar(this.selectedCityId === 'orbit_aurora' ? 1.6 + 0.2 * Math.sin(t * 5) : 1);
     }
 
     if (this.autoSpin) {
-      this.earthPivot.rotation.y += dt * 0.08;
+      if (!this.reducedMotion) this.earthPivot.rotation.y += dt * 0.08;
       this.earthPivot.rotation.x += (0.24 - this.earthPivot.rotation.x) * Math.min(1, dt * 2.5);
     } else {
       this.earthPivot.rotation.y +=
@@ -763,20 +767,20 @@ export class OrbitalEarthBackdrop {
     }
 
     if (this.cosmicShowcaseGroup.visible) {
-      this.bondMaterial.uniforms.uTime.value = nowSec;
+      this.bondMaterial.uniforms.uTime.value = t;
       this.bondMaterial.uniforms.uIntensity.value = this.cosmicBeatIndex === 0 ? 0.45 : 1.0;
-      this.mohsMaterial.uniforms.uTime.value = nowSec;
-      this.mohsRing.rotation.y = nowSec * 1.2;
-      this.mohsRingMat.opacity = 0.65 + 0.3 * Math.sin(nowSec * 4.0);
-      this.crystalCoreMesh.rotation.y = nowSec * 0.55;
-      this.crystalCoreMesh.rotation.z = Math.sin(nowSec * 0.9) * 0.12;
-      this.atomicOrbitGroup.rotation.y = -nowSec * 0.72;
-      this.atomicOrbitGroup.rotation.x = Math.sin(nowSec * 0.5) * 0.25;
+      this.mohsMaterial.uniforms.uTime.value = t;
+      this.mohsRing.rotation.y = t * 1.2;
+      this.mohsRingMat.opacity = 0.65 + 0.3 * Math.sin(t * 4.0);
+      this.crystalCoreMesh.rotation.y = t * 0.55;
+      this.crystalCoreMesh.rotation.z = Math.sin(t * 0.9) * 0.12;
+      this.atomicOrbitGroup.rotation.y = -t * 0.72;
+      this.atomicOrbitGroup.rotation.x = Math.sin(t * 0.5) * 0.25;
 
       // Beat-responsive crystal appearance
       if (this.cosmicBeatIndex === 0) {
         // Supernova nucleosynthesis: expanded atomic cloud, nascent crystal core
-        const s = 0.55 + 0.1 * Math.sin(nowSec * 2.2);
+        const s = 0.55 + 0.1 * Math.sin(t * 2.2);
         this.crystalCoreMesh.scale.setScalar(s);
         this.atomicOrbitGroup.scale.setScalar(1.35);
         (this.crystalCoreMat.uniforms.uBaseColor.value as THREE.Color).setHex(0xe0f2fe);
@@ -789,8 +793,8 @@ export class OrbitalEarthBackdrop {
         // Beat 2..3: Acid challenge vs 9F Fluorapatite turquoise lattice lock!
         this.crystalCoreMesh.scale.setScalar(1.06);
         this.atomicOrbitGroup.scale.setScalar(0.88);
-        this.fluorideLockGroup.rotation.y = nowSec * 1.35;
-        const lockScale = 0.78 + 0.12 * Math.sin(nowSec * 3.2);
+        this.fluorideLockGroup.rotation.y = t * 1.35;
+        const lockScale = 0.78 + 0.12 * Math.sin(t * 3.2);
         this.fluorideLockGroup.scale.setScalar(lockScale);
         (this.crystalCoreMat.uniforms.uBaseColor.value as THREE.Color).setHex(0x99f6e4);
       }

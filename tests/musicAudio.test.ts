@@ -26,6 +26,7 @@ import { SURGE_MAX } from '../src/config/gameConfig';
 import {
   buildTimerPill,
   clampToScreen,
+  wayfinderLabelY,
   formatClock,
   isEditableEventTarget,
   loadSeenHints,
@@ -235,6 +236,12 @@ describe('HUD helpers', () => {
     expect(off.onScreen).toBe(false);
     expect(off.x).toBeCloseTo(380, 3);
     expect(off.y).toBeCloseTo(400, 3);
+  });
+
+  it('keeps the whole wayfinder below HUDs of different heights', () => {
+    expect(wayfinderLabelY(30, 62, 22)).toBe(77);
+    expect(wayfinderLabelY(70, 220, 22)).toBe(235);
+    expect(wayfinderLabelY(300, 62, 22)).toBe(300);
   });
 
   it('persists seen contextual hints', () => {

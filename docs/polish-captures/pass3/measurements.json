@@ -1,0 +1,209 @@
+{
+  "results": {
+    "mohs": {
+      "overflow": false,
+      "active": "<button type=\"button\" class=\"mohs-item selected\" data-mohs-idx=\"0\" aria-pressed=\"true\" aria-label=\"Mohs 2.5 Pure Gold\">\n",
+      "small": [],
+      "calls": 11,
+      "pressed": "true",
+      "live": 1
+    },
+    "mohsLandscape": {
+      "overflow": false,
+      "active": "<button type=\"button\" class=\"mohs-item selected\" data-mohs-idx=\"0\" aria-pressed=\"true\" aria-label=\"Mohs 2.5 Pure Gold\">\n",
+      "small": []
+    },
+    "treat": {
+      "treatBefore": {
+        "enamel": 100,
+        "dentin": 100,
+        "pulp": 100,
+        "smooth": 92,
+        "splats": 0
+      },
+      "fed": {
+        "enamel": 100,
+        "dentin": 100,
+        "pulp": 100,
+        "smooth": 57,
+        "splats": 3
+      },
+      "rubStart": {
+        "enamel": 100,
+        "dentin": 100,
+        "pulp": 100,
+        "smooth": 57,
+        "splats": 3
+      },
+      "after": {
+        "enamel": 100,
+        "dentin": 100,
+        "pulp": 100,
+        "smooth": 67,
+        "splats": 1
+      },
+      "points": [
+        {
+          "x": 326.48360826654476,
+          "y": 367.6399821456624
+        },
+        {
+          "x": 362.5358588837574,
+          "y": 354.45641314537744
+        },
+        {
+          "x": 279.92549403417667,
+          "y": 379.5562152690801
+        }
+      ],
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": [],
+      "calls": 3
+    },
+    "upgrades": {
+      "angled_bass_array": {
+        "flag": true,
+        "lab": {
+          "overflow": false,
+          "active": "<button type=\"button\" class=\"btn btn-sm btn-primary\" aria-pressed=\"true\" data-equip-id=\"angled_bass_array\">\n            ",
+          "small": []
+        },
+        "escape": "btn-open-lab",
+        "audio": "running"
+      },
+      "hydro_sonic_pulse": {
+        "flag": true,
+        "lab": {
+          "overflow": false,
+          "active": "<button type=\"button\" class=\"btn btn-sm btn-primary\" aria-pressed=\"true\" data-equip-id=\"hydro_sonic_pulse\">\n            ",
+          "small": []
+        },
+        "escape": "btn-open-lab",
+        "audio": "running"
+      },
+      "ptfe_ribbon_filament": {
+        "flag": true,
+        "lab": {
+          "overflow": false,
+          "active": "<button type=\"button\" class=\"btn btn-sm btn-primary\" aria-pressed=\"true\" data-equip-id=\"ptfe_ribbon_filament\">\n         ",
+          "small": []
+        },
+        "escape": "btn-open-lab",
+        "audio": "running"
+      },
+      "bicarb_buffer_jet": {
+        "flag": true,
+        "lab": {
+          "overflow": false,
+          "active": "<button type=\"button\" class=\"btn btn-sm btn-primary\" aria-pressed=\"true\" data-equip-id=\"bicarb_buffer_jet\">\n            ",
+          "small": []
+        },
+        "escape": "btn-open-lab",
+        "audio": "running"
+      }
+    }
+  },
+  "stats": {
+    "quality": "ultra",
+    "world_1": {
+      "dive": 15,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "world_2": {
+      "dive": 16,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "world_3": {
+      "dive": 15,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "world_4": {
+      "dive": 15,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "world_5": {
+      "dive": 15,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "pulp_rescue": {
+      "dive": 15,
+      "baseline": 15,
+      "peak": 24,
+      "stress": {
+        "alley": true
+      },
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "HUB": {
+      "calls": 2,
+      "mode": "HUB",
+      "overflow": false,
+      "active": "btn-launch-arcade",
+      "small": []
+    },
+    "BRUSH_ALONG": {
+      "calls": 2,
+      "mode": "BRUSH_ALONG",
+      "overflow": false,
+      "active": "<body>\n    <div id=\"app\">\n      <canvas id=\"mouthlife-canvas\" aria-label=\"MouthLife 3D Viewport\" data-engine=\"three.js r",
+      "small": []
+    },
+    "COSMIC_INTRO": {
+      "calls": 7,
+      "mode": "COSMIC_INTRO",
+      "overflow": false,
+      "active": "btn-next-beat",
+      "small": []
+    },
+    "REPORT": {
+      "calls": 2,
+      "mode": "REPORT",
+      "overflow": false,
+      "active": "btn-report-next",
+      "small": []
+    },
+    "reportAfterEscape": {
+      "overflow": false,
+      "active": "<summary>📜 Field note unlocked: The First Bristle Brush &amp; Leeuwenhoek’s Living “Animalcules”</summary>",
+      "small": []
+    }
+  }
+}

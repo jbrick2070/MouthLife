@@ -43,17 +43,35 @@ export function isDoubleTap(
 }
 
 /**
- * Low-pass filter for the steer vector so HYDRA-1 rounds contact ridges instead of snapping
- * between wall-slide directions. `k` in (0,1]: higher = snappier. Returns near-zero as exact zero.
+ * Exponential steering response with the same feel as a 40% blend at 60 Hz.
  */
 export function smoothSteerVector(
   prev: { moveX: number; moveZ: number },
   next: { moveX: number; moveZ: number },
-  k = 0.4
+  dt: number
 ): { moveX: number; moveZ: number } {
+  const k = -Math.expm1(Math.log(0.6) * 60 * Math.max(0, dt));
   const moveX = prev.moveX + (next.moveX - prev.moveX) * k;
   const moveZ = prev.moveZ + (next.moveZ - prev.moveZ) * k;
-  return Math.hypot(moveX, moveZ) < 0.02 ? { moveX: 0, moveZ: 0 } : { moveX, moveZ };
+  return { moveX, moveZ };
+}
+
+/** True when a modal dialog (`role="dialog" aria-modal="true"`) is currently open and visible. */
+export function isModalDialogOpen(
+  doc: Document | undefined = typeof document !== 'undefined' ? document : undefined
+): boolean {
+  if (!doc) return false;
+  const zeroLayoutDom = (doc.documentElement?.clientWidth ?? 0) === 0;
+  return Array.from(doc.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')).some(
+    (d) => {
+      if (d.getClientRects().length > 0) return true;
+      if (!zeroLayoutDom) return false;
+      for (let cur: HTMLElement | null = d; cur; cur = cur.parentElement) {
+        if (cur.hidden || cur.style.display === 'none') return false;
+      }
+      return true;
+    }
+  );
 }
 
 const STEER_PREF_KEY = 'mouthlife.pointerSteer';
@@ -69,6 +87,7 @@ export class InputManager {
   private virtualMoveZ = 0;
   private virtualScrubHeld = false;
   private virtualFlossAim: Vec2 | null = null;
+  private virtualFlossSmartAim = false;
 
   // Edge-triggered one-shot requests
   private pendingFloss = false;
@@ -174,16 +193,17 @@ export class InputManager {
     window.addEventListener('keydown', (e) => {
       this.onUserGesture?.();
       const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || isModalDialogOpen()) return;
 
       const code = e.code;
+      if (code === 'Space' && (e.target as HTMLElement | null)?.closest('button, a, [role="button"]')) return;
       this.keysDown.add(code);
 
       if (code === 'KeyE') {
         this.pendingFloss = true;
       } else if (code === 'KeyQ' || code === 'ShiftLeft' || code === 'ShiftRight') {
         this.pendingRinse = true;
-      } else if (code === 'KeyR' || code === 'Tab') {
+      } else if (code === 'KeyR') {
         const m = this.currentModeGetter();
         if (m === 'ARCADE' || m === 'PULP_RESCUE') {
           e.preventDefault();
@@ -214,11 +234,13 @@ export class InputManager {
       this.updateCursorNdc(e.clientX, e.clientY);
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
+        if (e.pointerType !== 'mouse' && this.steerPointerId !== null) return;
         // Double-tap anywhere on the tooth: auto-aimed Floss (snaps to the nearest alley mouth)
         const tapNow = { t: performance.now(), x: e.clientX, y: e.clientY };
         if (e.pointerType !== 'mouse' && isDoubleTap(this.lastTap, tapNow)) {
           this.pendingFloss = true;
           this.virtualFlossAim = null;
+          this.virtualFlossSmartAim = true;
           this.lastTap = null;
         } else {
           this.lastTap = tapNow;
@@ -300,6 +322,7 @@ export class InputManager {
     };
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointercancel', endPointer);
+    this.canvas.addEventListener('lostpointercapture', endPointer);
   }
 
   private updateCursorNdc(clientX: number, clientY: number): void {
@@ -325,6 +348,7 @@ export class InputManager {
   triggerVirtualFloss(aimWorldOffset?: Vec2 | null): void {
     this.onUserGesture?.();
     this.virtualFlossAim = aimWorldOffset ?? null;
+    this.virtualFlossSmartAim = !aimWorldOffset;
     this.pendingFloss = true;
   }
 
@@ -351,12 +375,15 @@ export class InputManager {
     camera: THREE.Camera,
     probePos: Vec2,
     probeY: number,
-    gatedByTransition: boolean
+    gatedByTransition: boolean,
+    dt: number
   ): SessionInputCommand {
     if (gatedByTransition) {
       this.pendingFloss = false;
       this.pendingRinse = false;
       this.pendingDisclose = false;
+      this.virtualFlossAim = null;
+      this.virtualFlossSmartAim = false;
       return {
         moveX: 0,
         moveZ: 0,
@@ -384,7 +411,8 @@ export class InputManager {
         this.steerTarget = { x: this.hitVec3.x, z: this.hitVec3.z };
         const steer = smoothSteerVector(
           this.steerSmooth,
-          computePointerSteer(probePos, this.steerTarget)
+          computePointerSteer(probePos, this.steerTarget),
+          dt
         );
         this.steerSmooth = steer;
         moveX = steer.moveX;
@@ -400,12 +428,14 @@ export class InputManager {
         x: probePos.x + this.virtualFlossAim.x * 4.5,
         z: probePos.z + this.virtualFlossAim.z * 4.5,
       };
-    } else if (this.hasCursorMoved) {
+    } else if (!this.virtualFlossSmartAim && this.hasCursorMoved) {
       this.groundPlane.constant = -probeY;
       this.raycaster.setFromCamera(this.cursorNdc, camera);
       if (this.raycaster.ray.intersectPlane(this.groundPlane, this.hitVec3)) {
         aimWorldPos = { x: this.hitVec3.x, z: this.hitVec3.z };
       }
+    } else if (!this.virtualFlossSmartAim && this.steerPointerId !== null && this.steerTarget) {
+      aimWorldPos = { x: this.steerTarget.x, z: this.steerTarget.z };
     }
 
     const cmd: SessionInputCommand = {
@@ -422,6 +452,7 @@ export class InputManager {
     this.pendingRinse = false;
     this.pendingDisclose = false;
     this.virtualFlossAim = null;
+    this.virtualFlossSmartAim = false;
 
     return cmd;
   }

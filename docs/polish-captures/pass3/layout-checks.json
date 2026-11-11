@@ -1,0 +1,65 @@
+{
+  "intro": [
+    6,
+    8,
+    8,
+    4
+  ],
+  "report": [
+    {
+      "view": [
+        740,
+        360
+      ],
+      "overflow": false,
+      "focus": "",
+      "small": [],
+      "calls": 2
+    },
+    {
+      "view": [
+        844,
+        390
+      ],
+      "overflow": false,
+      "focus": "",
+      "small": [],
+      "calls": 2
+    },
+    {
+      "view": [
+        390,
+        844
+      ],
+      "overflow": false,
+      "focus": "",
+      "small": [],
+      "calls": 2
+    }
+  ],
+  "globe": [
+    {
+      "view": [
+        844,
+        390
+      ],
+      "overflow": false,
+      "focus": "",
+      "small": [],
+      "calls": 5
+    },
+    {
+      "view": [
+        740,
+        360
+      ],
+      "overflow": false,
+      "focus": "",
+      "small": [],
+      "calls": 5
+    }
+  ],
+  "hub": 2,
+  "hubTreat": 3,
+  "brush": 2
+}

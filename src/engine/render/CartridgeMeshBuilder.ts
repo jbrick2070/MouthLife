@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ORAL_LIGHTING_GLSL } from './OralLighting';
 import { buildAlleyWalls, sampleTerrainHeight } from '../physics/CollisionSystem';
 import { distancePointToSegmentSq2D } from '../surface/OralSurfaceGrid';
 import type { AABB2D, WorldCartridge } from '../types';
@@ -16,14 +17,14 @@ const GINGIVA_VERT = /* glsl */ `
     vColor = color;
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vWorldPos = wp.xyz;
-    vNormal = normalize(mat3(modelMatrix) * normal);
+    vNormal = mat3(modelMatrix) * normal;
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
 
 const GINGIVA_FRAG = /* glsl */ `
+  ${ORAL_LIGHTING_GLSL}
   uniform vec3 uGingivaColor;
-  uniform float uTime;
   varying vec3 vWorldPos;
   varying vec3 vNormal;
   varying vec3 vColor;
@@ -59,14 +60,15 @@ const GINGIVA_FRAG = /* glsl */ `
     // Orange-peel stippling of attached gingiva (perturbs the normal, not the silhouette)
     vec3 sp = vWorldPos * 9.5;
     float s1 = gnoise(sp);
-    float s2 = gnoise(sp * 2.3 + 7.1);
+    float s2 = uDetail > 0 ? gnoise(sp * 2.3 + 7.1) : 0.5;
+    float s3 = uDetail > 1 ? gnoise(sp + 3.3) : s1;
     float stipple = s1 * 0.65 + s2 * 0.35;
-    vec3 N = normalize(vNormal + (vec3(s1, s2, gnoise(sp + 3.3)) - 0.5) * (0.26 * attached + 0.06));
+    vec3 N = safeUnit(vNormal + (vec3(s1, s2, s3) - 0.5) * (0.26 * attached + 0.06));
 
-    vec3 V = normalize(cameraPosition - vWorldPos);
+    vec3 V = safeUnit(cameraPosition - vWorldPos);
     vec3 L = normalize(vec3(0.35, 0.88, 0.35));
     vec3 L2 = normalize(vec3(-0.5, 0.55, -0.6));
-    vec3 H = normalize(L + V);
+    vec3 H = safeUnit(L + V);
     float wrap = max(0.0, (dot(N, L) + 0.55) / 1.55);
     float fill = max(0.0, (dot(N, L2) + 0.4) / 1.4) * 0.3;
 
@@ -78,7 +80,7 @@ const GINGIVA_FRAG = /* glsl */ `
     col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(1.22, 0.86, 0.9), 0.3);
 
     // Warm subsurface scattering bleeding through thin papillae
-    float back = pow(1.0 - max(dot(N, V), 0.0), 2.0);
+    float back = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.0);
     col += vec3(0.42, 0.14, 0.16) * back * (0.1 + 0.14 * marginal);
 
     // Crisp saliva meniscus line pooled along the gingival crest where gum meets enamel
@@ -87,12 +89,14 @@ const GINGIVA_FRAG = /* glsl */ `
 
     // Wet saliva film: broad sheen + sharp sparkling stipple glints
     float broad = pow(max(dot(N, H), 0.0), 24.0) * 0.22;
-    float glint = pow(max(dot(N, H), 0.0), 140.0);
-    float sparkle = smoothstep(0.62, 0.9, s2) * (0.6 + 0.4 * sin(uTime * 2.3 + s1 * 18.0));
+    float glint = uDetail > 0 ? pow(max(dot(N, H), 0.0), 140.0) : 0.0;
+    float sparkle = smoothstep(0.62, 0.9, s2) * (0.6 + 0.4 * sin(uMotionTime * 2.3 + s1 * 18.0));
     col += vec3(1.0, 0.9, 0.92) * (broad + glint * (0.55 + 1.6 * sparkle));
-    col += vec3(1.0, 0.88, 0.9) * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.18;
+    col += vec3(1.0, 0.88, 0.9) * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0) * 0.18;
 
-    gl_FragColor = vec4(col, 1.0);
+    float sulcus = smoothstep(0.30, 0.72, marginal) * (1.0 - smoothstep(0.64, 0.96, marginal));
+    col *= (1.0 - 0.32 * sulcus) * (1.0 + headlamp(vWorldPos, N));
+    gl_FragColor = vec4(attenuateOralLight(col, vWorldPos), 1.0);
   }
 `;
 
@@ -101,7 +105,10 @@ export function createGingivaMaterial(hexColor = 0xe66c7e): THREE.ShaderMaterial
     vertexColors: true,
     uniforms: {
       uGingivaColor: { value: new THREE.Color(hexColor) },
-      uTime: { value: 0 },
+      uMotionTime: { value: 0 },
+      uHeadlamp: { value: new THREE.Vector4() },
+      uDepthCue: { value: new THREE.Vector2(18, 0.085) },
+      uDetail: { value: 1 },
     },
     vertexShader: GINGIVA_VERT,
     fragmentShader: GINGIVA_FRAG,
@@ -393,7 +400,7 @@ export function buildCartridgeStageGroup(
       if (dSq < rSq) {
         const k = 1 - dSq / rSq;
         y -= 0.18 * k;
-        fissureAo = Math.min(fissureAo, 1.0 - 0.26 * k);
+        fissureAo = Math.min(fissureAo, 1.0 - 0.37 * k);
       }
     }
 
@@ -411,11 +418,11 @@ export function buildCartridgeStageGroup(
       const cx = Math.max(w.minX, Math.min(x, w.maxX));
       const cz = Math.max(w.minZ, Math.min(z, w.maxZ));
       const d = Math.hypot(x - cx, z - cz);
-      if (d < 1.3) wallAo = Math.min(wallAo, 0.58 + 0.42 * (d / 1.3));
+      if (d < 1.3) wallAo = Math.min(wallAo, 0.46 + 0.54 * (d / 1.3));
     }
 
     pos.setY(i, y);
-    const ao = Math.max(0.42, Math.min(1.0, fissureAo * edgeAo * wallAo));
+    const ao = Math.max(0.33, fissureAo * edgeAo * wallAo);
     colors[i * 3] = ao;
     colors[i * 3 + 1] = -1; // not a Brush-Along quadrant tooth
     // Height fraction: cusp tips read pearly-translucent, fissures & cervical bevel dentin-warm
@@ -731,7 +738,7 @@ function buildScallopedGingivaCollar(
         marginal = 1;
       } else {
         y = crestY - 0.06;
-        ao = 0.62; // sulcus shadow where enamel emerges
+        ao = 0.48; // sulcus shadow where enamel emerges
         marginal = 1;
       }
       // Jugae alveolares: gentle root-eminence bulges over each root, shallow grooves between roots

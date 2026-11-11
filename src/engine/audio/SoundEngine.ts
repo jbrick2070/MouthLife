@@ -36,6 +36,7 @@ export interface ScrubState {
   probeSpeed: number;
   newlyCleaned: number;
   cleanRatio: number;
+  brush?: 'bass' | 'hydro-sonic';
 }
 
 /**
@@ -672,11 +673,12 @@ export class SoundEngine {
     });
   }
 
-  playFlossSnap(targetsHit: number, zipped: boolean): void {
+  playFlossSnap(targetsHit: number, zipped: boolean, ribbon = false): void {
     this.run((o, t) => {
       const m = this.harmonicMidi(targetsHit > 0 ? 3 : 1, 48);
       this.wood(o, t, m, 0.7);
       this.wood(o, t + 0.035, m + 7, 0.45);
+      if (ribbon) this.noiseSweep(o, t, 2400, 1000, 0.16, 0.035, 1.5);
       if (zipped) {
         this.noiseSweep(o, t, 1800, 6500, 0.28, 0.04, 1.4);
         this.bell(o, t + 0.1, this.harmonicMidi(6, 48), 0.55);
@@ -684,10 +686,11 @@ export class SoundEngine {
     });
   }
 
-  playIonRinseWave(): void {
+  playIonRinseWave(buffered = false): void {
     this.run((o, t) => {
       for (let i = 0; i < 7; i++) this.bell(o, t + i * 0.055, this.harmonicMidi(i, 48), 0.55, (i - 3) * 0.1, 0.65);
       this.noiseSweep(o, t, 1200, 5200, 0.55, 0.04, 0.8);
+      if (buffered) this.noiseSweep(o, t + 0.14, 2800, 720, 0.4, 0.055, 1.2);
     });
   }
 
@@ -946,8 +949,10 @@ export class SoundEngine {
     }
     this.scrubWasActive = true;
     const speed01 = Math.max(0, Math.min(1, state.probeSpeed / 7));
-    this.scrubLfo.frequency.setTargetAtTime(1.6 + speed01 * 5.5, now, 0.08);
-    this.scrubBp.frequency.setTargetAtTime(1000 + speed01 * 800 + state.cleanRatio * 500, now, 0.08);
+    const hydroSonic = state.brush === 'hydro-sonic';
+    const brushTone = state.brush === 'bass' ? 720 : hydroSonic ? 1550 : 1000;
+    this.scrubLfo.frequency.setTargetAtTime((hydroSonic ? 4.2 : 1.6) + speed01 * 5.5, now, 0.08);
+    this.scrubBp.frequency.setTargetAtTime(brushTone + speed01 * 800 + state.cleanRatio * 500, now, 0.08);
     this.scrubShimGain.gain.setTargetAtTime(0.1 + speed01 * 0.32, now, 0.08);
     this.scrubGain.gain.setTargetAtTime(0.32 + speed01 * 0.38, now, 0.05);
 

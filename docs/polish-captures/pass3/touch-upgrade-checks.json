@@ -1,0 +1,113 @@
+{
+  "twoThumbFloss": {
+    "scrub": false,
+    "floss": 0.22000000000000003,
+    "rinse": 0,
+    "scan": 0,
+    "pos": {
+      "x": 7.5,
+      "z": 13.82105263157895
+    },
+    "view": [
+      360,
+      740,
+      "portrait-primary"
+    ],
+    "overflow": false
+  },
+  "twoThumbSurge": {
+    "scrub": true,
+    "floss": 0,
+    "rinse": 0.883333333333333,
+    "scan": 0,
+    "pos": {
+      "x": 7.5,
+      "z": 12.077894736842111
+    },
+    "view": [
+      360,
+      740,
+      "portrait-primary"
+    ],
+    "overflow": false
+  },
+  "rotated": {
+    "scrub": false,
+    "floss": 0,
+    "rinse": 0.4999999999999985,
+    "scan": 0,
+    "pos": {
+      "x": 7.5,
+      "z": 11.860000000000007
+    },
+    "view": [
+      740,
+      360,
+      "landscape-primary"
+    ],
+    "overflow": false
+  },
+  "rotatedNewGesture": {
+    "scrub": true,
+    "floss": 0,
+    "rinse": 0.29999999999999855,
+    "scan": 0,
+    "pos": {
+      "x": 8.38771929824562,
+      "z": 11.860000000000007
+    },
+    "view": [
+      740,
+      360,
+      "landscape-primary"
+    ],
+    "overflow": false
+  },
+  "audio": {
+    "angled_bass_array": {
+      "state": "running",
+      "freq": [
+        1274.7443731811945,
+        1274.7988097625773,
+        1274.9076829253427
+      ],
+      "sweeps": []
+    },
+    "hydro_sonic_pulse": {
+      "state": "running",
+      "freq": [
+        2104.2544439487506,
+        2104.308880530133,
+        2104.3633171115157
+      ],
+      "sweeps": []
+    },
+    "ptfe_ribbon_filament": {
+      "state": "running",
+      "freq": [],
+      "sweeps": [
+        [
+          2400,
+          1000,
+          0.16
+        ]
+      ]
+    },
+    "bicarb_buffer_jet": {
+      "state": "running",
+      "freq": [],
+      "sweeps": [
+        [
+          1200,
+          5200,
+          0.55
+        ],
+        [
+          2800,
+          720,
+          0.4
+        ]
+      ]
+    }
+  }
+}

@@ -82,6 +82,92 @@ export interface ClampedPoint {
   angleRad: number; // direction from screen centre toward the target
 }
 
+export interface ScreenBox {
+  cx: number;
+  cy: number;
+  halfW: number;
+  halfH: number;
+}
+
+/** Keep the entire wayfinder pill between the top HUD and bottom thumb deck, including its padding. */
+export function wayfinderLabelY(
+  projectedY: number,
+  hudBottom: number,
+  labelHeight: number,
+  deckTop: number = Number.POSITIVE_INFINITY
+): number {
+  const minY = hudBottom + labelHeight / 2 + 4;
+  const maxY = deckTop - labelHeight / 2 - 6;
+  return Math.min(Math.max(minY, maxY), Math.max(minY, projectedY));
+}
+
+/** Find the closest free position at this anchor. Omit the pill if every slot is occupied. */
+export function findWayfinderLabelY(
+  anchor: ScreenBox,
+  hudBottom: number,
+  deckTop: number,
+  occupied: readonly ScreenBox[]
+): number | null {
+  const top = hudBottom + anchor.halfH + 4;
+  const bottom = deckTop - anchor.halfH - 6;
+  if (top > bottom) return null;
+
+  const blockers = occupied.filter(box => Math.abs(anchor.cx - box.cx) < anchor.halfW + box.halfW + 6);
+  const target = Math.max(top, Math.min(bottom, anchor.cy));
+  const candidates = [target, top, bottom];
+  for (const box of blockers) {
+    const gap = box.halfH + anchor.halfH + 5;
+    candidates.push(box.cy - gap, box.cy + gap);
+  }
+  let best: number | null = null;
+  for (const y of candidates) {
+    if (y < top || y > bottom || blockers.some(box => Math.abs(y - box.cy) < box.halfH + anchor.halfH + 4)) continue;
+    if (best === null || Math.abs(y - target) < Math.abs(best - target)) best = y;
+  }
+  return best;
+}
+
+/**
+ * Clamps a floating world callout (anchored at bottom-centre `(x, bottomY)`) inside the safe
+ * gameplay band between the top HUD/toast and bottom thumb/hotkey deck, dodging occupied pills.
+ */
+export function placeWorldCallout(params: {
+  x: number;
+  bottomY: number;
+  width: number;
+  height: number;
+  viewportW: number;
+  hudBottom: number;
+  deckTop: number;
+  occupied?: ReadonlyArray<ScreenBox>;
+}): { x: number; bottomY: number } {
+  const halfW = Math.min(params.viewportW * 0.46, Math.max(24, params.width * 0.5));
+  const h = Math.max(20, params.height);
+  const halfH = h * 0.5;
+  const x = Math.max(halfW + 8, Math.min(params.viewportW - halfW - 8, params.x));
+  const minBottomY = params.hudBottom + h + 6;
+  const maxBottomY = Math.max(minBottomY, params.deckTop - 8);
+  let cy = Math.max(minBottomY, Math.min(maxBottomY, params.bottomY)) - halfH;
+
+  if (params.occupied) {
+    for (const box of params.occupied) {
+      if (
+        Math.abs(x - box.cx) < box.halfW + halfW + 6 &&
+        Math.abs(cy - box.cy) < box.halfH + halfH + 4
+      ) {
+        const aboveCy = box.cy - box.halfH - halfH - 5;
+        const belowCy = box.cy + box.halfH + halfH + 5;
+        if (aboveCy - halfH >= params.hudBottom + 6) {
+          cy = aboveCy;
+        } else if (belowCy + halfH <= params.deckTop - 8) {
+          cy = belowCy;
+        }
+      }
+    }
+  }
+  return { x, bottomY: cy + halfH };
+}
+
 /** Clamps a projected point to the viewport edge (with margin), preserving direction. */
 export function clampToScreen(x: number, y: number, w: number, h: number, margin: number, forceOff = false): ClampedPoint {
   const cx = w / 2;
@@ -157,6 +243,21 @@ export function shouldShowHubWelcome(
   return !seenHints.has('hub_welcome') && totalBrushStamps === 0 && !world1Completed;
 }
 
+/**
+ * Progressive onboarding: on a new player's very first dive into World 1, suppress the
+ * multi-mechanic intro toast on frame 0 so the single top objective ("Restore 10 colonies —
+ * scrub glowing rings!") has zero competition until they restore their first colony.
+ */
+export function shouldShowDiveIntroToast(
+  mode: 'ARCADE' | 'PULP_RESCUE',
+  worldId: string,
+  world1Completed: boolean
+): boolean {
+  if (mode === 'PULP_RESCUE') return true;
+  if (worldId !== 'world_1') return true;
+  return world1Completed;
+}
+
 export interface ObjectiveInput {
   mode: 'ARCADE' | 'PULP_RESCUE';
   worldCleanRatio: number;
@@ -168,6 +269,8 @@ export interface ObjectiveInput {
   surgeReady: boolean;
   sealRatio?: number;
   rescueTargetRatio?: number;
+  rescueRemainingSec?: number;
+  acidLockSec?: number;
 }
 
 /**
@@ -179,7 +282,7 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
     const target = inp.rescueTargetRatio ?? 0.85;
     const left = Math.max(0, Math.ceil((target - inp.worldCleanRatio) * 100));
     return left > 0
-      ? `Scrub the glowing plaque — about ${left}% more to stabilize the pulp!`
+      ? `Pulp: ${left}% more${inp.rescueRemainingSec !== undefined ? ` • ${Math.max(0, Math.ceil(inp.rescueRemainingSec))}s left` : ""} — scrub!`
       : 'Stabilizing… the pulp is safe!';
   }
   const seal = inp.sealRatio ?? 0.9;
@@ -187,10 +290,11 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
   inp.sealed.forEach((s, i) => {
     if (!s) openIdx.push(i);
   });
-  if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ Every district is sealed — mission complete!';
-  if (inp.domesRemaining) return '🛡️ Crack the EPS dome with Floss [E] or a Fluoride Surge [Q]!';
-  if (inp.sitesLeftOpen === 1) return '1 Commensal Colony left — follow the ➤ Colony arrow!';
-  if (inp.sitesLeftOpen > 1) return `Restore ${inp.sitesLeftOpen} Commensal Colonies — scrub their glowing patches clean!`;
+  if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ All districts sealed — mission complete!';
+  if ((inp.acidLockSec ?? 0) > 0) return `Acid clock ${Math.ceil(inp.acidLockSec!)}s — use Saliva Spring!`;
+  if (inp.domesRemaining) return '🛡️ Crack EPS dome with Floss [E] or Surge [Q]!';
+  if (inp.sitesLeftOpen === 1) return '1 Commensal Colony left — follow ➤ Colony!';
+  if (inp.sitesLeftOpen > 1) return `Restore ${inp.sitesLeftOpen} colonies — scrub glowing rings!`;
   const worst = openIdx.reduce(
     (best, i) => (inp.districtClean[i] < inp.districtClean[best] ? i : best),
     openIdx[0] ?? 0
@@ -199,11 +303,40 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
   const nearly = openIdx.every((i) => (inp.districtClean[i] ?? 0) >= seal - 0.12);
   if (nearly && inp.surgeReady) {
     return openIdx.length > 1
-      ? 'Almost clean! Trigger 🌊 Fluoride Surge [Q] to seal the final districts!'
-      : 'Almost clean! Trigger 🌊 Fluoride Surge [Q] to seal the final district!';
+      ? 'Almost clean! Fire Fluoride Surge [Q] to seal!'
+      : 'Fire Fluoride Surge [Q] to seal final district!';
   }
-  if (nearly) return `Almost clean! Sweep D${worst + 1} (${worstPct}%) to ${Math.round(seal * 100)}% to seal it!`;
+  if (nearly) return `Sweep D${worst + 1} (${worstPct}% → ${Math.round(seal * 100)}%) to seal it!`;
   return inp.surgeReady
-    ? 'Scrub enamel → press Surge [Q] to seal'
-    : 'Scrub enamel → restore colonies → press Surge [Q] to seal';
+    ? 'Scrub enamel → fire Surge [Q] to seal!'
+    : 'Scrub enamel → restore colonies → Surge [Q]!';
+}
+
+/** A cast that cracks armor or fires while the alley Zip prompt is already visible needs no extra miss callout. */
+export function shouldHintFlossMiss(
+  zipped: boolean,
+  targetsHit: number,
+  epsCellsCracked: number,
+  zipPromptActive = false
+): boolean {
+  return !zipped && targetsHit === 0 && epsCellsCracked === 0 && !zipPromptActive;
+}
+
+/**
+ * Landscape phones place the hub/report deck in a right-hand column. Returns how far to shift the
+ * 3D view left and how much to back the camera off so the arch fits the free left side.
+ */
+export function sideLayoutFraming(
+  viewW: number,
+  viewH: number,
+  deckLeft: number,
+  archFraction = 0.52
+): { sideFrac: number; shiftX: number; dolly: number } | null {
+  if (!(viewW > viewH) || deckLeft <= viewW * 0.3 || deckLeft >= viewW) return null;
+  const sideFrac = deckLeft / viewW;
+  return {
+    sideFrac,
+    shiftX: deckLeft * 0.5 - viewW * 0.5,
+    dolly: Math.max(1, archFraction / (sideFrac * 0.92)),
+  };
 }

@@ -74,7 +74,7 @@ export class CompanionTouchSystem {
       return r / 2147483647;
     };
     const used = new Set<number>();
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < Math.min(count, anchors.length); i++) {
       let idx = Math.floor(rand() * anchors.length);
       for (let tries = 0; tries < anchors.length && used.has(idx); tries++) idx = (idx + 1) % anchors.length;
       used.add(idx);

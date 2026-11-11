@@ -57,8 +57,8 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
   },
   {
     tag: 'PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY',
-    title: 'Hydroxyapatite: Harder Than Iron, Halfway to Diamond',
-    body: 'Tap any mineral below to compare: mature human tooth enamel is 96% hexagonal Hydroxyapatite crystal — ranking 5.0 on the Mohs scale, outranking pure gold (2.5) and structural iron (4.0)!',
+    title: 'How Hard Is Tooth Enamel?',
+    body: 'Enamel ranks 5. Compare the specimens.',
   },
   {
     tag: 'PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX',
@@ -71,6 +71,21 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
     body: 'Zoom from orbit into real human cities and dental history — bask in the mirror-smooth joy of clean brushed, flossed, and fluoride-sealed teeth daily, and guard against the Dreaded Root Canal!',
   },
 ];
+
+/**
+ * After the overlay re-renders, pick the control that should keep focus (pure, unit-testable).
+ * Falls back to the beat's primary action when the previously focused control disappeared.
+ */
+export function resolveFocusSelector(
+  prev: { id?: string; mohsIdx?: string },
+  exists: (selector: string) => boolean
+): string | null {
+  const candidates: string[] = [];
+  if (prev.mohsIdx !== undefined) candidates.push(`[data-mohs-idx="${prev.mohsIdx}"]`);
+  if (prev.id) candidates.push(`#${prev.id}`);
+  candidates.push('#btn-next-beat', '#btn-finish-cosmic');
+  return candidates.find(exists) ?? null;
+}
 
 export class CosmicIntroOverlay implements OverlayView {
   private disposers = new DisposerBag();
@@ -127,14 +142,31 @@ export class CosmicIntroOverlay implements OverlayView {
       this.disposers.add(this.callbacks.bus.on('audio:changed', () => this.syncMuteUi()));
     }
     this.callbacks.onBeatChanged(0);
-    this.render();
+    this.renderMarkup();
+    // Keyboard players start on the primary action instead of an unfocused page.
+    requestAnimationFrame(() =>
+      this.container?.querySelector<HTMLElement>('#btn-next-beat')?.focus({ preventScroll: true })
+    );
   }
 
   private render(): void {
     if (!this.container) return;
+    const prevEl = document.activeElement as HTMLElement | null;
+    const hadFocus = !!prevEl && this.container.contains(prevEl);
+    const prev = { id: prevEl?.id || undefined, mohsIdx: prevEl?.dataset?.mohsIdx };
+    this.renderMarkup();
+    if (hadFocus) {
+      const sel = resolveFocusSelector(prev, (q) => !!this.container?.querySelector(q));
+      if (sel) this.container.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true });
+    }
+  }
+
+  private renderMarkup(): void {
+    if (!this.container) return;
     const beat = COSMIC_BEATS[this.beatIndex];
     const isLast = this.beatIndex === COSMIC_BEATS.length - 1;
     const mohsActive = MOHS_SPECIMENS[this.selectedMohsIdx];
+    this.container.classList.toggle('cosmic-mohs', this.beatIndex === 1);
 
     const mohsHtml =
       this.beatIndex === 1
@@ -155,7 +187,7 @@ export class CosmicIntroOverlay implements OverlayView {
         `
         ).join('')}
       </div>
-      <div style="font-size:0.76rem;color:#bae6fd;background:rgba(4,16,28,0.68);padding:7px 10px;border-radius:10px;border:1px solid rgba(56,189,248,0.24);">
+      <div id="mohs-detail" role="status" aria-live="polite" style="font-size:0.76rem;color:#bae6fd;background:rgba(4,16,28,0.68);padding:7px 10px;border-radius:10px;border:1px solid rgba(56,189,248,0.24);">
         <strong>${mohsActive.name} (${mohsActive.formula}):</strong> ${mohsActive.note}
       </div>
     `
@@ -203,8 +235,9 @@ export class CosmicIntroOverlay implements OverlayView {
 
       <div class="hub-center-callout"></div>
 
-      <div class="cosmic-card glass-card ui-interactive" aria-live="polite">
-        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;color:#38bdf8;margin-bottom:4px;">
+      <div class="cosmic-card glass-card ui-interactive">
+        <div class="cosmic-beat-copy">
+        <div class="cosmic-beat-tag" style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;color:#38bdf8;margin-bottom:4px;">
           ${beat.tag}
         </div>
         <h2 style="margin:0 0 6px 0;font-size:1.12rem;line-height:1.25;color:#ffffff;">
@@ -215,8 +248,9 @@ export class CosmicIntroOverlay implements OverlayView {
         </p>
         ${elementBadges}
         ${mohsHtml}
+        </div>
 
-        <div class="row-between" style="margin-top:12px;">
+        <div class="row-between cosmic-beat-actions" style="margin-top:12px;">
           <button
             type="button"
             id="btn-prev-beat"
@@ -271,11 +305,23 @@ export class CosmicIntroOverlay implements OverlayView {
       .querySelector('#btn-finish-cosmic')
       ?.addEventListener('click', () => this.callbacks.onFinishOrSkip());
 
-    this.container.querySelectorAll<HTMLButtonElement>('[data-mohs-idx]').forEach((btn) => {
+    const specimenButtons = this.container.querySelectorAll<HTMLButtonElement>('[data-mohs-idx]');
+    const specimenDetail = this.container.querySelector('#mohs-detail');
+    specimenButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
         this.selectedMohsIdx = Number(btn.dataset.mohsIdx ?? 2);
         this.callbacks.onMohsSelected?.(this.selectedMohsIdx);
-        this.render();
+        for (const specimen of specimenButtons) {
+          const selected = specimen === btn;
+          specimen.classList.toggle('selected', selected);
+          specimen.setAttribute('aria-pressed', String(selected));
+        }
+        const mineral = MOHS_SPECIMENS[this.selectedMohsIdx];
+        if (specimenDetail) {
+          const name = document.createElement('strong');
+          name.textContent = `${mineral.name} (${mineral.formula}):`;
+          specimenDetail.replaceChildren(name, ` ${mineral.note}`);
+        }
       });
     });
   }

@@ -126,7 +126,7 @@ export class CompanionHubOverlay implements OverlayView {
     this.selectedCityId = save.playerProfile.homeCityId || 'toronto';
 
     this.container = document.createElement('div');
-    this.container.className = 'hub-shell';
+    this.container.className = 'hub-shell companion-hub';
     root.appendChild(this.container);
 
     this.disposers.add(
@@ -183,11 +183,29 @@ export class CompanionHubOverlay implements OverlayView {
   }
 
   private closeActiveModal(): void {
+    const closingModal = this.activeModal;
     const opener = this.modalOpenerSelector;
     this.modalOpenerSelector = null;
     this.activeModal = 'none';
+    if (closingModal === 'chart') {
+      const sel = getToothByUniversal(this.selectedUniversalTooth);
+      if (sel.companionArchIndex !== null) {
+        this.lastTouchedCrownIdx = sel.companionArchIndex;
+        this.actions.onHighlightCrown?.(sel.companionArchIndex);
+      }
+    }
     this.render();
     if (opener) this.container?.querySelector<HTMLElement>(opener)?.focus();
+  }
+
+  private refreshLabUpgrade(upgradeId: string): void {
+    const scrollTop = this.container?.querySelector('.modal-sheet')?.scrollTop ?? 0;
+    this.render();
+    const sheet = this.container?.querySelector('.modal-sheet');
+    if (sheet) sheet.scrollTop = scrollTop;
+    const equipButton = sheet?.querySelector<HTMLButtonElement>(`[data-equip-id="${CSS.escape(upgradeId)}"]`);
+    equipButton?.focus({ preventScroll: true });
+    equipButton?.scrollIntoView({ block: 'nearest' });
   }
 
   /** Called when the player taps a city pin directly on the 3D Earth globe. */
@@ -197,6 +215,14 @@ export class CompanionHubOverlay implements OverlayView {
     this.actions.onPlayUiTap();
     this.actions.onTabChanged('globe', this.selectedCityId);
     this.render();
+  }
+
+  /** Re-render drops focus; put keyboard players back on the city they just picked. */
+  private focusCityPill(cityId: string): void {
+    const pill = this.container?.querySelector<HTMLElement>(`[data-city-id="${cityId}"]`);
+    if (!pill) return;
+    pill.focus({ preventScroll: true });
+    pill.scrollIntoView?.({ block: 'nearest', inline: 'center' });
   }
 
   setStatusBanner(text: string): void {
@@ -378,9 +404,9 @@ export class CompanionHubOverlay implements OverlayView {
       </div>
 
       <div class="hub-center-callout">
-        <div class="bask-floating-pill">
+        ${splatHint && !needsPulpRescue ? '' : `<div class="bask-floating-pill">
           ${floatingStatusText}
-        </div>
+        </div>`}
         <div id="hub-tooth-readout-slot">${this.buildTouchedCrownPillHtml()}</div>
         ${splatHint}${globeHint}
         ${welcomeTipHtml}
@@ -902,6 +928,7 @@ export class CompanionHubOverlay implements OverlayView {
             rows="2"
             style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:0.76rem;padding:8px;"
           ></textarea>
+          <div id="sync-import-status" role="alert" style="min-height:1.1em;margin-top:6px;font-size:0.76rem;color:#fca5a5;"></div>
           <div style="margin-top:8px;text-align:right;">
             <button type="button" id="btn-apply-sync" class="btn btn-gold btn-sm">Import & Merge</button>
           </div>
@@ -1220,13 +1247,12 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#btn-feed-treat')?.addEventListener('click', () => {
+      this.dismissWelcome();
       this.actions.onPlayTreatSfx();
       const homeCity = getHostCityById(save.playerProfile.homeCityId);
       const res = CompanionArchSim.feedRegionalTreat(save.companion, Date.now());
       save.fluorideIons += res.ionsGranted;
       this.actions.onTreatSplat?.();
-      this.saveSys.save(save);
-      this.bus.emit('companion:updated', { state: save.companion });
 
       if (res.triggeredPulpRescue) {
         this.statusBanner =
@@ -1236,7 +1262,9 @@ export class CompanionHubOverlay implements OverlayView {
       } else {
         this.statusBanner = `Enjoyed ${homeCity.signatureTreat.name}! (Hourly Ion bonus 3/3 reached — watch acid load!)`;
       }
-      this.render();
+      this.saveSys.save(save);
+      this.bus.emit('companion:updated', { state: save.companion });
+      this.container?.querySelector<HTMLElement>('#btn-feed-treat')?.focus({ preventScroll: true });
     });
 
     this.container.querySelector('#btn-replay-cosmic')?.addEventListener('click', () => {
@@ -1249,6 +1277,7 @@ export class CompanionHubOverlay implements OverlayView {
         this.actions.onPlayUiTap();
         this.actions.onTabChanged('globe', this.selectedCityId);
         this.render();
+        this.focusCityPill(this.selectedCityId);
       });
     });
 
@@ -1337,7 +1366,10 @@ export class CompanionHubOverlay implements OverlayView {
           return;
         }
         this.selectedUniversalTooth = num;
-        if (t.companionArchIndex !== null) this.actions.onHighlightCrown?.(t.companionArchIndex);
+        if (t.companionArchIndex !== null) {
+          this.lastTouchedCrownIdx = t.companionArchIndex;
+          this.actions.onHighlightCrown?.(t.companionArchIndex);
+        }
         if (this.actions.onPlayToothChime) {
           this.actions.onPlayToothChime(step);
         } else {
@@ -1400,7 +1432,7 @@ export class CompanionHubOverlay implements OverlayView {
         const id = b.dataset.buyId;
         if (id && this.saveSys.purchaseUpgradeWithIons(id)) {
           this.actions.onPlaySparkleSfx();
-          this.render();
+          this.refreshLabUpgrade(id);
         }
       });
     });
@@ -1409,7 +1441,7 @@ export class CompanionHubOverlay implements OverlayView {
       b.addEventListener('click', () => {
         const id = b.dataset.equipId;
         if (id && this.saveSys.equipUpgrade(id)) {
-          this.render();
+          this.refreshLabUpgrade(id);
         }
       });
     });
@@ -1442,9 +1474,14 @@ export class CompanionHubOverlay implements OverlayView {
         this.statusBanner = 'Sync Code imported & merged cleanly!';
         this.closeActiveModal();
       } catch (err) {
-        this.statusBanner =
-          err instanceof Error ? err.message : 'Invalid Sync Code.';
-        this.closeActiveModal();
+        // Keep the sheet open with the pasted text so the player can fix the code; progress is untouched.
+        const status = this.container?.querySelector<HTMLElement>('#sync-import-status');
+        if (status) {
+          status.textContent =
+            (err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.') +
+            ' Your current progress was not changed.';
+        }
+        txt?.focus();
       }
     });
   }

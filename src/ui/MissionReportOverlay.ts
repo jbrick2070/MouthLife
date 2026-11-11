@@ -23,6 +23,10 @@ export interface MissionReportData {
 const esc = (t: string): string =>
   t.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
 
+const REPORT_REVEAL_MS = 520;
+const REPORT_FOCUSABLE_SEL =
+  'button:not([disabled]), summary, a[href], [tabindex]:not([tabindex="-1"])';
+
 /** Headline celebrating the actual cleared world (pure, unit-testable). */
 export function buildReportHeadline(r: MissionReportData): string {
   if (r.mode === 'PULP_RESCUE') {
@@ -35,9 +39,58 @@ export function buildReportHeadline(r: MissionReportData): string {
   return `✨ ${r.worldTitle ?? 'Plaque City'} Remineralized${place}! Smooth Bask Restored!`;
 }
 
+/** Which report button should receive keyboard focus first (pure, unit-testable). */
+export function pickReportPrimaryButtonId(
+  r: Pick<MissionReportData, 'won' | 'mode' | 'nextWorldId' | 'nextWorldTitle'>
+): string {
+  if (r.won && r.mode === 'ARCADE' && r.nextWorldId && r.nextWorldTitle) return 'btn-report-next';
+  return r.won ? 'btn-report-hub' : 'btn-report-replay';
+}
+
+/** Ease-out cubic score reveal sampler; returns target immediately under reduced motion. */
+export function sampleScoreReveal(target: number, progress01: number, reducedMotion: boolean): number {
+  if (reducedMotion || progress01 >= 1) return Math.round(target);
+  const u = Math.max(0, Math.min(1, progress01));
+  const eased = 1 - Math.pow(1 - u, 3);
+  return Math.round(target * eased);
+}
+
 export class MissionReportOverlay implements OverlayView {
   private disposers = new DisposerBag();
   private container: HTMLElement | null = null;
+  private revealRafId: number | null = null;
+
+  private readonly keyHandler = (e: KeyboardEvent): void => {
+    if (!this.container) return;
+    if (e.key === 'Escape') {
+      const openLesson = this.container.querySelector<HTMLDetailsElement>('details.report-lesson[open]');
+      e.preventDefault();
+      if (openLesson) {
+        openLesson.open = false;
+        openLesson.querySelector<HTMLElement>('summary')?.focus();
+      } else {
+        this.callbacks.onReturnToHub();
+      }
+      return;
+    }
+    if (e.key === 'Tab') {
+      const items = Array.from(this.container.querySelectorAll<HTMLElement>(REPORT_FOCUSABLE_SEL));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !this.container.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
 
   constructor(
     private readonly report: MissionReportData,
@@ -47,9 +100,21 @@ export class MissionReportOverlay implements OverlayView {
       onNextDive: (worldId: string) => void;
       isMuted?: () => boolean;
       onToggleMute?: () => void;
+      isReducedMotion?: () => boolean;
       bus?: EventBus;
     }
   ) {}
+
+  private isReducedMotionActive(): boolean {
+    if (this.callbacks.isReducedMotion?.()) return true;
+    if (typeof document !== 'undefined' && document.documentElement.classList.contains('reduced-motion')) {
+      return true;
+    }
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+    return false;
+  }
 
   private syncMuteUi(): void {
     const btn = this.container?.querySelector<HTMLButtonElement>('#btn-report-mute');
@@ -61,7 +126,7 @@ export class MissionReportOverlay implements OverlayView {
 
   mount(root: HTMLElement): void {
     this.container = document.createElement('div');
-    this.container.className = 'hub-shell';
+    this.container.className = 'hub-shell companion-hub';
     root.appendChild(this.container);
 
     const { breakdown, won, mode } = this.report;
@@ -80,12 +145,14 @@ export class MissionReportOverlay implements OverlayView {
     const gradeLabel =
       breakdown.grade === 'FLUORAPATITE_GOLD' ? '★ FLUORAPATITE GOLD' : `GRADE ${breakdown.grade}`;
     const muted = this.callbacks.isMuted?.() ?? false;
+    const reduced = this.isReducedMotionActive();
+    const revealCls = reduced ? '' : ' report-grade-reveal';
 
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive row-between">
-        <strong style="color:#5eead4;font-size:0.88rem;">🦷 CLINICAL MISSION REPORT</strong>
-        <div class="row-wrap">
-          <span class="pill-badge" style="border-color:#fbbf24;color:#fde68a;">${gradeLabel}</span>
+        <strong style="color:#5eead4;font-size:0.86rem;">🦷 CLINICAL MISSION REPORT</strong>
+        <div class="row-wrap" style="flex-wrap:nowrap;">
+          <span id="report-grade-pill" class="pill-badge report-grade-pill grade-${esc(breakdown.grade)}${revealCls}" style="border-color:#fbbf24;color:#fde68a;">${gradeLabel}</span>
           <button
             type="button"
             id="btn-report-mute"
@@ -104,7 +171,7 @@ export class MissionReportOverlay implements OverlayView {
       </div>
 
       <div class="cosmic-card glass-card ui-interactive">
-        <h2 id="report-headline" style="margin:0 0 6px 0;font-size:1.1rem;color:#fff;">${headline}</h2>
+        <h2 id="report-headline" tabindex="-1" style="margin:0 0 6px 0;font-size:1.1rem;color:#fff;">${headline}</h2>
         ${
           this.report.newBest
             ? '<div class="row-wrap" style="margin-bottom:6px;"><span id="pill-new-best" class="pill-badge" style="border-color:#fbbf24;color:#fde68a;">🏆 NEW BEST SCORE!</span></div>'
@@ -124,24 +191,24 @@ export class MissionReportOverlay implements OverlayView {
         <div class="shield-grid" style="margin:8px 0;">
           <div class="mini-meter">
             <div class="mini-meter-label"><span>Restoration</span></div>
-            <strong style="font-size:0.84rem;color:#5eead4;">${breakdown.restorationPts}</strong>
+            <strong id="report-pts-restoration" class="report-num" style="font-size:0.84rem;color:#5eead4;">${sampleScoreReveal(breakdown.restorationPts, 0, reduced)}</strong>
           </div>
           <div class="mini-meter">
             <div class="mini-meter-label"><span>Technique</span></div>
-            <strong style="font-size:0.84rem;color:#38bdf8;">${breakdown.techniquePts}</strong>
+            <strong id="report-pts-technique" class="report-num" style="font-size:0.84rem;color:#38bdf8;">${sampleScoreReveal(breakdown.techniquePts, 0, reduced)}</strong>
           </div>
           <div class="mini-meter">
             <div class="mini-meter-label"><span>Ecology</span></div>
-            <strong style="font-size:0.84rem;color:#34d399;">${breakdown.ecologyPts}</strong>
+            <strong id="report-pts-ecology" class="report-num" style="font-size:0.84rem;color:#34d399;">${sampleScoreReveal(breakdown.ecologyPts, 0, reduced)}</strong>
           </div>
           <div class="mini-meter">
             <div class="mini-meter-label"><span>Par Time</span></div>
-            <strong style="font-size:0.84rem;color:#fbbf24;">${breakdown.parTimePts}</strong>
+            <strong id="report-pts-partime" class="report-num" style="font-size:0.84rem;color:#fbbf24;">${sampleScoreReveal(breakdown.parTimePts, 0, reduced)}</strong>
           </div>
         </div>
 
         <div class="row-between" style="font-size:0.8rem;margin-bottom:8px;">
-          <span>Total Score: <strong>${breakdown.totalScore}</strong> (${breakdown.cleanlinessPct}% Clean)</span>
+          <span>Total Score: <strong id="report-total-score" class="report-num">${sampleScoreReveal(breakdown.totalScore, 0, reduced)}</strong> (${breakdown.cleanlinessPct}% Clean)</span>
           <span style="color:#99f6e4;font-weight:700;">
             ✦ +${mode === 'PULP_RESCUE' ? this.report.bonusRescueIons : breakdown.ionsEarned} Fluoride Ions
           </span>
@@ -149,16 +216,20 @@ export class MissionReportOverlay implements OverlayView {
 
         ${
           note
-            ? `<div style="background:rgba(4,16,28,0.78);border:1px solid rgba(45,212,191,0.35);border-radius:10px;padding:8px 10px;margin-bottom:10px;">
-                <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">📜 HISTORICAL FIELD NOTE UNLOCKED • ${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
-                <div style="font-size:0.82rem;font-weight:700;color:#fff;margin:2px 0;">${esc(note.title)}</div>
-                <div style="font-size:0.74rem;color:#cbd5e1;">${esc(note.enamelLesson)}</div>
-              </div>`
-            : `<div id="report-dental-lesson" style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.3);border-radius:10px;padding:8px 10px;margin-bottom:10px;">
-                <div style="font-size:0.7rem;color:#5eead4;font-weight:700;">🦷 CLINICAL DENTAL PEARL • ${esc(dentalLesson.focusTeethBadge)}</div>
-                <div style="font-size:0.8rem;font-weight:700;color:#fff;margin:2px 0;">${esc(dentalLesson.headline)}</div>
-                <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;">${esc(dentalLesson.lesson)}</div>
-              </div>`
+            ? `<details id="report-field-note" class="report-lesson">
+                <summary>📜 Field note unlocked: ${esc(note.title)}</summary>
+                <div class="report-lesson-body">
+                  <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
+                  <div style="font-size:0.76rem;color:#cbd5e1;margin-top:3px;">${esc(note.enamelLesson)}</div>
+                </div>
+              </details>`
+            : `<details id="report-dental-lesson" class="report-lesson">
+                <summary>🦷 Dental pearl: ${esc(dentalLesson.headline)}</summary>
+                <div class="report-lesson-body">
+                  <div style="font-size:0.7rem;color:#5eead4;font-weight:700;">${esc(dentalLesson.focusTeethBadge)}</div>
+                  <div style="font-size:0.75rem;color:#cbd5e1;line-height:1.36;margin-top:3px;">${esc(dentalLesson.lesson)}</div>
+                </div>
+              </details>`
         }
 
         <div class="hub-actions-primary">
@@ -207,9 +278,55 @@ export class MissionReportOverlay implements OverlayView {
     this.container
       .querySelector('#btn-report-replay')
       ?.addEventListener('click', () => this.callbacks.onReplay());
+
+    window.addEventListener('keydown', this.keyHandler);
+
+    if (!reduced && typeof requestAnimationFrame === 'function') {
+      this.startScoreReveal(breakdown);
+    }
+
+    requestAnimationFrame(() => {
+      const primary = this.container?.querySelector<HTMLElement>(`#${pickReportPrimaryButtonId(this.report)}`);
+      const button = primary?.getBoundingClientRect();
+      const card = this.container?.querySelector('.cosmic-card')?.getBoundingClientRect();
+      const primaryVisible = button && card && button.top >= card.top && button.bottom <= card.bottom;
+      const target = primaryVisible ? primary : this.container?.querySelector<HTMLElement>('#report-headline');
+      target?.focus({ preventScroll: true });
+    });
+  }
+
+  private startScoreReveal(breakdown: ScoreBreakdown): void {
+    const startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const restEl = this.container?.querySelector<HTMLElement>('#report-pts-restoration');
+    const techEl = this.container?.querySelector<HTMLElement>('#report-pts-technique');
+    const ecoEl = this.container?.querySelector<HTMLElement>('#report-pts-ecology');
+    const parEl = this.container?.querySelector<HTMLElement>('#report-pts-partime');
+    const totEl = this.container?.querySelector<HTMLElement>('#report-total-score');
+
+    const step = (nowMs: number) => {
+      if (!this.container) return;
+      const reducedNow = this.isReducedMotionActive();
+      const progress = Math.min(1, Math.max(0, (nowMs - startMs) / REPORT_REVEAL_MS));
+      if (restEl) restEl.textContent = String(sampleScoreReveal(breakdown.restorationPts, progress, reducedNow));
+      if (techEl) techEl.textContent = String(sampleScoreReveal(breakdown.techniquePts, progress, reducedNow));
+      if (ecoEl) ecoEl.textContent = String(sampleScoreReveal(breakdown.ecologyPts, progress, reducedNow));
+      if (parEl) parEl.textContent = String(sampleScoreReveal(breakdown.parTimePts, progress, reducedNow));
+      if (totEl) totEl.textContent = String(sampleScoreReveal(breakdown.totalScore, progress, reducedNow));
+      if (progress < 1 && !reducedNow) {
+        this.revealRafId = requestAnimationFrame(step);
+      } else {
+        this.revealRafId = null;
+      }
+    };
+    this.revealRafId = requestAnimationFrame(step);
   }
 
   dispose(): void {
+    window.removeEventListener('keydown', this.keyHandler);
+    if (this.revealRafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.revealRafId);
+      this.revealRafId = null;
+    }
     this.disposers.disposeAll();
     this.container?.remove();
     this.container = null;

@@ -57,6 +57,8 @@ import {
 import type { EventBus } from '../EventBus';
 import {
   buildAlleyWalls,
+  findNearestZipMouth,
+  moveCircleWithSlide,
   resolveCircleCollisions,
   sampleTerrainHeight,
   segmentsIntersect2D,
@@ -393,12 +395,9 @@ export class WorldSession {
         this.knockbackTimer = Math.max(0, this.knockbackTimer - dt);
       }
 
-      const candidatePos = {
-        x: this.probePos.x + vx * dt,
-        z: this.probePos.z + vz * dt,
-      };
-      this.probePos = resolveCircleCollisions(
-        candidatePos,
+      this.probePos = moveCircleWithSlide(
+        this.probePos,
+        { x: vx * dt, z: vz * dt },
         PROBE_RADIUS,
         this.cartridge.worldWidth,
         this.cartridge.worldDepth,
@@ -612,6 +611,7 @@ export class WorldSession {
   private fireFlossActuator(aimWorldPos: Vec2 | null): void {
     this.flossCooldown = FLOSS_COOLDOWN_SEC;
 
+    const travelDir: Vec2 = { x: Math.cos(this.probeFacingRad), z: Math.sin(this.probeFacingRad) };
     let aimDir: Vec2;
     if (aimWorldPos) {
       const dx = aimWorldPos.x - this.probePos.x;
@@ -628,7 +628,7 @@ export class WorldSession {
 
     this.probeFacingRad = Math.atan2(aimDir.z, aimDir.x);
 
-    const zipCandidate = tryStartCapillaryZip(
+    let zipCandidate = tryStartCapillaryZip(
       this.probePos,
       aimDir,
       this.cartridge.interdentalAlleys,
@@ -636,6 +636,82 @@ export class WorldSession {
       FLOSS_ZIP_ASSIST_ANGLE_RAD,
       FLOSS_ZIP_ASSIST_ENTRY_DIST
     );
+    // A parked cursor must not veto a zip the player is walking into with the keyboard:
+    // fall back to the travel heading when the cursor aim misses every mouth.
+    if (!zipCandidate && aimWorldPos) {
+      zipCandidate = tryStartCapillaryZip(
+        this.probePos,
+        travelDir,
+        this.cartridge.interdentalAlleys,
+        this.cartridge.wallBoxes,
+        FLOSS_ZIP_ASSIST_ANGLE_RAD,
+        FLOSS_ZIP_ASSIST_ENTRY_DIST
+      );
+      if (zipCandidate) aimDir = travelDir;
+    }
+
+    // Wall-sliding (North/South along a divider) or steep diagonal approaches into a narrow alley
+    // mouth should still zip when HYDRA-1 is inside FLOSS_ZIP_ASSIST_ENTRY_DIST, unless the player
+    // is explicitly aiming at an intact sucrose crystal or bridge in another direction.
+    if (!zipCandidate) {
+      const nearMouth = findNearestZipMouth(
+        this.probePos,
+        this.cartridge.interdentalAlleys,
+        this.cartridge.wallBoxes,
+        FLOSS_ZIP_ASSIST_ENTRY_DIST
+      );
+      if (nearMouth) {
+        const rayEndX = this.probePos.x + aimDir.x * FLOSS_LENGTH;
+        const rayEndZ = this.probePos.z + aimDir.z * FLOSS_LENGTH;
+        const aimingAtOtherTarget =
+          Boolean(aimWorldPos) &&
+          (this.sucroseCrystals.some(
+            (c) =>
+              c.intact &&
+              distancePointToSegmentSq2D(
+                c.pos.x,
+                c.pos.z,
+                this.probePos.x,
+                this.probePos.z,
+                rayEndX,
+                rayEndZ
+              ) <= 0.85
+          ) ||
+            this.bridges.some(
+              (b) =>
+                b.intact &&
+                (segmentsIntersect2D(this.probePos, { x: rayEndX, z: rayEndZ }, b.a, b.b) ||
+                  distancePointToSegmentSq2D(
+                    (b.a.x + b.b.x) * 0.5,
+                    (b.a.z + b.b.z) * 0.5,
+                    this.probePos.x,
+                    this.probePos.z,
+                    rayEndX,
+                    rayEndZ
+                  ) <= 0.65)
+            ));
+        if (!aimingAtOtherTarget) {
+          const vx = nearMouth.exit.x - nearMouth.entry.x;
+          const vz = nearMouth.exit.z - nearMouth.entry.z;
+          const vLen = Math.hypot(vx, vz);
+          if (vLen > 1e-4) {
+            const alleyDir = { x: vx / vLen, z: vz / vLen };
+            zipCandidate = tryStartCapillaryZip(
+              this.probePos,
+              alleyDir,
+              this.cartridge.interdentalAlleys,
+              this.cartridge.wallBoxes,
+              FLOSS_ZIP_ASSIST_ANGLE_RAD,
+              FLOSS_ZIP_ASSIST_ENTRY_DIST
+            );
+            if (zipCandidate) {
+              aimDir = alleyDir;
+              this.probeFacingRad = Math.atan2(aimDir.z, aimDir.x);
+            }
+          }
+        }
+      }
+    }
 
     const segStart = { x: this.probePos.x, z: this.probePos.z };
     const segEnd = zipCandidate
@@ -756,6 +832,7 @@ export class WorldSession {
       targetsHit,
       surgeDelta,
       zipped: Boolean(zipCandidate),
+      epsCellsCracked: epsCracked,
     });
   }
 
@@ -763,19 +840,17 @@ export class WorldSession {
     let bestDir: Vec2 | null = null;
     let bestDist = 4.4;
 
-    for (const alley of this.cartridge.interdentalAlleys) {
-      for (const [entry, exit] of [
-        [alley.endpointA, alley.endpointB],
-        [alley.endpointB, alley.endpointA],
-      ] as const) {
-        const dEntry = Math.hypot(entry.x - this.probePos.x, entry.z - this.probePos.z);
-        if (dEntry <= FLOSS_ZIP_ASSIST_ENTRY_DIST) {
-          const vx = exit.x - this.probePos.x;
-          const vz = exit.z - this.probePos.z;
-          const l = Math.hypot(vx, vz);
-          if (l > 0.1) return { x: vx / l, z: vz / l };
-        }
-      }
+    const nearMouth = findNearestZipMouth(
+      this.probePos,
+      this.cartridge.interdentalAlleys,
+      this.cartridge.wallBoxes,
+      FLOSS_ZIP_ASSIST_ENTRY_DIST
+    );
+    if (nearMouth) {
+      const vx = nearMouth.exit.x - nearMouth.entry.x;
+      const vz = nearMouth.exit.z - nearMouth.entry.z;
+      const l = Math.hypot(vx, vz);
+      if (l > 0.1) return { x: vx / l, z: vz / l };
     }
 
     for (const c of this.sucroseCrystals) {
@@ -988,25 +1063,36 @@ export class WorldSession {
       );
       if (Math.abs(nextPos.x - (m.pos.x + m.vel.x * dt)) > 1e-4) m.vel.x *= -1;
       if (Math.abs(nextPos.z - (m.pos.z + m.vel.z * dt)) > 1e-4) m.vel.z *= -1;
+      if (this.isInsideSealedDistrict(nextPos.x, m.pos.z)) {
+        m.vel.x *= -1;
+        nextPos.x = m.pos.x;
+      }
+      if (this.isInsideSealedDistrict(nextPos.x, nextPos.z)) {
+        m.vel.z *= -1;
+        nextPos.z = m.pos.z;
+      }
       m.pos = nextPos;
 
-      this.grid.depositPlaqueCircle(
-        m.pos.x,
-        m.pos.z,
-        MUTANS_TRAIL_RADIUS,
-        MUTANS_DEPOSIT_RATE,
-        dt
-      );
+      const onSealedCrown = this.isInsideSealedDistrict(m.pos.x, m.pos.z);
+      if (!onSealedCrown) {
+        this.grid.depositPlaqueCircle(
+          m.pos.x,
+          m.pos.z,
+          MUTANS_TRAIL_RADIUS,
+          MUTANS_DEPOSIT_RATE,
+          dt
+        );
 
-      m.acidDropCooldown -= dt;
-      if (m.acidDropCooldown <= 0 && this.acidPools.length < 8) {
-        m.acidDropCooldown = 7.0;
-        this.acidPools.push({
-          id: this.nextEntityId++,
-          pos: { x: m.pos.x, z: m.pos.z },
-          radius: ACID_POOL_RADIUS,
-          remainingSec: ACID_POOL_LIFETIME_SEC,
-        });
+        m.acidDropCooldown -= dt;
+        if (m.acidDropCooldown <= 0 && this.acidPools.length < 8) {
+          m.acidDropCooldown = 7.0;
+          this.acidPools.push({
+            id: this.nextEntityId++,
+            pos: { x: m.pos.x, z: m.pos.z },
+            radius: ACID_POOL_RADIUS,
+            remainingSec: ACID_POOL_LIFETIME_SEC,
+          });
+        }
       }
 
       // Playful Slime-Boing bump against HYDRA-1 (zero HP bar!)
@@ -1064,11 +1150,52 @@ export class WorldSession {
       if (ratio >= DISTRICT_SEAL_CLEAN_RATIO && allDistrictSitesRestored) {
         this.sealedDistricts[di] = true;
         this.grid.sealDistrict(di);
+        this.purgeSealedDistrictEcology(di);
         this.bus.emit('district:sealed', {
           districtIdx: di,
           districtName: this.cartridge.districts[di].name,
           worldCleanRatio: this.grid.getWorldCleanRatio(),
         });
+      }
+    }
+  }
+
+  private isPointInSealedSector(di: number, x: number, z: number): boolean {
+    const b = this.cartridge.districts[di]?.bounds;
+    if (!b) return false;
+    const ds = this.cartridge.districts;
+    const minX = ds.some((d, j) => j !== di && d.bounds.maxX <= b.minX + 0.5) ? b.minX : 0;
+    const maxX = ds.some((d, j) => j !== di && d.bounds.minX >= b.maxX - 0.5) ? b.maxX : this.cartridge.worldWidth;
+    const minZ = ds.some((d, j) => j !== di && d.bounds.maxZ <= b.minZ + 0.5) ? b.minZ : 0;
+    const maxZ = ds.some((d, j) => j !== di && d.bounds.minZ >= b.maxZ - 0.5) ? b.maxZ : this.cartridge.worldDepth;
+    return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+  }
+
+  private isInsideSealedDistrict(x: number, z: number): boolean {
+    for (let di = 0; di < this.cartridge.districts.length; di++) {
+      if (!this.sealedDistricts[di]) continue;
+      if (this.isPointInSealedSector(di, x, z)) return true;
+    }
+    return false;
+  }
+
+  /** Clears resident S. mutans, acid pools, and sucrose spawners when a crown seals in Fluorapatite. */
+  private purgeSealedDistrictEcology(di: number): void {
+    if (!this.cartridge.districts[di]) return;
+    for (const c of this.sucroseCrystals) {
+      if (c.districtIdx === di) c.intact = false;
+    }
+    for (let i = this.acidPools.length - 1; i >= 0; i--) {
+      const p = this.acidPools[i].pos;
+      if (this.isPointInSealedSector(di, p.x, p.z)) {
+        this.acidPools.splice(i, 1);
+      }
+    }
+    for (let i = this.mutans.length - 1; i >= 0; i--) {
+      const p = this.mutans[i].pos;
+      if (this.isPointInSealedSector(di, p.x, p.z)) {
+        this.bus.emit('mutans:popped', { pos: { x: p.x, z: p.z }, via: 'seal' });
+        this.mutans.splice(i, 1);
       }
     }
   }

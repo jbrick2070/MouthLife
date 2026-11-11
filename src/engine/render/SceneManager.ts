@@ -1,3 +1,6 @@
+/// <reference types="vite/client" />
+
+import { sideLayoutFraming } from '../../ui/hudHelpers';
 import * as THREE from 'three';
 import {
   CAMERA_BASE_FOV_DEG,
@@ -6,6 +9,7 @@ import {
   DISCLOSE_DURATION_SEC,
   DISCLOSE_WAVE_RADIUS,
   EARTH_BACKDROP_POS,
+  EARTH_BACKDROP_RADIUS,
   FPS_DOWNGRADE_THRESHOLD,
   FPS_UPGRADE_THRESHOLD,
   QUALITY_GOVERNOR_COOLDOWN_SEC,
@@ -88,6 +92,16 @@ export class SceneManager {
   private orbitYaw = 0;
   private orbitPitch = 0.42;
   private orbitResetActive = false;
+  // Pixels the Companion image is lifted so the arch sits in the gap between hub chrome.
+  private hubViewShiftPx = 0;
+  private hubViewShiftTarget = 0;
+  // Landscape phones: the hub deck becomes a right-hand column, so the arch shifts left instead.
+  private hubViewShiftXPx = 0;
+  private hubViewShiftXTarget = 0;
+  private hubSideFrac = 0;
+  private hubBandFrac = 1;
+  private hubInsetTimer = 0;
+  private viewOffsetApplied = 0;
   private highlightTooth: number | null = null;
   private highlightHoldSec = 0;
   private highlightStartSec = -1;
@@ -112,12 +126,12 @@ export class SceneManager {
   private dtRingFilled = 0;
   private governorCooldownSec = 3.0;
   private lastDrawCalls = 0;
+  private warnedDrawBudget = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly bus: EventBus
   ) {
-    this.scene.background = new THREE.Color(0x051624);
     this.camera = new THREE.PerspectiveCamera(
       CAMERA_BASE_FOV_DEG,
       1,
@@ -206,7 +220,7 @@ export class SceneManager {
         canvas: this.canvas,
         antialias: true,
         powerPreference: 'high-performance',
-        alpha: false,
+        alpha: true,
       });
       this.webglAvailable = true;
     } catch {
@@ -214,7 +228,7 @@ export class SceneManager {
         this.renderer = new THREE.WebGLRenderer({
           canvas: this.canvas,
           antialias: false,
-          alpha: false,
+          alpha: true,
         });
         this.webglAvailable = true;
       } catch {
@@ -286,6 +300,7 @@ export class SceneManager {
       this.baseFov = CAMERA_BASE_FOV_DEG;
     }
     this.camera.fov = this.baseFov + this.fovPunch;
+    this.viewOffsetApplied = Number.NaN; // force the hub view shift to re-apply at the new size
     this.camera.updateProjectionMatrix();
 
     const spec = QUALITY_TIER_SPECS[this.activeTier];
@@ -340,12 +355,14 @@ export class SceneManager {
     this.cartridgeStage.group.visible =
       this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
     this.scene.add(this.cartridgeStage.group);
-    (this.scene.background as THREE.Color).setHex(cartridge.palette.skyTopHex);
+    this.canvas.style.setProperty('--oral-sky', new THREE.Color(cartridge.palette.skyTopHex).getStyle());
     this.prewarmShaders();
   }
 
   setMode(mode: AppMode): void {
     this.currentMode = mode;
+    this.hubInsetTimer = 0;
+    this.canvas.classList.toggle('arcade-backdrop', mode === 'ARCADE' || mode === 'PULP_RESCUE');
     this.syncStageVisibility();
   }
 
@@ -360,11 +377,12 @@ export class SceneManager {
 
   setCosmicBeat(beatIdx: number): void {
     this.cosmicBeat = beatIdx;
+    this.hubInsetTimer = 0;
     this.earthBackdrop.setCosmicIntroState(this.currentMode === 'COSMIC_INTRO', beatIdx);
   }
 
   /** Softly illuminates a Companion crown (0..13) for `holdSec`, then fades; null clears. */
-  highlightCompanionTooth(index: number | null, holdSec = 2.6): void {
+  highlightCompanionTooth(index: number | null, holdSec = 4.2): void {
     this.highlightTooth = index;
     this.highlightHoldSec = holdSec;
     this.highlightStartSec = -1; // stamped on the next frame
@@ -450,7 +468,8 @@ export class SceneManager {
     const { frameDt, nowSec, session, companion } = params;
 
     this.stepQualityGovernor(frameDt);
-    this.earthBackdrop.update(frameDt, nowSec);
+    this.earthBackdrop.reducedMotion = this.reducedMotion;
+    this.earthBackdrop.update(frameDt, this.reducedMotion ? 0 : nowSec);
 
     // Update EnamelBiophysicsMaterial mode & DataTexture upload
     const isArcade =
@@ -506,9 +525,12 @@ export class SceneManager {
         rinseOriginZ: session.rinseWaveOrigin.z,
         rinseRadius: rinseProg * RINSE_WAVE_RADIUS,
         rinseStrength,
+        bufferedRinse: session.hasBicarbRinseUpgrade,
       });
+      this.syncDistrictSeals(nowSec, session);
     } else {
       // Companion Smooth Bask / Brush-Along / Report shader override
+      this.enamelMat.setDistrictSeals([], []);
       const smooth01 =
         this.currentMode === 'REPORT' || this.currentMode === 'BRUSH_ALONG'
           ? 0.98
@@ -565,18 +587,139 @@ export class SceneManager {
       session,
       scrubbingActive: params.scrubbingActive,
       companionSmoothness: companion.smoothnessIndex,
+      reducedMotion: this.reducedMotion,
+      companionVisible: this.companionArch.group.visible,
     });
 
-    this.companionArch.gingivaMaterial.uniforms.uTime.value = nowSec;
-    if (this.cartridgeStage) {
-      for (const gm of this.cartridgeStage.gingivaMaterials) gm.uniforms.uTime.value = nowSec;
-    }
-
     this.updateCameraRig(frameDt, nowSec, session, params.activePacerQuadrant);
+    this.applyHubViewShift(frameDt);
     this.applyCameraJuice(frameDt, nowSec);
+    this.updateOralLighting(nowSec, isArcade, session);
 
+    // The orbital leg of a dive never needs to render the arcade batches.
+    this.entityBatch.arcadeEntitiesGroup.visible = isArcade && !!this.cartridgeStage?.group.visible;
     this.renderer.render(this.scene, this.camera);
     this.lastDrawCalls = this.renderer.info.render.calls;
+    if (import.meta.env.DEV && this.lastDrawCalls >= 25 && !this.warnedDrawBudget) {
+      console.assert(false, `MouthLife ${this.currentMode} used ${this.lastDrawCalls} draw calls (budget < 25)`);
+      this.warnedDrawBudget = true;
+    } else if (this.lastDrawCalls < 25) {
+      this.warnedDrawBudget = false;
+    }
+  }
+
+  private readonly sealStartSec: number[] = [];
+
+  /** Drives the on-surface district seal sweep and the steady gold boundary afterwards. */
+  private syncDistrictSeals(nowSec: number, session: WorldSession): void {
+    const districts = session.cartridge.districts;
+    const ages: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      if (districts[i] && session.sealedDistricts[i]) {
+        if (this.sealStartSec[i] === undefined) this.sealStartSec[i] = nowSec;
+        ages[i] = this.reducedMotion ? 99 : Math.max(0, nowSec - this.sealStartSec[i]);
+      } else {
+        delete this.sealStartSec[i];
+        ages[i] = -1;
+      }
+    }
+    this.enamelMat.setDistrictSeals(districts.map((d) => d.bounds), ages);
+  }
+
+  /** Finds the free vertical band between the top header/callout and the bottom deck/pacer card. */
+  private measureHubBand(dt: number): void {
+    this.hubInsetTimer -= dt;
+    if (this.hubInsetTimer > 0) return;
+    this.hubInsetTimer = 0.25;
+    const h = Math.max(1, window.innerHeight);
+    let top = 0;
+    let bottom = h;
+    const header = document.querySelector('.hub-top-bar') as HTMLElement | null;
+    const callout = document.querySelector('.hub-center-callout') as HTMLElement | null;
+    const deck = document.querySelector(
+      '.hub-bottom-deck, #pacer-card, .pacer-bottom-card, .companion-hub .cosmic-card, .cosmic-mohs .cosmic-card'
+    ) as HTMLElement | null;
+    const w = Math.max(1, window.innerWidth);
+    const deckRect = deck?.getBoundingClientRect();
+    const side = deckRect && deckRect.height > 0 ? sideLayoutFraming(w, h, deckRect.left) : null;
+    if (side) {
+      this.hubSideFrac = side.sideFrac;
+      this.hubViewShiftXTarget = side.shiftX;
+      this.hubViewShiftTarget = 0;
+      this.hubBandFrac = 1;
+      if (this.currentMode === 'HUB' && this.hubFocus === 'globe') {
+        const top = (callout?.getBoundingClientRect().bottom ?? 0) + 12;
+        const bottom = h - 12;
+        const band = Math.max(h * 0.25, bottom - top);
+        this.hubBandFrac = band / h;
+        this.hubViewShiftTarget = bottom - band / 2 - h / 2;
+      } else if (this.currentMode === 'COSMIC_INTRO') {
+        this.hubViewShiftTarget = (header?.getBoundingClientRect().bottom ?? 0) / 2;
+      }
+      return;
+    }
+    this.hubSideFrac = 0;
+    this.hubViewShiftXTarget = 0;
+    if (header) top = Math.max(top, header.getBoundingClientRect().bottom);
+    if (callout) {
+      const r = callout.getBoundingClientRect();
+      if (r.height > 0 && r.bottom < h * 0.4) top = Math.max(top, r.bottom);
+    }
+    if (deck) {
+      const r = deck.getBoundingClientRect();
+      if (r.height > 0 && r.top > h * 0.3) bottom = Math.min(bottom, r.top);
+    }
+    const band = Math.max(h * 0.25, bottom - top);
+    this.hubBandFrac = band / h;
+    // Bias the free-band center slightly upward so foreground central incisors clear the bottom deck.
+    const midY = (top + bottom) * 0.5 - Math.min(22, (bottom - top) * 0.08);
+    this.hubViewShiftTarget = bottom > top ? midY - h / 2 : 0;
+  }
+
+  private applyHubViewShift(dt: number): void {
+    const active =
+      (this.currentMode === 'HUB' && this.hubFocus === 'companion') ||
+      this.currentMode === 'BRUSH_ALONG' ||
+      this.currentMode === 'REPORT';
+    const globeSide = this.currentMode === 'HUB' && this.hubFocus === 'globe';
+    const mohsSide = this.currentMode === 'COSMIC_INTRO' && this.cosmicBeat === 1;
+    const sideOnly = (globeSide || mohsSide) && this.hubSideFrac > 0;
+    const target = active || sideOnly ? this.hubViewShiftTarget : 0;
+    const targetX = active || sideOnly ? this.hubViewShiftXTarget : 0;
+    const k = this.reducedMotion ? 1 : 1 - Math.exp(-dt * 8);
+    this.hubViewShiftPx += (target - this.hubViewShiftPx) * k;
+    this.hubViewShiftXPx += (targetX - this.hubViewShiftXPx) * k;
+    if (Math.abs(this.hubViewShiftPx - target) < 0.4) this.hubViewShiftPx = target;
+    if (Math.abs(this.hubViewShiftXPx - targetX) < 0.4) this.hubViewShiftXPx = targetX;
+    const signature = this.hubViewShiftPx + this.hubViewShiftXPx * 1000;
+    if (Math.abs(signature - this.viewOffsetApplied) < 0.05) return;
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    if (this.hubViewShiftPx === 0 && this.hubViewShiftXPx === 0) this.camera.clearViewOffset();
+    else this.camera.setViewOffset(w, h, -this.hubViewShiftXPx, -this.hubViewShiftPx, w, h);
+    this.viewOffsetApplied = signature;
+  }
+
+  private updateOralLighting(nowSec: number, arcade: boolean, session: WorldSession): void {
+    const detail = this.activeTier === 'low' ? 0 : this.activeTier === 'medium' ? 1 : 2;
+    const motionTime = this.reducedMotion ? 0 : nowSec;
+    // Keep portrait framing from dimming the entire arch as the camera backs up.
+    const fogStart = arcade ? 16 : Math.max(14, this.rigPos.distanceTo(this.currentLookAt) - 7);
+    const update = (material: THREE.ShaderMaterial) => {
+      const u = material.uniforms;
+      u.uDetail.value = detail;
+      u.uMotionTime.value = motionTime;
+      u.uDepthCue.value.set(fogStart, arcade ? 0.053 : 0.095);
+      u.uHeadlamp.value.set(
+        session.probePos.x + Math.cos(session.probeFacingRad) * 0.95,
+        session.probeY + 1.35,
+        session.probePos.z + Math.sin(session.probeFacingRad) * 0.95,
+        arcade ? 1 : 0
+      );
+    };
+    update(this.enamelMat.material);
+    update(this.companionArch.gingivaMaterial);
+    for (const material of this.cartridgeStage?.gingivaMaterials ?? []) update(material);
   }
 
   private updateCameraRig(
@@ -612,6 +755,7 @@ export class SceneManager {
       return;
     }
 
+    const motionTime = this.reducedMotion ? 0 : nowSec;
     const desiredPos = new THREE.Vector3();
     const desiredLook = new THREE.Vector3();
 
@@ -621,12 +765,15 @@ export class SceneManager {
         const cx = EARTH_BACKDROP_POS.x;
         const cy = EARTH_BACKDROP_POS.y + 38;
         const cz = EARTH_BACKDROP_POS.z;
-        const swayX = Math.sin(nowSec * 0.35 + this.orbitYaw) * 3.2;
-        // Beat 2 tilts down & pulls back so the Mohs specimen row clears the lower info panel
+        const swayX = Math.sin(motionTime * 0.35 + this.orbitYaw) * 3.2;
         const mohsBeat = this.cosmicBeat === 1;
         const portrait = this.camera.aspect < 1.0;
-        desiredPos.set(cx + swayX * (mohsBeat ? 0.4 : 1), cy + (mohsBeat ? -0.6 : 1.2), cz + (mohsBeat ? (portrait ? 19.5 : 16.5) : 14.5));
-        desiredLook.set(cx, cy - (mohsBeat ? (portrait ? 5.6 : 4.6) : 0.0), cz);
+        if (mohsBeat) this.measureHubBand(dt);
+        const mohsSide = mohsBeat && this.hubSideFrac > 0;
+        const distance = mohsSide ? 21 : portrait ? 23.5 : 16.5;
+        const lookDown = mohsSide ? 1.5 : portrait ? 5.6 : 4.6;
+        desiredPos.set(cx + swayX * (mohsBeat ? 0.4 : 1), cy + (mohsBeat ? -0.6 : 1.2), cz + (mohsBeat ? distance : 14.5));
+        desiredLook.set(cx, cy - (mohsBeat ? lookDown : 0), cz);
       } else {
         // Beat 3: Majestic Earthrise zoom framing the 3D Globe!
         desiredPos.set(
@@ -642,14 +789,21 @@ export class SceneManager {
       }
     } else if (this.currentMode === 'HUB') {
       if (this.hubFocus === 'globe') {
+        this.measureHubBand(dt);
+        const sideLayout = this.hubSideFrac > 0;
+        const halfFov = THREE.MathUtils.degToRad(this.baseFov / 2);
+        const fit = Math.min(this.hubBandFrac, this.camera.aspect * this.hubSideFrac * 0.92);
+        const globeDistance = sideLayout
+          ? Math.max(66, EARTH_BACKDROP_RADIUS / Math.sin(Math.atan(Math.tan(halfFov) * fit)))
+          : 49;
         desiredPos.set(
           EARTH_BACKDROP_POS.x,
-          EARTH_BACKDROP_POS.y + 5.5,
-          EARTH_BACKDROP_POS.z + 49
+          EARTH_BACKDROP_POS.y + (sideLayout ? 0 : 5.5),
+          EARTH_BACKDROP_POS.z + globeDistance
         );
         desiredLook.set(
           EARTH_BACKDROP_POS.x,
-          EARTH_BACKDROP_POS.y - 1.5,
+          EARTH_BACKDROP_POS.y - (sideLayout ? 0 : 1.5),
           EARTH_BACKDROP_POS.z
         );
       } else {
@@ -663,27 +817,51 @@ export class SceneManager {
             this.orbitResetActive = false;
           }
         }
-        const gentleBob = Math.sin(nowSec * 0.45) * 0.08;
+        const gentleBob = Math.sin(motionTime * 0.45) * 0.08;
         const yaw = this.orbitYaw + gentleBob;
-        const radius = this.camera.aspect < 1.0 ? 31.0 : 21.5;
+        this.measureHubBand(dt);
+        // Landscape has spare width, so back off further to fit the arch height inside the band.
+        const portraitView = this.camera.aspect < 1.0;
+        const bandDolly =
+          1 + Math.min(portraitView ? 0.24 : 0.72, Math.max(0, 0.58 - this.hubBandFrac) * (portraitView ? 0.65 : 1.85));
+        const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.52 / (this.hubSideFrac * 0.92)) : 1;
+        const radius = (this.camera.aspect < 1.0 ? 31.0 : 21.5) * bandDolly * sideDolly;
         const pitch = Math.max(0.48, this.orbitPitch);
         desiredPos.set(
           32 + Math.sin(yaw) * Math.cos(pitch) * radius,
           2.2 + Math.sin(pitch) * radius,
           16 + Math.cos(yaw) * Math.cos(pitch) * radius
         );
-        desiredLook.set(32, 1.5, 16.5);
+        desiredLook.set(32, 1.05, 18.2);
       }
     } else if (this.currentMode === 'BRUSH_ALONG') {
-      const quadPanX = ((activeQuadrant >= 0 ? activeQuadrant : 1.5) - 1.5) * 2.4;
-      desiredPos.set(32 + quadPanX, 17.5, 32.5);
-      desiredLook.set(32 + quadPanX * 0.45, 1.6, 15.5);
-    } else if (this.currentMode === 'REPORT') {
-      const celebYaw = nowSec * 0.42 + this.orbitYaw;
+      this.measureHubBand(dt);
+      const portraitView = this.camera.aspect < 1.0;
+      const bandDolly =
+        1 +
+        Math.min(
+          portraitView ? 0.28 : 0.7,
+          Math.max(0, 0.58 - this.hubBandFrac) * (portraitView ? 0.72 : 1.8)
+        );
+      const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.55 / (this.hubSideFrac * 0.92)) : 1;
+      const radius = (portraitView ? 36.8 : 22.4) * bandDolly * sideDolly;
+      const pitch = portraitView ? 0.54 : 0.56;
+      const panScale = portraitView ? 1.1 : 2.2;
+      const quadPanX = ((activeQuadrant >= 0 ? activeQuadrant : 1.5) - 1.5) * panScale;
       desiredPos.set(
-        32 + Math.sin(celebYaw) * 19.5,
+        32 + quadPanX,
+        2.1 + Math.sin(pitch) * radius,
+        16 + Math.cos(pitch) * radius
+      );
+      desiredLook.set(32 + quadPanX * 0.42, 1.1, 18.0);
+    } else if (this.currentMode === 'REPORT') {
+      const celebYaw = motionTime * 0.42 + this.orbitYaw;
+      this.measureHubBand(dt);
+      const reportSide = this.hubSideFrac > 0 ? Math.max(1, 0.55 / (this.hubSideFrac * 0.92)) : 1;
+      desiredPos.set(
+        32 + Math.sin(celebYaw) * 19.5 * reportSide,
         10.5,
-        16 + Math.cos(celebYaw) * 19.5
+        16 + Math.cos(celebYaw) * 19.5 * reportSide
       );
       desiredLook.set(32, 1.9, 16);
     } else {
@@ -803,6 +981,9 @@ export class SceneManager {
   /** Labial-face anchor points on crowns facing the camera (sugar splat targets). */
   getCompanionSplatAnchors(): Array<{ x: number; y: number; z: number }> {
     const anchors: Array<{ x: number; y: number; z: number }> = [];
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const reachable: typeof anchors = [];
     for (const tooth of this.companionArch.teeth) {
       const lx = Math.sin(tooth.yaw);
       const lz = Math.cos(tooth.yaw);
@@ -811,8 +992,15 @@ export class SceneManager {
       const pz = tooth.center.z + lz * tooth.halfD * 0.95;
       this.tmpV.set(px, py, pz);
       this.tmpV2.subVectors(this.camera.position, this.tmpV).normalize();
-      if (lx * this.tmpV2.x + lz * this.tmpV2.z > 0.15) anchors.push({ x: px, y: py, z: pz });
+      if (lx * this.tmpV2.x + lz * this.tmpV2.z <= 0.15) continue;
+      const anchor = { x: px, y: py, z: pz };
+      anchors.push(anchor);
+      const screen = this.worldToScreen(px, py, pz);
+      if (screen.visible && screen.x >= 18 && screen.x <= w - 18 && screen.y >= 18 && screen.y <= h - 18) {
+        reachable.push(anchor);
+      }
     }
+    if (reachable.length > 0) return reachable;
     return anchors.length > 0
       ? anchors
       : this.companionArch.teeth.map((t) => ({ x: t.center.x, y: t.center.y + t.halfH * 0.6, z: t.center.z }));

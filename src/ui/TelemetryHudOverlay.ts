@@ -12,9 +12,14 @@ import {
   clampToScreen,
   isEditableEventTarget,
   computeObjectiveBreadcrumb,
+  placeWorldCallout,
+  shouldHintFlossMiss,
   loadSeenHints,
   saveSeenHints,
   selectWayfinderTargets,
+  shouldShowDiveIntroToast,
+  findWayfinderLabelY,
+  type ScreenBox,
   type WayfinderKind,
 } from './hudHelpers';
 
@@ -76,6 +81,8 @@ export class TelemetryHudOverlay implements OverlayView {
   private calloutLayer: HTMLElement | null = null;
   private callouts: WorldCallout[] = [];
   private zipPromptEl: HTMLElement | null = null;
+  private zipScreenBox = { cx: 0, cy: 0, halfW: 0, halfH: 0, active: false };
+  private frameOccupiedBoxes: ScreenBox[] = [];
   private steerHaloEl: HTMLElement | null = null;
   private flossRingEl: HTMLElement | null = null;
   private flossDeskBtnEl: HTMLElement | null = null;
@@ -168,6 +175,10 @@ export class TelemetryHudOverlay implements OverlayView {
       }
       this.syncMuteLabels();
       this.syncMotionLabels();
+      this.refreshStats();
+      const objective = this.container?.querySelector('#hud-objective')?.textContent;
+      const pauseObjective = this.pauseSheetEl?.querySelector('#pause-objective');
+      if (pauseObjective) pauseObjective.textContent = objective ?? '';
       this.pauseSheetEl?.querySelector<HTMLElement>('#btn-pause-resume')?.focus();
     } else {
       if (this.lastFocusedBeforePause && this.lastFocusedBeforePause.isConnected) {
@@ -305,17 +316,16 @@ export class TelemetryHudOverlay implements OverlayView {
               <button type="button" id="btn-mob-scan" class="btn btn-sm">🔍 Dye Scan</button>
               <button type="button" id="btn-mob-surge" class="btn btn-sm">🌊 Surge 0%</button>
             </div>
-            <div
+            <button
+              type="button"
               id="ring-floss"
               class="floss-ring"
-              role="button"
-              tabindex="0"
               aria-label="Polymer Floss and Capillary Zip"
               title="Tap or Drag Vector to Slice & Capillary Zip"
             >
               <span>🧵 FLOSS</span>
               <span style="font-size:0.62rem;opacity:0.8;">TAP / AIM</span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -382,12 +392,18 @@ export class TelemetryHudOverlay implements OverlayView {
     this.lastSynergy = this.session.scoring.getSynergyMultiplier();
 
     const blurb = this.session.cartridge.challengeBlurb;
-    if (blurb) this.showToast(`🎯 ${blurb}`, 5.0);
+    const world1Done = Boolean(this.saveSys.getSave().worlds.world_1?.completed);
+    if (blurb && shouldShowDiveIntroToast(this.mode, this.session.cartridge.id, world1Done)) {
+      this.showToast(`🎯 ${blurb}`, 4.2);
+    }
   }
 
   /** Spawns a crisp floating callout anchored to a world position (rises & fades). */
   spawnCallout(text: string, pos: Vec2, tone: CalloutTone = 'mint', life = 1.25, yOffset = 1.6): void {
-    const slot = this.callouts.find((c) => !c.active) ?? this.callouts.reduce((a, b) => (a.age > b.age ? a : b));
+    const slot =
+      this.callouts.find((c) => c.active && c.el.textContent === text) ??
+      this.callouts.find((c) => !c.active) ??
+      this.callouts.reduce((a, b) => (a.age > b.age ? a : b));
     const cart = this.session.cartridge;
     slot.active = true;
     slot.age = 0;
@@ -401,8 +417,17 @@ export class TelemetryHudOverlay implements OverlayView {
 
   private tickCallouts(dt: number): void {
     const reduced = this.sceneMgr.isReducedMotion();
+    const w = Math.max(1, window.innerWidth);
+    const hudBottom = this.measureTopClearanceBottom();
+    const deckTop = this.measureBottomDeckTop();
+    const calloutBoxes: ScreenBox[] = [...this.frameOccupiedBoxes];
+
     for (const c of this.callouts) {
       if (!c.active) continue;
+      if (this.paused) {
+        c.el.style.opacity = '0';
+        continue;
+      }
       c.age += dt;
       if (c.age >= c.life) {
         c.active = false;
@@ -416,12 +441,30 @@ export class TelemetryHudOverlay implements OverlayView {
         c.el.style.opacity = '0';
         continue;
       }
+      const pillW = c.el.offsetWidth || 168;
+      const pillH = c.el.offsetHeight || 28;
+      const placed = placeWorldCallout({
+        x: sp.x,
+        bottomY: sp.y,
+        width: pillW,
+        height: pillH,
+        viewportW: w,
+        hudBottom,
+        deckTop,
+        occupied: calloutBoxes,
+      });
+      calloutBoxes.push({
+        cx: placed.x,
+        cy: placed.bottomY - pillH * 0.5,
+        halfW: pillW * 0.5,
+        halfH: pillH * 0.5,
+      });
       const pop = reduced
         ? 1.0
         : u < 0.12
-          ? 0.7 + (u / 0.12) * 0.45
-          : 1.15 - Math.min(0.15, (u - 0.12) * 0.6);
-      c.el.style.transform = `translate3d(${sp.x.toFixed(1)}px, ${sp.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${pop.toFixed(3)})`;
+          ? 0.85 + (u / 0.12) * 0.23
+          : 1.08 - Math.min(0.08, (u - 0.12) * 0.4);
+      c.el.style.transform = `translate3d(${placed.x.toFixed(1)}px, ${placed.bottomY.toFixed(1)}px, 0) translate(-50%, -100%) scale(${pop.toFixed(3)})`;
       c.el.style.opacity = String(u > 0.7 ? Math.max(0, (1 - u) / 0.3) : 1);
     }
   }
@@ -445,27 +488,75 @@ export class TelemetryHudOverlay implements OverlayView {
     el.classList.add('on');
   }
 
+  private measureTopClearanceBottom(): number {
+    let bottom = this.container?.querySelector('.hud-top')?.getBoundingClientRect().bottom ?? 0;
+    if (this.toastTimerSec > 0 && this.toastEl) {
+      const tr = this.toastEl.getBoundingClientRect();
+      if (tr.height > 0 && tr.bottom < window.innerHeight * 0.45) {
+        bottom = Math.max(bottom, tr.bottom);
+      }
+    }
+    return bottom;
+  }
+
+  private measureBottomDeckTop(): number {
+    const h = Math.max(1, window.innerHeight);
+    let deckTop = h;
+    for (const sel of ['.thumb-deck', '.desktop-hotkey-bar']) {
+      const el = this.container?.querySelector<HTMLElement>(sel);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.top > h * 0.45) {
+        deckTop = Math.min(deckTop, r.top);
+      }
+    }
+    return deckTop;
+  }
+
   /** In-world contextual Zip prompt when HYDRA-1 approaches a 0.90u alley blocked to walking. */
   private tickZipPrompt(): void {
     if (!this.zipPromptEl) return;
     const cart = this.session.cartridge;
     const hint =
-      !cart || this.session.probeZip
+      !cart || this.session.probeZip || this.paused
         ? null
         : findNearestZipMouth(this.session.probePos, cart.interdentalAlleys, cart.wallBoxes);
     const show = Boolean(hint && hint.blockedToWalking);
-    if (show && hint && hint.inZipRange && !this.usedFloss) {
-      this.maybeHint('alley', '🧵 Narrow interdental alley! Floss (E / Right-Click / tap 🧵) to zip through.');
-    }
     if (hint && show) {
+      const wantText = hint.inZipRange
+        ? ZIP_PROMPT_TEXT
+        : '🦷 Narrow Alley — Move Closer to Zip';
+      if (this.zipPromptEl.textContent !== wantText) {
+        this.zipPromptEl.textContent = wantText;
+      }
       const y = sampleTerrainHeight(cart, hint.entry.x, hint.entry.z) + 2.1;
       const sp = this.sceneMgr.worldToScreen(hint.entry.x, y, hint.entry.z);
-      this.zipPromptEl.style.transform = `translate3d(${sp.x.toFixed(1)}px, ${sp.y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+      const w = Math.max(1, window.innerWidth);
+      const hudBottom = this.measureTopClearanceBottom();
+      const deckTop = this.measureBottomDeckTop();
+      const promptW = this.zipPromptEl.offsetWidth || 240;
+      const promptH = this.zipPromptEl.offsetHeight || 40;
+      const halfW = Math.min(w * 0.46, promptW * 0.5);
+      const clampedX = Math.max(halfW + 8, Math.min(w - halfW - 8, sp.x));
+      const minBottomY = hudBottom + promptH + 8;
+      const maxBottomY = Math.max(minBottomY, deckTop - 8);
+      const clampedY = Math.max(minBottomY, Math.min(maxBottomY, sp.y));
+      this.zipPromptEl.style.transform = `translate3d(${clampedX.toFixed(1)}px, ${clampedY.toFixed(1)}px, 0) translate(-50%, -100%)`;
       this.zipPromptEl.style.opacity = sp.visible ? '1' : '0';
-      this.zipPromptEl.style.pointerEvents = sp.visible ? 'auto' : 'none';
+      this.zipPromptEl.style.pointerEvents = sp.visible && hint.inZipRange ? 'auto' : 'none';
       this.zipPromptEl.classList.toggle('ready', hint.inZipRange);
+      this.zipScreenBox = {
+        cx: clampedX,
+        cy: clampedY - promptH * 0.5,
+        halfW: promptW * 0.5,
+        halfH: promptH * 0.5,
+        active: sp.visible,
+      };
     } else {
       this.zipPromptEl.style.opacity = '0';
+      this.zipPromptEl.style.pointerEvents = 'none';
+      this.zipPromptEl.classList.remove('ready');
+      this.zipScreenBox.active = false;
     }
     const ready = Boolean(hint && hint.inZipRange);
     this.flossRingEl?.classList.toggle('zip-ready', ready);
@@ -522,6 +613,8 @@ export class TelemetryHudOverlay implements OverlayView {
       if (this.qualityBtnEl) {
         this.qualityBtnEl.textContent = this.formatQualityLabel();
       }
+      const sheetQuality = this.container?.querySelector('#btn-pause-quality');
+      if (sheetQuality) sheetQuality.textContent = this.formatQualityLabel();
     });
 
     // Desktop clickable buttons
@@ -535,13 +628,24 @@ export class TelemetryHudOverlay implements OverlayView {
       .querySelector('#btn-desk-scan')
       ?.addEventListener('click', () => this.input.triggerVirtualDisclose());
 
-    // Mobile buttons
-    this.container
-      .querySelector('#btn-mob-surge')
-      ?.addEventListener('click', () => this.input.triggerVirtualRinse());
-    this.container
-      .querySelector('#btn-mob-scan')
-      ?.addEventListener('click', () => this.input.triggerVirtualDisclose());
+    // Mobile buttons (respond immediately on multi-touch pointerdown as well as click/keyboard)
+    const mobSurge = this.container.querySelector('#btn-mob-surge');
+    mobSurge?.addEventListener('pointerdown', (e) => {
+      if ((e as PointerEvent).pointerType !== 'mouse') {
+        e.preventDefault();
+        this.input.triggerVirtualRinse();
+      }
+    });
+    mobSurge?.addEventListener('click', () => this.input.triggerVirtualRinse());
+
+    const mobScan = this.container.querySelector('#btn-mob-scan');
+    mobScan?.addEventListener('pointerdown', (e) => {
+      if ((e as PointerEvent).pointerType !== 'mouse') {
+        e.preventDefault();
+        this.input.triggerVirtualDisclose();
+      }
+    });
+    mobScan?.addEventListener('click', () => this.input.triggerVirtualDisclose());
 
     // Left Virtual Scrub & Sweep Thumb Pad
     const pad = this.container.querySelector<HTMLElement>('#pad-move');
@@ -566,6 +670,7 @@ export class TelemetryHudOverlay implements OverlayView {
       };
 
       pad.addEventListener('pointerdown', (e) => {
+        if (activePid !== null || e.button !== 0) return;
         activePid = e.pointerId;
         pad.setPointerCapture(e.pointerId);
         updatePad(e.clientX, e.clientY);
@@ -582,16 +687,18 @@ export class TelemetryHudOverlay implements OverlayView {
       };
       pad.addEventListener('pointerup', releasePad);
       pad.addEventListener('pointercancel', releasePad);
+      pad.addEventListener('lostpointercapture', releasePad);
     }
 
     // Right Polymer Floss Vector Slingshot Ring (tap = smart auto-aim; drag = directional filament!)
-    const ring = this.container.querySelector<HTMLElement>('#ring-floss');
+    const ring = this.container.querySelector<HTMLButtonElement>('#ring-floss');
     if (ring) {
       let flossPid: number | null = null;
       let startX = 0;
       let startY = 0;
 
       ring.addEventListener('pointerdown', (e) => {
+        if (flossPid !== null || e.button !== 0) return;
         flossPid = e.pointerId;
         startX = e.clientX;
         startY = e.clientY;
@@ -599,10 +706,15 @@ export class TelemetryHudOverlay implements OverlayView {
         ring.style.borderColor = '#2dd4bf';
       });
 
-      const releaseRing = (e: PointerEvent) => {
-        if (e.pointerId !== flossPid) return;
+      const clearRing = (e: PointerEvent): boolean => {
+        if (e.pointerId !== flossPid) return false;
         flossPid = null;
-        ring.style.borderColor = 'rgba(103, 232, 249, 0.55)';
+        ring.style.removeProperty('border-color');
+        return true;
+      };
+
+      ring.addEventListener('pointerup', (e) => {
+        if (!clearRing(e)) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
         const dist = Math.hypot(dx, dy);
@@ -611,15 +723,12 @@ export class TelemetryHudOverlay implements OverlayView {
         } else {
           this.input.triggerVirtualFloss(null);
         }
-      };
-
-      ring.addEventListener('pointerup', releaseRing);
-      ring.addEventListener('pointercancel', releaseRing);
-      ring.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          this.input.triggerVirtualFloss(null);
-        }
+      });
+      ring.addEventListener('pointercancel', clearRing);
+      ring.addEventListener('lostpointercapture', clearRing);
+      ring.addEventListener('click', (e) => {
+        // Pointer releases already carry an aim vector. Keyboard and assistive activation use smart aim.
+        if (e.detail === 0) this.input.triggerVirtualFloss(null);
       });
     }
   }
@@ -648,8 +757,8 @@ export class TelemetryHudOverlay implements OverlayView {
       })
     );
     this.disposers.add(
-      this.bus.on('mutans:popped', ({ pos }) => {
-        if (this.mutansPopCalloutCooldown <= 0) {
+      this.bus.on('mutans:popped', ({ pos, via }) => {
+        if (via !== 'seal' && this.mutansPopCalloutCooldown <= 0) {
           this.mutansPopCalloutCooldown = 0.6;
           this.spawnCallout('🦠 Mutans Popped!', pos, 'mint', 1.05, 1.5);
         }
@@ -679,7 +788,13 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('site:restored', ({ pos, surgeDelta }) => {
-        this.showToast('✨ Commensal S. sanguinis Colony Restored! (+30% Surge)');
+        if (!this.seenHints.has('first_colony')) {
+          this.seenHints.add('first_colony');
+          saveSeenHints(this.seenHints);
+          this.showToast('✨ Colony Restored! Clean glowing rings to charge 🌊 Fluoride Surge (+30%)', 3.4);
+        } else {
+          this.showToast('✨ Commensal S. sanguinis Colony Restored! (+30% Surge)', 2.2);
+        }
         this.spawnCallout(`Colony Restored! +${Math.round(surgeDelta)} Surge`, pos, 'mint', 1.5);
       })
     );
@@ -691,11 +806,23 @@ export class TelemetryHudOverlay implements OverlayView {
     this.disposers.add(
       this.bus.on('actuator:scrub', ({ acidWarn }) => {
         if (acidWarn) {
-          this.maybeHint('acid', '⚠️ pH < 5.5 shields enamel — wait out the acid dip or hit a Saliva Spring to buffer it!');
+          this.maybeHint(
+            this.session.hasErosionChallenge() ? 'acid_erosion' : 'acid',
+            this.session.hasErosionChallenge()
+              ? '🌺 pH 4.95 Hibiscus basin — touch a Miswak Spring or fire Surge [Q] to infuse Fluorapatite!'
+              : '⚠️ pH < 5.5 shields enamel — wait out the acid dip or hit a Saliva Spring to buffer it!'
+          );
         }
         if (acidWarn && this.acidCalloutCooldown <= 0) {
           this.acidCalloutCooldown = 1.8;
-          this.spawnCallout('pH < 5.5 Acid Shielded!', this.session.probePos, 'rose', 1.3);
+          this.spawnCallout(
+            this.session.hasErosionChallenge()
+              ? '🌺 pH 4.95! Touch Miswak Spring'
+              : 'pH < 5.5! Touch Saliva Spring',
+            this.session.probePos,
+            'rose',
+            1.35
+          );
         }
       })
     );
@@ -719,11 +846,13 @@ export class TelemetryHudOverlay implements OverlayView {
       this.bus.on('eps:cracked', ({ pos, via }) => {
         this.showToast(
           via === 'rinse'
-            ? '💥 Fluoride Surge Shattered the Quorum EPS Dome — Sweep Clean!'
-            : '💥 Polymer Floss Cracked the Quorum EPS Dome — Sweep Clean!',
+            ? '💥 Surge shattered EPS Dome — scrub clean!'
+            : '💥 Floss cracked EPS Dome — scrub clean!',
           2.8
         );
-        this.spawnCallout('💥 EPS Dome Cracked!', pos, 'mint', 1.35);
+        if (via === 'rinse') {
+          this.spawnCallout('💥 EPS Cracked!', pos, 'mint', 1.35);
+        }
       })
     );
     this.disposers.add(
@@ -768,14 +897,28 @@ export class TelemetryHudOverlay implements OverlayView {
       })
     );
     this.disposers.add(
-      this.bus.on('floss:sliced', ({ zipped, targetsHit, surgeDelta, to }) => {
+      this.bus.on('floss:sliced', ({ zipped, targetsHit, surgeDelta, to, epsCellsCracked }) => {
         const surge = Math.round(surgeDelta);
         if (zipped) {
-          this.showToast('🧵 Capillary Tether-Zip Across Interdental Contact!');
+          this.showToast(
+            epsCellsCracked > 0
+              ? '💥 Tether-Zip Cracked EPS Dome Across Contact!'
+              : '🧵 Capillary Tether-Zip Across Interdental Contact!'
+          );
           this.spawnCallout(surge > 0 ? `Zipped! +${surge} Surge` : 'Zipped! Surge Full', to, 'cyan', 1.35);
+        } else if (epsCellsCracked > 0) {
+          const extra = targetsHit > 0 ? ` +×${targetsHit}` : '';
+          this.spawnCallout(
+            `💥 EPS Cracked!${extra}${surge > 0 ? ` +${surge} Surge` : ''}`,
+            to,
+            'mint',
+            1.35
+          );
         } else if (targetsHit > 0) {
           this.showToast(`🧵 Floss Severed ${targetsHit} Biofilm Target${targetsHit > 1 ? 's' : ''}!`);
           this.spawnCallout(`Severed ×${targetsHit}${surge > 0 ? ` +${surge} Surge` : ''}`, to, 'mint', 1.2);
+        } else if (shouldHintFlossMiss(zipped, targetsHit, epsCellsCracked, this.zipScreenBox.active)) {
+          this.spawnCallout('No hit — aim at gem or alley', this.session.probePos, 'cyan', 1.35);
         }
       })
     );
@@ -790,6 +933,11 @@ export class TelemetryHudOverlay implements OverlayView {
 
   showToast(msg: string, durationSec = 2.6): void {
     if (!this.toastEl) return;
+    if (!msg || durationSec <= 0) {
+      this.toastEl.style.opacity = '0';
+      this.toastTimerSec = 0;
+      return;
+    }
     this.toastEl.textContent = msg;
     this.toastEl.style.opacity = '1';
     this.toastTimerSec = durationSec;
@@ -824,10 +972,10 @@ export class TelemetryHudOverlay implements OverlayView {
     }
     this.lastSynergy = syn;
 
-    this.tickCallouts(frameDt);
     this.tickZipPrompt();
     this.tickSteerHalo();
     this.tickWayfinders();
+    this.tickCallouts(frameDt);
 
     if (this.toastTimerSec > 0) {
       this.toastTimerSec -= frameDt;
@@ -971,6 +1119,8 @@ export class TelemetryHudOverlay implements OverlayView {
         sitesLeftOpen: this.session.sites.filter((st) => !st.restored && !sealedArr[st.districtIdx]).length,
         domesRemaining: this.session.hasEpsDomes() && this.session.grid.getEpsArmorRemainingRatio() > 0,
         surgeReady,
+        acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
+        rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
       });
       const full = `🎯 ${msg}`;
       if (objEl.textContent !== full) objEl.textContent = full;
@@ -994,6 +1144,29 @@ export class TelemetryHudOverlay implements OverlayView {
         ? '🌊 FLUORIDE SURGE READY! [Q]'
         : `🌊 Fluoride Surge (${surgePct}%) [Q]`;
       this.surgeDeskBtnEl.className = surgeReady ? 'btn btn-primary btn-sm' : 'btn btn-sm';
+    }
+
+    const pauseSummary = this.pauseSheetEl?.querySelector<HTMLElement>('#pause-telemetry-summary');
+    if (pauseSummary) {
+      const acidic = avgPh < 5.6;
+      const distBadges =
+        this.mode === 'PULP_RESCUE'
+          ? `<span class="pill-badge" style="border-color:#f59e0b;color:#fde68a;">Target 85% (${cleanPct}%)</span>`
+          : this.session.cartridge.districts
+              .map((_d, idx) => {
+                const sealed = this.session.sealedDistricts[idx];
+                const dPct = Math.round(this.session.grid.getDistrictCleanRatio(idx) * 100);
+                return `<span class="pill-badge" style="border-color:${sealed ? '#38bdf8' : 'rgba(148,184,204,0.22)'};color:${sealed ? '#bae6fd' : '#cbd5e1'};">${sealed ? '✓' : `D${idx + 1}`} ${dPct}%</span>`;
+              })
+              .join('');
+      pauseSummary.innerHTML = `
+        <span class="pill-badge">Sites ${restored}/${this.session.sites.length}</span>
+        <span class="pill-badge" style="border-color:${acidic ? '#f59e0b' : 'rgba(56,189,248,0.35)'};color:${acidic ? '#fde68a' : '#e0f2fe'};">${acidic ? '⚠️' : '✓'} pH ${avgPh.toFixed(1)}</span>
+        ${distBadges}
+        ${this.mechanicBadgeEl && this.mechanicBadgeEl.style.display !== 'none' ? `<span class="pill-badge">${this.mechanicBadgeEl.textContent}</span>` : ''}
+        ${this.mode === 'PULP_RESCUE' ? `<span class="pill-badge">⏱ ${Math.ceil(this.session.getRemainingRescueSec())}s left</span>` : ''}
+        <span class="pill-badge">${syn.toFixed(2)}x • ${preview.totalScore}</span>
+      `;
     }
   }
 
@@ -1021,6 +1194,8 @@ export class TelemetryHudOverlay implements OverlayView {
           <button type="button" id="btn-pause-resume-x" class="btn btn-sm btn-icon" aria-label="Resume Game">✕</button>
         </div>
         <p id="pause-tip" style="margin:0 0 8px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.4;">🎯 ${escTxt(tip)}</p>
+        <p id="pause-objective" class="pause-objective"></p>
+        <div id="pause-telemetry-summary" class="row-wrap" style="margin:0 0 8px 0;gap:5px;"></div>
         <div id="pause-dental-lesson" style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.28);border-radius:10px;padding:7px 10px;margin-bottom:10px;">
           <div style="font-size:0.69rem;font-weight:700;color:#5eead4;">🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</div>
           <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;margin-top:2px;">${escTxt(dentalLesson.lesson)}</div>
@@ -1040,6 +1215,7 @@ export class TelemetryHudOverlay implements OverlayView {
         <div class="row-wrap" style="margin:10px 0;">
           <button type="button" id="btn-pause-shake" aria-pressed="${reduced ? 'true' : 'false'}" class="btn btn-sm ${reduced ? 'btn-primary' : ''}">${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}</button>
           <button type="button" id="btn-pause-steer" aria-pressed="${steer ? 'true' : 'false'}" class="btn btn-sm ${steer ? 'btn-primary' : ''}">${steer ? '🎯 Steer: ON' : '🎯 Steer: OFF'}</button>
+          <button type="button" id="btn-pause-quality" class="btn btn-sm" aria-label="Cycle Graphics Quality Tier">${this.formatQualityLabel()}</button>
         </div>
         <div class="row-wrap" style="justify-content:flex-end;">
           <button type="button" id="btn-pause-exit" class="btn">Exit to Hub</button>
@@ -1064,6 +1240,7 @@ export class TelemetryHudOverlay implements OverlayView {
       a.restartDive();
     });
     q('#btn-pause-mute')?.addEventListener('click', () => this.toggleMuteUi());
+    q('#btn-pause-quality')?.addEventListener('click', () => this.qualityBtnEl?.click());
     q<HTMLInputElement>('#pause-music')?.addEventListener('input', (e) =>
       a.setMusicVolume(Number((e.target as HTMLInputElement).value) / 100)
     );
@@ -1107,6 +1284,12 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
+    const hudBottom = this.measureTopClearanceBottom();
+    const deckTop = this.measureBottomDeckTop();
+    const occupied: ScreenBox[] = [];
+    if (this.zipScreenBox.active) {
+      occupied.push(this.zipScreenBox);
+    }
     for (let i = 0; i < this.wayfinders.length; i++) {
       const slot = this.wayfinders[i];
       const t = targets[i];
@@ -1132,9 +1315,26 @@ export class TelemetryHudOverlay implements OverlayView {
         arrow.style.display = c.onScreen ? 'none' : '';
         arrow.style.transform = `rotate(${deg.toFixed(0)}deg)`;
       }
-      slot.el.style.transform = `translate3d(${c.x.toFixed(1)}px, ${(c.onScreen ? c.y - 18 : c.y).toFixed(1)}px, 0) translate(-50%, -50%)`;
+      const pillW = slot.el.offsetWidth || 84;
+      const pillH = slot.el.offsetHeight || 22;
+      const halfW = Math.min(w * 0.45, pillW * 0.5);
+      const halfH = pillH * 0.5;
+      const clampedX = Math.max(halfW + 6, Math.min(w - halfW - 6, c.x));
+      const labelY = findWayfinderLabelY(
+        { cx: clampedX, cy: c.onScreen ? c.y - 18 : c.y, halfW, halfH },
+        hudBottom,
+        deckTop,
+        occupied
+      );
+      if (labelY === null) {
+        slot.el.style.opacity = '0';
+        continue;
+      }
+      occupied.push({ cx: clampedX, cy: labelY, halfW, halfH });
+      slot.el.style.transform = `translate3d(${clampedX.toFixed(1)}px, ${labelY.toFixed(1)}px, 0) translate(-50%, -50%)`;
       slot.el.style.opacity = '1';
     }
+    this.frameOccupiedBoxes = occupied;
   }
 
   dispose(): void {

@@ -34,6 +34,15 @@ export class BrushAlongOverlay implements OverlayView {
     slotType: 'full' | 'tip' | 'capped';
   } | null = null;
   private cueFlashTimer: number | null = null;
+  private readonly keyHandler = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.clock.stopPacer();
+      this.callbacks.onPauseChanged?.(false);
+      this.callbacks.onActiveQuadrantChanged(-1);
+      this.callbacks.onExitToHub();
+    }
+  };
 
   constructor(
     private readonly bus: EventBus,
@@ -82,6 +91,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.clock.startPacer();
     this.callbacks.onActiveQuadrantChanged(0);
     this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
+    window.addEventListener('keydown', this.keyHandler);
 
     this.disposers.add(
       this.bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, surfaceIdx, inFlossBonus }) => {
@@ -193,10 +203,10 @@ export class BrushAlongOverlay implements OverlayView {
       const initialSec = isFloss ? BRUSH_ALONG_FLOSS_BONUS_SEC : BRUSH_ALONG_TOTAL_SEC;
       this.container.innerHTML = `
         <div class="hub-top-bar glass-card ui-interactive row-between">
-          <strong style="color:#5eead4;font-size:0.88rem;">
-            ${isFloss ? '🧵 20s C-CURVE FLOSS BONUS' : '🪥 2-MINUTE SINK BRUSH-ALONG'}
+          <strong style="color:#5eead4;font-size:0.8rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${isFloss ? '🧵 20s FLOSS BONUS' : '🪥 2-MIN BRUSH-ALONG'}
           </strong>
-          <div class="row-wrap">
+          <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
             ${this.buildMuteBtnHtml()}
             <button type="button" id="btn-pacer-exit" class="btn btn-sm">← Exit</button>
           </div>
@@ -247,7 +257,13 @@ export class BrushAlongOverlay implements OverlayView {
         const nextPaused = !this.clock.isPacerPaused();
         this.clock.setPacerPaused(nextPaused);
         this.callbacks.onPauseChanged?.(nextPaused);
-        this.render();
+        const button = this.container?.querySelector<HTMLButtonElement>('#btn-pacer-pause');
+        if (button) {
+          button.textContent = nextPaused ? '▶ Resume Pacer' : '⏸ Pause';
+          button.setAttribute('aria-pressed', String(nextPaused));
+        }
+        const note = this.container?.querySelector<HTMLElement>('#pacer-paused-note');
+        if (note) note.style.display = nextPaused ? 'block' : 'none';
       });
       return;
     }
@@ -259,7 +275,7 @@ export class BrushAlongOverlay implements OverlayView {
           ${this.buildMuteBtnHtml()}
         </div>
         <div></div>
-        <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
+        <div class="cosmic-card pacer-bottom-card glass-card ui-interactive" style="text-align:center;">
           <h2 style="margin:0 0 6px 0;font-size:1.15rem;">Enamel Polished! Add 20s C-Curve Flossing?</h2>
           <p style="margin:0 0 12px 0;font-size:0.82rem;color:#cbd5e1;">
             Spit out excess foam (don’t rinse away your protective fluoride!) — or run a quick 20-second interdental floss pass for +25 bonus Fluoride Ions!
@@ -341,6 +357,7 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   dispose(): void {
+    window.removeEventListener('keydown', this.keyHandler);
     if (this.cueFlashTimer !== null) window.clearTimeout(this.cueFlashTimer);
     this.cueFlashTimer = null;
     this.clock.stopPacer();

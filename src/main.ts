@@ -43,6 +43,7 @@ declare global {
       touch: CompanionTouchSystem;
       getHud: () => TelemetryHudOverlay | null;
       switchMode: (next: AppMode) => void;
+      launchStage: (worldId: string, mode?: 'ARCADE' | 'PULP_RESCUE') => void;
     };
   }
 }
@@ -285,8 +286,8 @@ function bootstrapMouthLife(): void {
     if (!missionUpgradeIds.includes(upgradeId)) missionUpgradeIds.push(upgradeId);
   });
 
-  bus.on('floss:sliced', ({ to, targetsHit, zipped }) => {
-    sound.playFlossSnap(targetsHit, zipped);
+  bus.on('floss:sliced', ({ to, targetsHit, zipped, epsCellsCracked }) => {
+    sound.playFlossSnap(targetsHit + (epsCellsCracked > 0 ? 1 : 0), zipped, session.hasPtfeFlossUpgrade);
     sceneMgr.entityBatch.spawnBurst({
       x: to.x,
       y: session.probeY + 0.6,
@@ -298,7 +299,7 @@ function bootstrapMouthLife(): void {
   });
 
   bus.on('rinse:surged', ({ origin }) => {
-    sound.playIonRinseWave();
+    sound.playIonRinseWave(session.hasBicarbRinseUpgrade);
     sceneMgr.entityBatch.spawnBurst({
       x: origin.x,
       y: session.probeY + 0.7,
@@ -574,7 +575,7 @@ function bootstrapMouthLife(): void {
         },
         onPlaySparkleSfx: () => sound.playSmoothBaskSparkle(),
         onPlayToothChime: (step) => sound.playGlassHarpNote(step),
-        onHighlightCrown: (idx) => sceneMgr.highlightCompanionTooth(idx, 3.2),
+        onHighlightCrown: (idx) => sceneMgr.highlightCompanionTooth(idx, 4.5),
         onResetCompanionView: () => sceneMgr.resetCompanionOrbit(),
         isCompanionViewOffCenter: () => sceneMgr.isCompanionOrbitOffCenter(),
         onPlayTreatSfx: () => sound.playTreatSnack(),
@@ -634,11 +635,32 @@ function bootstrapMouthLife(): void {
         onNextDive: (id) => launchPlayableStage(id, 'ARCADE'),
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        isReducedMotion: () => sceneMgr.isReducedMotion(),
         bus,
       });
     }
 
     activeOverlay?.mount(uiRoot!);
+
+    // Restore keyboard focus cleanly to the logical Hub trigger when returning from a mode/sheet.
+    if (next === 'HUB' && prev !== 'HUB') {
+      const fromRescue = prev === 'PULP_RESCUE' || (prev === 'REPORT' && lastReport?.mode === 'PULP_RESCUE');
+      const ids =
+        prev === 'BRUSH_ALONG'
+          ? ['#btn-start-brush-along', '#btn-launch-arcade']
+          : fromRescue
+            ? ['#btn-launch-rescue', '#btn-launch-arcade', '#btn-start-brush-along']
+            : ['#btn-launch-arcade', '#btn-start-brush-along'];
+      requestAnimationFrame(() => {
+        for (const sel of ids) {
+          const el = uiRoot?.querySelector<HTMLElement>(sel);
+          if (el) {
+            el.focus({ preventScroll: true });
+            break;
+          }
+        }
+      });
+    }
   }
 
   // Step 6: Bind Fixed-Step Simulation & Render Loop
@@ -652,7 +674,8 @@ function bootstrapMouthLife(): void {
           sceneMgr.camera,
           session.probePos,
           session.probeY,
-          sceneMgr.isTransitioning()
+          sceneMgr.isTransitioning(),
+          fixedDt
         );
         session.step(fixedDt, cmd);
         sound.updateScrub({
@@ -660,6 +683,7 @@ function bootstrapMouthLife(): void {
           probeSpeed: session.probeSpeed,
           newlyCleaned: pendingNewlyCleaned,
           cleanRatio: session.grid.getWorldCleanRatio(),
+          brush: session.hasBassUpgrade ? 'bass' : session.hasHydroSonicUpgrade ? 'hydro-sonic' : undefined,
         });
         pendingNewlyCleaned = 0;
 
@@ -713,6 +737,8 @@ function bootstrapMouthLife(): void {
     touch,
     getHud: () => activeTelemetryHud,
     switchMode,
+    launchStage: (worldId, mode = worldId === 'pulp_rescue' ? 'PULP_RESCUE' : 'ARCADE') =>
+      launchPlayableStage(worldId, mode),
   };
 }
 

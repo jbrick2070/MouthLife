@@ -363,6 +363,7 @@ export interface AppEventMap {
     targetsHit: number;
     surgeDelta: number;
     zipped: boolean;
+    epsCellsCracked: number;
   };
   'rinse:surged': {
     origin: Vec2;
@@ -455,7 +456,7 @@ export interface AppEventMap {
   };
   'spring:triggered': { pos: Vec2 };
   'mutans:bumped': { pos: Vec2 };
-  'mutans:popped': { pos: Vec2; via: 'brush' | 'floss' };
+  'mutans:popped': { pos: Vec2; via: 'brush' | 'floss' | 'seal' };
   'surge:ready': Record<string, never>;
   'audio:changed': { muted: boolean; musicVolume: number; sfxVolume: number };
   'motion:changed': { reduced: boolean };

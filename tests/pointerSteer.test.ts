@@ -32,7 +32,7 @@ describe('Pointer drag/click-to-steer', () => {
   });
 });
 
-import { isDoubleTap, smoothSteerVector } from '../src/engine/InputManager';
+import { isDoubleTap, isModalDialogOpen, smoothSteerVector } from '../src/engine/InputManager';
 
 describe('Phase 3 steering helpers', () => {
   it('detects double taps by time and distance only', () => {
@@ -43,11 +43,28 @@ describe('Phase 3 steering helpers', () => {
     expect(isDoubleTap(a, { t: 1100, x: 300, y: 100 })).toBe(false);
   });
 
-  it('smooths steering toward the target and settles to exact zero', () => {
-    let v = { moveX: 0, moveZ: 0 };
-    v = smoothSteerVector(v, { moveX: 1, moveZ: 0 }, 0.5);
-    expect(v.moveX).toBeCloseTo(0.5);
-    for (let i = 0; i < 30; i++) v = smoothSteerVector(v, { moveX: 0, moveZ: 0 }, 0.5);
-    expect(v).toEqual({ moveX: 0, moveZ: 0 });
+  it('produces the same steering response for equal elapsed time at 30 and 120 Hz', () => {
+    const start = { moveX: 0, moveZ: 0 };
+    const target = { moveX: 0.9, moveZ: -0.4 };
+    let v = start;
+    for (let i = 0; i < 4; i++) v = smoothSteerVector(v, target, 1 / 120);
+    const slow = smoothSteerVector(start, target, 1 / 30);
+    expect(v.moveX).toBeCloseTo(slow.moveX, 12);
+    expect(v.moveZ).toBeCloseTo(slow.moveZ, 12);
+    expect(smoothSteerVector(start, target, 0)).toEqual(start);
+  });
+
+  it('detects visible modal dialogs so Tab/Shift+Tab inside Pause Sheet never fire gameplay hotkeys', () => {
+    const hiddenDoc = {
+      documentElement: { clientWidth: 390 },
+      querySelectorAll: () => [{ getClientRects: () => [] }],
+    } as unknown as Document;
+    const openDoc = {
+      documentElement: { clientWidth: 390 },
+      querySelectorAll: () => [{ getClientRects: () => [{ width: 320, height: 420 }] }],
+    } as unknown as Document;
+    expect(isModalDialogOpen(undefined)).toBe(false);
+    expect(isModalDialogOpen(hiddenDoc)).toBe(false);
+    expect(isModalDialogOpen(openDoc)).toBe(true);
   });
 });
