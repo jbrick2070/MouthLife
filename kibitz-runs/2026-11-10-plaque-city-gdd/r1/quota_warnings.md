@@ -1,0 +1,1 @@
+- 2026-11-10T16:35:54 Codex failed on quota/credit/rate-limit usage. Suggested retry after 1h (2026-11-10T17:35-08:00).

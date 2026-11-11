@@ -1,0 +1,18 @@
+{
+  "name": "MouthLife: The Plaque Dimension",
+  "short_name": "MouthLife",
+  "description": "Progressive 3D biophysical dental arcade & daily Smooth Bask companion.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#041019",
+  "theme_color": "#071f2e",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
