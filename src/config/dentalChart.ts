@@ -443,3 +443,151 @@ export function getWorldDentalLesson(
   if (mode === 'PULP_RESCUE') return WORLD_DENTAL_LESSONS.pulp_rescue;
   return WORLD_DENTAL_LESSONS[worldId] ?? WORLD_DENTAL_LESSONS.world_1;
 }
+
+// ---------------------------------------------------------------------------------------------
+// "Spot That Tooth!" optional micro-quiz (zero pressure: no timers, no penalties, never gatekeeps)
+// ---------------------------------------------------------------------------------------------
+export interface SpotQuizQuestion {
+  targetUniversal: number;
+  prompt: string;
+  /** How much of the answer is given away: 'full' shows name + all codes, 'code' only a number. */
+  difficulty: 'full' | 'name' | 'code';
+}
+
+export interface SpotQuizResult {
+  correct: boolean;
+  nextStreak: number;
+  bestStreak: number;
+  message: string;
+}
+
+/** Builds one friendly prompt. `rand` is injectable (0..1) so tests are deterministic. */
+export function buildSpotQuizQuestion(
+  rand: () => number = Math.random,
+  avoidUniversal?: number
+): SpotQuizQuestion {
+  let n = 1 + Math.floor(rand() * 32);
+  if (n > 32) n = 32;
+  if (avoidUniversal !== undefined && n === avoidUniversal) n = (n % 32) + 1;
+  const t = getToothByUniversal(n);
+  const style = Math.floor(rand() * 4);
+  if (style === 0) {
+    return {
+      targetUniversal: n,
+      difficulty: 'full',
+      prompt: `Can you tap the ${t.clinicalName} (${t.commonNickname}) — #${t.universal} / FDI ${t.fdi}?`,
+    };
+  }
+  if (style === 1) {
+    return {
+      targetUniversal: n,
+      difficulty: 'name',
+      prompt: `Find the ${t.clinicalName}!`,
+    };
+  }
+  if (style === 2) {
+    return {
+      targetUniversal: n,
+      difficulty: 'code',
+      prompt: `Find FDI ${t.fdi} (“${t.fdiSpoken}”)!`,
+    };
+  }
+  return {
+    targetUniversal: n,
+    difficulty: 'code',
+    prompt: `Tap US tooth #${t.universal}!`,
+  };
+}
+
+/** Pure answer check; streak resets gently on a miss and the best streak never decreases. */
+export function judgeSpotQuizAnswer(
+  targetUniversal: number,
+  tappedUniversal: number,
+  streak: number,
+  bestStreak: number
+): SpotQuizResult {
+  const target = getToothByUniversal(targetUniversal);
+  if (targetUniversal === tappedUniversal) {
+    const nextStreak = streak + 1;
+    return {
+      correct: true,
+      nextStreak,
+      bestStreak: Math.max(bestStreak, nextStreak),
+      message: `Yes! ${target.clinicalName} = #${target.universal} • FDI ${target.fdi} • Palmer ${target.palmer}`,
+    };
+  }
+  const tapped = getToothByUniversal(tappedUniversal);
+  return {
+    correct: false,
+    nextStreak: 0,
+    bestStreak,
+    message: `Close! That one is ${tapped.clinicalName} (#${tapped.universal}). Try again — you’ve got this!`,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tooth cross-section anatomy explorer (4 layers, outside → in)
+// ---------------------------------------------------------------------------------------------
+export interface ToothLayerInfo {
+  id: 'enamel' | 'dentin' | 'pulp' | 'ligament';
+  name: string;
+  emoji: string;
+  /** Approximate mineral content by weight (percent), where meaningful. */
+  mineralPercent: number | null;
+  tagline: string;
+  detail: string;
+  careTip: string;
+  /** Diagram fill color. */
+  colorHex: string;
+}
+
+export const TOOTH_CROSS_SECTION_LAYERS: readonly ToothLayerInfo[] = [
+  {
+    id: 'enamel',
+    name: 'Enamel',
+    emoji: '💎',
+    mineralPercent: 96,
+    tagline: 'Mohs 5 • the hardest tissue in your body',
+    detail:
+      'About 96% hydroxyapatite mineral packed in tiny prisms. It has no living cells, so it cannot regrow — but saliva and fluoride can re-mineralize early soft spots into tougher fluorapatite.',
+    careTip: 'Fluoride toothpaste + a calm 2-minute brush keeps this shield glassy.',
+    colorHex: '#e0f2fe',
+  },
+  {
+    id: 'dentin',
+    name: 'Dentin',
+    emoji: '🟡',
+    mineralPercent: 70,
+    tagline: 'Microscopic tubules • the flexible core',
+    detail:
+      'About 70% mineral, laced with millions of microscopic tubules that lead toward the nerve. When enamel wears thin or gums recede, fluid moving in those tubules is why cold air can zing.',
+    careTip: 'Soft bristles and gentle angles protect exposed dentin near the gumline.',
+    colorHex: '#fde68a',
+  },
+  {
+    id: 'pulp',
+    name: 'Living Pulp',
+    emoji: '❤️',
+    mineralPercent: null,
+    tagline: 'Nerves & blood vessels • the tooth’s heart',
+    detail:
+      'A soft chamber of nerves, vessels and connective tissue that feeds the tooth and senses temperature and pressure. Healthy pulp keeps a tooth alive and able to build repair dentin.',
+    careTip: 'Catching cavities while they are small keeps bacteria far from the pulp.',
+    colorHex: '#fb7185',
+  },
+  {
+    id: 'ligament',
+    name: 'Cementum & Periodontal Ligament',
+    emoji: '🪢',
+    mineralPercent: 45,
+    tagline: 'The shock-absorbing sling around the root',
+    detail:
+      'Cementum (about 45% mineral) coats the root, and thousands of ligament fibers hang the tooth in its bony socket like a hammock — cushioning every bite and sensing how hard you chew.',
+    careTip: 'Daily flossing keeps the gums that guard this sling calm and healthy.',
+    colorHex: '#c4b5fd',
+  },
+];
+
+export function getToothLayer(id: ToothLayerInfo['id']): ToothLayerInfo {
+  return TOOTH_CROSS_SECTION_LAYERS.find((l) => l.id === id) ?? TOOTH_CROSS_SECTION_LAYERS[0];
+}

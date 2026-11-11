@@ -87,6 +87,10 @@ export class SceneManager {
   // Companion orbit angles (draggable by touch/mouse!)
   private orbitYaw = 0;
   private orbitPitch = 0.42;
+  private orbitResetActive = false;
+  private highlightTooth: number | null = null;
+  private highlightHoldSec = 0;
+  private highlightStartSec = -1;
 
   // Powers-of-Ten Dive Transition state
   private diveActive = false;
@@ -359,7 +363,24 @@ export class SceneManager {
     this.earthBackdrop.setCosmicIntroState(this.currentMode === 'COSMIC_INTRO', beatIdx);
   }
 
+  /** Softly illuminates a Companion crown (0..13) for `holdSec`, then fades; null clears. */
+  highlightCompanionTooth(index: number | null, holdSec = 2.6): void {
+    this.highlightTooth = index;
+    this.highlightHoldSec = holdSec;
+    this.highlightStartSec = -1; // stamped on the next frame
+  }
+
+  /** True when the player has orbited the Companion Arch well away from the default view. */
+  isCompanionOrbitOffCenter(): boolean {
+    return Math.abs(this.orbitYaw) > 0.35 || Math.abs(this.orbitPitch - 0.42) > 0.3;
+  }
+
+  resetCompanionOrbit(): void {
+    this.orbitResetActive = true;
+  }
+
   nudgeCompanionOrbit(deltaYaw: number, deltaPitch: number): void {
+    this.orbitResetActive = false;
     this.orbitYaw += deltaYaw;
     this.orbitPitch = Math.max(0.18, Math.min(1.05, this.orbitPitch + deltaPitch));
   }
@@ -437,6 +458,7 @@ export class SceneManager {
 
     if (isArcade && session.cartridge) {
       this.enamelMat.setCompanionOverride({ active: false });
+      this.enamelMat.setHighlightedTooth(null);
       if (session.grid.syncRgbaBuffer(session.chemistry, session.cartridge.bChannelMode)) {
         this.enamelMat.markTextureNeedsUpdate();
       }
@@ -505,6 +527,20 @@ export class SceneManager {
           this.currentMode === 'BRUSH_ALONG' ? params.activePacerQuadrant : -1,
       });
       this.enamelMat.setFoamSamples([]);
+      if (this.highlightTooth !== null) {
+        if (this.highlightStartSec < 0) this.highlightStartSec = nowSec;
+        const age = nowSec - this.highlightStartSec;
+        const fadeIn = Math.min(1, age / 0.18);
+        const fadeOut = Math.max(0, Math.min(1, (this.highlightHoldSec + 0.6 - age) / 0.6));
+        if (age > this.highlightHoldSec + 0.6) {
+          this.highlightTooth = null;
+          this.enamelMat.setHighlightedTooth(null);
+        } else {
+          this.enamelMat.setHighlightedTooth(this.highlightTooth, Math.min(fadeIn, fadeOut));
+        }
+      } else {
+        this.enamelMat.setHighlightedTooth(null);
+      }
       if (this.companionTouch) {
         this.enamelMat.setRipples(this.companionTouch.ripples);
         this.enamelMat.setSplats(this.companionTouch.getRenderSplats());
@@ -618,6 +654,15 @@ export class SceneManager {
         );
       } else {
         // Pocket Tamagotchi Smooth Bask Companion Arch 3D Showcase!
+        if (this.orbitResetActive) {
+          this.orbitYaw *= 0.9;
+          this.orbitPitch += (0.42 - this.orbitPitch) * 0.1;
+          if (Math.abs(this.orbitYaw) < 0.01 && Math.abs(this.orbitPitch - 0.42) < 0.01) {
+            this.orbitYaw = 0;
+            this.orbitPitch = 0.42;
+            this.orbitResetActive = false;
+          }
+        }
         const gentleBob = Math.sin(nowSec * 0.45) * 0.08;
         const yaw = this.orbitYaw + gentleBob;
         const radius = this.camera.aspect < 1.0 ? 31.0 : 21.5;

@@ -31,3 +31,23 @@ describe('Pointer drag/click-to-steer', () => {
     expect(diag.moveZ).toBeLessThan(0);
   });
 });
+
+import { isDoubleTap, smoothSteerVector } from '../src/engine/InputManager';
+
+describe('Phase 3 steering helpers', () => {
+  it('detects double taps by time and distance only', () => {
+    const a = { t: 1000, x: 100, y: 100 };
+    expect(isDoubleTap(null, a)).toBe(false);
+    expect(isDoubleTap(a, { t: 1200, x: 120, y: 110 })).toBe(true);
+    expect(isDoubleTap(a, { t: 1500, x: 100, y: 100 })).toBe(false);
+    expect(isDoubleTap(a, { t: 1100, x: 300, y: 100 })).toBe(false);
+  });
+
+  it('smooths steering toward the target and settles to exact zero', () => {
+    let v = { moveX: 0, moveZ: 0 };
+    v = smoothSteerVector(v, { moveX: 1, moveZ: 0 }, 0.5);
+    expect(v.moveX).toBeCloseTo(0.5);
+    for (let i = 0; i < 30; i++) v = smoothSteerVector(v, { moveX: 0, moveZ: 0 }, 0.5);
+    expect(v).toEqual({ moveX: 0, moveZ: 0 });
+  });
+});

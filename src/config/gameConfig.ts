@@ -58,6 +58,9 @@ export const FLOSS_COOLDOWN_SEC = 0.32;
 export const FLOSS_ZIP_ENTRY_DIST = 1.65;
 export const FLOSS_ZIP_MAX_ANGLE_RAD = (24 * Math.PI) / 180;
 export const FLOSS_ZIP_DURATION_SEC = 0.22;
+// Forgiving assist: a tap/double-tap near an alley mouth snaps to the alley even with a loose aim
+export const FLOSS_ZIP_ASSIST_ANGLE_RAD = (62 * Math.PI) / 180;
+export const FLOSS_ZIP_ASSIST_ENTRY_DIST = 2.2;
 export const ZIP_PROMPT_RADIUS = 2.9; // contextual "Press E / Right-Click / Tap Floss to Zip!" prompt
 
 // Fluoride-Bicarb Ion Rinse & Disclosing Scan

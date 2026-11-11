@@ -11,6 +11,7 @@ import {
   buildTimerPill,
   clampToScreen,
   isEditableEventTarget,
+  computeObjectiveBreadcrumb,
   loadSeenHints,
   saveSeenHints,
   selectWayfinderTargets,
@@ -75,6 +76,7 @@ export class TelemetryHudOverlay implements OverlayView {
   private calloutLayer: HTMLElement | null = null;
   private callouts: WorldCallout[] = [];
   private zipPromptEl: HTMLElement | null = null;
+  private steerHaloEl: HTMLElement | null = null;
   private flossRingEl: HTMLElement | null = null;
   private flossDeskBtnEl: HTMLElement | null = null;
   private mechanicBadgeEl: HTMLElement | null = null;
@@ -280,6 +282,7 @@ export class TelemetryHudOverlay implements OverlayView {
           </div>
           <div id="hud-districts" class="row-wrap" style="font-size:0.72rem;"></div>
         </div>
+        <div id="hud-objective" class="hud-objective" role="status" aria-live="off"></div>
       </div>
 
       <div id="hud-toast" class="hud-toast" role="status" aria-live="polite" style="opacity:0;"></div>
@@ -354,7 +357,17 @@ export class TelemetryHudOverlay implements OverlayView {
     this.zipPromptEl.className = 'zip-prompt';
     this.zipPromptEl.textContent = ZIP_PROMPT_TEXT;
     this.zipPromptEl.style.opacity = '0';
+    this.zipPromptEl.setAttribute('role', 'button');
+    this.zipPromptEl.setAttribute('aria-label', 'Zip floss through the interdental alley');
+    this.zipPromptEl.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.input.triggerVirtualFloss(null);
+    });
     this.calloutLayer.appendChild(this.zipPromptEl);
+    this.steerHaloEl = document.createElement('div');
+    this.steerHaloEl.className = 'steer-halo';
+    this.calloutLayer.appendChild(this.steerHaloEl);
     for (let i = 0; i < MAX_WAYFINDERS; i++) {
       const el = document.createElement('div');
       el.className = 'wayfinder-pill';
@@ -413,6 +426,25 @@ export class TelemetryHudOverlay implements OverlayView {
     }
   }
 
+  /** Subtle world-anchored scrub halo where the player is pointing (zero draw calls, DOM only). */
+  private tickSteerHalo(): void {
+    const el = this.steerHaloEl;
+    if (!el) return;
+    const t = this.paused ? null : this.input.getSteerTarget();
+    if (!t) {
+      el.classList.remove('on');
+      return;
+    }
+    const y = sampleTerrainHeight(this.session.cartridge, t.x, t.z) + 0.2;
+    const sp = this.sceneMgr.worldToScreen(t.x, y, t.z);
+    if (!sp.visible) {
+      el.classList.remove('on');
+      return;
+    }
+    el.style.transform = `translate3d(${sp.x.toFixed(1)}px, ${sp.y.toFixed(1)}px, 0)`;
+    el.classList.add('on');
+  }
+
   /** In-world contextual Zip prompt when HYDRA-1 approaches a 0.90u alley blocked to walking. */
   private tickZipPrompt(): void {
     if (!this.zipPromptEl) return;
@@ -430,6 +462,7 @@ export class TelemetryHudOverlay implements OverlayView {
       const sp = this.sceneMgr.worldToScreen(hint.entry.x, y, hint.entry.z);
       this.zipPromptEl.style.transform = `translate3d(${sp.x.toFixed(1)}px, ${sp.y.toFixed(1)}px, 0) translate(-50%, -100%)`;
       this.zipPromptEl.style.opacity = sp.visible ? '1' : '0';
+      this.zipPromptEl.style.pointerEvents = sp.visible ? 'auto' : 'none';
       this.zipPromptEl.classList.toggle('ready', hint.inZipRange);
     } else {
       this.zipPromptEl.style.opacity = '0';
@@ -793,6 +826,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
     this.tickCallouts(frameDt);
     this.tickZipPrompt();
+    this.tickSteerHalo();
     this.tickWayfinders();
 
     if (this.toastTimerSec > 0) {
@@ -926,6 +960,27 @@ export class TelemetryHudOverlay implements OverlayView {
 
     const surgePct = Math.round((this.session.surgeMeter / SURGE_MAX) * 100);
     const surgeReady = surgePct >= 100;
+    const objEl = this.container?.querySelector<HTMLElement>('#hud-objective');
+    if (objEl) {
+      const sealedArr = this.session.sealedDistricts;
+      const msg = computeObjectiveBreadcrumb({
+        mode: this.mode === 'PULP_RESCUE' ? 'PULP_RESCUE' : 'ARCADE',
+        worldCleanRatio: this.session.grid.getWorldCleanRatio(),
+        districtClean: this.session.cartridge.districts.map((_d, i) => this.session.grid.getDistrictCleanRatio(i)),
+        sealed: this.session.cartridge.districts.map((_d, i) => Boolean(sealedArr[i])),
+        sitesLeftOpen: this.session.sites.filter((st) => !st.restored && !sealedArr[st.districtIdx]).length,
+        domesRemaining: this.session.hasEpsDomes() && this.session.grid.getEpsArmorRemainingRatio() > 0,
+        surgeReady,
+      });
+      const full = `🎯 ${msg}`;
+      if (objEl.textContent !== full) objEl.textContent = full;
+    }
+    if (this.session.discloseActiveRemaining > 0) {
+      this.maybeHint(
+        'two_tone_dye',
+        '🔍 Two-tone dye, like a dentist’s disclosing tablet: pink = fresh, thin plaque • violet = older, thick biofilm. Scrub violet first!'
+      );
+    }
     if (surgeReady && !this.lastSurgeReady && !this.usedSurge) {
       this.maybeHint('surge', '🌊 Fluoride Surge 100%! Press Q / tap Surge to blast a wave of fluorapatite.');
     }

@@ -5,7 +5,9 @@ import {
   BRUSH_BASS_ARC_RAD,
   MAX_PARTICLES_ULTRA,
   QUALITY_TIER_SPECS,
+  SITE_RESTORE_CLEAN_RATIO,
   SMOOTH_BASK_THRESHOLD,
+  SURGE_MAX,
 } from '../../config/gameConfig';
 import { findNearestZipMouth, sampleTerrainHeight } from '../physics/CollisionSystem';
 import type { WorldSession } from '../sim/WorldSession';
@@ -246,10 +248,12 @@ function buildHydraHullGeometry(): THREE.BufferGeometry {
   keel.translate(-0.08, -0.16, 0);
   parts.push(paint(keel, 0x7dd3fc));
 
-  const canopy = new THREE.SphereGeometry(0.34, 18, 12);
-  canopy.scale(1.25, 0.72, 0.92);
-  canopy.translate(0.24, 0.24, 0);
-  parts.push(paint(canopy, 0x06b6d4));
+  // Canopy seat ring (the glass dome + Surge core are separate dynamic meshes)
+  const seat = new THREE.TorusGeometry(0.33, 0.04, 8, 22);
+  seat.rotateX(Math.PI / 2);
+  seat.scale(1.25, 1, 0.92);
+  seat.translate(0.24, 0.2, 0);
+  parts.push(paint(seat, 0x0e7490));
 
   for (const side of [-1, 1]) {
     const pod = new THREE.CapsuleGeometry(0.15, 0.62, 4, 10);
@@ -275,12 +279,43 @@ function buildHydraHullGeometry(): THREE.BufferGeometry {
   head.translate(1.12, -0.36, 0);
   parts.push(paint(head, 0xf0fdfa));
 
-  // Rear sonic emitter ring
-  const ring = new THREE.TorusGeometry(0.24, 0.05, 8, 20);
-  ring.rotateY(Math.PI / 2);
-  ring.translate(-0.74, 0.02, 0);
-  parts.push(paint(ring, 0x22d3ee));
+  // Glowing floss-spool pylons: slim mast + wound spool disc + bead of thread on each pod
+  for (const side of [-1, 1]) {
+    const mast = new THREE.CylinderGeometry(0.035, 0.05, 0.34, 8);
+    mast.translate(-0.24, 0.2, side * 0.66);
+    parts.push(paint(mast, 0x94a3b8));
+    const spool = new THREE.CylinderGeometry(0.13, 0.13, 0.1, 14);
+    spool.rotateX(Math.PI / 2);
+    spool.translate(-0.24, 0.4, side * 0.66);
+    parts.push(paint(spool, 0xfef3c7));
+    const wound = new THREE.TorusGeometry(0.11, 0.035, 6, 14);
+    wound.translate(-0.24, 0.4, side * 0.66);
+    parts.push(paint(wound, 0x5eead4));
+  }
+  // Rear emitter collar (static); the spinning rings are separate meshes
+  const collar = new THREE.CylinderGeometry(0.1, 0.14, 0.18, 12);
+  collar.rotateZ(Math.PI / 2);
+  collar.translate(-0.62, 0.02, 0);
+  parts.push(paint(collar, 0x475569));
 
+  const merged = mergeBufferGeometriesSimple(parts);
+  for (const p of parts) p.dispose();
+  return merged;
+}
+
+/** Toothed sonic bristle ring (axis = local X) used for both counter-rotating emitter rings. */
+function buildSonicRingGeometry(radius: number, teeth: number, hex: number, toothHex: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const ring = new THREE.TorusGeometry(radius, 0.035, 6, 20);
+  ring.rotateY(Math.PI / 2);
+  parts.push(paint(ring, hex));
+  for (let i = 0; i < teeth; i++) {
+    const a = (i / teeth) * Math.PI * 2;
+    const bristle = new THREE.BoxGeometry(0.05, 0.14, 0.035);
+    bristle.translate(0, radius + 0.06, 0);
+    bristle.rotateX(a);
+    parts.push(paint(bristle, i % 2 === 0 ? toothHex : 0xf0fdfa));
+  }
   const merged = mergeBufferGeometriesSimple(parts);
   for (const p of parts) p.dispose();
   return merged;
@@ -346,6 +381,11 @@ function buildSucroseClusterGeometry(): THREE.BufferGeometry {
       g.dispose();
     }
   }
+  // Faceted inner glow core (bright warm-pink octahedron visible through the prism faces)
+  const core = new THREE.OctahedronGeometry(0.2, 0);
+  core.translate(0, 0.4, 0);
+  parts.push(paint(core, 0xfff7fb));
+  core.dispose();
   const merged = mergeBufferGeometriesSimple(parts);
   for (const p of parts) p.dispose();
   merged.computeVertexNormals(); // non-indexed → crisp flat facet normals
@@ -386,6 +426,12 @@ export class EntityBatchRenderer {
   private probeHullMesh: THREE.Mesh;
   private probeHullMat: THREE.ShaderMaterial;
   private bristleTuftInst: THREE.InstancedMesh;
+  private sonicRingOuter: THREE.Mesh;
+  private sonicRingInner: THREE.Mesh;
+  private cockpitDome: THREE.Mesh;
+  private surgeCore: THREE.Mesh;
+  private surgeCoreMat: THREE.MeshBasicMaterial;
+  private ringSpin = 0;
   private tuftRest: Array<{ x: number; z: number }> = [];
   private bristleArcMesh: THREE.Mesh;
   private wakeRingInst: THREE.InstancedMesh;
@@ -437,6 +483,34 @@ export class EntityBatchRenderer {
     this.probeHullMat = createCrystalLitMaterial(0xffffff, 1, { vertexColors: true });
     this.probeHullMesh = new THREE.Mesh(buildHydraHullGeometry(), this.probeHullMat);
     this.probeGroup.add(this.probeHullMesh);
+
+    // Articulated counter-rotating sonic bristle rings (spin faster while scrubbing)
+    const ringMat = createCrystalLitMaterial(0xffffff, 1, { vertexColors: true });
+    this.sonicRingOuter = new THREE.Mesh(buildSonicRingGeometry(0.27, 12, 0x22d3ee, 0x67e8f9), ringMat);
+    this.sonicRingOuter.position.set(-0.78, 0.02, 0);
+    this.probeGroup.add(this.sonicRingOuter);
+    this.sonicRingInner = new THREE.Mesh(buildSonicRingGeometry(0.16, 8, 0x0ea5e9, 0xa5f3fc), ringMat);
+    this.sonicRingInner.position.set(-0.78, 0.02, 0);
+    this.probeGroup.add(this.sonicRingInner);
+
+    // Translucent cockpit dome with a reactive Surge core inside
+    this.surgeCoreMat = new THREE.MeshBasicMaterial({ color: 0x5eead4 });
+    this.surgeCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), this.surgeCoreMat);
+    this.surgeCore.position.set(0.24, 0.3, 0);
+    this.probeGroup.add(this.surgeCore);
+    const domeGeo = new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    domeGeo.scale(1.25, 0.9, 0.92);
+    this.cockpitDome = new THREE.Mesh(
+      domeGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0x67e8f9,
+        transparent: true,
+        opacity: 0.32,
+        depthWrite: false,
+      })
+    );
+    this.cockpitDome.position.set(0.24, 0.2, 0);
+    this.probeGroup.add(this.cockpitDome);
 
     // Oscillating sonic bristle tufts under the brush head (1 instanced draw call)
     const tuftGeo = new THREE.CylinderGeometry(0.03, 0.045, 0.3, 5, 1);
@@ -781,6 +855,16 @@ export class EntityBatchRenderer {
     }
     this.bristleTuftInst.instanceMatrix.needsUpdate = true;
 
+    // Counter-rotating sonic rings (fast + blurred while scrubbing) and reactive Surge core
+    this.ringSpin += dt * (scrubbingActive ? 34 : 3.2);
+    this.sonicRingOuter.rotation.x = this.ringSpin;
+    this.sonicRingInner.rotation.x = -this.ringSpin * 1.35;
+    const surge01 = Math.max(0, Math.min(1, session.surgeMeter / SURGE_MAX));
+    const surgeReady = surge01 >= 1;
+    const corePulse = surgeReady ? 1.0 + Math.sin(nowSec * 14) * 0.28 : 0.55 + surge01 * 0.45;
+    this.surgeCore.scale.setScalar(corePulse);
+    this.surgeCoreMat.color.setHex(0x14b8a6).lerp(this.tmpColor.setHex(surgeReady ? 0xfde047 : 0x67e8f9), surgeReady ? 1 : surge01);
+
     const arcScale = session.hasBassUpgrade ? BRUSH_BASS_ARC_RAD / BRUSH_BASE_ARC_RAD : 1.0;
     const overdriveScale = session.overdriveActive ? 1.25 : 1.0;
     this.bristleArcMesh.scale.set(
@@ -892,7 +976,8 @@ export class EntityBatchRenderer {
       const stretch = 1 / Math.sqrt(Math.max(0.4, squash));
       this.dummy.position.set(m.pos.x, y + 0.36 + hop, m.pos.z);
       this.dummy.rotation.set(Math.sin(m.hopPhase * 0.5) * 0.25, Math.atan2(-m.vel.z, m.vel.x), Math.sin(m.hopPhase) * 0.18);
-      this.dummy.scale.set(stretch * 1.05, squash, stretch * 1.05);
+      const wob = stunned ? 1 : 1 + Math.sin(nowSec * 9.5 + m.id * 1.9) * 0.07;
+      this.dummy.scale.set(stretch * 1.05 * wob, squash / wob, stretch * 1.05 * (2 - wob));
       this.dummy.updateMatrix();
       this.mutansInst.setMatrixAt(mCount, this.dummy.matrix);
       this.mutansInst.setColorAt(mCount, this.tmpColor.setHex(stunned ? 0x67e8f9 : 0xa3e635));
@@ -929,6 +1014,19 @@ export class EntityBatchRenderer {
       pushShadow(site.pos.x, y, site.pos.z, 1.25);
       sCount++;
 
+      if (!site.restored && hCount < 16) {
+        // Partial bloom: a faint pearlescent halo grows with local cleanliness (0% -> 100%)
+        const frac = Math.max(0, Math.min(1, site.localCleanRatio / SITE_RESTORE_CLEAN_RATIO));
+        if (frac > 0.08) {
+          this.dummy.position.set(site.pos.x, y + 0.3, site.pos.z);
+          this.dummy.rotation.set(0, -nowSec * 0.3 + hCount, 0);
+          this.dummy.scale.set(frac * 1.05, frac * 0.7 + 0.05, frac * 1.05);
+          this.dummy.updateMatrix();
+          this.siteHaloInst.setMatrixAt(hCount, this.dummy.matrix);
+          this.siteHaloInst.setColorAt(hCount, this.tmpColor.setRGB(0.25 + 0.5 * frac, 0.45 + 0.4 * frac, 0.45 + 0.4 * frac));
+          hCount++;
+        }
+      }
       if (site.restored) {
         if (!this.siteRestoredAt.has(site.id)) this.siteRestoredAt.set(site.id, nowSec);
         const age = nowSec - (this.siteRestoredAt.get(site.id) ?? nowSec);
@@ -955,7 +1053,7 @@ export class EntityBatchRenderer {
       const jitter = damage > 0.05 ? Math.sin(nowSec * 60 + cCount) * 0.04 * damage : 0;
       this.dummy.position.set(c.pos.x + jitter, y + 0.32, c.pos.z);
       this.dummy.rotation.set(0.12, nowSec * 0.6 + cCount, 0.08);
-      this.dummy.scale.setScalar(1.15 - damage * 0.25);
+      this.dummy.scale.setScalar((1.15 - damage * 0.25) * (1 + Math.sin(nowSec * 3.1 + cCount * 1.3) * 0.03));
       this.dummy.updateMatrix();
       this.sucroseInst.setMatrixAt(cCount, this.dummy.matrix);
       this.sucroseInst.setColorAt(cCount, this.tmpColor.setHex(0xf9a8d4).lerp(new THREE.Color(0xffffff), 0.25 - damage * 0.2));

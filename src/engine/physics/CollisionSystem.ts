@@ -150,13 +150,15 @@ export function tryStartCapillaryZip(
   probePos: Vec2,
   aimDir: Vec2,
   alleys: readonly InterdentalAlleyDef[],
-  allWalls: readonly AABB2D[]
+  allWalls: readonly AABB2D[],
+  maxAngleRad: number = FLOSS_ZIP_MAX_ANGLE_RAD,
+  entryDist: number = FLOSS_ZIP_ENTRY_DIST
 ): { zip: ProbeZipState; alley: InterdentalAlleyDef } | null {
   const aimLen = Math.hypot(aimDir.x, aimDir.z);
   if (aimLen < 1e-5) return null;
   const ax = aimDir.x / aimLen;
   const az = aimDir.z / aimLen;
-  const cosLimit = Math.cos(FLOSS_ZIP_MAX_ANGLE_RAD);
+  const cosLimit = Math.cos(maxAngleRad);
 
   for (const alley of alleys) {
     const pairs: Array<[Vec2, Vec2]> = [
@@ -165,7 +167,7 @@ export function tryStartCapillaryZip(
     ];
     for (const [startEp, endEp] of pairs) {
       const distToEntry = Math.hypot(probePos.x - startEp.x, probePos.z - startEp.z);
-      if (distToEntry > FLOSS_ZIP_ENTRY_DIST) continue;
+      if (distToEntry > entryDist) continue;
 
       const vx = endEp.x - startEp.x;
       const vz = endEp.z - startEp.z;

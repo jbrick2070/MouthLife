@@ -102,3 +102,44 @@ describe('Clinical 32-tooth numbering & dental education reference', () => {
     expect(getWorldDentalLesson('pulp_rescue', 'PULP_RESCUE').id).toBe('pulp_rescue');
   });
 });
+
+import {
+  buildSpotQuizQuestion,
+  judgeSpotQuizAnswer,
+  TOOTH_CROSS_SECTION_LAYERS,
+  getToothLayer,
+} from '../src/config/dentalChart';
+
+describe('Spot That Tooth! quiz & cross-section', () => {
+  it('builds deterministic prompts that always name a valid tooth', () => {
+    for (let i = 0; i < 40; i++) {
+      let seed = i * 0.0237;
+      const q = buildSpotQuizQuestion(() => (seed = (seed + 0.6180339) % 1));
+      expect(q.targetUniversal).toBeGreaterThanOrEqual(1);
+      expect(q.targetUniversal).toBeLessThanOrEqual(32);
+      expect(q.prompt.length).toBeGreaterThan(5);
+    }
+  });
+
+  it('never repeats the previous target when asked to avoid it', () => {
+    const q = buildSpotQuizQuestion(() => 0.0, 1);
+    expect(q.targetUniversal).not.toBe(1);
+  });
+
+  it('judges answers with a gentle streak and a monotonic best streak', () => {
+    const hit = judgeSpotQuizAnswer(19, 19, 2, 2);
+    expect(hit.correct).toBe(true);
+    expect(hit.nextStreak).toBe(3);
+    expect(hit.bestStreak).toBe(3);
+    const miss = judgeSpotQuizAnswer(19, 6, 3, 3);
+    expect(miss.correct).toBe(false);
+    expect(miss.nextStreak).toBe(0);
+    expect(miss.bestStreak).toBe(3);
+  });
+
+  it('describes four cross-section layers with the documented mineral levels', () => {
+    expect(TOOTH_CROSS_SECTION_LAYERS.map((l) => l.id)).toEqual(['enamel', 'dentin', 'pulp', 'ligament']);
+    expect(getToothLayer('enamel').mineralPercent).toBe(96);
+    expect(getToothLayer('dentin').mineralPercent).toBe(70);
+  });
+});

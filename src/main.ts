@@ -109,6 +109,7 @@ function bootstrapMouthLife(): void {
   let lastReport: MissionReportData | null = null;
 
   // Direct touch-the-teeth Smooth Bask toy (HUB companion & REPORT) + 3D globe city picking
+  let lastEmptyTapMs = 0;
   function handleCanvasPointer(
     phase: CanvasPointerPhase,
     clientX: number,
@@ -136,13 +137,24 @@ function bootstrapMouthLife(): void {
     }
     const hit = sceneMgr.raycastCompanionTeeth(ndcX, ndcY);
     if (!hit) {
-      if (phase === 'down') return false; // empty space → orbit drag instead
+      if (phase === 'down') {
+        // Double-tap the gum / empty space to smoothly recenter the 3D view
+        if (lastEmptyTapMs > 0 && performance.now() - lastEmptyTapMs < 350 && currentMode === 'HUB') {
+          sceneMgr.resetCompanionOrbit();
+          activeHub?.setViewOffCenter(false);
+          lastEmptyTapMs = 0;
+        } else {
+          lastEmptyTapMs = performance.now();
+        }
+        return false; // empty space → orbit drag instead
+      }
       touch.endTouch();
       return true;
     }
 
     if (currentMode === 'HUB') {
       activeHub?.notifyToothTouched(hit.toothIndex);
+      sceneMgr.highlightCompanionTooth(hit.toothIndex);
     }
 
     const save = saveSys.getSave();
@@ -197,7 +209,10 @@ function bootstrapMouthLife(): void {
 
   input.setHooks({
     onUserGesture: () => sound.unlockOnGesture(),
-    onOrbitDrag: (dYaw, dPitch) => sceneMgr.nudgeCompanionOrbit(dYaw, dPitch),
+    onOrbitDrag: (dYaw, dPitch) => {
+      sceneMgr.nudgeCompanionOrbit(dYaw, dPitch);
+      activeHub?.setViewOffCenter(sceneMgr.isCompanionOrbitOffCenter());
+    },
     getMode: () => currentMode,
     onCanvasPointer: handleCanvasPointer,
   });
@@ -559,6 +574,9 @@ function bootstrapMouthLife(): void {
         },
         onPlaySparkleSfx: () => sound.playSmoothBaskSparkle(),
         onPlayToothChime: (step) => sound.playGlassHarpNote(step),
+        onHighlightCrown: (idx) => sceneMgr.highlightCompanionTooth(idx, 3.2),
+        onResetCompanionView: () => sceneMgr.resetCompanionOrbit(),
+        isCompanionViewOffCenter: () => sceneMgr.isCompanionOrbitOffCenter(),
         onPlayTreatSfx: () => sound.playTreatSnack(),
         onTreatSplat: () => splatRegionalTreatOnTeeth(),
         getSplatCount: () => touch.activeSplatCount,

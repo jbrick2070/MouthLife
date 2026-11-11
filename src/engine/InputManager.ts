@@ -30,6 +30,32 @@ export function computePointerSteer(
   return { moveX: (dx / dist) * mag, moveZ: (dz / dist) * mag };
 }
 
+/** True when two taps land close together in time and space (double-tap detector). */
+export function isDoubleTap(
+  prev: { t: number; x: number; y: number } | null,
+  now: { t: number; x: number; y: number },
+  maxMs = 320,
+  maxDistPx = 44
+): boolean {
+  if (!prev) return false;
+  const dt = now.t - prev.t;
+  return dt > 0 && dt <= maxMs && Math.hypot(now.x - prev.x, now.y - prev.y) <= maxDistPx;
+}
+
+/**
+ * Low-pass filter for the steer vector so HYDRA-1 rounds contact ridges instead of snapping
+ * between wall-slide directions. `k` in (0,1]: higher = snappier. Returns near-zero as exact zero.
+ */
+export function smoothSteerVector(
+  prev: { moveX: number; moveZ: number },
+  next: { moveX: number; moveZ: number },
+  k = 0.4
+): { moveX: number; moveZ: number } {
+  const moveX = prev.moveX + (next.moveX - prev.moveX) * k;
+  const moveZ = prev.moveZ + (next.moveZ - prev.moveZ) * k;
+  return Math.hypot(moveX, moveZ) < 0.02 ? { moveX: 0, moveZ: 0 } : { moveX, moveZ };
+}
+
 const STEER_PREF_KEY = 'mouthlife.pointerSteer';
 
 export class InputManager {
@@ -73,6 +99,9 @@ export class InputManager {
   private steerPref: PointerSteerPref = 'auto';
   private steerPointerId: number | null = null;
   private steerNdc = new THREE.Vector2(0, 0);
+  private steerSmooth = { moveX: 0, moveZ: 0 };
+  private steerTarget: Vec2 | null = null;
+  private lastTap: { t: number; x: number; y: number } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     try {
@@ -123,6 +152,11 @@ export class InputManager {
     } catch {
       /* ignore */
     }
+  }
+
+  /** Ground-plane point the active pointer is steering toward (null when not steering). */
+  getSteerTarget(): Vec2 | null {
+    return this.steerPointerId !== null ? this.steerTarget : null;
   }
 
   /** True while a mouse/touch is actively steering HYDRA-1 across the tooth surface. */
@@ -180,6 +214,15 @@ export class InputManager {
       this.updateCursorNdc(e.clientX, e.clientY);
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
+        // Double-tap anywhere on the tooth: auto-aimed Floss (snaps to the nearest alley mouth)
+        const tapNow = { t: performance.now(), x: e.clientX, y: e.clientY };
+        if (e.pointerType !== 'mouse' && isDoubleTap(this.lastTap, tapNow)) {
+          this.pendingFloss = true;
+          this.virtualFlossAim = null;
+          this.lastTap = null;
+        } else {
+          this.lastTap = tapNow;
+        }
         const shouldSteer = resolvePointerSteerForType(this.steerPref, e.pointerType);
         if (e.pointerType === 'mouse') {
           if (e.button === 0) {
@@ -338,10 +381,17 @@ export class InputManager {
       this.groundPlane.constant = -probeY;
       this.raycaster.setFromCamera(this.steerNdc, camera);
       if (this.raycaster.ray.intersectPlane(this.groundPlane, this.hitVec3)) {
-        const steer = computePointerSteer(probePos, { x: this.hitVec3.x, z: this.hitVec3.z });
+        this.steerTarget = { x: this.hitVec3.x, z: this.hitVec3.z };
+        const steer = smoothSteerVector(
+          this.steerSmooth,
+          computePointerSteer(probePos, this.steerTarget)
+        );
+        this.steerSmooth = steer;
         moveX = steer.moveX;
         moveZ = steer.moveZ;
       }
+    } else {
+      this.steerSmooth = { moveX: 0, moveZ: 0 };
     }
 
     let aimWorldPos: Vec2 | null = null;

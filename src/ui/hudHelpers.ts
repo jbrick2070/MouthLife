@@ -156,3 +156,54 @@ export function shouldShowHubWelcome(
 ): boolean {
   return !seenHints.has('hub_welcome') && totalBrushStamps === 0 && !world1Completed;
 }
+
+export interface ObjectiveInput {
+  mode: 'ARCADE' | 'PULP_RESCUE';
+  worldCleanRatio: number;
+  districtClean: number[];
+  sealed: boolean[];
+  /** Unrestored Commensal sites located in districts that are not yet sealed. */
+  sitesLeftOpen: number;
+  domesRemaining: boolean;
+  surgeReady: boolean;
+  sealRatio?: number;
+  rescueTargetRatio?: number;
+}
+
+/**
+ * One-line, always-truthful breadcrumb naming the single next thing a stage still needs.
+ * Pure + deterministic so it is unit-testable; never blocks gameplay (it only advises).
+ */
+export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
+  if (inp.mode === 'PULP_RESCUE') {
+    const target = inp.rescueTargetRatio ?? 0.85;
+    const left = Math.max(0, Math.ceil((target - inp.worldCleanRatio) * 100));
+    return left > 0
+      ? `Scrub the glowing plaque — about ${left}% more to stabilize the pulp!`
+      : 'Stabilizing… the pulp is safe!';
+  }
+  const seal = inp.sealRatio ?? 0.9;
+  const openIdx: number[] = [];
+  inp.sealed.forEach((s, i) => {
+    if (!s) openIdx.push(i);
+  });
+  if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ Every district is sealed — mission complete!';
+  if (inp.domesRemaining) return '🛡️ Crack the EPS dome with Floss [E] or a Fluoride Surge [Q]!';
+  if (inp.sitesLeftOpen === 1) return '1 Commensal Colony left — follow the ➤ Colony arrow!';
+  if (inp.sitesLeftOpen > 1) return `Restore ${inp.sitesLeftOpen} Commensal Colonies — scrub their glowing patches clean!`;
+  const worst = openIdx.reduce(
+    (best, i) => (inp.districtClean[i] < inp.districtClean[best] ? i : best),
+    openIdx[0] ?? 0
+  );
+  const worstPct = Math.round((inp.districtClean[worst] ?? 0) * 100);
+  const nearly = openIdx.every((i) => (inp.districtClean[i] ?? 0) >= seal - 0.12);
+  if (nearly && inp.surgeReady) {
+    return openIdx.length > 1
+      ? 'Almost clean! Trigger 🌊 Fluoride Surge [Q] to seal the final districts!'
+      : 'Almost clean! Trigger 🌊 Fluoride Surge [Q] to seal the final district!';
+  }
+  if (nearly) return `Almost clean! Sweep D${worst + 1} (${worstPct}%) to ${Math.round(seal * 100)}% to seal it!`;
+  return inp.surgeReady
+    ? 'Scrub enamel → press Surge [Q] to seal'
+    : 'Scrub enamel → restore colonies → press Surge [Q] to seal';
+}

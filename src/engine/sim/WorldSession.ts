@@ -15,7 +15,8 @@ import {
   FLOSS_COOLDOWN_SEC,
   FLOSS_LENGTH,
   FLOSS_PTFE_HALF_WIDTH,
-  FLOSS_ZIP_ENTRY_DIST,
+  FLOSS_ZIP_ASSIST_ANGLE_RAD,
+  FLOSS_ZIP_ASSIST_ENTRY_DIST,
   HIBISCUS_DEFAULT_PULSE_SEC,
   MAX_MUTANS_GLOBAL,
   MAX_MUTANS_PER_CRYSTAL,
@@ -631,7 +632,9 @@ export class WorldSession {
       this.probePos,
       aimDir,
       this.cartridge.interdentalAlleys,
-      this.cartridge.wallBoxes
+      this.cartridge.wallBoxes,
+      FLOSS_ZIP_ASSIST_ANGLE_RAD,
+      FLOSS_ZIP_ASSIST_ENTRY_DIST
     );
 
     const segStart = { x: this.probePos.x, z: this.probePos.z };
@@ -766,7 +769,7 @@ export class WorldSession {
         [alley.endpointB, alley.endpointA],
       ] as const) {
         const dEntry = Math.hypot(entry.x - this.probePos.x, entry.z - this.probePos.z);
-        if (dEntry <= FLOSS_ZIP_ENTRY_DIST) {
+        if (dEntry <= FLOSS_ZIP_ASSIST_ENTRY_DIST) {
           const vx = exit.x - this.probePos.x;
           const vz = exit.z - this.probePos.z;
           const l = Math.hypot(vx, vz);

@@ -9,12 +9,16 @@ const B_MODE_INDEX: Record<BChannelMode, number> = {
 };
 
 const VERTEX_SHADER = /* glsl */ `
+  // Companion crown id + 1 (0 = not a companion crown). Costs 0 extra draw calls.
+  attribute float aToothId;
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
   varying vec3 vVertColor;
+  varying float vToothId;
 
   void main() {
     vVertColor = color;
+    vToothId = aToothId;
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
     vWorldPos = worldPosition.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
@@ -44,6 +48,9 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uGlobalFluorideGlow;
   uniform float uAcidStress;
   uniform int uActiveQuadrant;
+  // Tapped / inspected Companion crown (0..13), or < 0 for none; uHighlightPulse eases 0..1
+  uniform float uHighlightedTooth;
+  uniform float uHighlightPulse;
 
   // Recently-scrubbed bubbling foam trail samples: (x, z, birthTime, strength)
   uniform vec4 uFoam[12];
@@ -55,6 +62,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
   varying vec3 vVertColor;
+  varying float vToothId;
 
   // Lightweight procedural hash & cellular value noise (zero extra texture fetches)
   float hash21(vec2 p) {
@@ -154,6 +162,19 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Translucent bluish-ivory enamel edge scattering
     cleanEnamel += vec3(0.16, 0.28, 0.38) * fresnel * (1.0 - plaqueMask);
 
+    // Perikymata: faint horizontal growth-line wave bands on clean crowns (follow crown height)
+    float perikBand = 0.5 + 0.5 * sin(vWorldPos.y * 58.0 + valueNoise(vWorldPos.xz * 2.3) * 3.2);
+    float perikFade = smoothstep(0.12, 0.35, hFrac) * (1.0 - smoothstep(0.88, 1.0, hFrac));
+    cleanEnamel *= 1.0 - 0.035 * perikBand * perikFade * cleanFactor;
+
+    // Bluish-opal incisal edge translucency (thin tips let the dark mouth show through)
+    float tip = smoothstep(0.75, 0.97, vVertColor.b);
+    cleanEnamel = mix(cleanEnamel, cleanEnamel * vec3(0.80, 0.90, 1.0) + vec3(0.03, 0.08, 0.16) * (0.5 + fresnel * 2.0), tip * 0.32 * cleanFactor);
+
+    // Warm dentin subsurface scattering glowing through the thin cervical neck
+    float neckGlow = 1.0 - smoothstep(0.18, 0.35, vVertColor.b);
+    cleanEnamel += vec3(0.20, 0.11, 0.03) * neckGlow * (0.4 + 0.6 * backScatter) * cleanFactor;
+
     // Fluorapatite crystalline iridescent mint-cyan sheen
     if (fluorideSeal > 0.05) {
       float hexShimmer = 0.5 + 0.5 * sin(vWorldPos.x * 5.2 + vWorldPos.z * 5.2 + uTime * 2.1);
@@ -203,6 +224,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     float dullSpec = pow(max(dot(N, H1), 0.0), 9.0) * 0.14;
     float spec = mix(cleanSpec1 + cleanSpec2, dullSpec, plaqueMask);
     baseColor += vec3(0.94, 0.99, 1.0) * spec;
+
+    // Wet saliva meniscus glint pooled along the gingival collar (vVertColor.b near 0)
+    float collarMeniscus = (1.0 - smoothstep(0.04, 0.2, vVertColor.b)) * (1.0 - plaqueMask);
+    baseColor += vec3(0.85, 0.97, 1.0) * collarMeniscus * (0.08 + 0.5 * pow(max(dot(N, H1), 0.0), 26.0));
 
     // Liquid contour meniscus rim right along the scrubbed plaque boundary!
     float contourEdge = smoothstep(0.07, 0.105, rawPlaque) * (1.0 - smoothstep(0.115, 0.16, rawPlaque));
@@ -290,6 +315,14 @@ const FRAGMENT_SHADER = /* glsl */ `
       }
     }
 
+    // Tapped / inspected Companion crown: soft pearlescent mint-gold rim light
+    if (uHighlightedTooth > -0.5 && vToothId > 0.5 && abs(vToothId - 1.0 - uHighlightedTooth) < 0.5) {
+      float rim = pow(1.0 - NdotV, 2.2);
+      float breathe = 0.78 + 0.22 * sin(uTime * 3.4);
+      vec3 mintGold = mix(vec3(0.45, 1.0, 0.82), vec3(1.0, 0.86, 0.40), 0.5 + 0.5 * sin(uTime * 1.3 + vWorldPos.x * 0.8));
+      baseColor += mintGold * (rim * 1.1 + 0.2) * uHighlightPulse * breathe;
+    }
+
     // Apply baked vertex cavity AO stored in vVertColor.r
     float ao = clamp(vVertColor.r, 0.38, 1.0);
     baseColor *= ao;
@@ -336,6 +369,8 @@ export class EnamelBiophysicsMaterial {
         uGlobalFluorideGlow: { value: 0 },
         uAcidStress: { value: 0 },
         uActiveQuadrant: { value: -1 },
+        uHighlightedTooth: { value: -1 },
+        uHighlightPulse: { value: 0 },
         uFoam: { value: Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, -99, 0)) },
         uRipples: { value: Array.from({ length: 4 }, () => new THREE.Vector4(0, 0, 0, -99)) },
         uSplats: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0)) },
@@ -343,6 +378,18 @@ export class EnamelBiophysicsMaterial {
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
     });
+    // Meshes without a crown id attribute (arcade stage) read 0 = "not a companion crown"
+    this.material.defaultAttributeValues = {
+      ...this.material.defaultAttributeValues,
+      aToothId: [0],
+    };
+  }
+
+  /** Softly illuminates one Companion crown (0..13); pass null to clear. */
+  setHighlightedTooth(index: number | null, pulse01 = 1): void {
+    const u = this.material.uniforms;
+    u.uHighlightedTooth.value = index === null ? -1 : index;
+    u.uHighlightPulse.value = index === null ? 0 : Math.max(0, Math.min(1, pulse01));
   }
 
   private buildDataTexture(

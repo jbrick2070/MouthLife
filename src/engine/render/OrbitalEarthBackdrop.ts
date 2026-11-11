@@ -341,9 +341,12 @@ const EARTH_FRAG = /* glsl */ `
     float dayTerm = smoothstep(-0.18, 0.25, NdotL);
 
     vec3 lit = albedo * (0.14 + 0.92 * max(NdotL, 0.0));
-    // Warm city lights hint on night side of continents
-    float nightGlow = (1.0 - dayTerm) * landMask * smoothstep(0.55, 0.75, detail);
-    lit += vec3(1.0, 0.76, 0.38) * nightGlow * 0.35;
+    // City lights: clustered speckle on the night side of land (dimmed under clouds, gently twinkling)
+    float metro = smoothstep(0.52, 0.8, fbm(n * 6.5 + 3.7));
+    float dots = smoothstep(0.78, 0.93, noise3(n * 38.0));
+    float twinkle = 0.78 + 0.22 * sin(uTime * 2.6 + noise3(n * 55.0) * 40.0);
+    float nightGlow = (1.0 - dayTerm) * landMask * (metro * 0.45 + dots * metro * 1.15) * (1.0 - clouds * 0.7);
+    lit += vec3(1.0, 0.78, 0.40) * nightGlow * 0.62 * twinkle;
 
     // Ocean sun glint
     vec3 H = normalize(sunDir + V);
@@ -353,6 +356,11 @@ const EARTH_FRAG = /* glsl */ `
     // Rayleigh atmospheric blue-cyan limb glow
     float rim = pow(1.0 - max(dot(normalize(vWorldNormal), V), 0.0), 2.8);
     lit += vec3(0.22, 0.68, 1.0) * rim * 0.82;
+    // Thin bright outer limb line + warm sunset tint hugging the terminator
+    float limbLine = pow(1.0 - max(dot(normalize(vWorldNormal), V), 0.0), 7.0);
+    lit += vec3(0.55, 0.88, 1.0) * limbLine * 0.55 * (0.35 + 0.65 * dayTerm);
+    float terminator = smoothstep(-0.2, 0.0, NdotL) * (1.0 - smoothstep(0.0, 0.3, NdotL));
+    lit += vec3(1.0, 0.52, 0.28) * terminator * rim * 0.45;
 
     gl_FragColor = vec4(lit, 1.0);
   }

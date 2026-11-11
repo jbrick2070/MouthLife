@@ -6,6 +6,12 @@ import {
   QUADRANT_NUMBERING_META,
   TOOTH_SURFACES_GUIDE,
   type ToothNumberingSystem,
+  buildSpotQuizQuestion,
+  getToothLayer,
+  judgeSpotQuizAnswer,
+  TOOTH_CROSS_SECTION_LAYERS,
+  type SpotQuizQuestion,
+  type ToothLayerInfo,
 } from '../config/dentalChart';
 import { SMOOTH_BASK_THRESHOLD } from '../config/gameConfig';
 import {
@@ -48,6 +54,13 @@ export class CompanionHubOverlay implements OverlayView {
   private seenHints = loadSeenHints();
   private modalOpenerSelector: string | null = null;
   private chartSystem: ToothNumberingSystem = 'universal';
+  private viewOffCenter = false;
+  private chartTab: 'chart' | 'quiz' | 'anatomy' = 'chart';
+  private quizTarget: SpotQuizQuestion | null = null;
+  private quizStreak = 0;
+  private quizBest = 0;
+  private quizFeedback: { ok: boolean; text: string } | null = null;
+  private selectedLayer: ToothLayerInfo['id'] = 'enamel';
   private selectedUniversalTooth = 3;
   private lastTouchedCrownIdx: number | null = null;
 
@@ -89,6 +102,9 @@ export class CompanionHubOverlay implements OverlayView {
       onReplayCosmicIntro: () => void;
       onPlaySparkleSfx: () => void;
       onPlayToothChime?: (step: number) => void;
+      onHighlightCrown?: (toothIndex: number | null) => void;
+      onResetCompanionView?: () => void;
+      isCompanionViewOffCenter?: () => boolean;
       onPlayTreatSfx: () => void;
       onTreatSplat?: () => number;
       getSplatCount?: () => number;
@@ -208,9 +224,13 @@ export class CompanionHubOverlay implements OverlayView {
   }
 
   private buildTouchedCrownPillHtml(): string {
-    if (this.tab !== 'companion' || this.lastTouchedCrownIdx === null) return '';
+    if (this.tab !== 'companion') return '';
+    const resetBtn = this.viewOffCenter
+      ? `<div style="margin-top:6px;"><button type="button" id="btn-reset-view" class="btn btn-sm ui-interactive" aria-label="Reset 3D view to center">⟲ Reset View</button></div>`
+      : '';
+    if (this.lastTouchedCrownIdx === null) return resetBtn;
     const s = getCompanionCrownSummary(this.lastTouchedCrownIdx);
-    return `
+    return `${resetBtn}
       <div style="margin-top:6px;">
         <button
           type="button"
@@ -225,7 +245,24 @@ export class CompanionHubOverlay implements OverlayView {
     `;
   }
 
+  /** Called when the 3D Companion view is orbited away from (or back to) its default framing. */
+  setViewOffCenter(off: boolean): void {
+    if (this.viewOffCenter === off) return;
+    this.viewOffCenter = off;
+    if (this.tab !== 'companion' || this.activeModal !== 'none') return;
+    const slot = this.container?.querySelector<HTMLElement>('#hub-tooth-readout-slot');
+    if (slot) {
+      slot.innerHTML = this.buildTouchedCrownPillHtml();
+      this.bindTouchedCrownPill();
+    }
+  }
+
   private bindTouchedCrownPill(): void {
+    this.container?.querySelector('#btn-reset-view')?.addEventListener('click', () => {
+      this.actions.onPlayUiTap();
+      this.actions.onResetCompanionView?.();
+      this.setViewOffCenter(false);
+    });
     this.container?.querySelector('#btn-inspect-touched-tooth')?.addEventListener('click', () => {
       this.actions.onPlayUiTap();
       this.openModal('chart', '#btn-open-chart');
@@ -873,6 +910,61 @@ export class CompanionHubOverlay implements OverlayView {
     `;
   }
 
+  private buildQuizCardHtml(): string {
+    if (!this.quizTarget) this.quizTarget = buildSpotQuizQuestion();
+    const fb = this.quizFeedback;
+    return `
+      <div id="chart-quiz-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(251,191,36,0.5);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+        <div class="row-between" style="flex-wrap:wrap;gap:6px;margin-bottom:5px;">
+          <strong style="font-size:0.78rem;color:#fde68a;">🎯 Optional Practice • no timer, no pressure</strong>
+          <span class="pill-badge">🔥 Streak <strong>${this.quizStreak}</strong> • Best <strong>${this.quizBest}</strong></span>
+        </div>
+        <div id="quiz-prompt" style="font-size:0.95rem;font-weight:700;color:#fff;margin-bottom:6px;">${escapeHtml(this.quizTarget.prompt)}</div>
+        <div id="quiz-feedback" role="status" aria-live="polite" style="min-height:1.2em;font-size:0.76rem;color:${fb ? (fb.ok ? '#86efac' : '#fca5a5') : '#94a3b8'};margin-bottom:6px;">${escapeHtml(fb ? fb.text : 'Tap a tooth on the chart below to answer.')}</div>
+        <button type="button" id="btn-quiz-next" class="btn btn-sm">⏭ Different tooth</button>
+      </div>
+    `;
+  }
+
+  private buildAnatomyHtml(): string {
+    const sel = getToothLayer(this.selectedLayer);
+    const fill = (id: ToothLayerInfo['id']) => getToothLayer(id).colorHex;
+    const stroke = (id: ToothLayerInfo['id']) => (this.selectedLayer === id ? '#ffffff' : 'rgba(15,23,42,0.6)');
+    const sw = (id: ToothLayerInfo['id']) => (this.selectedLayer === id ? 3 : 1.2);
+    const shortName: Record<ToothLayerInfo['id'], string> = {
+      enamel: 'Enamel',
+      dentin: 'Dentin',
+      pulp: 'Pulp',
+      ligament: 'Sling',
+    };
+    return `
+      <div id="anatomy-panel">
+        <svg viewBox="0 0 200 250" role="img" aria-label="Tooth cross-section: enamel, dentin, pulp, and periodontal ligament with cementum" style="width:100%;max-width:230px;height:auto;display:block;margin:0 auto 8px auto;">
+          <path d="M20 205 Q10 120 40 80 Q100 20 160 80 Q190 120 180 205 Z" fill="rgba(196,181,253,0.18)" stroke="${stroke('ligament')}" stroke-width="${sw('ligament')}" />
+          <path d="M70 100 Q60 150 72 235 Q82 245 92 215 Q100 195 108 215 Q118 245 128 235 Q140 150 130 100 Z" fill="${fill('ligament')}" stroke="${stroke('ligament')}" stroke-width="${sw('ligament')}" />
+          <path d="M60 30 Q100 8 140 30 Q158 70 134 108 Q120 140 118 195 Q112 215 106 195 L100 150 L94 195 Q88 215 82 195 Q80 140 66 108 Q42 70 60 30 Z" fill="${fill('dentin')}" stroke="${stroke('dentin')}" stroke-width="${sw('dentin')}" />
+          <path d="M60 30 Q100 8 140 30 Q150 50 146 66 Q100 40 54 66 Q50 50 60 30 Z" fill="${fill('enamel')}" stroke="${stroke('enamel')}" stroke-width="${sw('enamel')}" />
+          <path d="M82 60 Q100 48 118 60 Q124 90 108 112 Q104 150 102 200 L98 200 Q96 150 92 112 Q76 90 82 60 Z" fill="${fill('pulp')}" stroke="${stroke('pulp')}" stroke-width="${sw('pulp')}" />
+        </svg>
+        <div class="seg-tabs" role="tablist" aria-label="Tooth Layers" style="margin-bottom:8px;">
+          ${TOOTH_CROSS_SECTION_LAYERS.map(
+            (ly) =>
+              `<button type="button" role="tab" data-layer="${ly.id}" aria-selected="${this.selectedLayer === ly.id ? 'true' : 'false'}" class="seg-tab ${this.selectedLayer === ly.id ? 'active' : ''}">${ly.emoji} ${shortName[ly.id]}</button>`
+          ).join('')}
+        </div>
+        <div style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;">
+          <div class="row-between" style="flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+            <strong style="font-size:0.92rem;color:#fff;">${sel.emoji} ${escapeHtml(sel.name)}</strong>
+            ${sel.mineralPercent !== null ? `<span class="pill-badge">≈${sel.mineralPercent}% mineral</span>` : '<span class="pill-badge">Living tissue</span>'}
+          </div>
+          <div style="font-size:0.78rem;color:#5eead4;margin-bottom:4px;">${escapeHtml(sel.tagline)}</div>
+          <p style="margin:0 0 4px 0;font-size:0.76rem;color:#e2e8f0;line-height:1.4;">${escapeHtml(sel.detail)}</p>
+          <div style="font-size:0.73rem;color:#99f6e4;">🪥 <strong>Care Tip:</strong> ${escapeHtml(sel.careTip)}</div>
+        </div>
+      </div>
+    `;
+  }
+
   private buildChartModalHtml(): string {
     const sel = getToothByUniversal(this.selectedUniversalTooth);
     const shortPosTag: Record<number, string> = {
@@ -945,6 +1037,20 @@ export class CompanionHubOverlay implements OverlayView {
             <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
           </div>
 
+          <div class="seg-tabs" role="tablist" aria-label="Chart Sections" style="margin-bottom:8px;">
+            ${(
+              [
+                ['chart', '🦷 Chart'],
+                ['quiz', '🎯 Spot That Tooth!'],
+                ['anatomy', '🔬 Inside a Tooth'],
+              ] as const
+            )
+              .map(
+                ([id, label]) => `<button type="button" role="tab" data-chart-tab="${id}" aria-selected="${this.chartTab === id ? 'true' : 'false'}" class="seg-tab ${this.chartTab === id ? 'active' : ''}">${label}</button>`
+              )
+              .join('')}
+          </div>
+          ${this.chartTab === 'anatomy' ? this.buildAnatomyHtml() : `
           <div class="row-between" style="flex-wrap:wrap;margin-bottom:8px;">
             <div class="seg-tabs" role="tablist" aria-label="Dental Numbering System">
               <button
@@ -974,6 +1080,7 @@ export class CompanionHubOverlay implements OverlayView {
             </span>
           </div>
 
+          ${this.chartTab === 'quiz' ? this.buildQuizCardHtml() : `
           <div id="chart-selected-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
             <div class="row-between" style="flex-wrap:wrap;margin-bottom:5px;">
               <div>
@@ -996,6 +1103,8 @@ export class CompanionHubOverlay implements OverlayView {
             </div>
           </div>
 
+`}
+
           <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:4px;">
             ▲ UPPER ARCH (MAXILLARY) — Tap Any Tooth to Hear &amp; Inspect
           </div>
@@ -1014,6 +1123,7 @@ export class CompanionHubOverlay implements OverlayView {
             ▼ LOWER ARCH (MANDIBULAR) — <span style="color:#67e8f9;">CI/LI Incisors</span> • <span style="color:#fde68a;">C Canine</span> • <span style="color:#93c5fd;">1P/2P Premolars</span> • <span style="color:#d8b4fe;">1M–3M Molars</span>
           </div>
 
+          ${this.chartTab === 'chart' ? `
           <div style="background:rgba(4,16,28,0.78);border:1px solid rgba(148,184,204,0.22);border-radius:12px;padding:9px 11px;margin-bottom:8px;">
             <strong style="font-size:0.8rem;color:#fff;display:block;margin-bottom:4px;">🎓 30-Second Dentistry Decoder</strong>
             <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.42;display:flex;flex-direction:column;gap:4px;">
@@ -1036,6 +1146,8 @@ export class CompanionHubOverlay implements OverlayView {
               ).join('')}
             </div>
           </div>
+` : ''}
+`}
         </div>
       </div>
     `;
@@ -1180,12 +1292,52 @@ export class CompanionHubOverlay implements OverlayView {
       });
     });
 
+    this.container.querySelectorAll<HTMLButtonElement>('[data-chart-tab]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.chartTab as 'chart' | 'quiz' | 'anatomy' | undefined;
+        if (!id || id === this.chartTab) return;
+        this.chartTab = id;
+        this.actions.onPlayUiTap();
+        this.rerenderModalKeepingScroll(`[data-chart-tab="${id}"]`);
+      });
+    });
+    this.container.querySelectorAll<HTMLButtonElement>('[data-layer]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.selectedLayer = (b.dataset.layer as ToothLayerInfo['id']) ?? 'enamel';
+        this.actions.onPlayToothChime?.(['enamel', 'dentin', 'pulp', 'ligament'].indexOf(this.selectedLayer) * 2 + 2);
+        this.rerenderModalKeepingScroll(`[data-layer="${this.selectedLayer}"]`);
+      });
+    });
+    this.container.querySelector('#btn-quiz-next')?.addEventListener('click', () => {
+      this.quizTarget = buildSpotQuizQuestion(Math.random, this.quizTarget?.targetUniversal);
+      this.quizFeedback = null;
+      this.actions.onPlayUiTap();
+      this.rerenderModalKeepingScroll('#btn-quiz-next');
+    });
+
     this.container.querySelectorAll<HTMLButtonElement>('[data-tooth-num]').forEach((toothBtn) => {
       toothBtn.addEventListener('click', () => {
         const num = Number(toothBtn.dataset.toothNum ?? 3);
-        this.selectedUniversalTooth = num;
         const t = getToothByUniversal(num);
         const step = (8 - t.positionFromMidline) + (t.arch === 'upper' ? 4 : 0);
+        if (this.chartTab === 'quiz' && this.quizTarget) {
+          const res = judgeSpotQuizAnswer(this.quizTarget.targetUniversal, num, this.quizStreak, this.quizBest);
+          this.quizStreak = res.nextStreak;
+          this.quizBest = res.bestStreak;
+          this.quizFeedback = { ok: res.correct, text: res.message };
+          if (res.correct) {
+            this.actions.onPlayToothChime?.(step);
+            this.actions.onPlayToothChime?.(step + 2);
+            if (t.companionArchIndex !== null) this.actions.onHighlightCrown?.(t.companionArchIndex);
+            this.quizTarget = buildSpotQuizQuestion(Math.random, num);
+          } else {
+            this.actions.onPlayUiTap();
+          }
+          this.rerenderModalKeepingScroll(`[data-tooth-num="${num}"]`);
+          return;
+        }
+        this.selectedUniversalTooth = num;
+        if (t.companionArchIndex !== null) this.actions.onHighlightCrown?.(t.companionArchIndex);
         if (this.actions.onPlayToothChime) {
           this.actions.onPlayToothChime(step);
         } else {

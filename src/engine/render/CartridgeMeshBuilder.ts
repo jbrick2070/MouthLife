@@ -81,6 +81,10 @@ const GINGIVA_FRAG = /* glsl */ `
     float back = pow(1.0 - max(dot(N, V), 0.0), 2.0);
     col += vec3(0.42, 0.14, 0.16) * back * (0.1 + 0.14 * marginal);
 
+    // Crisp saliva meniscus line pooled along the gingival crest where gum meets enamel
+    float meniscus = smoothstep(0.55, 1.0, marginal) * (1.0 - smoothstep(0.0, 1.0, attached));
+    col += vec3(0.95, 0.98, 1.0) * meniscus * (0.1 + 0.55 * pow(max(dot(N, H), 0.0), 18.0));
+
     // Wet saliva film: broad sheen + sharp sparkling stipple glints
     float broad = pow(max(dot(N, H), 0.0), 24.0) * 0.22;
     float glint = pow(max(dot(N, H), 0.0), 140.0);
@@ -104,7 +108,10 @@ export function createGingivaMaterial(hexColor = 0xe66c7e): THREE.ShaderMaterial
   });
 }
 
-export function mergeBufferGeometriesSimple(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
+export function mergeBufferGeometriesSimple(
+  geos: THREE.BufferGeometry[],
+  toothIndices?: number[]
+): THREE.BufferGeometry {
   let totalVerts = 0;
   const nonIndexed = geos.map((g) => (g.index ? g.toNonIndexed() : g));
   for (const g of nonIndexed) totalVerts += g.attributes.position.count;
@@ -112,8 +119,10 @@ export function mergeBufferGeometriesSimple(geos: THREE.BufferGeometry[]): THREE
   const positions = new Float32Array(totalVerts * 3);
   const normals = new Float32Array(totalVerts * 3);
   const colors = new Float32Array(totalVerts * 3);
+  const toothAttr = toothIndices ? new Float32Array(totalVerts) : null;
 
   let offset = 0;
+  let geoIdx = 0;
   for (const g of nonIndexed) {
     const posAttr = g.attributes.position;
     const normAttr = g.attributes.normal;
@@ -131,6 +140,9 @@ export function mergeBufferGeometriesSimple(geos: THREE.BufferGeometry[]): THREE
       colors[dst + 1] = colAttr ? colAttr.getY(i) : 0;
       colors[dst + 2] = colAttr ? colAttr.getZ(i) : 0;
     }
+    // aToothId = toothIndex + 1 (0 means "not a companion crown")
+    if (toothAttr && toothIndices) toothAttr.fill(toothIndices[geoIdx] + 1, offset, offset + count);
+    geoIdx++;
     offset += count;
     if (!geos.includes(g)) g.dispose();
   }
@@ -139,6 +151,7 @@ export function mergeBufferGeometriesSimple(geos: THREE.BufferGeometry[]): THREE
   merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   merged.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  if (toothAttr) merged.setAttribute('aToothId', new THREE.BufferAttribute(toothAttr, 1));
   return merged;
 }
 
@@ -606,7 +619,10 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
     cursor += width + contactGap;
   }
 
-  const mergedTeeth = mergeBufferGeometriesSimple(toothGeos);
+  const mergedTeeth = mergeBufferGeometriesSimple(
+    toothGeos,
+    toothGeos.map((_, i) => i)
+  );
   for (const tg of toothGeos) tg.dispose();
   const teethMesh = new THREE.Mesh(mergedTeeth, enamelMaterial);
   group.add(teethMesh);
@@ -680,6 +696,13 @@ function buildScallopedGingivaCollar(
         break;
       }
     }
+    let rootU = 0;
+    for (const sp of spans) {
+      if (sClamped >= sp.s0 && sClamped <= sp.s1) {
+        rootU = (sClamped - sp.s0) / Math.max(1e-6, sp.s1 - sp.s0);
+        break;
+      }
+    }
     let papilla = 0;
     for (const cs of contacts) papilla = Math.max(papilla, Math.exp(-Math.pow((sClamped - cs) / 0.32, 2)));
 
@@ -690,7 +713,8 @@ function buildScallopedGingivaCollar(
     const crestY = 0.66 + 0.5 * papilla - 0.08 * zenith;
     for (let r = 0; r < rows; r++) {
       const [factor, key] = profile[r];
-      const off = factor * neckD * endScale;
+      const rootOut = key === 'mid' ? 1 + 0.07 * Math.sin(Math.PI * rootU) : 1;
+      const off = factor * neckD * endScale * rootOut;
       let y: number;
       let ao = 0.95;
       let marginal = 0;
@@ -709,6 +733,11 @@ function buildScallopedGingivaCollar(
         y = crestY - 0.06;
         ao = 0.62; // sulcus shadow where enamel emerges
         marginal = 1;
+      }
+      // Jugae alveolares: gentle root-eminence bulges over each root, shallow grooves between roots
+      if (key === 'mid' || key === 'base') {
+        const rootBulge = 0.5 + 0.5 * Math.sin(Math.PI * rootU);
+        if (key === 'mid') y += 0.07 * rootBulge * endFade - 0.03 * papilla;
       }
       y = y * (0.55 + 0.45 * endFade) - (1 - endFade) * 0.2;
       const idx = (a * rows + r) * 3;
