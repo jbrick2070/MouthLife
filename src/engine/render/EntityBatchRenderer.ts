@@ -138,20 +138,21 @@ const CRYSTAL_FRAG = /* glsl */ `
     vec3 N = normalize(vWorldNormal);
     vec3 V = normalize(cameraPosition - vWorldPos);
     vec3 L = normalize(vec3(0.42, 0.85, 0.38));
+    vec3 L2 = normalize(vec3(-0.52, 0.65, -0.55));
     float NdotV = max(dot(N, V), 0.0);
     float facet = h31(floor(N * 7.0));
     vec3 R = reflect(-V, N);
     vec3 T = refract(-V, N, 0.66);
-    float caustic = pow(max(dot(T, L), 0.0), 6.0);
-    float glint = pow(max(dot(R, L), 0.0), 60.0);
-    vec3 disp = 0.5 + 0.5 * cos(6.2831 * (dot(T, vec3(0.3, 0.6, 0.2)) * 2.2 + vec3(0.0, 0.33, 0.67)));
-    vec3 body = vInstColor * (0.32 + 0.5 * facet);
-    vec3 col = body + disp * (0.18 + 0.4 * caustic) * (1.0 - NdotV * 0.5);
-    col += vec3(1.0) * glint * 1.6;
-    col += vec3(1.0, 0.85, 0.95) * pow(1.0 - NdotV, 3.0) * 0.6;
-    float twinkle = step(0.93, fract(facet * 17.0 + uTime * 0.8));
-    col += vec3(1.0) * twinkle * 0.5;
-    gl_FragColor = vec4(col, 0.94);
+    float caustic = pow(max(dot(T, L), 0.0), 5.0);
+    float glint = pow(max(dot(R, L), 0.0), 42.0) + pow(max(dot(R, L2), 0.0), 36.0) * 0.65;
+    vec3 disp = 0.5 + 0.5 * cos(6.2831 * (dot(T, vec3(0.3, 0.6, 0.2)) * 2.4 + vec3(0.0, 0.33, 0.67) + uTime * 0.25));
+    vec3 body = vInstColor * (0.42 + 0.52 * facet);
+    vec3 col = body + disp * (0.28 + 0.52 * caustic) * (1.0 - NdotV * 0.4);
+    col += vec3(1.0) * glint * 2.1;
+    col += vec3(1.0, 0.88, 0.96) * pow(1.0 - NdotV, 2.6) * 0.72;
+    float twinkle = smoothstep(0.86, 0.98, fract(facet * 19.0 + uTime * 1.35 + dot(vWorldPos, vec3(0.7, 1.1, 0.5))));
+    col += vec3(1.0, 0.98, 1.0) * twinkle * 0.85;
+    gl_FragColor = vec4(col, 0.95);
   }
 `;
 
@@ -614,8 +615,11 @@ export class EntityBatchRenderer {
     inst.count = 0;
     inst.frustumCulled = false; // instance bounds move every frame; culling is per-batch anyway
     inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    // Allocate instanceColor up front so every batch can tint per instance
-    inst.setColorAt(0, this.tmpColor.setHex(0xffffff));
+    // Initialize all instanceColor slots to white so un-tinted instances never read (0,0,0)
+    this.tmpColor.setHex(0xffffff);
+    for (let i = 0; i < count; i++) {
+      inst.setColorAt(i, this.tmpColor);
+    }
     this.arcadeEntitiesGroup.add(inst);
     return inst;
   }
@@ -1041,11 +1045,18 @@ export class EntityBatchRenderer {
       this.dummy.scale.setScalar(Math.max(0.01, s.size * (1 - u * u)));
       this.dummy.updateMatrix();
       this.tmpMat.copy(this.dummy.matrix);
+      const shardTints = [0xffffff, 0xfdf2f8, 0xe0f2fe, 0xfbcfe8];
       this.shardInst.setMatrixAt(live, this.tmpMat);
+      const flash = 1.0 + 0.35 * (1.0 - u);
+      this.tmpColor.setHex(shardTints[i & 3]).multiplyScalar(flash);
+      this.shardInst.setColorAt(live, this.tmpColor);
       live++;
     }
     this.shardInst.count = live;
-    if (live > 0) this.shardInst.instanceMatrix.needsUpdate = true;
+    if (live > 0) {
+      this.shardInst.instanceMatrix.needsUpdate = true;
+      if (this.shardInst.instanceColor) this.shardInst.instanceColor.needsUpdate = true;
+    }
   }
 
   private stepParticles(dt: number): void {

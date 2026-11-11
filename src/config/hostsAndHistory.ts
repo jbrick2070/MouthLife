@@ -168,7 +168,7 @@ export const HOST_CITIES: readonly HostCityDef[] = [
     hostSkinToneHex: '#3B1F14',
     hostAccentHex: '#fbbf24',
     unlockStampsRequired: 14,
-    playableInSlice: false,
+    playableInSlice: true,
     scenarioSummary:
       'Tart hibiscus-citrus hydration on long humid runs lowers surface pH while dehydration slows salivary bicarbonate buffering.',
     historyNoteId: '1901_colorado_accra_miswak',
@@ -193,7 +193,7 @@ export const HOST_CITIES: readonly HostCityDef[] = [
     hostSkinToneHex: '#C98E63',
     hostAccentHex: '#34d399',
     unlockStampsRequired: 20,
-    playableInSlice: false,
+    playableInSlice: true,
     scenarioSummary:
       'In zero gravity with no bathroom sink to spit into, a cooperative quorum-sensing EPS biofilm dome attempts to colonize a molar arch.',
     historyNoteId: '1973_skylab_orbit',

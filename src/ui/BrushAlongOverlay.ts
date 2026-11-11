@@ -32,6 +32,7 @@ export class BrushAlongOverlay implements OverlayView {
     stampAwarded: boolean;
     slotType: 'full' | 'tip' | 'capped';
   } | null = null;
+  private cueFlashTimer: number | null = null;
 
   constructor(
     private readonly bus: EventBus,
@@ -41,8 +42,31 @@ export class BrushAlongOverlay implements OverlayView {
       onActiveQuadrantChanged: (quadrantIdx: number) => void;
       onPlayCue: (kind: 'surface' | 'quadrant' | 'complete') => void;
       onExitToHub: () => void;
+      isMuted?: () => boolean;
+      onToggleMute?: () => void;
+      onPauseChanged?: (paused: boolean) => void;
     }
   ) {}
+
+  private syncMuteUi(): void {
+    const b = this.container?.querySelector<HTMLButtonElement>('#btn-pacer-mute');
+    if (!b) return;
+    const muted = this.callbacks.isMuted?.() ?? false;
+    b.textContent = muted ? '🔇' : '🔊';
+    b.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  }
+
+  private flashCueVisual(label: string): void {
+    const card = this.container?.querySelector<HTMLElement>('#pacer-card');
+    const cueEl = this.container?.querySelector<HTMLElement>('#pacer-visual-cue');
+    if (cueEl) cueEl.textContent = label;
+    card?.classList.add('pacer-cue-flash');
+    if (this.cueFlashTimer !== null) window.clearTimeout(this.cueFlashTimer);
+    this.cueFlashTimer = window.setTimeout(() => {
+      card?.classList.remove('pacer-cue-flash');
+      this.cueFlashTimer = null;
+    }, 850);
+  }
 
   mount(root: HTMLElement): void {
     this.stage = 'brushing';
@@ -56,21 +80,29 @@ export class BrushAlongOverlay implements OverlayView {
 
     this.clock.startPacer();
     this.callbacks.onActiveQuadrantChanged(0);
+    this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
 
     this.disposers.add(
       this.bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, surfaceIdx, inFlossBonus }) => {
         if (!inFlossBonus && this.stage === 'brushing') {
           if (quadrantIdx !== this.lastQuad) {
-            if (this.lastQuad !== -1) this.callbacks.onPlayCue('quadrant');
+            if (this.lastQuad !== -1) {
+              this.callbacks.onPlayCue('quadrant');
+              this.flashCueVisual(`✨ Switch Quadrant → ${QUADRANT_NAMES[quadrantIdx] ?? ''}`);
+            }
             this.lastQuad = quadrantIdx;
             this.callbacks.onActiveQuadrantChanged(quadrantIdx);
           } else if (surfaceIdx !== this.lastSurf) {
-            if (this.lastSurf !== -1) this.callbacks.onPlayCue('surface');
+            if (this.lastSurf !== -1) {
+              this.callbacks.onPlayCue('surface');
+              this.flashCueVisual(`🪥 Next Surface (${surfaceIdx + 1}/3)`);
+            }
             this.lastSurf = surfaceIdx;
           }
 
           if (elapsedSec >= BRUSH_ALONG_TOTAL_SEC - 1e-4) {
             this.clock.stopPacer();
+            this.callbacks.onPauseChanged?.(false);
             this.callbacks.onPlayCue('complete');
             this.callbacks.onActiveQuadrantChanged(-1);
             this.stage = 'choice';
@@ -81,6 +113,7 @@ export class BrushAlongOverlay implements OverlayView {
         } else if (inFlossBonus && this.stage === 'flossing') {
           if (elapsedSec >= BRUSH_ALONG_FLOSS_BONUS_SEC - 1e-4) {
             this.clock.stopPacer();
+            this.callbacks.onPauseChanged?.(false);
             this.callbacks.onPlayCue('complete');
             this.finalizeHabitReward(true);
             return;
@@ -121,14 +154,34 @@ export class BrushAlongOverlay implements OverlayView {
     if (quadIdx >= 0) {
       const qEl = this.container.querySelector('#pacer-quad');
       const sEl = this.container.querySelector('#pacer-surf');
+      const stepEl = this.container.querySelector('#pacer-visual-cue');
       if (qEl) qEl.textContent = QUADRANT_NAMES[quadIdx] ?? QUADRANT_NAMES[0];
       if (sEl) sEl.textContent = SURFACE_PROMPTS[surfIdx] ?? SURFACE_PROMPTS[0];
+      if (stepEl && !this.container.querySelector('#pacer-card')?.classList.contains('pacer-cue-flash')) {
+        stepEl.textContent = `Quadrant ${quadIdx + 1}/4 • Surface ${surfIdx + 1}/3`;
+      }
     }
+    const totalSec = this.stage === 'flossing' ? BRUSH_ALONG_FLOSS_BONUS_SEC : BRUSH_ALONG_TOTAL_SEC;
+    const pct = Math.max(0, Math.min(100, Math.round(((totalSec - remSec) / totalSec) * 100)));
+    const barEl = this.container.querySelector<HTMLElement>('#pacer-progress-bar');
+    if (barEl) barEl.style.width = `${pct}%`;
 
     const pauseBanner = this.container.querySelector<HTMLElement>('#pacer-paused-note');
     if (pauseBanner) {
       pauseBanner.style.display = this.clock.isPacerPaused() ? 'block' : 'none';
     }
+  }
+
+  private buildMuteBtnHtml(): string {
+    const muted = this.callbacks.isMuted?.() ?? false;
+    return `<button type="button" id="btn-pacer-mute" class="btn btn-sm btn-icon" aria-label="Toggle Sound (M)" aria-pressed="${muted ? 'true' : 'false'}" title="Mute / Unmute (M)">${muted ? '🔇' : '🔊'}</button>`;
+  }
+
+  private bindMuteBtn(): void {
+    this.container?.querySelector('#btn-pacer-mute')?.addEventListener('click', () => {
+      this.callbacks.onToggleMute?.();
+      this.syncMuteUi();
+    });
   }
 
   private render(): void {
@@ -142,7 +195,10 @@ export class BrushAlongOverlay implements OverlayView {
           <strong style="color:#5eead4;font-size:0.88rem;">
             ${isFloss ? '🧵 20s C-CURVE FLOSS BONUS' : '🪥 2-MINUTE SINK BRUSH-ALONG'}
           </strong>
-          <button type="button" id="btn-pacer-exit" class="btn btn-sm">← Exit</button>
+          <div class="row-wrap">
+            ${this.buildMuteBtnHtml()}
+            <button type="button" id="btn-pacer-exit" class="btn btn-sm">← Exit</button>
+          </div>
         </div>
 
         <div class="hub-center-callout">
@@ -151,12 +207,18 @@ export class BrushAlongOverlay implements OverlayView {
           </div>
         </div>
 
-        <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
+        <div id="pacer-card" class="cosmic-card glass-card ui-interactive" style="text-align:center;">
+          <div id="pacer-visual-cue" role="status" aria-live="polite" class="pill-badge" style="margin-bottom:6px;">
+            ${isFloss ? '20s Interdental Bonus' : 'Quadrant 1/4 • Surface 1/3'}
+          </div>
           <div id="pacer-quad" style="font-size:0.78rem;font-weight:700;color:#38bdf8;">
             ${isFloss ? 'Interproximal Contacts • Hug Each Tooth in a C-Shape' : QUADRANT_NAMES[0]}
           </div>
-          <div id="pacer-clock" style="font-size:2.7rem;font-weight:800;letter-spacing:0.04em;margin:4px 0;color:#fff;">
+          <div id="pacer-clock" style="font-size:2.7rem;font-weight:800;letter-spacing:0.04em;margin:4px 0;color:#fff;font-variant-numeric:tabular-nums;">
             ${this.formatClock(initialSec - this.clock.getPacerElapsedSec())}
+          </div>
+          <div class="clean-progress-outer" style="margin:6px 0 8px 0;" aria-hidden="true">
+            <div id="pacer-progress-bar" class="clean-progress-inner" style="width:0%;"></div>
           </div>
           <div id="pacer-surf" style="font-size:0.84rem;color:#ccfbf1;margin-bottom:10px;">
             ${isFloss ? 'Slide gently beneath the papilla without snapping!' : SURFACE_PROMPTS[0]}
@@ -165,21 +227,25 @@ export class BrushAlongOverlay implements OverlayView {
             ⏸️ Pacer paused — tap Resume when ready!
           </div>
           <div class="row-between" style="justify-content:center;gap:10px;">
-            <button type="button" id="btn-pacer-pause" class="btn btn-primary">
+            <button type="button" id="btn-pacer-pause" class="btn btn-primary" aria-pressed="${this.clock.isPacerPaused() ? 'true' : 'false'}">
               ${this.clock.isPacerPaused() ? '▶ Resume Pacer' : '⏸ Pause'}
             </button>
           </div>
         </div>
       `;
 
+      this.bindMuteBtn();
       this.container.querySelector('#btn-pacer-exit')?.addEventListener('click', () => {
         this.clock.stopPacer();
+        this.callbacks.onPauseChanged?.(false);
         this.callbacks.onActiveQuadrantChanged(-1);
         this.callbacks.onExitToHub();
       });
 
       this.container.querySelector('#btn-pacer-pause')?.addEventListener('click', () => {
-        this.clock.setPacerPaused(!this.clock.isPacerPaused());
+        const nextPaused = !this.clock.isPacerPaused();
+        this.clock.setPacerPaused(nextPaused);
+        this.callbacks.onPauseChanged?.(nextPaused);
         this.render();
       });
       return;
@@ -189,6 +255,7 @@ export class BrushAlongOverlay implements OverlayView {
       this.container.innerHTML = `
         <div class="hub-top-bar glass-card ui-interactive row-between">
           <strong style="color:#5eead4;">✨ 2-MINUTE BRUSH COMPLETE!</strong>
+          ${this.buildMuteBtnHtml()}
         </div>
         <div></div>
         <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
@@ -207,6 +274,7 @@ export class BrushAlongOverlay implements OverlayView {
         </div>
       `;
 
+      this.bindMuteBtn();
       this.container
         .querySelector('#btn-claim-brush-only')
         ?.addEventListener('click', () => this.finalizeHabitReward(false));
@@ -223,6 +291,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive row-between">
         <strong style="color:#5eead4;">🦷 100% MIRROR-SMOOTH BASK RESTORED!</strong>
+        ${this.buildMuteBtnHtml()}
       </div>
       <div></div>
       <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
@@ -242,13 +311,17 @@ export class BrushAlongOverlay implements OverlayView {
       </div>
     `;
 
+    this.bindMuteBtn();
     this.container.querySelector('#btn-done-pacer')?.addEventListener('click', () => {
       this.callbacks.onExitToHub();
     });
   }
 
   dispose(): void {
+    if (this.cueFlashTimer !== null) window.clearTimeout(this.cueFlashTimer);
+    this.cueFlashTimer = null;
     this.clock.stopPacer();
+    this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
     this.disposers.disposeAll();
     this.container?.remove();

@@ -13,8 +13,12 @@ import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { HubCameraFocus } from '../engine/render/SceneManager';
 import type { OverlayView } from '../engine/types';
 import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
+import { loadSeenHints, saveSeenHints, shouldShowHubWelcome } from './hudHelpers';
 
 type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync';
+
+const FOCUSABLE_SEL =
+  'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function escapeHtml(raw: string): string {
   return raw
@@ -32,6 +36,35 @@ export class CompanionHubOverlay implements OverlayView {
   private selectedCityId = 'toronto';
   private activeModal: ActiveModal = 'none';
   private statusBanner = '';
+  private seenHints = loadSeenHints();
+  private modalOpenerSelector: string | null = null;
+
+  private keyHandler = (e: KeyboardEvent): void => {
+    if (this.activeModal === 'none') return;
+    if (e.key === 'Escape' && !e.repeat) {
+      e.preventDefault();
+      this.closeActiveModal();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const sheet = this.container?.querySelector<HTMLElement>('.modal-sheet');
+      if (!sheet) return;
+      const items = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE_SEL));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (!active || !sheet.contains(active) || active === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (!active || !sheet.contains(active) || active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
 
   constructor(
     private readonly bus: EventBus,
@@ -49,6 +82,12 @@ export class CompanionHubOverlay implements OverlayView {
       onPlayUiTap: () => void;
       isMuted: () => boolean;
       onToggleMute: () => void;
+      getMusicVolume?: () => number;
+      setMusicVolume?: (v: number) => void;
+      getSfxVolume?: () => number;
+      setSfxVolume?: (v: number) => void;
+      isReducedMotion?: () => boolean;
+      onToggleReducedMotion?: () => void;
     }
   ) {}
 
@@ -68,9 +107,58 @@ export class CompanionHubOverlay implements OverlayView {
         }
       })
     );
+    this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
+    this.disposers.add(this.bus.on('motion:changed', () => this.syncReducedMotionUi()));
+    window.addEventListener('keydown', this.keyHandler);
 
     this.actions.onTabChanged(this.tab, this.selectedCityId);
     this.render();
+  }
+
+  private dismissWelcome(): void {
+    if (this.seenHints.has('hub_welcome')) return;
+    this.seenHints.add('hub_welcome');
+    saveSeenHints(this.seenHints);
+  }
+
+  private syncMuteUi(): void {
+    if (!this.container) return;
+    const muted = this.actions.isMuted();
+    const topBtn = this.container.querySelector<HTMLButtonElement>('#btn-toggle-mute');
+    if (topBtn) {
+      topBtn.textContent = muted ? '🔇' : '🔊';
+      topBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    }
+    const modalBtn = this.container.querySelector<HTMLButtonElement>('#btn-modal-mute');
+    if (modalBtn) {
+      modalBtn.textContent = muted ? '🔇 Muted' : '🔊 On';
+      modalBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+      modalBtn.classList.toggle('btn-primary', !muted);
+    }
+  }
+
+  private syncReducedMotionUi(): void {
+    const btn = this.container?.querySelector<HTMLButtonElement>('#btn-toggle-reduce-motion');
+    if (!btn) return;
+    const on = Boolean(this.actions.isReducedMotion?.());
+    btn.textContent = on ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('btn-primary', on);
+  }
+
+  private openModal(modal: Exclude<ActiveModal, 'none'>, openerSel: string): void {
+    this.modalOpenerSelector = openerSel;
+    this.activeModal = modal;
+    this.render();
+    this.container?.querySelector<HTMLElement>('#btn-close-modal')?.focus();
+  }
+
+  private closeActiveModal(): void {
+    const opener = this.modalOpenerSelector;
+    this.modalOpenerSelector = null;
+    this.activeModal = 'none';
+    this.render();
+    if (opener) this.container?.querySelector<HTMLElement>(opener)?.focus();
   }
 
   /** Called when the player taps a city pin directly on the 3D Earth globe. */
@@ -116,6 +204,19 @@ export class CompanionHubOverlay implements OverlayView {
       this.tab === 'globe'
         ? `<div class="splat-hint-pill">🌍 Tap a glowing city pin on the 3D globe to pick your next dive</div>`
         : '';
+    const welcomeTipHtml =
+      this.tab === 'companion' &&
+      shouldShowHubWelcome(this.seenHints, save.totalBrushStamps, Boolean(save.worlds.world_1?.completed))
+        ? `
+          <div id="hub-welcome-tip" class="welcome-tip-card ui-interactive" role="region" aria-label="First-Run Guide">
+            <div style="font-size:0.76rem;color:#e0f2fe;line-height:1.38;text-align:left;">
+              <strong style="color:#5eead4;">👋 First Time Here?</strong> Rub the 3D teeth to hear them chime, run a <strong>2-Min Sink Brush-Along</strong> for real-life brushing, or tap <strong>Dive: Plaque City</strong> to scrub enamel with HYDRA-1!
+            </div>
+            <button type="button" id="btn-dismiss-welcome" class="btn btn-sm btn-primary">Got it ✓</button>
+          </div>
+        `
+        : '';
+    const muted = this.actions.isMuted();
 
     const bottomDeckHtml =
       this.tab === 'companion'
@@ -125,26 +226,45 @@ export class CompanionHubOverlay implements OverlayView {
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive">
         <div class="row-between">
-          <button type="button" id="btn-open-profile" class="btn btn-sm" title="Customize Host & Skin Tone">
-            <span style="width:14px;height:14px;border-radius:50%;background:${skin.hex};border:1px solid #fff;display:inline-block;"></span>
-            <span>${escapeHtml(save.playerProfile.displayName)} • ${escapeHtml(homeCity.city)}</span>
+          <button type="button" id="btn-open-profile" class="btn btn-sm hub-profile-btn" title="Customize Host & Skin Tone">
+            <span style="width:14px;height:14px;border-radius:50%;background:${skin.hex};border:1px solid #fff;display:inline-block;flex-shrink:0;"></span>
+            <span class="hub-profile-label">${escapeHtml(save.playerProfile.displayName)} • ${escapeHtml(homeCity.city)}</span>
           </button>
 
-          <div class="row-wrap">
+          <div class="row-wrap hub-currency-row">
             <span class="pill-badge" title="Fluoride Ions (Currency)">✦ <strong id="val-ions">${save.fluorideIons}</strong> Ions</span>
             <span class="pill-badge" title="Monotonic Habit Stamps (Never lost on missed days!)">🦷 <strong id="val-stamps">${save.totalBrushStamps}</strong> Stamps</span>
-            <button type="button" id="btn-toggle-mute" class="btn btn-sm" aria-label="Toggle Sound">
-              ${this.actions.isMuted() ? '🔇' : '🔊'}
+            <button
+              type="button"
+              id="btn-toggle-mute"
+              class="btn btn-sm btn-icon"
+              aria-label="Toggle Sound (M)"
+              aria-pressed="${muted ? 'true' : 'false'}"
+              title="Mute / Unmute (M)"
+            >
+              ${muted ? '🔇' : '🔊'}
             </button>
           </div>
         </div>
 
         <div class="row-between" style="margin-top:7px;">
-          <div class="seg-tabs">
-            <button type="button" id="tab-companion" class="seg-tab ${this.tab === 'companion' ? 'active' : ''}">
+          <div class="seg-tabs" role="tablist" aria-label="Hub View">
+            <button
+              type="button"
+              id="tab-companion"
+              role="tab"
+              aria-selected="${this.tab === 'companion' ? 'true' : 'false'}"
+              class="seg-tab ${this.tab === 'companion' ? 'active' : ''}"
+            >
               🦷 Smooth Bask
             </button>
-            <button type="button" id="tab-globe" class="seg-tab ${this.tab === 'globe' ? 'active' : ''}">
+            <button
+              type="button"
+              id="tab-globe"
+              role="tab"
+              aria-selected="${this.tab === 'globe' ? 'true' : 'false'}"
+              class="seg-tab ${this.tab === 'globe' ? 'active' : ''}"
+            >
               🌍 Earth Campaign
             </button>
           </div>
@@ -160,9 +280,10 @@ export class CompanionHubOverlay implements OverlayView {
           ${floatingStatusText}
         </div>
         ${splatHint}${globeHint}
+        ${welcomeTipHtml}
         ${
           this.statusBanner
-            ? `<div style="margin-top:6px;font-size:0.76rem;color:#fde68a;background:rgba(6,24,38,0.85);padding:4px 12px;border-radius:99px;display:inline-block;">${escapeHtml(this.statusBanner)}</div>`
+            ? `<div role="status" aria-live="polite" style="margin-top:6px;font-size:0.76rem;color:#fde68a;background:rgba(6,24,38,0.85);padding:4px 12px;border-radius:99px;display:inline-block;">${escapeHtml(this.statusBanner)}</div>`
             : ''
         }
       </div>
@@ -266,7 +387,18 @@ export class CompanionHubOverlay implements OverlayView {
     const hist = getHistoryNoteById(city.historyNoteId);
     const stampUnlocked = save.totalBrushStamps >= city.unlockStampsRequired;
 
+    const campaignIds = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'];
+    const cleared = campaignIds.filter((id) => save.worlds[id]?.completed).length;
+    const gradeBadge = (worldId: string): string => {
+      const g = save.worlds[worldId]?.bestGrade;
+      if (!g || g === 'NONE') return '';
+      return ` <span class="grade-chip grade-${g}">${g === 'FLUORAPATITE_GOLD' ? '★ GOLD' : g}</span>`;
+    };
+
     return `
+      <div class="campaign-progress" id="campaign-progress">
+        ${cleared}/5 Worlds Cleared • ${save.unlockedHistoryNotes.length}/${HISTORICAL_FIELD_NOTES.length} Field Notes • ${save.unlockedUpgrades.length}/${UPGRADE_CATALOG.length} Lab Upgrades${cleared >= campaignIds.length ? ' • 🛰️ Campaign Mastered!' : ''}
+      </div>
       <div class="city-strip">
         ${HOST_CITIES.map(
           (c) => `
@@ -274,8 +406,9 @@ export class CompanionHubOverlay implements OverlayView {
             type="button"
             class="city-pill ${c.id === city.id ? 'active' : ''}"
             data-city-id="${c.id}"
+            aria-pressed="${c.id === city.id ? 'true' : 'false'}"
           >
-            ${c.isOrbital ? '🛰️' : '📍'} ${escapeHtml(c.city)}
+            ${c.isOrbital ? '🛰️' : '📍'} ${escapeHtml(c.city)}${gradeBadge(c.worldId)}
           </button>
         `
         ).join('')}
@@ -329,14 +462,16 @@ export class CompanionHubOverlay implements OverlayView {
     const save = this.saveSys.getSave();
 
     if (this.activeModal === 'profile') {
+      const reduced = Boolean(this.actions.isReducedMotion?.());
+      const muted = this.actions.isMuted();
       return `
         <div class="modal-backdrop" id="modal-bg">
-          <div class="modal-sheet" onclick="event.stopPropagation()">
+          <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
             <div class="row-between" style="margin-bottom:10px;">
-              <h3 style="margin:0;font-size:1rem;">🧑🏽‍🚀 Host Identity & Inclusive Skin Tone</h3>
-              <button type="button" id="btn-close-modal" class="btn btn-sm">✕ Close</button>
+              <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🧑🏽‍🚀 Host Identity & Inclusive Skin Tone</h3>
+              <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
-            <label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Display Name</label>
+            <label for="inp-host-name" style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Display Name</label>
             <input
               id="inp-host-name"
               type="text"
@@ -353,6 +488,8 @@ export class CompanionHubOverlay implements OverlayView {
                   class="skin-swatch ${idx === save.playerProfile.skinToneIndex ? 'selected' : ''}"
                   style="background:${t.hex};"
                   title="${escapeHtml(t.label)}"
+                  aria-label="${escapeHtml(t.label)}"
+                  aria-pressed="${idx === save.playerProfile.skinToneIndex ? 'true' : 'false'}"
                   data-skin-idx="${idx}"
                 ></button>
               `
@@ -365,12 +502,45 @@ export class CompanionHubOverlay implements OverlayView {
                 <button
                   type="button"
                   class="btn btn-sm ${c.id === save.playerProfile.homeCityId ? 'btn-primary' : ''}"
+                  aria-pressed="${c.id === save.playerProfile.homeCityId ? 'true' : 'false'}"
                   data-home-city="${c.id}"
                 >
                   ${c.signatureTreat.emoji} ${escapeHtml(c.city)}
                 </button>
               `
               ).join('')}
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Accessibility & Comfort</div>
+            <div class="row-between" style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
+              <span style="font-size:0.78rem;color:#e0f2fe;">Reduce Camera Shake & FOV Punch</span>
+              <button
+                type="button"
+                id="btn-toggle-reduce-motion"
+                aria-pressed="${reduced ? 'true' : 'false'}"
+                class="btn btn-sm ${reduced ? 'btn-primary' : ''}"
+              >
+                ${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}
+              </button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Audio</div>
+            <div style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
+              <div class="row-between" style="margin-bottom:6px;">
+                <span style="font-size:0.78rem;color:#e0f2fe;">Sound</span>
+                <button
+                  type="button"
+                  id="btn-modal-mute"
+                  aria-pressed="${muted ? 'true' : 'false'}"
+                  class="btn btn-sm ${muted ? '' : 'btn-primary'}"
+                >
+                  ${muted ? '🔇 Muted' : '🔊 On'}
+                </button>
+              </div>
+              <label class="audio-slider-row"><span>Music</span>
+                <input type="range" id="rng-music" aria-label="Music Volume" min="0" max="100" value="${Math.round((this.actions.getMusicVolume?.() ?? 0.7) * 100)}" />
+              </label>
+              <label class="audio-slider-row"><span>SFX</span>
+                <input type="range" id="rng-sfx" aria-label="SFX Volume" min="0" max="100" value="${Math.round((this.actions.getSfxVolume?.() ?? 0.85) * 100)}" />
+              </label>
             </div>
             <div style="margin-top:14px;text-align:right;">
               <button type="button" id="btn-save-profile" class="btn btn-primary">Save Host Profile</button>
@@ -383,10 +553,10 @@ export class CompanionHubOverlay implements OverlayView {
     if (this.activeModal === 'lab') {
       return `
         <div class="modal-backdrop" id="modal-bg">
-          <div class="modal-sheet" onclick="event.stopPropagation()">
+          <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
             <div class="row-between" style="margin-bottom:10px;">
-              <h3 style="margin:0;font-size:1rem;">🔬 Biophysical Actuator Lab (${save.fluorideIons} Ions)</h3>
-              <button type="button" id="btn-close-modal" class="btn btn-sm">✕ Close</button>
+              <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🔬 Biophysical Actuator Lab (${save.fluorideIons} Ions)</h3>
+              <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px;">
               ${UPGRADE_CATALOG.map((u) => {
@@ -402,7 +572,7 @@ export class CompanionHubOverlay implements OverlayView {
                       </div>
                       ${
                         unlocked
-                          ? `<button type="button" class="btn btn-sm ${equipped ? 'btn-primary' : ''}" data-equip-id="${u.id}">
+                          ? `<button type="button" class="btn btn-sm ${equipped ? 'btn-primary' : ''}" aria-pressed="${equipped ? 'true' : 'false'}" data-equip-id="${u.id}">
                               ${equipped ? '✓ Equipped' : 'Equip'}
                             </button>`
                           : `<button type="button" class="btn btn-sm ${canAfford ? 'btn-gold' : ''}" data-buy-id="${u.id}" ${!canAfford ? 'disabled style="opacity:0.45;"' : ''}>
@@ -427,10 +597,10 @@ export class CompanionHubOverlay implements OverlayView {
     if (this.activeModal === 'history') {
       return `
         <div class="modal-backdrop" id="modal-bg">
-          <div class="modal-sheet" onclick="event.stopPropagation()">
+          <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
             <div class="row-between" style="margin-bottom:10px;">
-              <h3 style="margin:0;font-size:1rem;">📜 Global Dental History & Enamel Almanac</h3>
-              <button type="button" id="btn-close-modal" class="btn btn-sm">✕ Close</button>
+              <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">📜 Global Dental History & Enamel Almanac</h3>
+              <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px;">
               ${HISTORICAL_FIELD_NOTES.map((n) => {
@@ -457,16 +627,17 @@ export class CompanionHubOverlay implements OverlayView {
     const syncCode = this.saveSys.exportSyncCode();
     return `
       <div class="modal-backdrop" id="modal-bg">
-        <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
           <div class="row-between" style="margin-bottom:10px;">
-            <h3 style="margin:0;font-size:1rem;">☁️ Cross-Device Sync Code (Zero Sign-Up)</h3>
-            <button type="button" id="btn-close-modal" class="btn btn-sm">✕ Close</button>
+            <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">☁️ Cross-Device Sync Code (Zero Sign-Up)</h3>
+            <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
           </div>
           <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0;">
             Copy your portable <code>ML2:</code> Sync Code or download a <code>.mouthlife.json</code> snapshot to carry Habit Stamps & Upgrades between phone and desktop.
           </p>
           <textarea
             id="txt-sync-export"
+            aria-label="Exported ML2 Sync Code"
             readonly
             rows="3"
             style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#99f6e4;font-size:0.74rem;padding:8px;"
@@ -475,7 +646,7 @@ export class CompanionHubOverlay implements OverlayView {
             <button type="button" id="btn-copy-sync" class="btn btn-primary btn-sm">📋 Copy ML2 Code</button>
             <button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>
           </div>
-          <label style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Import ML2 Sync Code</label>
+          <label for="txt-sync-import" style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Import ML2 Sync Code</label>
           <textarea
             id="txt-sync-import"
             placeholder="Paste ML2:... code here"
@@ -494,6 +665,12 @@ export class CompanionHubOverlay implements OverlayView {
     if (!this.container) return;
     const save = this.saveSys.getSave();
 
+    this.container.querySelector('#btn-dismiss-welcome')?.addEventListener('click', () => {
+      this.dismissWelcome();
+      this.actions.onPlayUiTap();
+      this.render();
+    });
+
     this.container.querySelector('#tab-companion')?.addEventListener('click', () => {
       this.tab = 'companion';
       this.actions.onPlayUiTap();
@@ -502,6 +679,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#tab-globe')?.addEventListener('click', () => {
+      this.dismissWelcome();
       this.tab = 'globe';
       this.actions.onPlayUiTap();
       this.actions.onTabChanged('globe', this.selectedCityId);
@@ -510,7 +688,7 @@ export class CompanionHubOverlay implements OverlayView {
 
     this.container.querySelector('#btn-toggle-mute')?.addEventListener('click', () => {
       this.actions.onToggleMute();
-      this.render();
+      this.syncMuteUi();
     });
 
     this.container.querySelector('#btn-claim-reservoir')?.addEventListener('click', () => {
@@ -525,15 +703,18 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#btn-start-brush-along')?.addEventListener('click', () => {
+      this.dismissWelcome();
       this.actions.onLaunchBrushAlong();
     });
 
     this.container.querySelector<HTMLButtonElement>('#btn-launch-arcade')?.addEventListener('click', (e) => {
+      this.dismissWelcome();
       const wid = (e.currentTarget as HTMLButtonElement).dataset.worldId ?? 'world_1';
       this.actions.onLaunchArcadeWorld(wid);
     });
 
     this.container.querySelector('#btn-globe-dive')?.addEventListener('click', () => {
+      this.dismissWelcome();
       const city = getHostCityById(this.selectedCityId);
       if (city.playableInSlice && isPlayableWorld(city.worldId)) {
         this.actions.onLaunchArcadeWorld(city.worldId);
@@ -580,30 +761,23 @@ export class CompanionHubOverlay implements OverlayView {
     // Modal openers & closers
     this.container.querySelector('#btn-open-profile')?.addEventListener('click', () => {
       this.actions.onPlayUiTap();
-      this.activeModal = 'profile';
-      this.render();
+      this.openModal('profile', '#btn-open-profile');
     });
     this.container.querySelector('#btn-open-lab')?.addEventListener('click', () => {
       this.actions.onPlayUiTap();
-      this.activeModal = 'lab';
-      this.render();
+      this.openModal('lab', '#btn-open-lab');
     });
     this.container.querySelector('#btn-open-history')?.addEventListener('click', () => {
       this.actions.onPlayUiTap();
-      this.activeModal = 'history';
-      this.render();
+      this.openModal('history', '#btn-open-history');
     });
     this.container.querySelector('#btn-open-sync')?.addEventListener('click', () => {
-      this.activeModal = 'sync';
-      this.render();
+      this.actions.onPlayUiTap();
+      this.openModal('sync', '#btn-open-sync');
     });
 
-    const closeModal = () => {
-      this.activeModal = 'none';
-      this.render();
-    };
-    this.container.querySelector('#btn-close-modal')?.addEventListener('click', closeModal);
-    this.container.querySelector('#modal-bg')?.addEventListener('click', closeModal);
+    this.container.querySelector('#btn-close-modal')?.addEventListener('click', () => this.closeActiveModal());
+    this.container.querySelector('#modal-bg')?.addEventListener('click', () => this.closeActiveModal());
 
     // Profile modal handlers
     this.container.querySelectorAll<HTMLButtonElement>('[data-skin-idx]').forEach((sw) => {
@@ -623,13 +797,30 @@ export class CompanionHubOverlay implements OverlayView {
       });
     });
 
+    this.container.querySelector('#btn-toggle-reduce-motion')?.addEventListener('click', () => {
+      const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
+      if (inp) save.playerProfile.displayName = inp.value.trim().slice(0, 24) || save.playerProfile.displayName;
+      this.actions.onToggleReducedMotion?.();
+      this.actions.onPlayUiTap();
+      this.render();
+    });
+
+    this.container.querySelector('#btn-modal-mute')?.addEventListener('click', () => {
+      this.actions.onToggleMute();
+      this.syncMuteUi();
+    });
+    this.container.querySelector<HTMLInputElement>('#rng-music')?.addEventListener('input', (e) => {
+      this.actions.setMusicVolume?.(Number((e.target as HTMLInputElement).value) / 100);
+    });
+    this.container.querySelector<HTMLInputElement>('#rng-sfx')?.addEventListener('input', (e) => {
+      this.actions.setSfxVolume?.(Number((e.target as HTMLInputElement).value) / 100);
+    });
     this.container.querySelector('#btn-save-profile')?.addEventListener('click', () => {
       const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
       const cleaned = inp?.value.trim().slice(0, 24) || 'Explorer';
       save.playerProfile.displayName = cleaned;
       this.saveSys.save(save);
-      this.activeModal = 'none';
-      this.render();
+      this.closeActiveModal();
     });
 
     // Upgrade Lab handlers
@@ -657,8 +848,7 @@ export class CompanionHubOverlay implements OverlayView {
       const code = this.saveSys.exportSyncCode();
       navigator.clipboard?.writeText(code).catch(() => {});
       this.statusBanner = 'Copied ML2: Sync Code to clipboard!';
-      this.activeModal = 'none';
-      this.render();
+      this.closeActiveModal();
     });
 
     this.container.querySelector('#btn-download-json')?.addEventListener('click', () => {
@@ -679,18 +869,17 @@ export class CompanionHubOverlay implements OverlayView {
       try {
         this.saveSys.importSyncCode(raw);
         this.statusBanner = 'Sync Code imported & merged cleanly!';
-        this.activeModal = 'none';
-        this.render();
+        this.closeActiveModal();
       } catch (err) {
         this.statusBanner =
           err instanceof Error ? err.message : 'Invalid Sync Code.';
-        this.activeModal = 'none';
-        this.render();
+        this.closeActiveModal();
       }
     });
   }
 
   dispose(): void {
+    window.removeEventListener('keydown', this.keyHandler);
     this.disposers.disposeAll();
     this.container?.remove();
     this.container = null;

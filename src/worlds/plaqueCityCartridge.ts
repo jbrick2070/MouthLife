@@ -13,6 +13,8 @@ export const plaqueCityCartridge: WorldCartridge = {
   basePellicleDensity: 0.48,
   baselinePh: 7.0,
   probeSpawn: { x: 7.5, z: 16.0 },
+  challengeBlurb:
+    'Sweep morning pellicle off all 3 districts, Floss-zip narrow premolar alleys, and unleash Fluoride Surge to seal molar fissures!',
   districts: [
     {
       id: 'incisor_terrace',

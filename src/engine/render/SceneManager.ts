@@ -69,8 +69,7 @@ export class SceneManager {
   private fovPunch = 0;
   private baseFov = CAMERA_BASE_FOV_DEG;
   private fovDirty = false;
-  private readonly motionScale =
-    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0.3 : 1.0;
+  private reducedMotion = SceneManager.readInitialReducedMotion();
 
   // Bubbling foam trail samples behind recently scrubbed boundaries
   private foamSamples: FoamSample[] = [];
@@ -122,7 +121,51 @@ export class SceneManager {
       CAMERA_FAR
     );
     this.initRenderer();
+    this.syncReducedMotionClass();
     this.bindJuiceEvents();
+  }
+
+  private syncReducedMotionClass(): void {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('reduced-motion', this.reducedMotion);
+    }
+  }
+
+  private static readInitialReducedMotion(): boolean {
+    try {
+      const saved =
+        typeof localStorage !== 'undefined' ? localStorage.getItem('mouthlife.reduceMotion') : null;
+      if (saved === '1') return true;
+      if (saved === '0') return false;
+    } catch {
+      // ignore storage errors
+    }
+    return Boolean(
+      typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  isReducedMotion(): boolean {
+    return this.reducedMotion;
+  }
+
+  setReducedMotion(reduced: boolean): void {
+    this.reducedMotion = reduced;
+    this.syncReducedMotionClass();
+    if (reduced) {
+      this.trauma = 0;
+      this.fovPunch = 0;
+      this.fovDirty = true;
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('mouthlife.reduceMotion', reduced ? '1' : '0');
+      }
+    } catch {
+      // ignore storage errors
+    }
+    this.bus.emit('motion:changed', { reduced });
   }
 
   /** Impulse camera micro-shake + FOV punch on the big arcade moments. */
@@ -132,14 +175,16 @@ export class SceneManager {
       else if (targetsHit > 0) this.addTrauma(0.16, 1.2);
     });
     this.bus.on('sucrose:shattered', () => this.addTrauma(0.34, 2.6));
+    this.bus.on('eps:cracked', () => this.addTrauma(0.28, 2.2));
     this.bus.on('district:sealed', () => this.addTrauma(0.62, 7.5));
     this.bus.on('rinse:surged', () => this.addTrauma(0.5, 6.0));
     this.bus.on('stephan:sip', () => this.addTrauma(0.2, -1.5));
   }
 
   addTrauma(amount: number, fovPunchDeg = 0): void {
-    this.trauma = Math.min(1, this.trauma + amount * this.motionScale);
-    this.fovPunch += fovPunchDeg * this.motionScale;
+    if (this.reducedMotion) return;
+    this.trauma = Math.min(1, this.trauma + amount);
+    this.fovPunch += fovPunchDeg;
     this.fovPunch = Math.max(-6, Math.min(12, this.fovPunch));
   }
 

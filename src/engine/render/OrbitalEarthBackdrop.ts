@@ -94,11 +94,24 @@ const MOHS_FRAG = /* glsl */ `
   }
 `;
 
+function paintSolidColor(geo: THREE.BufferGeometry, hex: number): void {
+  const n = geo.attributes.position.count;
+  const col = new THREE.Color(hex);
+  const cols = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    cols[i * 3] = col.r;
+    cols[i * 3 + 1] = col.g;
+    cols[i * 3 + 2] = col.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+}
+
 function tagSpecimen(
   geo: THREE.BufferGeometry,
   hex: number,
   center: THREE.Vector3,
-  smooth: 'flat' | 'indexed' | 'radial'
+  smooth: 'flat' | 'indexed' | 'radial' | 'keep',
+  preserveColor = false
 ): THREE.BufferGeometry {
   if (smooth === 'indexed' && geo.index) geo.computeVertexNormals();
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -118,15 +131,9 @@ function tagSpecimen(
     g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
   }
   g.translate(center.x, center.y, center.z);
-  const n = g.attributes.position.count;
-  const col = new THREE.Color(hex);
-  const cols = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    cols[i * 3] = col.r;
-    cols[i * 3 + 1] = col.g;
-    cols[i * 3 + 2] = col.b;
+  if (!preserveColor || !g.getAttribute('color')) {
+    paintSolidColor(g, hex);
   }
-  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   return g;
 }
 
@@ -164,10 +171,39 @@ function buildMohsSpecimenGeometry(centers: THREE.Vector3[]): THREE.BufferGeomet
   shank.dispose();
   parts.push(tagSpecimen(iron, 0xd6dde6, centers[1], 'flat'));
 
-  // 2 · Tooth Enamel 5.0 — miniature 4-cusp molar crown
-  const crown = sculptCrownGeometry({ kind: 'molar', halfW: 0.58, halfD: 0.6, halfH: 0.62, encodedQuad: 0 });
-  crown.deleteAttribute('color');
-  parts.push(tagSpecimen(crown, 0xf0f9ff, centers[2], 'indexed'));
+  // 2 · Tooth Enamel 5.0 — 4-cusp pearly molar crown + bifurcated warm-cementum anatomical root
+  const crown = sculptCrownGeometry({ kind: 'molar', halfW: 0.54, halfD: 0.56, halfH: 0.44, encodedQuad: 0 });
+  crown.translate(0, 0.25, 0);
+  crown.computeVertexNormals();
+  paintSolidColor(crown, 0xf0f9ff);
+
+  const rootTrunk = new THREE.CylinderGeometry(0.39, 0.31, 0.22, 14, 1);
+  rootTrunk.scale(1.0, 1.0, 0.88);
+  rootTrunk.translate(0, -0.14, 0);
+  rootTrunk.computeVertexNormals();
+  paintSolidColor(rootTrunk, 0xedd5af);
+
+  const buildMolarRootProng = (side: -1 | 1): THREE.BufferGeometry => {
+    const prong = new THREE.CylinderGeometry(0.145, 0.058, 0.46, 12, 4);
+    const pp = prong.attributes.position;
+    for (let i = 0; i < pp.count; i++) {
+      const y = pp.getY(i); // -0.23..+0.23
+      const t = (0.23 - y) / 0.46; // 0 at furcation -> 1 at apex
+      // Gentle anatomical root arch: splays outward from furcation then curves slightly at apex
+      pp.setX(i, pp.getX(i) + side * (0.12 * Math.sin(t * Math.PI * 0.75)));
+      pp.setZ(i, pp.getZ(i) * 0.84);
+    }
+    prong.translate(side * 0.21, -0.38, 0);
+    prong.computeVertexNormals();
+    paintSolidColor(prong, 0xe7ca9e);
+    return prong;
+  };
+
+  const mesialRoot = buildMolarRootProng(-1);
+  const distalRoot = buildMolarRootProng(1);
+  const molarTooth = mergeBufferGeometriesSimple([crown, rootTrunk, mesialRoot, distalRoot]);
+  [crown, rootTrunk, mesialRoot, distalRoot].forEach((g) => g.dispose());
+  parts.push(tagSpecimen(molarTooth, 0xf0f9ff, centers[2], 'keep', true));
 
   // 3 · Quartz 7.0 — hexagonal prism with pyramidal termination (+ a smaller twin point)
   const prism = new THREE.CylinderGeometry(0.3, 0.3, 0.9, 6, 1);

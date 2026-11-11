@@ -27,6 +27,18 @@ export const SULCUS_HYDROSONIC_IRRITATION_MULT = 0.5; // "Reduces sulcus pressur
 export const GUM_TENDER_THRESHOLD = 0.72;
 export const SALIVA_SPRING_GUM_SOOTHE = 0.6;
 
+// Ancient Miswak & 1901–1945 Fluorapatite Conversion (World 4)
+export const HIBISCUS_EROSION_PH = 4.95; // < 5.5 Hydroxyapatite, > 4.5 Fluorapatite!
+export const HIBISCUS_DEFAULT_PULSE_SEC = 14.0;
+export const MISWAK_INFUSION_DURATION_SEC = 9.0;
+export const MISWAK_SPRING_CONVERT_RADIUS = 4.6;
+
+// 1973 Skylab & 1978 Costerton Quorum-Sensing EPS Biofilm Domes (World 5)
+export const EPS_FLOSS_CRACK_HALF_WIDTH = 2.25; // Floss quorum-fracture shockwave through EPS matrix
+export const EPS_CRACKED_SLURRY_CAP = 0.52;
+export const EPS_RINSE_BIOFILM_CHIP = 0.28;
+export const SURGE_PER_EPS_CELL_CRACKED = 0.08;
+
 // Sonic Bristle Actuator
 export const BRUSH_BASE_RADIUS = 1.75;
 export const BRUSH_OVERDRIVE_RADIUS_MULT = 1.25;

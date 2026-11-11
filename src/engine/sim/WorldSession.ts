@@ -16,8 +16,11 @@ import {
   FLOSS_LENGTH,
   FLOSS_PTFE_HALF_WIDTH,
   FLOSS_ZIP_ENTRY_DIST,
+  HIBISCUS_DEFAULT_PULSE_SEC,
   MAX_MUTANS_GLOBAL,
   MAX_MUTANS_PER_CRYSTAL,
+  MISWAK_INFUSION_DURATION_SEC,
+  MISWAK_SPRING_CONVERT_RADIUS,
   MUTANS_DEPOSIT_RATE,
   MUTANS_MOVE_SPEED,
   MUTANS_STUN_SEC,
@@ -46,6 +49,7 @@ import {
   SURGE_MAX,
   SURGE_PER_BEACON,
   SURGE_PER_CLEANED_CELL,
+  SURGE_PER_EPS_CELL_CRACKED,
   SURGE_PER_FLOSS_TARGET,
   SURGE_PER_SITE_RESTORED,
 } from '../../config/gameConfig';
@@ -139,6 +143,12 @@ export class WorldSession {
   private stephanSipCount = 0;
   // World 2 — gum tender warning throttle
   private gumWarnCooldown = 0;
+  // World 4 — Hibiscus erosion wash & Miswak/Fluorapatite lattice infusion
+  private erosionPulseTimer = 0;
+  private erosionWashCount = 0;
+  fluorapatiteInfusionSec = 0;
+  // World 5 — Quorum-sensing EPS armor deflection throttle
+  private epsWarnCooldown = 0;
 
   private nextEntityId = 1;
 
@@ -239,6 +249,15 @@ export class WorldSession {
     this.stephanSipTimer = cartridge.stephanSipIntervalSec ? 6.0 : 0;
     this.stephanSipCount = 0;
     this.gumWarnCooldown = 0;
+    this.erosionWashCount = 0;
+    this.fluorapatiteInfusionSec = 0;
+    this.epsWarnCooldown = 0;
+    if (cartridge.erosionZones && cartridge.erosionZones.length > 0) {
+      this.applyActiveErosionZones();
+      this.erosionPulseTimer = cartridge.erosionPulseIntervalSec ?? HIBISCUS_DEFAULT_PULSE_SEC;
+    } else {
+      this.erosionPulseTimer = 0;
+    }
 
     this.elapsedSec = 0;
     this.completed = false;
@@ -248,6 +267,20 @@ export class WorldSession {
   /** True when the loaded cartridge runs the 1940 Stephan Curve acid clock. */
   hasStephanClock(): boolean {
     return Boolean(this.cartridge?.stephanSipIntervalSec);
+  }
+
+  /** True when the loaded cartridge has tart organic-acid erosion basins + Fluorapatite conversion (World 4). */
+  hasErosionChallenge(): boolean {
+    return Boolean(this.cartridge?.erosionZones && this.cartridge.erosionZones.length > 0);
+  }
+
+  getFluorapatiteInfusionSec(): number {
+    return this.fluorapatiteInfusionSec;
+  }
+
+  /** True when the loaded cartridge has zero-G quorum-sensing EPS biofilm domes (World 5). */
+  hasEpsDomes(): boolean {
+    return Boolean(this.cartridge?.epsDomes && this.cartridge.epsDomes.length > 0);
   }
 
   /** Seconds until the next sweet sip (0 when the sugar supply has been cut off). */
@@ -295,6 +328,9 @@ export class WorldSession {
     if (delta <= 0) return 0;
     const prev = this.surgeMeter;
     this.surgeMeter = Math.min(SURGE_MAX, this.surgeMeter + delta);
+    if (prev < SURGE_MAX && this.surgeMeter >= SURGE_MAX) {
+      this.bus.emit('surge:ready', {});
+    }
     return this.surgeMeter - prev;
   }
 
@@ -315,7 +351,10 @@ export class WorldSession {
     this.chemistry.step(dt);
     this.scoring.step(dt);
     this.gumWarnCooldown = Math.max(0, this.gumWarnCooldown - dt);
+    this.fluorapatiteInfusionSec = Math.max(0, this.fluorapatiteInfusionSec - dt);
+    this.epsWarnCooldown = Math.max(0, this.epsWarnCooldown - dt);
     this.stepStephanClock(dt);
+    this.stepErosionWash(dt);
 
     // 1. Probe Movement or Capillary Tether-Zip
     if (this.probeZip) {
@@ -387,6 +426,7 @@ export class WorldSession {
       const sp = this.cartridge.salivaSprings[si];
       if (Math.hypot(this.probePos.x - sp.x, this.probePos.z - sp.z) <= 1.6) {
         this.springCooldowns[si] = 3.0;
+        this.bus.emit('spring:triggered', { pos: { x: sp.x, z: sp.z } });
         this.chemistry.triggerSalivaSpring(
           sp.x,
           sp.z,
@@ -400,6 +440,19 @@ export class WorldSession {
         if (this.chemistry.getStephanTimerSec() > 0) {
           const remainingSec = this.chemistry.bufferStephan(STEPHAN_SPRING_BUFFER_SEC);
           this.bus.emit('stephan:buffered', { pos: { x: sp.x, z: sp.z }, remainingSec });
+        }
+        if (this.hasErosionChallenge()) {
+          const cellsConverted = this.grid.convertCircleToFluorapatite(
+            sp.x,
+            sp.z,
+            MISWAK_SPRING_CONVERT_RADIUS
+          );
+          this.fluorapatiteInfusionSec = MISWAK_INFUSION_DURATION_SEC;
+          this.bus.emit('fluorapatite:infused', {
+            pos: { x: sp.x, z: sp.z },
+            cellsConverted,
+            durationSec: MISWAK_INFUSION_DURATION_SEC,
+          });
         }
       }
     }
@@ -437,6 +490,7 @@ export class WorldSession {
           hasBassUpgrade: this.hasBassUpgrade,
           sulcusIrritationPerSec: this.getSulcusIrritationRate(),
           isMovingSweep: isMoving,
+          convertToFluorapatite: this.fluorapatiteInfusionSec > 0,
         },
         this.chemistry
       );
@@ -462,8 +516,20 @@ export class WorldSession {
           warnings: gumWarnings,
         });
       }
+      const epsWarnings = res.epsDeflectWarnings ?? 0;
+      if (epsWarnings > 0 && this.epsWarnCooldown <= 0) {
+        this.epsWarnCooldown = 0.7;
+        this.bus.emit('eps:deflected', {
+          pos: { x: this.probePos.x, z: this.probePos.z },
+          warnings: epsWarnings,
+        });
+      }
 
-      if (res.newlyCleanedCells > 0 || res.acidAbrasionWarnings > 0) {
+      if (
+        res.newlyCleanedCells > 0 ||
+        res.acidAbrasionWarnings > 0 ||
+        (res.fluorapatiteConverted ?? 0) > 0
+      ) {
         this.bus.emit('actuator:scrub', {
           cleanRatio: this.grid.getWorldCleanRatio(),
           newlyCleaned: res.newlyCleanedCells,
@@ -518,6 +584,7 @@ export class WorldSession {
           m.pos.z += (dz / dist) * 5.0 * dt;
         }
         if (m.hp <= 0) {
+          this.bus.emit('mutans:popped', { pos: { x: m.pos.x, z: m.pos.z }, via: 'brush' });
           this.mutans.splice(i, 1);
         }
       }
@@ -649,6 +716,7 @@ export class WorldSession {
           segEnd.z
         ) <= 0.55
       ) {
+        this.bus.emit('mutans:popped', { pos: { x: m.pos.x, z: m.pos.z }, via: 'floss' });
         this.mutans.splice(i, 1);
       }
     }
@@ -657,16 +725,27 @@ export class WorldSession {
       this.probeZip = zipCandidate.zip;
     }
 
+    const epsCracked = gridRes.epsCellsCracked ?? 0;
     const perTargetSurge =
       SURGE_PER_FLOSS_TARGET * (this.hasPtfeFlossUpgrade ? PTFE_SURGE_MULTIPLIER : 1.0);
     const rawSurge =
-      targetsHit * perTargetSurge + gridRes.newlyCleanedCells * SURGE_PER_CLEANED_CELL;
+      targetsHit * perTargetSurge +
+      gridRes.newlyCleanedCells * SURGE_PER_CLEANED_CELL +
+      epsCracked * SURGE_PER_EPS_CELL_CRACKED;
     const surgeDelta = this.addSurge(rawSurge);
 
     this.scoring.recordFlossSlice(targetsHit, gridRes.newlyCleanedCells);
 
     this.flossBeamRemaining = 0.22;
     this.flossBeamSegment = { a: segStart, b: segEnd };
+
+    if (epsCracked > 0) {
+      this.bus.emit('eps:cracked', {
+        pos: { x: (segStart.x + segEnd.x) * 0.5, z: (segStart.z + segEnd.z) * 0.5 },
+        cellsCracked: epsCracked,
+        via: 'floss',
+      });
+    }
 
     this.bus.emit('floss:sliced', {
       from: segStart,
@@ -708,6 +787,21 @@ export class WorldSession {
       }
     }
 
+    if (!bestDir && this.cartridge.epsDomes) {
+      let bestDomeDist = 5.2;
+      for (const dome of this.cartridge.epsDomes) {
+        if (!this.grid.isEpsArmoredAt(dome.cx, dome.cz)) continue;
+        const d = Math.hypot(dome.cx - this.probePos.x, dome.cz - this.probePos.z);
+        if (d < bestDomeDist && d > 0.1) {
+          bestDomeDist = d;
+          bestDir = {
+            x: (dome.cx - this.probePos.x) / d,
+            z: (dome.cz - this.probePos.z) / d,
+          };
+        }
+      }
+    }
+
     if (bestDir) return bestDir;
     return { x: Math.cos(this.probeFacingRad), z: Math.sin(this.probeFacingRad) };
   }
@@ -729,6 +823,46 @@ export class WorldSession {
     }
   }
 
+  private applyActiveErosionZones(): { count: number; minPh: number } {
+    const zones = this.cartridge.erosionZones;
+    if (!zones || zones.length === 0) {
+      return { count: 0, minPh: this.cartridge?.baselinePh ?? 7.0 };
+    }
+    let count = 0;
+    let minPh = this.cartridge.baselinePh;
+    for (const z of zones) {
+      const di = this.cartridge.districts.findIndex(
+        (d) =>
+          z.cx >= d.bounds.minX &&
+          z.cx <= d.bounds.maxX &&
+          z.cz >= d.bounds.minZ &&
+          z.cz <= d.bounds.maxZ
+      );
+      if (di >= 0 && this.sealedDistricts[di]) continue;
+      this.chemistry.applyAcidZone(z.cx, z.cz, z.radius, z.targetPh);
+      count++;
+      if (z.targetPh < minPh) minPh = z.targetPh;
+    }
+    return { count, minPh };
+  }
+
+  private stepErosionWash(dt: number): void {
+    if (!this.cartridge.erosionZones || this.cartridge.erosionZones.length === 0) return;
+    this.erosionPulseTimer -= dt;
+    if (this.erosionPulseTimer <= 0) {
+      this.erosionPulseTimer =
+        this.cartridge.erosionPulseIntervalSec ?? HIBISCUS_DEFAULT_PULSE_SEC;
+      const { count, minPh } = this.applyActiveErosionZones();
+      if (count > 0) {
+        this.erosionWashCount++;
+        this.bus.emit('erosion:wash', {
+          washIndex: this.erosionWashCount,
+          targetPh: minPh,
+        });
+      }
+    }
+  }
+
   private fireIonRinseActuator(): void {
     this.surgeMeter = 0;
     // Fluoride-Bicarb surge neutralizes the Stephan acid window immediately
@@ -743,6 +877,30 @@ export class WorldSession {
       this.chemistry,
       this.hasBicarbRinseUpgrade
     );
+
+    let extraConverted = 0;
+    if (this.hasErosionChallenge()) {
+      extraConverted = this.grid.convertCircleToFluorapatite(
+        this.probePos.x,
+        this.probePos.z,
+        RINSE_WAVE_RADIUS * 0.85
+      );
+      this.fluorapatiteInfusionSec = MISWAK_INFUSION_DURATION_SEC;
+      this.bus.emit('fluorapatite:infused', {
+        pos: { x: this.probePos.x, z: this.probePos.z },
+        cellsConverted: extraConverted,
+        durationSec: MISWAK_INFUSION_DURATION_SEC,
+      });
+    }
+
+    const epsCracked = res.epsCellsCracked ?? 0;
+    if (epsCracked > 0) {
+      this.bus.emit('eps:cracked', {
+        pos: { x: this.probePos.x, z: this.probePos.z },
+        cellsCracked: epsCracked,
+        via: 'rinse',
+      });
+    }
 
     // Clear Acid Pools & Stun S. mutans inside Rinse Wave
     for (let i = this.acidPools.length - 1; i >= 0; i--) {
@@ -764,7 +922,7 @@ export class WorldSession {
       }
     }
 
-    const sealed = res.cellsSealed ?? 0;
+    const sealed = (res.cellsSealed ?? 0) + extraConverted;
     this.scoring.recordIonRinseSeal(sealed);
     this.bus.emit('rinse:surged', {
       origin: this.rinseWaveOrigin,
@@ -854,6 +1012,7 @@ export class WorldSession {
       const dist = Math.hypot(dx, dz);
       if (dist < PROBE_RADIUS + 0.45 && dist > 0.01 && this.knockbackTimer <= 0) {
         this.knockbackTimer = PROBE_KNOCKBACK_SEC;
+        this.bus.emit('mutans:bumped', { pos: { x: m.pos.x, z: m.pos.z } });
         this.knockbackVel = {
           x: (dx / dist) * 8.5,
           z: (dz / dist) * 8.5,

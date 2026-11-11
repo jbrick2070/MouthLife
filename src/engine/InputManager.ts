@@ -3,6 +3,17 @@ import type { SessionInputCommand } from './sim/WorldSession';
 import type { AppMode, Vec2 } from './types';
 
 export type CanvasPointerPhase = 'down' | 'move' | 'up';
+export type PointerSteerPref = 'auto' | 'on' | 'off';
+
+/**
+ * Pure policy helper: in 'auto' mode (no explicit user override), touch/pen pointers steer
+ * HYDRA-1 directly across the tooth arch while mouse left-click scrubs in place without yanking.
+ */
+export function resolvePointerSteerForType(pref: PointerSteerPref, pointerType: string): boolean {
+  if (pref === 'on') return true;
+  if (pref === 'off') return false;
+  return pointerType !== 'mouse';
+}
 
 /** Steering helper: converts a ground-plane target into a -1..1 move vector with arrival easing. */
 export function computePointerSteer(
@@ -58,16 +69,18 @@ export class InputManager {
   private touchPointerId: number | null = null;
 
   // Optional drag/click-to-steer on the 3D tooth surface (ARCADE / PULP_RESCUE)
-  private pointerSteerEnabled = true;
+  // Defaults to 'auto': ON for touch/pen, OFF for desktop mouse unless explicitly toggled.
+  private steerPref: PointerSteerPref = 'auto';
   private steerPointerId: number | null = null;
   private steerNdc = new THREE.Vector2(0, 0);
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     try {
       const stored = window.localStorage.getItem(STEER_PREF_KEY);
-      if (stored !== null) this.pointerSteerEnabled = stored === '1';
+      if (stored === '1') this.steerPref = 'on';
+      else if (stored === '0') this.steerPref = 'off';
     } catch {
-      /* storage unavailable — keep default */
+      /* storage unavailable — keep 'auto' default */
     }
     this.bindEvents();
   }
@@ -91,11 +104,19 @@ export class InputManager {
   }
 
   isPointerSteerEnabled(): boolean {
-    return this.pointerSteerEnabled;
+    if (this.steerPref === 'on') return true;
+    if (this.steerPref === 'off') return false;
+    return Boolean(
+      typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+    );
+  }
+
+  getPointerSteerPreference(): PointerSteerPref {
+    return this.steerPref;
   }
 
   setPointerSteerEnabled(enabled: boolean): void {
-    this.pointerSteerEnabled = enabled;
+    this.steerPref = enabled ? 'on' : 'off';
     if (!enabled) this.steerPointerId = null;
     try {
       window.localStorage.setItem(STEER_PREF_KEY, enabled ? '1' : '0');
@@ -159,17 +180,18 @@ export class InputManager {
       this.updateCursorNdc(e.clientX, e.clientY);
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
+        const shouldSteer = resolvePointerSteerForType(this.steerPref, e.pointerType);
         if (e.pointerType === 'mouse') {
           if (e.button === 0) {
             this.mouseLeftHeld = true;
-            if (this.pointerSteerEnabled) {
+            if (shouldSteer) {
               this.steerPointerId = e.pointerId;
               this.steerNdc.copy(this.cursorNdc);
             }
           } else if (e.button === 2) {
             this.pendingFloss = true;
           }
-        } else if (this.pointerSteerEnabled) {
+        } else if (shouldSteer) {
           // One-thumb touch / pen: touch the tooth surface to sweep HYDRA-1 there while scrubbing
           this.steerPointerId = e.pointerId;
           this.steerNdc.copy(this.cursorNdc);

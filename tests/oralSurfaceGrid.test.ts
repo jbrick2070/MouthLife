@@ -303,4 +303,64 @@ describe('OralSurfaceGrid', () => {
     );
     expect(MARGIN_BASE_PENALTY * BASS_UPGRADE_MARGIN_BOOST).toBeCloseTo(0.9425, 4);
   });
+
+  it('bakes EPS_ARMOR domes (bChannel epsArmor), deflects raw brush, cracks via Floss/Rinse, and converts Fluorapatite', () => {
+    const cart = {
+      ...createTestCartridge(),
+      bChannelMode: 'epsArmor' as const,
+      epsDomes: [{ id: 'd1', cx: 12.0, cz: 8.0, radius: 1.8, initialDensity: 0.88 }],
+    };
+    const grid = new OralSurfaceGrid(cart.worldWidth, cart.worldDepth);
+    const chem = new OralChemistrySim(cart.worldWidth, cart.worldDepth, 7.0);
+    grid.bakeFromCartridge(cart);
+
+    expect(grid.getInitialEpsArmorCount()).toBeGreaterThan(0);
+    expect(grid.isEpsArmoredAt(12.0, 8.0)).toBe(true);
+    expect(grid.syncRgbaBuffer(chem, 'epsArmor')).toBe(true);
+    const domeIdx = Math.floor(8.0 / CELL_SIZE) * grid.gridW + Math.floor(12.0 / CELL_SIZE);
+    expect(grid.rgbaBuffer[domeIdx * 4 + 2]).toBe(255);
+
+    const deflectRes = grid.applyBrush(
+      {
+        cx: 12.0,
+        cz: 8.0,
+        facingRad: 0,
+        arcRad: Math.PI * 2,
+        radius: 1.0,
+        removalPerSec: BRUSH_MOVING_RATE,
+        dt: 0.5,
+        hasBassUpgrade: false,
+      },
+      chem
+    );
+    expect(deflectRes.densityRemovedTotal).toBe(0);
+    expect(deflectRes.epsDeflectWarnings).toBeGreaterThan(0);
+
+    const crackRes = grid.applyFlossSegment(10.0, 8.0, 14.0, 8.0, 0.2, 2.0);
+    expect(crackRes.epsCellsCracked).toBeGreaterThan(0);
+    expect(grid.isEpsArmoredAt(12.0, 8.0)).toBe(false);
+    expect(grid.syncRgbaBuffer(chem, 'epsArmor')).toBe(true);
+    expect(grid.rgbaBuffer[domeIdx * 4 + 2]).toBe(0);
+
+    // Fluorapatite-infused brush converts unsealed cells at pH 4.95 and scrubs without acid warnings
+    chem.applyAcidZone(4.0, 8.0, 2.0, 4.95);
+    const faRes = grid.applyBrush(
+      {
+        cx: 4.0,
+        cz: 8.0,
+        facingRad: 0,
+        arcRad: Math.PI * 2,
+        radius: 1.0,
+        removalPerSec: BRUSH_MOVING_RATE,
+        dt: 0.5,
+        hasBassUpgrade: false,
+        convertToFluorapatite: true,
+      },
+      chem
+    );
+    expect(faRes.fluorapatiteConverted).toBeGreaterThan(0);
+    expect(faRes.acidAbrasionWarnings).toBe(0);
+    expect(faRes.densityRemovedTotal).toBeGreaterThan(0);
+    expect(grid.isFluorideSealedAt(4.0, 8.0)).toBe(true);
+  });
 });

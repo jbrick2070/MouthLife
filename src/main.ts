@@ -9,6 +9,9 @@ import { SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
 import { SceneManager } from './engine/render/SceneManager';
 import { WorldSession } from './engine/sim/WorldSession';
 import { SoundEngine } from './engine/audio/SoundEngine';
+import { synergyRankIndex } from './engine/audio/musicTheory';
+import { HOST_CITIES } from './config/hostsAndHistory';
+import { getUpgradeById } from './config/upgrades';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
@@ -18,7 +21,10 @@ import {
   MissionReportOverlay,
 } from './ui/MissionReportOverlay';
 import { TelemetryHudOverlay } from './ui/TelemetryHudOverlay';
+import { shouldHandleGlobalMuteKey } from './ui/hudHelpers';
 import { getCartridgeById } from './worlds/worldRegistry';
+
+export const CAMPAIGN_WORLD_IDS = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'];
 
 declare global {
   interface Window {
@@ -27,6 +33,8 @@ declare global {
       getDrawCalls: () => number;
       getQualityTier: () => string;
       getAudioState: () => string;
+      getAudioDebug: () => Record<string, unknown>;
+      sound: SoundEngine;
       getSave: () => unknown;
       session: WorldSession;
       sceneMgr: SceneManager;
@@ -60,7 +68,14 @@ function bootstrapMouthLife(): void {
   // Step 2: Clock, Procedural Audio & Simulation Session
   const clock = new ClockController(bus);
   const sound = new SoundEngine();
+  sound.onPrefsChanged = (prefs) => bus.emit('audio:changed', prefs);
   sound.bindGlobalUnlockListeners();
+  window.addEventListener('keydown', (ev) => {
+    if (shouldHandleGlobalMuteKey(ev, ev.target)) {
+      sound.unlockOnGesture();
+      sound.setMuted(!sound.isMuted());
+    }
+  });
   const session = new WorldSession(bus);
 
   // Step 3: Modest-GPU 3D SceneManager & InputManager
@@ -207,8 +222,48 @@ function bootstrapMouthLife(): void {
   }
 
   // Step 4: Wire Simulation Events to Audio, Particles & Save Persistence
-  bus.on('actuator:scrub', ({ cleanRatio, acidWarn }) => {
-    sound.updateScrubState(true, cleanRatio, acidWarn);
+  // Scrub audio is driven by ONE per-step update (see clock callback); the event only
+  // accumulates newly-cleaned cells and fires the throttled acid-lockout cue.
+  let pendingNewlyCleaned = 0;
+  let lastSynergyRank = -1;
+  bus.on('actuator:scrub', ({ newlyCleaned, acidWarn }) => {
+    pendingNewlyCleaned += newlyCleaned;
+    if (acidWarn) sound.playAcidWarn();
+  });
+
+  bus.on('spring:triggered', ({ pos }) => {
+    sound.playSalivaSpring();
+    sceneMgr.entityBatch.spawnBurst({
+      x: pos.x,
+      y: session.probeY + 0.55,
+      z: pos.z,
+      count: 10,
+      speed: 3.1,
+      colorHex: 0x67e8f9,
+      size: 0.36,
+      life: 0.55,
+    });
+  });
+  bus.on('mutans:bumped', () => sound.playMutansBoing());
+  bus.on('mutans:popped', ({ pos }) => {
+    sound.playMutansPop();
+    sceneMgr.entityBatch.spawnBurst({
+      x: pos.x,
+      y: session.probeY + 0.5,
+      z: pos.z,
+      count: 6,
+      speed: 2.2,
+      colorHex: 0xbef264,
+      size: 0.35,
+      life: 0.4,
+    });
+  });
+  bus.on('surge:ready', () => sound.playSurgeReady());
+  bus.on('companion:updated', ({ state }) => sound.setPulpReadiness(state.pulpIntegrity));
+
+  const missionUpgradeIds: string[] = [];
+  bus.on('upgrade:unlocked', ({ upgradeId }) => {
+    if (!missionUpgradeIds.includes(upgradeId)) missionUpgradeIds.push(upgradeId);
   });
 
   bus.on('floss:sliced', ({ to, targetsHit, zipped }) => {
@@ -298,8 +353,54 @@ function bootstrapMouthLife(): void {
     sound.playGumTender();
   });
 
+  bus.on('eps:deflected', ({ pos }) => {
+    sound.playEpsDeflect();
+    sceneMgr.entityBatch.spawnBurst({
+      x: pos.x,
+      y: session.probeY + 0.5,
+      z: pos.z,
+      count: 8,
+      speed: 2.8,
+      colorHex: 0xa78bfa,
+      size: 0.35,
+      life: 0.4,
+    });
+  });
+
+  bus.on('eps:cracked', ({ pos, via }) => {
+    sound.playEpsCrack();
+    const y = session.cartridge ? sampleTerrainHeight(session.cartridge, pos.x, pos.z) : 0.6;
+    sceneMgr.entityBatch.spawnBurst({
+      x: pos.x,
+      y: y + 0.6,
+      z: pos.z,
+      count: via === 'rinse' ? 24 : 18,
+      speed: 5.2,
+      colorHex: 0x34d399,
+      life: 0.75,
+    });
+  });
+
+  bus.on('fluorapatite:infused', ({ pos }) => {
+    sound.playFluorapatiteInfuse();
+    sceneMgr.entityBatch.spawnBurst({
+      x: pos.x,
+      y: session.probeY + 0.65,
+      z: pos.z,
+      count: 20,
+      speed: 4.4,
+      colorHex: 0x2dd4bf,
+      life: 0.8,
+    });
+  });
+
+  bus.on('erosion:wash', () => {
+    sound.playErosionWash();
+  });
+
   // Brush-Along & winning dives clear Regional Treat sugar splats from the Companion teeth
-  bus.on('pacer:tick', ({ elapsedSec }) => {
+  bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, inFlossBonus }) => {
+    sound.setPacerState(quadrantIdx, inFlossBonus);
     const cap = Math.max(0, 1 - elapsedSec / 40);
     for (const sp of touch.splats) sp.amount = Math.min(sp.amount, cap);
   });
@@ -319,8 +420,8 @@ function bootstrapMouthLife(): void {
   });
 
   bus.on('mission:complete', ({ mode, worldId, won, breakdown }) => {
-    sound.updateScrubState(false, 1, false);
-    sound.playDistrictSealed();
+    sound.stopScrub();
+    sound.playMissionEnd(won);
 
     const save = saveSys.getSave();
     let bonusRescueIons = 0;
@@ -336,6 +437,7 @@ function bootstrapMouthLife(): void {
     if (won) touch.clearAll();
 
     const cart = getCartridgeById(worldId);
+    const prevBest = saveSys.getSave().worlds[worldId]?.bestScore ?? 0;
     const { unlockedHistoryNoteId } = saveSys.recordMissionCompletion({
       mode,
       worldId,
@@ -344,6 +446,13 @@ function bootstrapMouthLife(): void {
       historyNoteIds: cart.historyNoteIds,
     });
 
+    const after = saveSys.getSave();
+    const clearedCount = CAMPAIGN_WORLD_IDS.filter((id) => after.worlds[id]?.completed).length;
+    const nextId =
+      mode === 'ARCADE' && won ? CAMPAIGN_WORLD_IDS[CAMPAIGN_WORLD_IDS.indexOf(worldId) + 1] : undefined;
+    const hostLabel = HOST_CITIES.filter((h) => h.worldId === worldId)
+      .map((h) => h.city)
+      .join(' & ');
     lastReport = {
       mode,
       worldId,
@@ -351,13 +460,25 @@ function bootstrapMouthLife(): void {
       breakdown,
       unlockedHistoryNoteId,
       bonusRescueIons,
+      worldTitle: cart.title,
+      hostCityLabel: hostLabel,
+      newBest: mode === 'ARCADE' && won && breakdown.totalScore > prevBest,
+      nextWorldId: nextId ?? null,
+      nextWorldTitle: nextId ? getCartridgeById(nextId).title : null,
+      campaignMastered: mode === 'ARCADE' && won && clearedCount >= CAMPAIGN_WORLD_IDS.length,
+      unlockedUpgradeNames: missionUpgradeIds.map((id) => getUpgradeById(id)?.name ?? id),
     };
+    missionUpgradeIds.length = 0;
     switchMode('REPORT');
   });
 
   // Step 5: Mode Transition Orchestrator
   function launchPlayableStage(worldId: string, mode: 'ARCADE' | 'PULP_RESCUE'): void {
     lastPlayedWorldId = worldId;
+    missionUpgradeIds.length = 0;
+    lastSynergyRank = -1;
+    pendingNewlyCleaned = 0;
+    sound.setWorldContext(worldId);
     const cartridge = getCartridgeById(worldId);
     session.loadCartridge(cartridge, saveSys.getSave(), mode);
     sceneMgr.mountCartridgeMesh(cartridge, session);
@@ -380,7 +501,8 @@ function bootstrapMouthLife(): void {
     touch.endTouch();
     uiRoot!.innerHTML = '';
 
-    sound.updateScrubState(false, 0, false);
+    sound.stopScrub();
+    sound.setPaused(false);
     sound.setAmbientMode(next);
     sceneMgr.setMode(next);
     bus.emit('mode:changed', { from: prev, to: next });
@@ -390,7 +512,10 @@ function bootstrapMouthLife(): void {
       activeOverlay = new CosmicIntroOverlay({
         onBeatChanged: (beatIdx) => {
           sceneMgr.setCosmicBeat(beatIdx);
-          sound.playCosmicBeatChime(beatIdx);
+          sound.setCosmicBeat(beatIdx);
+          if (beatIdx > 0 || sound.getAudioState() === 'running') {
+            sound.playCosmicBeatChime(beatIdx);
+          }
         },
         onMohsSelected: (mohsIdx) => {
           sound.playMohsSpecimenTone(mohsIdx);
@@ -405,11 +530,15 @@ function bootstrapMouthLife(): void {
         },
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        bus,
       });
     } else if (next === 'HUB') {
+      sound.setHubFocus('companion');
+      sound.setPulpReadiness(saveSys.getSave().companion.pulpIntegrity);
       activeHub = new CompanionHubOverlay(bus, saveSys, {
         onTabChanged: (tab, cityId) => {
           sceneMgr.setHubFocus(tab);
+          sound.setHubFocus(tab);
           sceneMgr.setMode('HUB');
           if (tab === 'globe') {
             sceneMgr.earthBackdrop.focusOnCity(cityId);
@@ -422,7 +551,6 @@ function bootstrapMouthLife(): void {
           switchMode('BRUSH_ALONG');
         },
         onReplayCosmicIntro: () => {
-          sound.playCosmicBeatChime(0);
           switchMode('COSMIC_INTRO');
         },
         onPlaySparkleSfx: () => sound.playSmoothBaskSparkle(),
@@ -432,6 +560,12 @@ function bootstrapMouthLife(): void {
         onPlayUiTap: () => sound.playUiTap(),
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        getMusicVolume: () => sound.getMusicVolume(),
+        setMusicVolume: (v) => sound.setMusicVolume(v),
+        getSfxVolume: () => sound.getSfxVolume(),
+        setSfxVolume: (v) => sound.setSfxVolume(v),
+        isReducedMotion: () => sceneMgr.isReducedMotion(),
+        onToggleReducedMotion: () => sceneMgr.setReducedMotion(!sceneMgr.isReducedMotion()),
       });
       activeOverlay = activeHub;
     } else if (next === 'ARCADE' || next === 'PULP_RESCUE') {
@@ -442,7 +576,19 @@ function bootstrapMouthLife(): void {
         input,
         sceneMgr,
         saveSys,
-        () => switchMode('HUB')
+        () => switchMode('HUB'),
+        {
+          isMuted: () => sound.isMuted(),
+          toggleMute: () => sound.setMuted(!sound.isMuted()),
+          getMusicVolume: () => sound.getMusicVolume(),
+          setMusicVolume: (v) => sound.setMusicVolume(v),
+          getSfxVolume: () => sound.getSfxVolume(),
+          setSfxVolume: (v) => sound.setSfxVolume(v),
+          setPaused: (p) => sound.setPaused(p),
+          isReducedMotion: () => sceneMgr.isReducedMotion(),
+          toggleReducedMotion: () => sceneMgr.setReducedMotion(!sceneMgr.isReducedMotion()),
+          restartDive: () => launchPlayableStage(lastPlayedWorldId, next),
+        }
       );
       activeTelemetryHud = hud;
       activeOverlay = hud;
@@ -453,12 +599,19 @@ function bootstrapMouthLife(): void {
         },
         onPlayCue: (kind) => sound.playPacerCue(kind),
         onExitToHub: () => switchMode('HUB'),
+        isMuted: () => sound.isMuted(),
+        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        onPauseChanged: (p) => sound.setPaused(p),
       });
     } else if (next === 'REPORT' && lastReport) {
       const repMode = lastReport.mode;
       activeOverlay = new MissionReportOverlay(lastReport, {
         onReturnToHub: () => switchMode('HUB'),
         onReplay: () => launchPlayableStage(lastPlayedWorldId, repMode),
+        onNextDive: (id) => launchPlayableStage(id, 'ARCADE'),
+        isMuted: () => sound.isMuted(),
+        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        bus,
       });
     }
 
@@ -468,7 +621,10 @@ function bootstrapMouthLife(): void {
   // Step 6: Bind Fixed-Step Simulation & Render Loop
   clock.setCallbacks(
     (fixedDt) => {
-      if (currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') {
+      if (
+        (currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') &&
+        !activeTelemetryHud?.isPaused()
+      ) {
         const cmd = input.sampleSessionCommand(
           sceneMgr.camera,
           session.probePos,
@@ -476,10 +632,22 @@ function bootstrapMouthLife(): void {
           sceneMgr.isTransitioning()
         );
         session.step(fixedDt, cmd);
-        sound.updateScrubState(
-          cmd.scrubHeld && !sceneMgr.isTransitioning(),
-          session.grid.getWorldCleanRatio(),
-          false
+        sound.updateScrub({
+          active: cmd.scrubHeld && !sceneMgr.isTransitioning(),
+          probeSpeed: session.probeSpeed,
+          newlyCleaned: pendingNewlyCleaned,
+          cleanRatio: session.grid.getWorldCleanRatio(),
+        });
+        pendingNewlyCleaned = 0;
+
+        const rank = synergyRankIndex(session.scoring.getSynergyMultiplier());
+        if (rank > lastSynergyRank && rank >= 0) sound.playSynergyRankUp(rank);
+        lastSynergyRank = rank;
+        sound.setUrgency(currentMode === 'PULP_RESCUE' && session.getRemainingRescueSec() <= 20);
+        sound.setAcidTension(
+          currentMode === 'ARCADE' &&
+            session.hasStephanClock() &&
+            session.chemistry.getStephanTimerSec() > 0
         );
       }
     },
@@ -512,6 +680,8 @@ function bootstrapMouthLife(): void {
     getDrawCalls: () => sceneMgr.getLastDrawCalls(),
     getQualityTier: () => sceneMgr.getActiveQualityTier(),
     getAudioState: () => sound.getAudioState(),
+    getAudioDebug: () => sound.getDebugInfo(),
+    sound,
     getSave: () => saveSys.getSave(),
     session,
     sceneMgr,

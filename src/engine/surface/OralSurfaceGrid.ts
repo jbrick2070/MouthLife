@@ -4,6 +4,9 @@ import {
   CLEAN_THRESHOLD,
   CRITICAL_PH_FLUORAPATITE,
   CRITICAL_PH_HYDROXYAPATITE,
+  EPS_CRACKED_SLURRY_CAP,
+  EPS_FLOSS_CRACK_HALF_WIDTH,
+  EPS_RINSE_BIOFILM_CHIP,
   GUM_TENDER_THRESHOLD,
   SULCUS_MOVING_IRRITATION_MULT,
   FLUORIDE_SEAL_RESOIL_MULT,
@@ -68,6 +71,9 @@ export class OralSurfaceGrid {
   private cleanPaintableAll = 0;
   private totalPaintableByDistrict: number[] = [];
   private cleanPaintableByDistrict: number[] = [];
+  private initialEpsCells = 0;
+  private activeEpsCells = 0;
+  private fluorideSealedCells = 0;
   textureDirty = true;
 
   constructor(worldWidth: number, worldDepth: number) {
@@ -95,6 +101,9 @@ export class OralSurfaceGrid {
     this.cleanPaintableAll = 0;
     this.totalPaintableByDistrict = new Array(districtCount).fill(0);
     this.cleanPaintableByDistrict = new Array(districtCount).fill(0);
+    this.initialEpsCells = 0;
+    this.activeEpsCells = 0;
+    this.fluorideSealedCells = 0;
 
     for (let gz = 0; gz < this.gridH; gz++) {
       const wz = (gz + 0.5) * CELL_SIZE;
@@ -170,6 +179,23 @@ export class OralSurfaceGrid {
           }
         }
 
+        // Zero-G quorum-sensing EPS biofilm domes (World 5): deflect Sonic Brush until cracked
+        if (cartridge.epsDomes && (f & CellFlag.INTERDENTAL) === 0) {
+          for (const dome of cartridge.epsDomes) {
+            const dx = wx - dome.cx;
+            const dz = wz - dome.cz;
+            if (dx * dx + dz * dz <= dome.radius * dome.radius) {
+              f |= CellFlag.EPS_ARMOR;
+              d = Math.max(d, dome.initialDensity);
+            }
+          }
+        }
+
+        if ((f & CellFlag.EPS_ARMOR) !== 0) {
+          this.initialEpsCells++;
+          this.activeEpsCells++;
+        }
+
         this.flags[idx] = f;
         this.density[idx] = Math.max(0, Math.min(1, d));
 
@@ -234,6 +260,24 @@ export class OralSurfaceGrid {
     return false;
   }
 
+  private sealCellFluorapatite(idx: number): boolean {
+    const f = this.flags[idx];
+    if ((f & CellFlag.PAINTABLE) === 0 || (f & CellFlag.FLUORIDE_SEALED) !== 0) return false;
+    this.flags[idx] = f | CellFlag.FLUORIDE_SEALED;
+    this.fluorideSealedCells++;
+    this.textureDirty = true;
+    return true;
+  }
+
+  private crackCellEpsArmor(idx: number): boolean {
+    const f = this.flags[idx];
+    if ((f & CellFlag.EPS_ARMOR) === 0) return false;
+    this.flags[idx] = f & ~CellFlag.EPS_ARMOR;
+    this.activeEpsCells = Math.max(0, this.activeEpsCells - 1);
+    this.textureDirty = true;
+    return true;
+  }
+
   applyBrush(params: BrushApplyParams, chemistry: OralChemistrySim): ToolApplyResult {
     const minGx = Math.max(0, Math.floor((params.cx - params.radius) / CELL_SIZE));
     const maxGx = Math.min(this.gridW - 1, Math.ceil((params.cx + params.radius) / CELL_SIZE));
@@ -247,6 +291,8 @@ export class OralSurfaceGrid {
     let densityRemovedTotal = 0;
     let acidAbrasionWarnings = 0;
     let gumTenderWarnings = 0;
+    let epsDeflectWarnings = 0;
+    let fluorapatiteConverted = 0;
     const sulcusRate = params.sulcusIrritationPerSec ?? 0;
     const sulcusMotionMult = params.isMovingSweep ? SULCUS_MOVING_IRRITATION_MULT : 1.0;
 
@@ -269,10 +315,21 @@ export class OralSurfaceGrid {
         }
 
         const idx = gz * this.gridW + gx;
-        const f = this.flags[idx];
+        let f = this.flags[idx];
         if ((f & CellFlag.PAINTABLE) === 0) continue;
         if ((f & CellFlag.INTERDENTAL) !== 0) continue;
-        if ((f & CellFlag.EPS_ARMOR) !== 0) continue;
+        if ((f & CellFlag.EPS_ARMOR) !== 0) {
+          epsDeflectWarnings++;
+          continue;
+        }
+
+        // World 4 Miswak + F⁻ lattice infusion converts brushed enamel into Fluorapatite (pH 4.5 stable!)
+        if (params.convertToFluorapatite && (f & CellFlag.FLUORIDE_SEALED) === 0) {
+          if (this.sealCellFluorapatite(idx)) {
+            fluorapatiteConverted++;
+            f = this.flags[idx];
+          }
+        }
 
         const prev = this.density[idx];
         if (prev <= 0) continue;
@@ -315,7 +372,41 @@ export class OralSurfaceGrid {
       }
     }
 
-    return { newlyCleanedCells, densityRemovedTotal, acidAbrasionWarnings, gumTenderWarnings };
+    return {
+      newlyCleanedCells,
+      densityRemovedTotal,
+      acidAbrasionWarnings,
+      gumTenderWarnings,
+      epsDeflectWarnings,
+      fluorapatiteConverted,
+    };
+  }
+
+  /** Converts paintable non-EPS cells inside world circle (cx, cz, radius) into Fluorapatite. */
+  convertCircleToFluorapatite(cx: number, cz: number, radius: number): number {
+    const minGx = Math.max(0, Math.floor((cx - radius) / CELL_SIZE));
+    const maxGx = Math.min(this.gridW - 1, Math.ceil((cx + radius) / CELL_SIZE));
+    const minGz = Math.max(0, Math.floor((cz - radius) / CELL_SIZE));
+    const maxGz = Math.min(this.gridH - 1, Math.ceil((cz + radius) / CELL_SIZE));
+    const rSq = radius * radius;
+    let converted = 0;
+
+    for (let gz = minGz; gz <= maxGz; gz++) {
+      if (gz < 0 || gz >= this.gridH) continue;
+      const wz = (gz + 0.5) * CELL_SIZE;
+      const dz = wz - cz;
+      for (let gx = minGx; gx <= maxGx; gx++) {
+        if (gx < 0 || gx >= this.gridW) continue;
+        const wx = (gx + 0.5) * CELL_SIZE;
+        const dx = wx - cx;
+        if (dx * dx + dz * dz > rSq) continue;
+        const idx = gz * this.gridW + gx;
+        const f = this.flags[idx];
+        if ((f & CellFlag.PAINTABLE) === 0 || (f & CellFlag.EPS_ARMOR) !== 0) continue;
+        if (this.sealCellFluorapatite(idx)) converted++;
+      }
+    }
+    return converted;
   }
 
   /** True when the cell at world (x, z) is a gingival sulcus margin cell. */
@@ -326,26 +417,64 @@ export class OralSurfaceGrid {
     return (this.flags[gz * this.gridW + gx] & CellFlag.SULCUS) !== 0;
   }
 
+  /** True when the cell at world (x, z) is shielded by intact EPS biofilm armor. */
+  isEpsArmoredAt(x: number, z: number): boolean {
+    const gx = Math.floor(x / CELL_SIZE);
+    const gz = Math.floor(z / CELL_SIZE);
+    if (gx < 0 || gz < 0 || gx >= this.gridW || gz >= this.gridH) return false;
+    return (this.flags[gz * this.gridW + gx] & CellFlag.EPS_ARMOR) !== 0;
+  }
+
+  /** True when the cell at world (x, z) has been converted into acid-defying Fluorapatite. */
+  isFluorideSealedAt(x: number, z: number): boolean {
+    const gx = Math.floor(x / CELL_SIZE);
+    const gz = Math.floor(z / CELL_SIZE);
+    if (gx < 0 || gz < 0 || gx >= this.gridW || gz >= this.gridH) return false;
+    return (this.flags[gz * this.gridW + gx] & CellFlag.FLUORIDE_SEALED) !== 0;
+  }
+
+  getEpsArmorCount(): number {
+    return this.activeEpsCells;
+  }
+
+  getInitialEpsArmorCount(): number {
+    return this.initialEpsCells;
+  }
+
+  getEpsArmorRemainingRatio(): number {
+    if (this.initialEpsCells === 0) return 0;
+    return this.activeEpsCells / this.initialEpsCells;
+  }
+
+  getFluorapatiteRatio(): number {
+    if (this.totalPaintableAll === 0) return 0;
+    return this.fluorideSealedCells / this.totalPaintableAll;
+  }
+
   applyFlossSegment(
     x0: number,
     z0: number,
     x1: number,
     z1: number,
-    halfWidth: number
+    halfWidth: number,
+    epsCrackHalfWidth = EPS_FLOSS_CRACK_HALF_WIDTH
   ): ToolApplyResult {
-    const minX = Math.min(x0, x1) - halfWidth;
-    const maxX = Math.max(x0, x1) + halfWidth;
-    const minZ = Math.min(z0, z1) - halfWidth;
-    const maxZ = Math.max(z0, z1) + halfWidth;
+    const outerHw = this.activeEpsCells > 0 ? Math.max(halfWidth, epsCrackHalfWidth) : halfWidth;
+    const minX = Math.min(x0, x1) - outerHw;
+    const maxX = Math.max(x0, x1) + outerHw;
+    const minZ = Math.min(z0, z1) - outerHw;
+    const maxZ = Math.max(z0, z1) + outerHw;
 
     const minGx = Math.max(0, Math.floor(minX / CELL_SIZE));
     const maxGx = Math.min(this.gridW - 1, Math.ceil(maxX / CELL_SIZE));
     const minGz = Math.max(0, Math.floor(minZ / CELL_SIZE));
     const maxGz = Math.min(this.gridH - 1, Math.ceil(maxZ / CELL_SIZE));
     const hwSq = halfWidth * halfWidth;
+    const outerHwSq = outerHw * outerHw;
 
     let newlyCleanedCells = 0;
     let densityRemovedTotal = 0;
+    let epsCellsCracked = 0;
 
     for (let gz = minGz; gz <= maxGz; gz++) {
       if (gz < 0 || gz >= this.gridH) continue;
@@ -353,22 +482,34 @@ export class OralSurfaceGrid {
       for (let gx = minGx; gx <= maxGx; gx++) {
         if (gx < 0 || gx >= this.gridW) continue;
         const wx = (gx + 0.5) * CELL_SIZE;
-        if (distancePointToSegmentSq2D(wx, wz, x0, z0, x1, z1) > hwSq) continue;
+        const distSq = distancePointToSegmentSq2D(wx, wz, x0, z0, x1, z1);
+        if (distSq > outerHwSq) continue;
 
         const idx = gz * this.gridW + gx;
         const f = this.flags[idx];
         if ((f & CellFlag.PAINTABLE) === 0) continue;
 
+        const cracked = this.crackCellEpsArmor(idx);
+        if (cracked) epsCellsCracked++;
+
         const prev = this.density[idx];
-        if (prev <= 0) continue;
-        densityRemovedTotal += prev;
-        if (this.setCellDensity(idx, 0)) {
-          newlyCleanedCells++;
+        if (distSq <= hwSq) {
+          if (prev <= 0) continue;
+          densityRemovedTotal += prev;
+          if (this.setCellDensity(idx, 0)) {
+            newlyCleanedCells++;
+          }
+        } else if (cracked && prev > EPS_CRACKED_SLURRY_CAP) {
+          // Quorum-fracture shockwave turns flanking dome armor into scrubbable slurry
+          densityRemovedTotal += prev - EPS_CRACKED_SLURRY_CAP;
+          if (this.setCellDensity(idx, EPS_CRACKED_SLURRY_CAP)) {
+            newlyCleanedCells++;
+          }
         }
       }
     }
 
-    return { newlyCleanedCells, densityRemovedTotal, acidAbrasionWarnings: 0 };
+    return { newlyCleanedCells, densityRemovedTotal, acidAbrasionWarnings: 0, epsCellsCracked };
   }
 
   applyIonRinse(
@@ -389,6 +530,7 @@ export class OralSurfaceGrid {
     let newlyCleanedCells = 0;
     let densityRemovedTotal = 0;
     let cellsSealed = 0;
+    let epsCellsCracked = 0;
 
     for (let gz = minGz; gz <= maxGz; gz++) {
       if (gz < 0 || gz >= this.gridH) continue;
@@ -404,6 +546,9 @@ export class OralSurfaceGrid {
         const f = this.flags[idx];
         if ((f & CellFlag.PAINTABLE) === 0) continue;
 
+        const wasArmored = this.crackCellEpsArmor(idx);
+        if (wasArmored) epsCellsCracked++;
+
         const prev = this.density[idx];
         if (prev <= RINSE_SLURRY_THRESHOLD) {
           // Mechanically disrupted slurry flushes away completely & forms Fluorapatite seal!
@@ -413,14 +558,13 @@ export class OralSurfaceGrid {
               newlyCleanedCells++;
             }
           }
-          if ((this.flags[idx] & CellFlag.FLUORIDE_SEALED) === 0) {
-            this.flags[idx] |= CellFlag.FLUORIDE_SEALED;
+          if (this.sealCellFluorapatite(idx)) {
             cellsSealed++;
-            this.textureDirty = true;
           }
         } else {
-          // Intact dense biofilm (> 0.35) sheds liquid rinse with minimal removal
-          const next = Math.max(0, prev - RINSE_THICK_BIOFILM_CHIP);
+          // Intact dense biofilm (> 0.35) sheds liquid rinse, though Surge cracks EPS armor
+          const chip = wasArmored ? EPS_RINSE_BIOFILM_CHIP : RINSE_THICK_BIOFILM_CHIP;
+          const next = Math.max(0, prev - chip);
           densityRemovedTotal += prev - next;
           if (this.setCellDensity(idx, next)) {
             newlyCleanedCells++;
@@ -434,6 +578,7 @@ export class OralSurfaceGrid {
       densityRemovedTotal,
       acidAbrasionWarnings: 0,
       cellsSealed,
+      epsCellsCracked,
     };
   }
 
@@ -442,9 +587,9 @@ export class OralSurfaceGrid {
     for (let idx = 0; idx < this.cellCount; idx++) {
       if (this.districtIdxMap[idx] !== districtIndex) continue;
       if ((this.flags[idx] & CellFlag.PAINTABLE) === 0) continue;
+      this.crackCellEpsArmor(idx);
       this.setCellDensity(idx, 0);
-      if ((this.flags[idx] & CellFlag.FLUORIDE_SEALED) === 0) {
-        this.flags[idx] |= CellFlag.FLUORIDE_SEALED;
+      if (this.sealCellFluorapatite(idx)) {
         newlySealed++;
       }
     }

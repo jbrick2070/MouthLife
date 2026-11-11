@@ -134,22 +134,30 @@ const FRAGMENT_SHADER = /* glsl */ `
     vec3 cleanEnamel = uEnamelBase * (0.34 + 0.6 * wrapDiff + fillDiff * 0.9);
     float fresnel = pow(1.0 - NdotV, 3.0);
 
-    // Dentin glowing warm through thin cervical enamel -> translucent bluish-pearl incisal edges
+    // Dentin glowing warm through thin cervical enamel -> opalescent bluish-pearl incisal/cusp tips
     float hFrac = clamp(vVertColor.b, 0.0, 1.0);
     float cervical = 1.0 - smoothstep(0.06, 0.48, hFrac);
     vec3 dentinWarm = vec3(1.0, 0.82, 0.58);
     cleanEnamel = mix(cleanEnamel, cleanEnamel * dentinWarm, cervical * 0.72);
-    float incisal = smoothstep(0.7, 0.98, hFrac);
-    vec3 pearlEdge = cleanEnamel * vec3(0.6, 0.72, 0.9) + vec3(0.05, 0.1, 0.17) * (0.5 + fresnel * 1.8);
-    cleanEnamel = mix(cleanEnamel, pearlEdge, incisal * 0.78);
 
-    // Subtle translucent bluish-ivory enamel edge scattering
-    cleanEnamel += vec3(0.14, 0.25, 0.32) * fresnel * (1.0 - plaqueMask);
+    // Subtle anatomical mamelon lobes under translucent incisal/cusp enamel
+    float mamelonWave = 0.5 + 0.5 * sin(vWorldPos.x * 3.4 + vWorldPos.z * 0.9);
+    float incisalStart = 0.54 + 0.10 * mamelonWave;
+    float incisal = smoothstep(incisalStart, 0.95, hFrac);
+    float cleanFactor = 1.0 - plaqueMask * 0.85;
+    float backScatter = pow(clamp(dot(-L1, V) * 0.5 + 0.5, 0.0, 1.0), 2.0);
+    vec3 opalBlue = cleanEnamel * vec3(0.62, 0.78, 0.98)
+                  + vec3(0.09, 0.20, 0.34) * (0.55 + fresnel * 2.1)
+                  + vec3(0.16, 0.09, 0.04) * backScatter * 0.55;
+    cleanEnamel = mix(cleanEnamel, opalBlue, incisal * 0.86 * cleanFactor);
+
+    // Translucent bluish-ivory enamel edge scattering
+    cleanEnamel += vec3(0.16, 0.28, 0.38) * fresnel * (1.0 - plaqueMask);
 
     // Fluorapatite crystalline iridescent mint-cyan sheen
     if (fluorideSeal > 0.05) {
       float hexShimmer = 0.5 + 0.5 * sin(vWorldPos.x * 5.2 + vWorldPos.z * 5.2 + uTime * 2.1);
-      cleanEnamel += vec3(0.06, 0.32, 0.30) * fluorideSeal * (0.35 + 0.65 * fresnel) * (0.75 + 0.25 * hexShimmer);
+      cleanEnamel += vec3(0.08, 0.40, 0.36) * fluorideSeal * (0.40 + 0.65 * fresnel) * (0.72 + 0.28 * hexShimmer);
     }
 
     // Plaque & mature biofilm albedo
@@ -167,9 +175,20 @@ const FRAGMENT_SHADER = /* glsl */ `
       // Gingival irritation warm coral flush
       baseColor = mix(baseColor, vec3(0.95, 0.32, 0.42), bVal * 0.45);
     } else if (uBChannelMode == 2 && bVal > 0.05) {
-      // Acidic demineralization warning glow (pH < 5.5)
+      // Acidic demineralization warning glow (pH < 5.5); Fluorapatite (pH 4.5 stable) repels it!
       float pulse = 0.65 + 0.35 * sin(uTime * 5.5);
-      baseColor = mix(baseColor, vec3(0.98, 0.42, 0.22), bVal * 0.42 * pulse);
+      float unsealedAcid = bVal * (1.0 - fluorideSeal * 0.85);
+      baseColor = mix(baseColor, vec3(0.98, 0.42, 0.22), unsealedAcid * 0.44 * pulse);
+      baseColor += vec3(0.10, 0.50, 0.46) * (bVal * fluorideSeal * 0.30 * pulse);
+    } else if (uBChannelMode == 3 && bVal > 0.04) {
+      // Zero-G quorum-sensing EPS polymer dome: bioluminescent matrix + glowing Floss fracture rim
+      float qHex = 0.5 + 0.5 * (sin(vWorldPos.x * 4.6 + uTime * 1.8) * cos(vWorldPos.z * 4.6 - uTime * 1.4));
+      float domeCore = smoothstep(0.35, 0.92, bVal);
+      float fractureRim = smoothstep(0.05, 0.42, bVal) * (1.0 - smoothstep(0.48, 0.88, bVal));
+      vec3 epsTint = mix(vec3(0.10, 0.62, 0.56), vec3(0.44, 0.26, 0.88), qHex * 0.65);
+      baseColor = mix(baseColor, epsTint, domeCore * (0.50 + 0.16 * qHex));
+      float domeSpec = pow(max(dot(N, H1), 0.0), 42.0) * 0.55 * domeCore;
+      baseColor += vec3(0.45, 1.0, 0.88) * (fractureRim * 0.72 + domeSpec + fresnel * domeCore * 0.28);
     }
 
     // Companion acid stress visual warning when shields are eroded

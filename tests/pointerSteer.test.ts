@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { computePointerSteer } from '../src/engine/InputManager';
+import { computePointerSteer, resolvePointerSteerForType } from '../src/engine/InputManager';
 
 describe('Pointer drag/click-to-steer', () => {
+  it('defaults to ON for touch/pen and OFF for mouse in auto mode, while honoring explicit overrides', () => {
+    expect(resolvePointerSteerForType('auto', 'touch')).toBe(true);
+    expect(resolvePointerSteerForType('auto', 'pen')).toBe(true);
+    expect(resolvePointerSteerForType('auto', 'mouse')).toBe(false);
+
+    expect(resolvePointerSteerForType('on', 'mouse')).toBe(true);
+    expect(resolvePointerSteerForType('on', 'touch')).toBe(true);
+    expect(resolvePointerSteerForType('off', 'touch')).toBe(false);
+    expect(resolvePointerSteerForType('off', 'mouse')).toBe(false);
+  });
+
   it('holds still inside the dead zone so tapping on HYDRA-1 scrubs in place', () => {
     expect(computePointerSteer({ x: 10, z: 10 }, { x: 10.3, z: 10.2 })).toEqual({ moveX: 0, moveZ: 0 });
   });

@@ -13,7 +13,9 @@ import {
 import { type SessionInputCommand, WorldSession } from '../src/engine/sim/WorldSession';
 import type { AABB2D, Vec2, WorldCartridge } from '../src/engine/types';
 import { crescentSulcusCartridge } from '../src/worlds/crescentSulcusCartridge';
+import { fluorapatiteCoastCartridge } from '../src/worlds/fluorapatiteCoastCartridge';
 import { neonAcidClockCartridge } from '../src/worlds/neonAcidClockCartridge';
+import { orbitalBiofilmDomeCartridge } from '../src/worlds/orbitalBiofilmDomeCartridge';
 import { plaqueCityCartridge } from '../src/worlds/plaqueCityCartridge';
 import { getCartridgeById, isPlayableWorld, PLAYABLE_CARTRIDGES } from '../src/worlds/worldRegistry';
 
@@ -113,11 +115,15 @@ function buildReachability(cart: WorldCartridge): (p: Vec2, tol: number) => bool
 }
 
 describe('Multi-City Cartridge Registry', () => {
-  it('registers playable World 2 (New Orleans) and World 3 (Tokyo/Chicago) and wires them to globe cities', () => {
+  it('registers all 5 playable worlds (Toronto, New Orleans, Tokyo/Chicago, Accra/Colorado, Station Aurora) and wires them to globe cities', () => {
     expect(isPlayableWorld('world_2')).toBe(true);
     expect(isPlayableWorld('world_3')).toBe(true);
+    expect(isPlayableWorld('world_4')).toBe(true);
+    expect(isPlayableWorld('world_5')).toBe(true);
     expect(getCartridgeById('world_2').bChannelMode).toBe('gumIrritation');
     expect(getCartridgeById('world_3').bChannelMode).toBe('localPh');
+    expect(getCartridgeById('world_4').bChannelMode).toBe('localPh');
+    expect(getCartridgeById('world_5').bChannelMode).toBe('epsArmor');
 
     for (const city of HOST_CITIES) {
       if (!city.playableInSlice) continue;
@@ -129,10 +135,18 @@ describe('Multi-City Cartridge Registry', () => {
       }
     }
     const playableIds = HOST_CITIES.filter((c) => c.playableInSlice).map((c) => c.worldId);
-    expect(playableIds).toEqual(expect.arrayContaining(['world_1', 'world_2', 'world_3']));
+    expect(playableIds).toEqual(
+      expect.arrayContaining(['world_1', 'world_2', 'world_3', 'world_4', 'world_5'])
+    );
   });
 
-  for (const cart of [plaqueCityCartridge, crescentSulcusCartridge, neonAcidClockCartridge]) {
+  for (const cart of [
+    plaqueCityCartridge,
+    crescentSulcusCartridge,
+    neonAcidClockCartridge,
+    fluorapatiteCoastCartridge,
+    orbitalBiofilmDomeCartridge,
+  ]) {
     it(`${cart.title}: every entity sits on playable enamel, clear of walls, and is reachable (walk + zip)`, () => {
       const walls = [...cart.wallBoxes, ...buildAlleyWalls(cart)];
       const reachable = buildReachability(cart);
@@ -316,5 +330,148 @@ describe('World 3 — Neon Acid Clock (1940 Stephan Curve localPh)', () => {
     session.step(1 / 60, IDLE);
     expect(won).toBe(true);
     expect(saveSys.getSave().unlockedHistoryNotes).toContain('1940_chicago_stephan');
+  });
+});
+
+describe('World 4 — Fluorapatite Coast (Hibiscus Erosion & Miswak/1901–1945 F⁻ Conversion)', () => {
+  it('hibiscus pH 4.95 basins shield unsealed Hydroxyapatite, while Miswak-Saliva F⁻ infusion converts enamel to Fluorapatite and scrubs cleanly', () => {
+    const { bus, session } = makeSession(fluorapatiteCoastCartridge);
+    expect(session.hasErosionChallenge()).toBe(true);
+
+    // Move directly into District 0 hibiscus basin (14.0, 11.5) where pH = 4.95 (< 5.5 HA, > 4.5 FA)
+    session.probePos = { x: 14.0, z: 11.5 };
+    const scrubEvents: Array<{ newlyCleaned: number; acidWarn: boolean }> = [];
+    bus.on('actuator:scrub', ({ newlyCleaned, acidWarn }) =>
+      scrubEvents.push({ newlyCleaned, acidWarn })
+    );
+
+    session.step(0.1, { ...IDLE, scrubHeld: true, moveX: 1 });
+    expect(scrubEvents.some((e) => e.acidWarn)).toBe(true);
+    expect(session.grid.isFluorideSealedAt(14.0, 11.5)).toBe(false);
+
+    // Touch Miswak-Saliva spring at (11.0, 20.5) to gain F⁻ lattice infusion
+    let infusedCount = 0;
+    bus.on('fluorapatite:infused', ({ cellsConverted }) => {
+      infusedCount += cellsConverted;
+    });
+    session.probePos = { x: 11.0, z: 20.5 };
+    session.step(1 / 60, IDLE);
+    expect(infusedCount).toBeGreaterThan(0);
+    expect(session.getFluorapatiteInfusionSec()).toBeGreaterThan(8.0);
+
+    // Re-enter pH 4.95 hibiscus basin while F⁻-infused: converts enamel to Fluorapatite & cleans without acid warning!
+    scrubEvents.length = 0;
+    session.probePos = { x: 14.0, z: 11.5 };
+    for (let i = 0; i < 30; i++) {
+      session.step(1 / 30, { ...IDLE, scrubHeld: true, moveX: i % 2 === 0 ? 0.5 : -0.5 });
+    }
+    expect(session.grid.isFluorideSealedAt(14.0, 11.5)).toBe(true);
+    expect(scrubEvents.every((e) => !e.acidWarn)).toBe(true);
+    expect(scrubEvents.reduce((acc, e) => acc + e.newlyCleaned, 0)).toBeGreaterThan(0);
+
+    // Advance past erosionPulseIntervalSec (14s) so periodic hibiscus wash fires and verify Fluorapatite stays stable
+    let washes = 0;
+    bus.on('erosion:wash', () => washes++);
+    session.probePos = { x: 7.0, z: 24.0 };
+    for (let i = 0; i < 14.5 * 30; i++) session.step(1 / 30, IDLE);
+    expect(washes).toBeGreaterThanOrEqual(1);
+    expect(session.grid.isFluorideSealedAt(14.0, 11.5)).toBe(true);
+  });
+
+  it('is fully clearable and unlocks the Miswak/Colorado F⁻ note plus Bicarbonate Buffer Jet upgrade', () => {
+    const { bus, saveSys, session } = makeSession(fluorapatiteCoastCartridge);
+    let won = false;
+    bus.on('mission:complete', ({ won: w, breakdown, worldId }) => {
+      won = w;
+      saveSys.recordMissionCompletion({
+        mode: 'ARCADE',
+        worldId,
+        won: w,
+        breakdown,
+        historyNoteIds: fluorapatiteCoastCartridge.historyNoteIds,
+      });
+    });
+    for (let z = 5.0; z <= 27.0; z += 1.0) session.grid.applyFlossSegment(2.5, z, 61.5, z, 0.75);
+    session.step(1 / 60, IDLE);
+    expect(won).toBe(true);
+    expect(saveSys.getSave().unlockedHistoryNotes).toContain('1901_colorado_accra_miswak');
+    expect(saveSys.getSave().unlockedUpgrades).toContain('bicarb_buffer_jet');
+  });
+});
+
+describe('World 5 — Quorum Dome (1973 Skylab & 1978 EPS Biofilm Armor)', () => {
+  it('EPS domes deflect raw Sonic Bristles until fractured by Polymer Floss or Fluoride Surge', () => {
+    const { bus, session } = makeSession(orbitalBiofilmDomeCartridge);
+    expect(session.hasEpsDomes()).toBe(true);
+    expect(session.grid.getInitialEpsArmorCount()).toBeGreaterThan(200);
+    expect(session.grid.isEpsArmoredAt(15.5, 16.0)).toBe(true);
+
+    let deflections = 0;
+    const crackedVia: Array<'floss' | 'rinse'> = [];
+    bus.on('eps:deflected', ({ warnings }) => {
+      deflections += warnings;
+    });
+    bus.on('eps:cracked', ({ via }) => crackedVia.push(via));
+
+    // Raw brushing bounces off the Cupola EPS dome
+    session.probePos = { x: 15.5, z: 16.0 };
+    const cleanBefore = session.grid.getAreaCleanRatio(15.5, 16.0, 2.0);
+    for (let i = 0; i < 15; i++) {
+      session.step(1 / 30, { ...IDLE, scrubHeld: true, moveX: 0.4 });
+    }
+    expect(deflections).toBeGreaterThan(0);
+    expect(session.grid.isEpsArmoredAt(15.5, 16.0)).toBe(true);
+    expect(session.grid.getAreaCleanRatio(15.5, 16.0, 2.0)).toBeCloseTo(cleanBefore, 4);
+
+    // Quick-tap Polymer Floss auto-aims & fractures the EPS dome
+    session.probePos = { x: 13.0, z: 16.0 };
+    session.flossCooldown = 0;
+    session.step(1 / 30, { ...IDLE, fireFlossRequested: true });
+    expect(crackedVia).toContain('floss');
+    expect(session.grid.isEpsArmoredAt(15.5, 16.0)).toBe(false);
+
+    // Now Sonic Bristles orbit around (15.5, 16.0) and restore the commensal site!
+    for (let i = 0; i < 75; i++) {
+      const ang = (i / 75) * Math.PI * 2;
+      session.probePos = {
+        x: 15.5 + Math.cos(ang) * 0.7,
+        z: 16.0 + Math.sin(ang) * 0.7,
+      };
+      session.step(1 / 30, {
+        ...IDLE,
+        scrubHeld: true,
+        moveX: -Math.sin(ang) * 0.5,
+        moveZ: Math.cos(ang) * 0.5,
+      });
+    }
+    expect(session.grid.getAreaCleanRatio(15.5, 16.0, 2.0)).toBeGreaterThan(0.85);
+    expect(session.sites.find((s) => s.id === 'aurora_d0_2')?.restored).toBe(true);
+
+    // Fluoride-Bicarb Surge wave cracks the District 2 fortress dome at (55.0, 16.0)
+    expect(session.grid.isEpsArmoredAt(55.0, 16.0)).toBe(true);
+    session.probePos = { x: 55.0, z: 16.0 };
+    session.surgeMeter = 100;
+    session.step(1 / 30, { ...IDLE, fireRinseRequested: true });
+    expect(crackedVia).toContain('rinse');
+    expect(session.grid.isEpsArmoredAt(55.0, 16.0)).toBe(false);
+  });
+
+  it('is fully clearable and unlocks the 1973 Skylab & 1978 Biofilm field note', () => {
+    const { bus, saveSys, session } = makeSession(orbitalBiofilmDomeCartridge);
+    let won = false;
+    bus.on('mission:complete', ({ won: w, breakdown, worldId }) => {
+      won = w;
+      saveSys.recordMissionCompletion({
+        mode: 'ARCADE',
+        worldId,
+        won: w,
+        breakdown,
+        historyNoteIds: orbitalBiofilmDomeCartridge.historyNoteIds,
+      });
+    });
+    for (let z = 5.0; z <= 27.0; z += 1.0) session.grid.applyFlossSegment(2.5, z, 61.5, z, 0.75);
+    session.step(1 / 60, IDLE);
+    expect(won).toBe(true);
+    expect(saveSys.getSave().unlockedHistoryNotes).toContain('1973_skylab_orbit');
   });
 });

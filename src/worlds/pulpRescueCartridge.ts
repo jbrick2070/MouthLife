@@ -17,6 +17,8 @@ export const pulpRescueCartridge: WorldCartridge = {
   basePellicleDensity: 0.56,
   baselinePh: 6.4,
   probeSpawn: { x: 8.0, z: 16.0 },
+  challengeBlurb:
+    '90s Scramble: hit Saliva Springs to buffer acid, shatter Sucrose Crystals, and clean 85%+ before time runs out — zero permadeath!',
   districts: [
     {
       id: 'deep_pulp_crown',

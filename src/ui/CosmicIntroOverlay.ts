@@ -1,4 +1,4 @@
-import { DisposerBag } from '../engine/EventBus';
+import { DisposerBag, type EventBus } from '../engine/EventBus';
 import type { OverlayView } from '../engine/types';
 
 interface MohsEntry {
@@ -85,8 +85,36 @@ export class CosmicIntroOverlay implements OverlayView {
       onFinishOrSkip: () => void;
       isMuted: () => boolean;
       onToggleMute: () => void;
+      bus?: EventBus;
     }
   ) {}
+
+  private keyHandler = (e: KeyboardEvent): void => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'ArrowRight') {
+      if (this.beatIndex < COSMIC_BEATS.length - 1) {
+        this.beatIndex++;
+        this.callbacks.onBeatChanged(this.beatIndex);
+        this.render();
+      } else {
+        this.callbacks.onFinishOrSkip();
+      }
+    } else if (e.key === 'ArrowLeft' && this.beatIndex > 0) {
+      this.beatIndex--;
+      this.callbacks.onBeatChanged(this.beatIndex);
+      this.render();
+    } else if (e.key === 'Escape') {
+      this.callbacks.onFinishOrSkip();
+    }
+  };
+
+  private syncMuteUi(): void {
+    const btn = this.container?.querySelector<HTMLButtonElement>('#btn-cosmic-mute');
+    if (!btn) return;
+    const muted = this.callbacks.isMuted();
+    btn.textContent = muted ? '🔇' : '🔊';
+    btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  }
 
   mount(root: HTMLElement): void {
     this.beatIndex = 0;
@@ -94,6 +122,10 @@ export class CosmicIntroOverlay implements OverlayView {
     this.container = document.createElement('div');
     this.container.className = 'hub-shell';
     root.appendChild(this.container);
+    window.addEventListener('keydown', this.keyHandler);
+    if (this.callbacks.bus) {
+      this.disposers.add(this.callbacks.bus.on('audio:changed', () => this.syncMuteUi()));
+    }
     this.callbacks.onBeatChanged(0);
     this.render();
   }
@@ -114,6 +146,8 @@ export class CosmicIntroOverlay implements OverlayView {
             type="button"
             class="mohs-item ${m.isEnamel ? 'enamel-hero' : ''} ${idx === this.selectedMohsIdx ? 'selected' : ''}"
             data-mohs-idx="${idx}"
+            aria-pressed="${idx === this.selectedMohsIdx ? 'true' : 'false'}"
+            aria-label="Mohs ${m.hardness} ${m.name}"
           >
             <div style="font-size:0.86rem;font-weight:800;color:${m.isEnamel ? '#5eead4' : '#e0f2fe'}">${m.hardness}</div>
             <div style="font-size:0.66rem;font-weight:600;margin-top:2px;">${m.name}</div>
@@ -153,7 +187,14 @@ export class CosmicIntroOverlay implements OverlayView {
           <span class="pill-badge">Drag 3D Crystal to Inspect</span>
         </div>
         <div class="row-wrap">
-          <button type="button" id="btn-cosmic-mute" class="btn btn-sm" aria-label="Toggle Sound">
+          <button
+            type="button"
+            id="btn-cosmic-mute"
+            class="btn btn-sm btn-icon"
+            aria-label="Toggle Sound (M)"
+            aria-pressed="${this.callbacks.isMuted() ? 'true' : 'false'}"
+            title="Mute / Unmute (M)"
+          >
             ${this.callbacks.isMuted() ? '🔇' : '🔊'}
           </button>
           <button type="button" id="btn-skip-cosmic" class="btn btn-sm">Skip Intro →</button>
@@ -162,7 +203,7 @@ export class CosmicIntroOverlay implements OverlayView {
 
       <div class="hub-center-callout"></div>
 
-      <div class="cosmic-card glass-card ui-interactive">
+      <div class="cosmic-card glass-card ui-interactive" aria-live="polite">
         <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;color:#38bdf8;margin-bottom:4px;">
           ${beat.tag}
         </div>
@@ -240,6 +281,7 @@ export class CosmicIntroOverlay implements OverlayView {
   }
 
   dispose(): void {
+    window.removeEventListener('keydown', this.keyHandler);
     this.disposers.disposeAll();
     this.container?.remove();
     this.container = null;

@@ -37,6 +37,22 @@ export interface HillDef {
   height: number;
 }
 
+export interface ErosionZoneDef {
+  id: string;
+  cx: number;
+  cz: number;
+  radius: number;
+  targetPh: number;
+}
+
+export interface EpsDomeDef {
+  id: string;
+  cx: number;
+  cz: number;
+  radius: number;
+  initialDensity: number;
+}
+
 export const enum CellFlag {
   NONE = 0,
   PAINTABLE = 1 << 0,
@@ -126,6 +142,17 @@ export interface WorldCartridge {
    * a sweet sip fires every N seconds, plunging plaque pH below 5.5 for the recovery window.
    */
   stephanSipIntervalSec?: number;
+  /**
+   * Optional tart hibiscus-citrus erosion basins (World 4 `localPh`). Holds/pulses local pH around
+   * ~4.95 (below Hydroxyapatite 5.5, above Fluorapatite 4.5) so Fluorapatite conversion shines.
+   */
+  erosionZones?: ErosionZoneDef[];
+  erosionPulseIntervalSec?: number;
+  /**
+   * Optional zero-G quorum-sensing EPS polymer domes (World 5 `epsArmor`). Deflects Sonic Bristles
+   * until cracked open by Polymer Floss shear or a Fluoride-Bicarb Surge wave.
+   */
+  epsDomes?: EpsDomeDef[];
   /** Short HUD/Hub blurb describing this cartridge's signature biophysical challenge. */
   challengeBlurb?: string;
 }
@@ -143,6 +170,8 @@ export interface BrushApplyParams {
   sulcusIrritationPerSec?: number;
   /** True when HYDRA-1 is sweeping above PROBE_SWEEP_SPEED_THRESHOLD (gentle Bass motion). */
   isMovingSweep?: boolean;
+  /** True while HYDRA-1 carries Miswak + F⁻ lattice infusion (converts brushed enamel to Fluorapatite). */
+  convertToFluorapatite?: boolean;
 }
 
 export interface ToolApplyResult {
@@ -151,6 +180,9 @@ export interface ToolApplyResult {
   acidAbrasionWarnings: number;
   cellsSealed?: number;
   gumTenderWarnings?: number;
+  epsDeflectWarnings?: number;
+  epsCellsCracked?: number;
+  fluorapatiteConverted?: number;
 }
 
 export interface ScoreBreakdown {
@@ -403,6 +435,30 @@ export interface AppEventMap {
     pos: Vec2;
     remainingSec: number;
   };
+  'erosion:wash': {
+    washIndex: number;
+    targetPh: number;
+  };
+  'fluorapatite:infused': {
+    pos: Vec2;
+    cellsConverted: number;
+    durationSec: number;
+  };
+  'eps:deflected': {
+    pos: Vec2;
+    warnings: number;
+  };
+  'eps:cracked': {
+    pos: Vec2;
+    cellsCracked: number;
+    via: 'floss' | 'rinse';
+  };
+  'spring:triggered': { pos: Vec2 };
+  'mutans:bumped': { pos: Vec2 };
+  'mutans:popped': { pos: Vec2; via: 'brush' | 'floss' };
+  'surge:ready': Record<string, never>;
+  'audio:changed': { muted: boolean; musicVolume: number; sfxVolume: number };
+  'motion:changed': { reduced: boolean };
   'webgl:restored': Record<string, never>;
   'save:updated': {
     save: MouthLifeSaveV2;
