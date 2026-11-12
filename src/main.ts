@@ -722,6 +722,17 @@ function bootstrapMouthLife(): void {
   switchMode(currentMode);
   clock.start();
 
+  // Flush save state on iOS/mobile backgrounding or page hide
+  const flushSaveOnLifecycleExit = () => {
+    saveSys.save(saveSys.getSave(), Date.now());
+  };
+  window.addEventListener('pagehide', flushSaveOnLifecycleExit);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushSaveOnLifecycleExit();
+    }
+  });
+
   window.__MOUTHLIFE_DEBUG__ = {
     getMode: () => currentMode,
     getDrawCalls: () => sceneMgr.getLastDrawCalls(),

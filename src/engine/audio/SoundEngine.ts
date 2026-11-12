@@ -113,9 +113,21 @@ export class SoundEngine {
       this.hidden = document.visibilityState === 'hidden';
       document.addEventListener('visibilitychange', () => {
         this.hidden = document.visibilityState === 'hidden';
-        this.applyPlaybackState();
+        if (!this.hidden && this.gestureReceived && this.ctx && this.isContextSuspendedOrInterrupted(this.ctx)) {
+          this.ctx
+            .resume()
+            .then(() => this.applyPlaybackState())
+            .catch(() => {});
+        } else {
+          this.applyPlaybackState();
+        }
       });
     }
+  }
+
+  private isContextSuspendedOrInterrupted(ctx: AudioContext): boolean {
+    const state = ctx.state as string;
+    return state === 'suspended' || state === 'interrupted';
   }
 
   private hasUserActivation(): boolean {
@@ -138,13 +150,14 @@ export class SoundEngine {
       if (!AudioCtx) return;
       try {
         this.ctx = new AudioCtx();
+        this.ctx.addEventListener?.('statechange', () => this.applyPlaybackState());
         this.buildGraph();
       } catch {
         this.ctx = null;
         return;
       }
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.isContextSuspendedOrInterrupted(this.ctx)) {
       this.ctx
         .resume()
         .then(() => this.applyPlaybackState())
@@ -563,7 +576,7 @@ export class SoundEngine {
       if (!this.ctx || !this.sfxOut || this.prefs.muted || this.prefs.sfxVolume <= 0.001) return;
       fn(this.sfxOut, this.ctx.currentTime + 0.01);
     };
-    if (this.ctx.state === 'suspended') this.ctx.resume().then(go).catch(() => {});
+    if (this.isContextSuspendedOrInterrupted(this.ctx)) this.ctx.resume().then(go).catch(() => {});
     else go();
   }
 

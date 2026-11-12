@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ClockController } from '../src/engine/ClockController';
 import { EventBus } from '../src/engine/EventBus';
+import { SoundEngine } from '../src/engine/audio/SoundEngine';
 import { SaveSystem } from '../src/engine/persistence/SaveSystem';
 import { WorldSession } from '../src/engine/sim/WorldSession';
 import {
@@ -343,5 +345,52 @@ describe('new gameplay audio events', () => {
       fireDiscloseRequested: false,
     });
     expect(springs).toBe(1);
+  });
+
+  it("emits 'pacer:paused' when ClockController pauses or resumes an active pacer", () => {
+    const bus = new EventBus();
+    const clock = new ClockController(bus);
+    const states: boolean[] = [];
+    bus.on('pacer:paused', ({ paused }) => states.push(paused));
+
+    // Not active yet -> no event
+    clock.setPacerPaused(true);
+    expect(states).toEqual([]);
+
+    clock.startPacer();
+    clock.setPacerPaused(true);
+    clock.setPacerPaused(true); // duplicate state -> no duplicate emit
+    clock.setPacerPaused(false);
+    expect(states).toEqual([true, false]);
+  });
+
+  it("SoundEngine resumes iOS WebKit 'interrupted' AudioContext state on gesture", () => {
+    const sound = new SoundEngine(memStore());
+    let resumeCalls = 0;
+    const fakeCtx = {
+      state: 'interrupted',
+      currentTime: 0,
+      sampleRate: 44100,
+      resume: () => {
+        resumeCalls++;
+        fakeCtx.state = 'running';
+        return Promise.resolve();
+      },
+    };
+    const prevWindow = (globalThis as Record<string, unknown>).window;
+    (globalThis as Record<string, unknown>).window = {};
+    try {
+      (sound as unknown as { ctx: unknown; gestureReceived: boolean }).ctx = fakeCtx;
+      (sound as unknown as { ctx: unknown; gestureReceived: boolean }).gestureReceived = true;
+      sound.unlockOnGesture();
+      expect(resumeCalls).toBe(1);
+      expect(fakeCtx.state).toBe('running');
+    } finally {
+      if (prevWindow === undefined) {
+        delete (globalThis as Record<string, unknown>).window;
+      } else {
+        (globalThis as Record<string, unknown>).window = prevWindow;
+      }
+    }
   });
 });

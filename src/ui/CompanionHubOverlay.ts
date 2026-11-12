@@ -63,6 +63,7 @@ export class CompanionHubOverlay implements OverlayView {
   private selectedLayer: ToothLayerInfo['id'] = 'enamel';
   private selectedUniversalTooth = 3;
   private lastTouchedCrownIdx: number | null = null;
+  private confirmResetPending = false;
 
   private keyHandler = (e: KeyboardEvent): void => {
     if (this.activeModal === 'none') return;
@@ -187,6 +188,7 @@ export class CompanionHubOverlay implements OverlayView {
     const opener = this.modalOpenerSelector;
     this.modalOpenerSelector = null;
     this.activeModal = 'none';
+    this.confirmResetPending = false;
     if (closingModal === 'chart') {
       const sel = getToothByUniversal(this.selectedUniversalTooth);
       if (sel.companionArchIndex !== null) {
@@ -614,7 +616,7 @@ export class CompanionHubOverlay implements OverlayView {
               type="text"
               maxlength="24"
               value="${escapeHtml(save.playerProfile.displayName)}"
-              style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:0.88rem;margin-bottom:10px;"
+              style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:1rem;margin-bottom:10px;"
             />
             <div style="font-size:0.78rem;color:var(--text-muted);">Realistic Human Skin Tone (Fitzpatrick I–VI)</div>
             <div class="swatch-row">
@@ -915,21 +917,28 @@ export class CompanionHubOverlay implements OverlayView {
             aria-label="Exported ML2 Sync Code"
             readonly
             rows="3"
-            style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#99f6e4;font-size:0.74rem;padding:8px;"
+            style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#99f6e4;font-size:1rem;padding:8px;"
           >${escapeHtml(syncCode)}</textarea>
           <div class="row-wrap" style="margin:8px 0 12px 0;">
             <button type="button" id="btn-copy-sync" class="btn btn-primary btn-sm">📋 Copy ML2 Code</button>
             <button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>
+            <button type="button" id="btn-copy-beta-diag" class="btn btn-sm" title="Copy device & performance snapshot for beta feedback">🩺 Copy Beta Report</button>
           </div>
           <label for="txt-sync-import" style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Import ML2 Sync Code</label>
           <textarea
             id="txt-sync-import"
             placeholder="Paste ML2:... code here"
             rows="2"
-            style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:0.76rem;padding:8px;"
+            style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:1rem;padding:8px;"
           ></textarea>
           <div id="sync-import-status" role="alert" style="min-height:1.1em;margin-top:6px;font-size:0.76rem;color:#fca5a5;"></div>
-          <div style="margin-top:8px;text-align:right;">
+          <div class="row-between" style="margin-top:10px;flex-wrap:wrap;gap:8px;border-top:1px solid rgba(94,234,212,0.16);padding-top:10px;">
+            <div class="row-wrap" style="gap:6px;">
+              <a href="./privacy.html" target="_blank" rel="noopener noreferrer" class="btn btn-sm">🔒 Privacy & Notice ↗</a>
+              <button type="button" id="btn-reset-save" class="btn btn-sm" style="${this.confirmResetPending ? 'border-color:#fb7185;color:#fecdd3;' : ''}">
+                ${this.confirmResetPending ? '⚠️ Tap Again to Confirm Reset' : '🔄 Reset Save Data'}
+              </button>
+            </div>
             <button type="button" id="btn-apply-sync" class="btn btn-gold btn-sm">Import & Merge</button>
           </div>
         </div>
@@ -1383,8 +1392,16 @@ export class CompanionHubOverlay implements OverlayView {
     this.container.querySelector('#modal-bg')?.addEventListener('click', () => this.closeActiveModal());
 
     // Profile modal handlers
+    const syncPendingName = () => {
+      const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
+      if (inp) {
+        save.playerProfile.displayName = inp.value.trim().slice(0, 24) || save.playerProfile.displayName;
+      }
+    };
+
     this.container.querySelectorAll<HTMLButtonElement>('[data-skin-idx]').forEach((sw) => {
       sw.addEventListener('click', () => {
+        syncPendingName();
         save.playerProfile.skinToneIndex = Number(sw.dataset.skinIdx ?? 3);
         this.saveSys.save(save);
         this.render();
@@ -1393,6 +1410,7 @@ export class CompanionHubOverlay implements OverlayView {
 
     this.container.querySelectorAll<HTMLButtonElement>('[data-home-city]').forEach((b) => {
       b.addEventListener('click', () => {
+        syncPendingName();
         save.playerProfile.homeCityId = b.dataset.homeCity ?? 'toronto';
         this.selectedCityId = save.playerProfile.homeCityId;
         this.saveSys.save(save);
@@ -1401,8 +1419,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#btn-toggle-reduce-motion')?.addEventListener('click', () => {
-      const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
-      if (inp) save.playerProfile.displayName = inp.value.trim().slice(0, 24) || save.playerProfile.displayName;
+      syncPendingName();
       this.actions.onToggleReducedMotion?.();
       this.actions.onPlayUiTap();
       this.render();
@@ -1449,7 +1466,24 @@ export class CompanionHubOverlay implements OverlayView {
     // Sync Code handlers
     this.container.querySelector('#btn-copy-sync')?.addEventListener('click', () => {
       const code = this.saveSys.exportSyncCode();
-      navigator.clipboard?.writeText(code).catch(() => {});
+      const exportArea = this.container?.querySelector<HTMLTextAreaElement>('#txt-sync-export');
+      const fallbackSelectAndCopy = () => {
+        if (exportArea) {
+          exportArea.focus();
+          exportArea.select();
+          exportArea.setSelectionRange?.(0, code.length);
+          try {
+            document.execCommand?.('copy');
+          } catch {
+            // Selection remains highlighted for manual Copy on restricted WebViews
+          }
+        }
+      };
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(code).catch(() => fallbackSelectAndCopy());
+      } else {
+        fallbackSelectAndCopy();
+      }
       this.statusBanner = 'Copied ML2: Sync Code to clipboard!';
       this.closeActiveModal();
     });
@@ -1464,6 +1498,69 @@ export class CompanionHubOverlay implements OverlayView {
       a.download = 'backup.mouthlife.json';
       a.click();
       URL.revokeObjectURL(url);
+    });
+
+    this.container.querySelector('#btn-copy-beta-diag')?.addEventListener('click', () => {
+      const dbg = (window as unknown as {
+        __MOUTHLIFE_DEBUG__?: {
+          getDrawCalls?: () => number;
+          getQualityTier?: () => string;
+          getAudioState?: () => string;
+        };
+      }).__MOUTHLIFE_DEBUG__;
+      const cleared = Object.entries(save.worlds)
+        .filter(([, w]) => w.completed)
+        .map(([id]) => id);
+      const report = JSON.stringify({
+        app: 'MouthLife v1.0-beta',
+        ts: new Date().toISOString(),
+        viewport:
+          typeof window !== 'undefined'
+            ? `${window.innerWidth}x${window.innerHeight}@${Number(window.devicePixelRatio || 1).toFixed(2)}x`
+            : 'n/a',
+        qualityTier: dbg?.getQualityTier?.() ?? save.qualityPreference,
+        drawCalls: dbg?.getDrawCalls?.() ?? -1,
+        audioState: dbg?.getAudioState?.() ?? 'unknown',
+        stamps: save.totalBrushStamps,
+        ions: save.fluorideIons,
+        clearedWorlds: cleared,
+        syncCode: this.saveSys.exportSyncCode(),
+      });
+      const exportArea = this.container?.querySelector<HTMLTextAreaElement>('#txt-sync-export');
+      const fallbackCopy = () => {
+        if (exportArea) {
+          exportArea.value = report;
+          exportArea.focus();
+          exportArea.select();
+          exportArea.setSelectionRange?.(0, report.length);
+          try {
+            document.execCommand?.('copy');
+          } catch {
+            // Leave selected for manual copy
+          }
+        }
+      };
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(report).catch(() => fallbackCopy());
+      } else {
+        fallbackCopy();
+      }
+      this.statusBanner = 'Copied Beta Diagnostic Report to clipboard!';
+      this.closeActiveModal();
+    });
+
+    this.container.querySelector('#btn-reset-save')?.addEventListener('click', () => {
+      if (!this.confirmResetPending) {
+        this.confirmResetPending = true;
+        this.actions.onPlayUiTap();
+        this.render();
+        return;
+      }
+      this.confirmResetPending = false;
+      this.saveSys.resetToFreshSave();
+      this.selectedCityId = 'toronto';
+      this.statusBanner = 'Save data reset to a fresh Day-1 profile!';
+      this.closeActiveModal();
     });
 
     this.container.querySelector('#btn-apply-sync')?.addEventListener('click', () => {

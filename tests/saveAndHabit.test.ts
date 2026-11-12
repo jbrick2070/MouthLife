@@ -125,4 +125,22 @@ describe('SaveSystem & HabitBank', () => {
     expect(() => decodeSaveFromSyncCode('BAD_PREFIX:abc')).toThrow();
     expect(() => decodeSaveFromSyncCode('ML2:!!!not_base64!!!')).toThrow();
   });
+
+  it('resetToFreshSave cleanly restores a Day-1 profile for beta testing', () => {
+    const bus = new EventBus();
+    const sys = new SaveSystem(bus);
+    const save = sys.load(1_700_000_000_000);
+    save.totalBrushStamps = 9;
+    save.fluorideIons = 420;
+    save.playerProfile.displayName = 'Veteran';
+    sys.save(save, 1_700_000_100_000);
+    expect(sys.getSave().totalBrushStamps).toBe(9);
+
+    const fresh = sys.resetToFreshSave(1_700_000_200_000);
+    expect(fresh.totalBrushStamps).toBe(0);
+    expect(fresh.fluorideIons).toBe(0);
+    expect(fresh.playerProfile.displayName).toBe('Explorer');
+    expect(fresh.worlds.world_1.unlocked).toBe(true);
+    expect(fresh.worlds.world_2.unlocked).toBe(false);
+  });
 });

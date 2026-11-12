@@ -410,6 +410,9 @@ export interface AppEventMap {
     surfaceIdx: number;
     inFlossBonus: boolean;
   };
+  'pacer:paused': {
+    paused: boolean;
+  };
   'pacer:complete': {
     withFlossBonus: boolean;
     ionsAwarded: number;

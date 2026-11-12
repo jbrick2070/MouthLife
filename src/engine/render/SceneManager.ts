@@ -252,11 +252,13 @@ export class SceneManager {
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
       this.enamelMat.markTextureNeedsUpdate();
+      this.entityBatch.markTexturesNeedsUpdate();
       this.prewarmShaders();
       this.bus.emit('webgl:restored', {});
     });
 
     window.addEventListener('resize', () => this.handleResize());
+    window.visualViewport?.addEventListener('resize', () => this.handleResize());
     this.applyQualityTier('medium');
     this.handleResize();
     this.prewarmShaders();

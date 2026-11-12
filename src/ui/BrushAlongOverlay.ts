@@ -91,6 +91,12 @@ export class BrushAlongOverlay implements OverlayView {
     this.clock.startPacer();
     this.callbacks.onActiveQuadrantChanged(0);
     this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
+    this.disposers.add(
+      this.bus.on('pacer:paused', ({ paused }) => {
+        this.callbacks.onPauseChanged?.(paused);
+        this.syncPauseUi(paused);
+      })
+    );
     window.addEventListener('keydown', this.keyHandler);
 
     this.disposers.add(
@@ -188,6 +194,16 @@ export class BrushAlongOverlay implements OverlayView {
     return `<button type="button" id="btn-pacer-mute" class="btn btn-sm btn-icon" aria-label="Toggle Sound (M)" aria-pressed="${muted ? 'true' : 'false'}" title="Mute / Unmute (M)">${muted ? '🔇' : '🔊'}</button>`;
   }
 
+  private syncPauseUi(paused = this.clock.isPacerPaused()): void {
+    const button = this.container?.querySelector<HTMLButtonElement>('#btn-pacer-pause');
+    if (button) {
+      button.textContent = paused ? '▶ Resume Pacer' : '⏸ Pause';
+      button.setAttribute('aria-pressed', String(paused));
+    }
+    const note = this.container?.querySelector<HTMLElement>('#pacer-paused-note');
+    if (note) note.style.display = paused ? 'block' : 'none';
+  }
+
   private bindMuteBtn(): void {
     this.container?.querySelector('#btn-pacer-mute')?.addEventListener('click', () => {
       this.callbacks.onToggleMute?.();
@@ -257,13 +273,7 @@ export class BrushAlongOverlay implements OverlayView {
         const nextPaused = !this.clock.isPacerPaused();
         this.clock.setPacerPaused(nextPaused);
         this.callbacks.onPauseChanged?.(nextPaused);
-        const button = this.container?.querySelector<HTMLButtonElement>('#btn-pacer-pause');
-        if (button) {
-          button.textContent = nextPaused ? '▶ Resume Pacer' : '⏸ Pause';
-          button.setAttribute('aria-pressed', String(nextPaused));
-        }
-        const note = this.container?.querySelector<HTMLElement>('#pacer-paused-note');
-        if (note) note.style.display = nextPaused ? 'block' : 'none';
+        this.syncPauseUi(nextPaused);
       });
       return;
     }

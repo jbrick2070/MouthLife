@@ -138,6 +138,11 @@ export class TelemetryHudOverlay implements OverlayView {
       this.setPaused(!this.paused);
     }
   };
+  private visibilityHandler = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && !this.paused) {
+      this.setPaused(true);
+    }
+  };
 
   constructor(
     private readonly mode: 'ARCADE' | 'PULP_RESCUE',
@@ -351,6 +356,7 @@ export class TelemetryHudOverlay implements OverlayView {
     this.timerEl = this.container.querySelector('#hud-timer');
     this.buildPauseSheet();
     window.addEventListener('keydown', this.keyHandler);
+    document.addEventListener('visibilitychange', this.visibilityHandler);
 
     // Callout layer sits above the canvas but outside the flex HUD flow
     this.calloutLayer = document.createElement('div');
@@ -1339,6 +1345,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
   dispose(): void {
     window.removeEventListener('keydown', this.keyHandler);
+    document.removeEventListener('visibilitychange', this.visibilityHandler);
     if (this.paused) this.audio?.setPaused(false);
     this.disposers.disposeAll();
     this.calloutLayer?.remove();

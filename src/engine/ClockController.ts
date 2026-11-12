@@ -39,8 +39,8 @@ export class ClockController {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.accumulatorSec = 0;
-          if (this.pacerActive) {
-            this.pacerPausedManual = true;
+          if (this.pacerActive && !this.pacerPausedManual) {
+            this.setPacerPaused(true);
           }
         } else {
           this.lastNowMs = performance.now();
@@ -87,9 +87,13 @@ export class ClockController {
   }
 
   setPacerPaused(paused: boolean): void {
+    const changed = this.pacerPausedManual !== paused;
     this.pacerPausedManual = paused;
     if (!paused) {
       this.requestScreenWakeLock();
+    }
+    if (changed && this.pacerActive) {
+      this.bus.emit('pacer:paused', { paused });
     }
   }
 

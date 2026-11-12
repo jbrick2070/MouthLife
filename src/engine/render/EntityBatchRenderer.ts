@@ -1302,6 +1302,10 @@ export class EntityBatchRenderer {
     }
   }
 
+  markTexturesNeedsUpdate(): void {
+    this.shadowTex.needsUpdate = true;
+  }
+
   dispose(): void {
     this.shadowTex.dispose();
   }

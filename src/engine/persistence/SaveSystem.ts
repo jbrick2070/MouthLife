@@ -396,6 +396,16 @@ export class SaveSystem {
     return this.currentSave;
   }
 
+  /**
+   * Resets local progress to a brand-new Day-1 save (for beta testing or fresh-start requests).
+   */
+  resetToFreshSave(nowEpochMs = Date.now()): MouthLifeSaveV2 {
+    this.currentSave = createDefaultSave(nowEpochMs);
+    this.persistInternal(nowEpochMs);
+    this.bus.emit('save:updated', { save: this.currentSave });
+    return this.currentSave;
+  }
+
   private persistInternal(nowEpochMs: number): void {
     this.currentSave.lastSavedEpochMs = nowEpochMs;
     const serialized = JSON.stringify(this.currentSave);
