@@ -6,7 +6,8 @@ A progressive stylized-3D browser arcade adventure and daily "Smooth Bask" oral-
 - **Playable Modes:**
   - **Smooth Bask Companion Hub** — Interactive 3D dental arch (with live crown tooth-numbering identification on tap/rub!), Interactive 32-Tooth Clinical Chart (`Universal #1–#32`, `FDI 11–48`, `Palmer`), regional treats, Saliva Stasis protection, Bio-Actuator Lab, Global Dental History Almanac, and portable `ML2:` sync codes.
   - **2-Minute Sink Brush-Along (+20s C-Curve Floss Bonus)** — Hands-free quadrant/surface pacer teaching real clinical quadrant numbers (`Q1–Q4`) and surface codes (`B/F`, `O/I`, `L/P`, `M/D`) while awarding monotonic Habit Stamps and Fluoride Ions.
-  - **5-World Earth-to-Orbit Arcade Campaign + 90s Pulp Rescue** — Pilot HYDRA-1 with Sonic Brush, Floss Zip, and Fluoride Surge across *Plaque City* (Toronto), *Biofilm Lagoon* (Lagos), *Candy Canyon* (Tokyo), *Tartar Ridge* (Mexico City), and *Zero-G Enamel Station* (Low-Earth Orbit), each paired with bite-sized clinical dentistry pearls.
+  - **5-World Earth-to-Orbit Arcade Campaign + 90s Pulp Rescue** — Pilot HYDRA-1 with Sonic Brush, Floss Zip, and Fluoride Surge across *Plaque City* (Toronto), *Crescent Sulcus* (New Orleans), *Neon Acid Clock* (Tokyo & Chicago), *Fluorapatite Coast* (Accra & Colorado Springs), and *Quorum Dome* (Station Aurora, 408 km Low-Earth Orbit), each paired with bite-sized clinical dentistry pearls and historical breakthroughs.
+- **100% On-Device & Offline-Ready PWA:** Zero sign-up, zero ads, automatic offline Service Worker shell caching for iPhone/Android *Add to Home Screen* bathroom play, and portable `ML2:` cross-device sync codes.
 
 ---
 

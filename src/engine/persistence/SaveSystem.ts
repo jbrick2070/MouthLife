@@ -6,7 +6,7 @@ import {
   REALISTIC_SKIN_TONES,
 } from '../../config/hostsAndHistory';
 import { UPGRADE_CATALOG, UPGRADE_IDS } from '../../config/upgrades';
-import { createInitialCompanionState } from '../companion/CompanionArchSim';
+import { CompanionArchSim, createInitialCompanionState } from '../companion/CompanionArchSim';
 import type { EventBus } from '../EventBus';
 import type {
   MasteryGrade,
@@ -27,6 +27,36 @@ const GRADE_ORDER: Record<MasteryGrade, number> = {
   S: 4,
   FLUORAPATITE_GOLD: 5,
 };
+
+const CAMPAIGN_UNLOCK_ORDER = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'] as const;
+
+/**
+ * Ensures campaign worlds unlock sequentially when the preceding stage is cleared
+ * OR when monotonic Habit Stamp milestones are met (`world_1` is always unlocked).
+ */
+export function reconcileWorldUnlocks(save: MouthLifeSaveV2): void {
+  for (const city of HOST_CITIES) {
+    const rec = save.worlds[city.worldId] ?? createDefaultWorldRecord(city.worldId === 'world_1');
+    if (
+      city.worldId === 'world_1' ||
+      rec.completed ||
+      save.totalBrushStamps >= city.unlockStampsRequired
+    ) {
+      rec.unlocked = true;
+    }
+    save.worlds[city.worldId] = rec;
+  }
+
+  for (let i = 1; i < CAMPAIGN_UNLOCK_ORDER.length; i++) {
+    const prevId = CAMPAIGN_UNLOCK_ORDER[i - 1];
+    const currId = CAMPAIGN_UNLOCK_ORDER[i];
+    if (save.worlds[prevId]?.completed) {
+      const rec = save.worlds[currId] ?? createDefaultWorldRecord(true);
+      rec.unlocked = true;
+      save.worlds[currId] = rec;
+    }
+  }
+}
 
 function clampInt(val: unknown, min: number, max = Number.MAX_SAFE_INTEGER, fallback = min): number {
   if (typeof val !== 'number' || !Number.isFinite(val)) return fallback;
@@ -283,6 +313,7 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
     }
   }
 
+  reconcileWorldUnlocks(base);
   return base;
 }
 
@@ -427,6 +458,7 @@ export class SaveSystem {
           this.currentSave.totalBrushStamps
         );
         this.currentSave = incoming;
+        this.checkThresholdAutoUnlocks();
         this.bus.emit('save:updated', { save: this.currentSave });
         return true;
       }
@@ -529,15 +561,8 @@ export class SaveSystem {
       }
     }
 
-    // Unlock preview campaign worlds when Stamp milestones are met
-    for (const city of HOST_CITIES) {
-      if (this.currentSave.totalBrushStamps >= city.unlockStampsRequired) {
-        const rec =
-          this.currentSave.worlds[city.worldId] ?? createDefaultWorldRecord(true);
-        rec.unlocked = true;
-        this.currentSave.worlds[city.worldId] = rec;
-      }
-    }
+    // Unlock campaign worlds sequentially on stage clear OR when Stamp milestones are met
+    reconcileWorldUnlocks(this.currentSave);
 
     return newlyUnlocked;
   }
@@ -586,8 +611,10 @@ export class SaveSystem {
       imported.totalBrushStamps,
       this.currentSave.totalBrushStamps
     );
+    CompanionArchSim.reconcileOfflineElapsed(imported.companion, nowEpochMs);
     imported.saveRevision = Math.max(this.currentSave.saveRevision, imported.saveRevision) + 1;
     this.currentSave = imported;
+    this.checkThresholdAutoUnlocks();
     this.persistInternal(nowEpochMs);
     this.bus.emit('save:updated', { save: this.currentSave });
     return this.currentSave;

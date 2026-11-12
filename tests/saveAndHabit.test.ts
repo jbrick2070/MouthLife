@@ -143,4 +143,58 @@ describe('SaveSystem & HabitBank', () => {
     expect(fresh.worlds.world_1.unlocked).toBe(true);
     expect(fresh.worlds.world_2.unlocked).toBe(false);
   });
+
+  it('unlocks subsequent campaign worlds sequentially on stage clear and reconciles offline + unlocks on sync import', () => {
+    const bus = new EventBus();
+    const sys = new SaveSystem(bus);
+    sys.load(1_700_000_000_000);
+    expect(sys.getSave().worlds.world_2.unlocked).toBe(false);
+    expect(sys.getSave().worlds.world_5.unlocked).toBe(false);
+
+    // Clearing World 1 unlocks World 2 immediately even with only 1 Habit Stamp (< 4 stamp milestone)
+    sys.recordMissionCompletion({
+      mode: 'ARCADE',
+      worldId: 'world_1',
+      won: true,
+      breakdown: {
+        restorationPts: 4800,
+        techniquePts: 2000,
+        ecologyPts: 1200,
+        parTimePts: 900,
+        totalScore: 8900,
+        grade: 'S',
+        cleanlinessPct: 96,
+        sitesRestored: 10,
+        sitesTotal: 10,
+        elapsedSec: 190,
+        ionsEarned: 89,
+      },
+      historyNoteIds: [],
+      nowEpochMs: 1_700_000_010_000,
+    });
+    expect(sys.getSave().totalBrushStamps).toBe(1);
+    expect(sys.getSave().worlds.world_2.unlocked).toBe(true);
+    expect(sys.getSave().worlds.world_3.unlocked).toBe(false);
+
+    // Exporting at t0 in Smooth Bask and importing 6 hours later reconciles idle ions + merged stamp auto-unlocks
+    const src = new SaveSystem(new EventBus());
+    const t0 = 1_700_000_000_000;
+    const srcSave = src.load(t0);
+    srcSave.companion.smoothnessIndex = 100;
+    srcSave.companion.unclaimedIdleIons = 0;
+    srcSave.companion.lastEvaluatedEpochMs = t0;
+    src.save(srcSave, t0);
+    const code = src.exportSyncCode();
+
+    const dst = new SaveSystem(new EventBus());
+    const dstSave = dst.load(t0);
+    dstSave.totalBrushStamps = 8; // Enough to unlock World 3 (8 stamps) + Hydro-Sonic (6 stamps)
+    dst.save(dstSave, t0);
+
+    const sixHoursLater = t0 + 6 * 3_600_000;
+    const merged = dst.importSyncCode(code, sixHoursLater);
+    expect(merged.companion.unclaimedIdleIons).toBe(36); // 6h * 6 Ions/hr Smooth Bask
+    expect(merged.worlds.world_3.unlocked).toBe(true);
+    expect(merged.unlockedUpgrades).toContain('hydro_sonic_pulse');
+  });
 });

@@ -399,22 +399,50 @@ export interface RecommendedDiveChoice {
 }
 
 /**
- * Picks the next uncleared campaign world for the primary Hub Dive CTA so players advance
- * through Worlds 1..5 in one tap without hunting through the Globe strip; falls back to the
+ * True when a campaign world can be launched: World 1 is always open; Worlds 2..5 unlock when
+ * already marked unlocked/completed, when the preceding campaign stage is cleared, or when the
+ * city's Habit Stamp milestone is met.
+ */
+export function isCampaignWorldUnlocked(
+  worldId: string,
+  worlds: Readonly<Record<string, { unlocked?: boolean; completed?: boolean } | undefined>>,
+  totalBrushStamps = 0,
+  unlockStampsRequired = Number.POSITIVE_INFINITY,
+  campaignWorldIds: readonly string[] = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5']
+): boolean {
+  if (worldId === 'world_1') return true;
+  const rec = worlds[worldId];
+  if (rec?.unlocked || rec?.completed) return true;
+  if (totalBrushStamps >= unlockStampsRequired) return true;
+  const idx = campaignWorldIds.indexOf(worldId);
+  if (idx > 0 && worlds[campaignWorldIds[idx - 1]]?.completed) return true;
+  return false;
+}
+
+/**
+ * Picks the next uncleared (and unlocked) campaign world for the primary Hub Dive CTA so players
+ * advance through Worlds 1..5 in one tap without hunting through the Globe strip; falls back to the
  * player's Home City world once all campaign worlds are cleared.
  */
 export function pickRecommendedDiveWorld(
-  completedWorlds: Readonly<Record<string, { completed?: boolean } | undefined>>,
+  completedWorlds: Readonly<Record<string, { unlocked?: boolean; completed?: boolean } | undefined>>,
   homeWorldId: string,
   campaignWorldIds: readonly string[] = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5']
 ): RecommendedDiveChoice {
   for (let i = 0; i < campaignWorldIds.length; i++) {
     const id = campaignWorldIds[i];
-    if (!completedWorlds[id]?.completed) {
+    if (!completedWorlds[id]?.completed && isCampaignWorldUnlocked(id, completedWorlds, 0, Number.POSITIVE_INFINITY, campaignWorldIds)) {
       return { worldId: id, stageNumber: i + 1 };
     }
   }
-  return { worldId: homeWorldId, stageNumber: null };
+  const homeUnlocked = isCampaignWorldUnlocked(
+    homeWorldId,
+    completedWorlds,
+    0,
+    Number.POSITIVE_INFINITY,
+    campaignWorldIds
+  );
+  return { worldId: homeUnlocked ? homeWorldId : (campaignWorldIds[0] ?? 'world_1'), stageNumber: null };
 }
 
 /**

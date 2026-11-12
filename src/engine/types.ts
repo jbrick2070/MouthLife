@@ -166,6 +166,7 @@ export interface BrushApplyParams {
   removalPerSec: number;
   dt: number;
   hasBassUpgrade: boolean;
+  hasHydroSonicUpgrade?: boolean;
   /** Gum irritation added per second on SULCUS cells while scrubbing stationary (0 disables). */
   sulcusIrritationPerSec?: number;
   /** True when HYDRA-1 is sweeping above PROBE_SWEEP_SPEED_THRESHOLD (gentle Bass motion). */

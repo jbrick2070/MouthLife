@@ -253,4 +253,63 @@ describe('WorldSession — Plaque City Integration', () => {
     expect(session.acidPools.some((p) => p.pos.x <= d0.maxX)).toBe(false);
     expect(session.grid.getDistrictCleanRatio(0)).toBe(1);
   });
+
+  it('credits Ecology points for district-sealed crystals & severed bridges (reaching 1,500 cap) and extends Hydro-Sonic reach globally', () => {
+    const bus = new EventBus();
+    const saveSys = new SaveSystem(bus);
+    saveSys.load(1_700_000_000_000);
+    const session = new WorldSession(bus);
+    session.loadCartridge(plaqueCityCartridge, saveSys.getSave(), 'ARCADE');
+
+    const idle = {
+      moveX: 0,
+      moveZ: 0,
+      scrubHeld: false,
+      aimWorldPos: null,
+      fireFlossRequested: false,
+      fireRinseRequested: false,
+      fireDiscloseRequested: false,
+    };
+
+    // Sever all 3 interdental biofilm bridges via Floss across each alley mouth
+    for (const alley of plaqueCityCartridge.interdentalAlleys) {
+      session.probeZip = null;
+      session.probePos = { x: alley.endpointA.x, z: alley.endpointA.z };
+      session.flossCooldown = 0;
+      session.step(1 / 60, {
+        ...idle,
+        fireFlossRequested: true,
+        aimWorldPos: { x: alley.endpointB.x, z: alley.endpointB.z },
+      });
+    }
+    expect(session.bridges.every((b) => !b.intact)).toBe(true);
+
+    // Seal all 3 districts WITHOUT pre-shattering sucrose crystals: sealing neutralizes & credits them!
+    for (let z = 5.0; z <= 27.0; z += 1.0) {
+      session.grid.applyFlossSegment(2.5, z, 61.5, z, 0.75);
+    }
+    session.step(1 / 60, idle);
+    const breakdown = session.scoring.evaluateBreakdown({
+      worldCleanRatio: 1,
+      sitesTotal: session.sites.length,
+      elapsedSec: 120,
+      parTimeSec: plaqueCityCartridge.parTimeSec,
+    });
+    expect(breakdown.ecologyPts).toBe(1500);
+
+    // Hydro-Sonic upgrade provides wider sweep cleaning reach in World 1 than un-upgraded brush
+    const baseSession = new WorldSession(new EventBus());
+    baseSession.loadCartridge(plaqueCityCartridge, saveSys.getSave(), 'ARCADE');
+    const hydroSave = saveSys.getSave();
+    hydroSave.unlockedUpgrades.push('hydro_sonic_pulse');
+    hydroSave.equippedUpgrades.brush = 'hydro_sonic_pulse';
+    const hydroSession = new WorldSession(new EventBus());
+    hydroSession.loadCartridge(plaqueCityCartridge, hydroSave, 'ARCADE');
+
+    for (let i = 0; i < 30; i++) {
+      baseSession.step(1 / 60, { ...idle, moveX: 1, scrubHeld: true });
+      hydroSession.step(1 / 60, { ...idle, moveX: 1, scrubHeld: true });
+    }
+    expect(hydroSession.grid.getWorldCleanRatio()).toBeGreaterThan(baseSession.grid.getWorldCleanRatio());
+  });
 });

@@ -8,6 +8,7 @@ import {
   EPS_FLOSS_CRACK_HALF_WIDTH,
   EPS_RINSE_BIOFILM_CHIP,
   GUM_TENDER_THRESHOLD,
+  HYDROSONIC_MARGIN_BOOST,
   SULCUS_MOVING_IRRITATION_MULT,
   FLUORIDE_SEAL_RESOIL_MULT,
   MARGIN_BASE_PENALTY,
@@ -358,7 +359,9 @@ export class OralSurfaceGrid {
         const marginMult = isMargin
           ? params.hasBassUpgrade
             ? MARGIN_BASE_PENALTY * BASS_UPGRADE_MARGIN_BOOST
-            : MARGIN_BASE_PENALTY
+            : params.hasHydroSonicUpgrade
+              ? MARGIN_BASE_PENALTY * HYDROSONIC_MARGIN_BOOST
+              : MARGIN_BASE_PENALTY
           : 1.0;
 
         const falloff = 1.0 - 0.22 * (dSq / Math.max(0.01, rSq));

@@ -41,12 +41,15 @@ export const SURGE_PER_EPS_CELL_CRACKED = 0.08;
 
 // Sonic Bristle Actuator
 export const BRUSH_BASE_RADIUS = 1.75;
+export const BRUSH_HYDROSONIC_RADIUS_MULT = 1.16; // +16% acoustic micro-bubble reach beyond filament tips
 export const BRUSH_OVERDRIVE_RADIUS_MULT = 1.25;
 export const BRUSH_BASE_ARC_RAD = (95 * Math.PI) / 180;
+export const BRUSH_HYDROSONIC_ARC_RAD = (115 * Math.PI) / 180;
 export const BRUSH_BASS_ARC_RAD = (130 * Math.PI) / 180;
 export const BRUSH_MOVING_RATE = 2.65;
 export const BRUSH_STATIONARY_RATE = 0.85;
 export const MARGIN_BASE_PENALTY = 0.65;
+export const HYDROSONIC_MARGIN_BOOST = 1.30; // +30% acoustic fluid shear in fissures/margins
 export const BASS_UPGRADE_MARGIN_BOOST = 1.45; // 0.65 * 1.45 = 0.9425x
 export const FLUORIDE_SEAL_RESOIL_MULT = 0.40;
 

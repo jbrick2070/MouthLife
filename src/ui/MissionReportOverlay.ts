@@ -3,6 +3,7 @@ import { getWorldDentalLesson } from '../config/dentalChart';
 import { getHistoryNoteById } from '../config/hostsAndHistory';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import type { OverlayView, ScoreBreakdown } from '../engine/types';
+import { formatClock } from './hudHelpers';
 
 export interface MissionReportData {
   mode: 'ARCADE' | 'PULP_RESCUE';
@@ -11,6 +12,7 @@ export interface MissionReportData {
   breakdown: ScoreBreakdown;
   unlockedHistoryNoteId: string | null;
   bonusRescueIons: number;
+  parTimeSec?: number;
   worldTitle?: string;
   hostCityLabel?: string;
   newBest?: boolean;
@@ -37,6 +39,16 @@ export function buildReportHeadline(r: MissionReportData): string {
   if (!r.won) return '🌱 Dive Complete — Keep Remineralizing!';
   const place = r.hostCityLabel ? ` • ${r.hostCityLabel}` : '';
   return `✨ ${r.worldTitle ?? 'Plaque City'} Remineralized${place}! Smooth Bask Restored!`;
+}
+
+/** Floating 3D arch status pill above the Mission Report card (pure, unit-testable). */
+export function buildReportArchBanner(r: Pick<MissionReportData, 'mode' | 'won'>): string {
+  if (!r.won) {
+    return r.mode === 'PULP_RESCUE'
+      ? '🛡️ Pulp Stabilized at 50% — Replay or Brush-Along for Glassy Shine!'
+      : '🌱 Enamel Stabilized — Replay or Brush-Along for Glassy Shine!';
+  }
+  return 'Drag 3D Arch to Admire Fresh-Mint Glassy Enamel!';
 }
 
 /** Which report button should receive keyboard focus first (pure, unit-testable). */
@@ -166,7 +178,7 @@ export class MissionReportOverlay implements OverlayView {
 
       <div class="hub-center-callout">
         <div class="bask-floating-pill">
-          Drag 3D Arch to Admire Fresh-Mint Glassy Enamel!
+          ${esc(buildReportArchBanner(this.report))}
         </div>
       </div>
 
@@ -203,7 +215,11 @@ export class MissionReportOverlay implements OverlayView {
               <strong id="report-pts-ecology" class="report-num" style="font-size:0.84rem;color:#34d399;">${sampleScoreReveal(breakdown.ecologyPts, 0, reduced)}</strong>
             </div>
             <div class="mini-meter">
-              <div class="mini-meter-label"><span>Par Time</span></div>
+              <div class="mini-meter-label"><span>${
+                this.report.parTimeSec && this.report.parTimeSec > 0
+                  ? `${mode === 'PULP_RESCUE' ? 'Time' : 'Par'} ${formatClock(breakdown.elapsedSec)}/${formatClock(this.report.parTimeSec)}`
+                  : 'Par Time'
+              }</span></div>
               <strong id="report-pts-partime" class="report-num" style="font-size:0.84rem;color:#fbbf24;">${sampleScoreReveal(breakdown.parTimePts, 0, reduced)}</strong>
             </div>
           </div>

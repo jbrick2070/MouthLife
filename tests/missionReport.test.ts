@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { pickReportPrimaryButtonId, sampleScoreReveal } from '../src/ui/MissionReportOverlay';
+import {
+  buildReportArchBanner,
+  pickReportPrimaryButtonId,
+  sampleScoreReveal,
+} from '../src/ui/MissionReportOverlay';
 
 describe('Mission report keyboard start & score celebration', () => {
   it('focuses the next dive after a win, replay after a loss, hub when there is no next world', () => {
@@ -19,5 +23,11 @@ describe('Mission report keyboard start & score celebration', () => {
     // Reduced motion renders the final score on frame 0 with zero count-up
     expect(sampleScoreReveal(2450, 0, true)).toBe(2450);
     expect(sampleScoreReveal(2450, 0.3, true)).toBe(2450);
+  });
+
+  it('shows emergency stabilization banner on Pulp Rescue timeout instead of glassy-enamel win copy', () => {
+    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: false })).toContain('50%');
+    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: true })).toContain('Glassy Enamel');
+    expect(buildReportArchBanner({ mode: 'ARCADE', won: true })).toContain('Glassy Enamel');
   });
 });

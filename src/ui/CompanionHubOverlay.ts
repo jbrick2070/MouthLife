@@ -31,6 +31,7 @@ import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
 import {
   bindBottomSheetSwipeClose,
   countAffordableLockedUpgrades,
+  isCampaignWorldUnlocked,
   isCompactViewport,
   loadSeenHints,
   pickRecommendedDiveWorld,
@@ -580,6 +581,14 @@ export class CompanionHubOverlay implements OverlayView {
 
     const campaignIds = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'];
     const cleared = campaignIds.filter((id) => save.worlds[id]?.completed).length;
+    const isCityUnlocked = (c: (typeof HOST_CITIES)[number]): boolean =>
+      isCampaignWorldUnlocked(c.worldId, save.worlds, save.totalBrushStamps, c.unlockStampsRequired, campaignIds);
+    const worldUnlocked = isCityUnlocked(city);
+    const stageIdx = campaignIds.indexOf(city.worldId);
+    const prevWorldTitle =
+      stageIdx > 0 && isPlayableWorld(campaignIds[stageIdx - 1])
+        ? getCartridgeById(campaignIds[stageIdx - 1]).title
+        : 'Previous World';
     const gradeBadge = (worldId: string): string => {
       const g = save.worlds[worldId]?.bestGrade;
       if (!g || g === 'NONE') return '';
@@ -599,18 +608,19 @@ export class CompanionHubOverlay implements OverlayView {
         </div>
       </div>
       <div class="city-strip">
-        ${HOST_CITIES.map(
-          (c) => `
+        ${HOST_CITIES.map((c) => {
+          const unlockedPill = isCityUnlocked(c);
+          return `
           <button
             type="button"
             class="city-pill ${c.id === city.id ? 'active' : ''}"
             data-city-id="${c.id}"
             aria-pressed="${c.id === city.id ? 'true' : 'false'}"
           >
-            ${c.isOrbital ? '🛰️' : '📍'} ${escapeHtml(c.city)}${gradeBadge(c.worldId)}
+            ${unlockedPill ? (c.isOrbital ? '🛰️' : '📍') : '🔒'} ${escapeHtml(c.city)}${gradeBadge(c.worldId)}
           </button>
-        `
-        ).join('')}
+        `;
+        }).join('')}
       </div>
 
       <div class="hub-drawer-collapsible globe-story-card" style="background:rgba(4,16,28,0.68);border:1px solid rgba(94,234,212,0.2);border-radius:12px;padding:9px 11px;">
@@ -620,7 +630,7 @@ export class CompanionHubOverlay implements OverlayView {
             <strong style="font-size:0.88rem;">${escapeHtml(city.hostName)}</strong>
             <span style="font-size:0.74rem;color:var(--text-muted);">• ${escapeHtml(city.hostRole)}</span>
           </div>
-          <span class="pill-badge">${rec?.bestGrade && rec.bestGrade !== 'NONE' ? `Best: ${rec.bestGrade}` : 'Unrated'}</span>
+          <span class="pill-badge">${rec?.bestGrade && rec.bestGrade !== 'NONE' ? `Best: ${rec.bestGrade}` : worldUnlocked ? 'Unrated' : '🔒 Locked'}</span>
         </div>
         <p style="margin:5px 0;font-size:0.77rem;color:#cbd5e1;line-height:1.38;">
           ${escapeHtml(city.scenarioSummary)}
@@ -637,16 +647,18 @@ export class CompanionHubOverlay implements OverlayView {
       <div class="row-between globe-launch-row">
         <span class="globe-blurb-copy" style="font-size:0.74rem;color:var(--text-muted);">
           ${
-            city.playableInSlice && isPlayableWorld(city.worldId)
+            city.playableInSlice && isPlayableWorld(city.worldId) && worldUnlocked
               ? `<strong style="color:#5eead4;">${escapeHtml(getCartridgeById(city.worldId).title)}</strong><span class="mob-hide"> • ${escapeHtml(
                   getCartridgeById(city.worldId).challengeBlurb ?? '3 Districts • Brush + Floss Zip + Fluoride Surge'
                 )}</span><span class="mob-only"> • ${escapeHtml(city.hostName)}</span>`
-              : `<span class="mob-hide">Campaign Expansion Preview • </span>${stampUnlocked ? 'Milestone Reached!' : `Unlocks at ${city.unlockStampsRequired} Stamps`}`
+              : city.playableInSlice && isPlayableWorld(city.worldId)
+                ? `<strong style="color:#fde68a;">🔒 ${escapeHtml(getCartridgeById(city.worldId).title)}</strong> • Clear ${escapeHtml(prevWorldTitle)} or ${city.unlockStampsRequired} Stamps (${save.totalBrushStamps}/${city.unlockStampsRequired})`
+                : `<span class="mob-hide">Campaign Expansion Preview • </span>${stampUnlocked ? 'Milestone Reached!' : `Unlocks at ${city.unlockStampsRequired} Stamps`}`
           }
         </span>
         <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
           ${
-            city.playableInSlice && isPlayableWorld(city.worldId)
+            city.playableInSlice && isPlayableWorld(city.worldId) && worldUnlocked
               ? `<button type="button" id="btn-globe-dive" class="btn btn-primary">
                   <span class="mob-hide">🚀 Dive Into ${escapeHtml(city.city)} →</span><span class="mob-only">🚀 Dive →</span>
                 </button>`
@@ -770,21 +782,23 @@ export class CompanionHubOverlay implements OverlayView {
               ${UPGRADE_CATALOG.map((u) => {
                 const unlocked = save.unlockedUpgrades.includes(u.id);
                 const equipped = save.equippedUpgrades[u.slot] === u.id;
+                const otherEquippedInSlot = Boolean(save.equippedUpgrades[u.slot]) && !equipped;
+                const sharedSlot = UPGRADE_CATALOG.filter((x) => x.slot === u.slot).length > 1;
                 const canAfford = save.fluorideIons >= u.ionCost;
                 return `
                   <div style="background:rgba(4,16,28,0.8);border:1px solid ${equipped ? '#2dd4bf' : 'rgba(148,184,204,0.22)'};border-radius:12px;padding:10px;">
                     <div class="row-between">
                       <div>
                         <strong style="font-size:0.88rem;color:#fff;">${escapeHtml(u.name)}</strong>
-                        <span class="pill-badge" style="margin-left:5px;">${u.slot.toUpperCase()}</span>
+                        <span class="pill-badge" style="margin-left:5px;">${u.slot.toUpperCase()}${sharedSlot ? ' • 1 ACTIVE' : ''}</span>
                       </div>
                       ${
                         unlocked
                           ? `<button type="button" class="btn btn-sm ${equipped ? 'btn-primary' : ''}" aria-pressed="${equipped ? 'true' : 'false'}" data-equip-id="${u.id}">
-                              ${equipped ? '✓ Equipped' : 'Equip'}
+                              ${equipped ? '✓ Equipped' : otherEquippedInSlot ? `⇄ Swap ${u.slot[0].toUpperCase()}${u.slot.slice(1)}` : 'Equip'}
                             </button>`
                           : `<button type="button" class="btn btn-sm ${canAfford ? 'btn-gold' : ''}" data-buy-id="${u.id}" ${!canAfford ? 'disabled style="opacity:0.45;"' : ''}>
-                              Unlock (${u.ionCost} Ions)
+                              ${otherEquippedInSlot ? `Unlock & Equip (${u.ionCost} Ions)` : `Unlock (${u.ionCost} Ions)`}
                             </button>`
                       }
                     </div>
@@ -1323,7 +1337,13 @@ export class CompanionHubOverlay implements OverlayView {
     this.container.querySelector('#btn-globe-dive')?.addEventListener('click', () => {
       this.dismissWelcome();
       const city = getHostCityById(this.selectedCityId);
-      if (city.playableInSlice && isPlayableWorld(city.worldId)) {
+      const unlocked = isCampaignWorldUnlocked(
+        city.worldId,
+        save.worlds,
+        save.totalBrushStamps,
+        city.unlockStampsRequired
+      );
+      if (city.playableInSlice && isPlayableWorld(city.worldId) && unlocked) {
         this.actions.onLaunchArcadeWorld(city.worldId);
       }
     });

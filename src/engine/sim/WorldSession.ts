@@ -5,6 +5,8 @@ import {
   BRUSH_BASE_ARC_RAD,
   BRUSH_BASE_RADIUS,
   BRUSH_BASS_ARC_RAD,
+  BRUSH_HYDROSONIC_ARC_RAD,
+  BRUSH_HYDROSONIC_RADIUS_MULT,
   BRUSH_MOVING_RATE,
   BRUSH_OVERDRIVE_RADIUS_MULT,
   BRUSH_STATIONARY_RATE,
@@ -475,8 +477,14 @@ export class WorldSession {
       const isMoving = this.probeSpeed >= PROBE_SWEEP_SPEED_THRESHOLD;
       const removalPerSec = isMoving ? BRUSH_MOVING_RATE : BRUSH_STATIONARY_RATE;
       const radius =
-        BRUSH_BASE_RADIUS * (this.overdriveActive ? BRUSH_OVERDRIVE_RADIUS_MULT : 1.0);
-      const arcRad = this.hasBassUpgrade ? BRUSH_BASS_ARC_RAD : BRUSH_BASE_ARC_RAD;
+        BRUSH_BASE_RADIUS *
+        (this.hasHydroSonicUpgrade ? BRUSH_HYDROSONIC_RADIUS_MULT : 1.0) *
+        (this.overdriveActive ? BRUSH_OVERDRIVE_RADIUS_MULT : 1.0);
+      const arcRad = this.hasBassUpgrade
+        ? BRUSH_BASS_ARC_RAD
+        : this.hasHydroSonicUpgrade
+          ? BRUSH_HYDROSONIC_ARC_RAD
+          : BRUSH_BASE_ARC_RAD;
 
       const res = this.grid.applyBrush(
         {
@@ -488,6 +496,7 @@ export class WorldSession {
           removalPerSec,
           dt,
           hasBassUpgrade: this.hasBassUpgrade,
+          hasHydroSonicUpgrade: this.hasHydroSonicUpgrade,
           sulcusIrritationPerSec: this.getSulcusIrritationRate(),
           isMovingSweep: isMoving,
           convertToFluorapatite: this.fluorapatiteInfusionSec > 0,
@@ -754,6 +763,7 @@ export class WorldSession {
       ) {
         bridge.intact = false;
         targetsHit++;
+        this.scoring.recordSucroseCleared(1);
       }
     }
 
@@ -1014,6 +1024,7 @@ export class WorldSession {
       if (!c.intact) continue;
       if (this.sealedDistricts[c.districtIdx]) {
         c.intact = false;
+        this.scoring.recordSucroseCleared(1);
         continue;
       }
       c.spawnTimer -= dt;
@@ -1183,7 +1194,10 @@ export class WorldSession {
   private purgeSealedDistrictEcology(di: number): void {
     if (!this.cartridge.districts[di]) return;
     for (const c of this.sucroseCrystals) {
-      if (c.districtIdx === di) c.intact = false;
+      if (c.districtIdx === di && c.intact) {
+        c.intact = false;
+        this.scoring.recordSucroseCleared(1);
+      }
     }
     for (let i = this.acidPools.length - 1; i >= 0; i--) {
       const p = this.acidPools[i].pos;

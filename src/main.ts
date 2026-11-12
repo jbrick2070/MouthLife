@@ -159,7 +159,12 @@ function bootstrapMouthLife(): void {
     }
 
     const save = saveSys.getSave();
-    const smoothness = currentMode === 'REPORT' ? 98 : save.companion.smoothnessIndex;
+    const smoothness =
+      currentMode === 'REPORT'
+        ? lastReport?.won === false
+          ? save.companion.smoothnessIndex
+          : Math.max(98, save.companion.smoothnessIndex)
+        : save.companion.smoothnessIndex;
     const fb = touch.registerTouch(
       { x: hit.point.x, y: hit.point.y, z: hit.point.z },
       phase,
@@ -480,6 +485,7 @@ function bootstrapMouthLife(): void {
       breakdown,
       unlockedHistoryNoteId,
       bonusRescueIons,
+      parTimeSec: cart.parTimeSec,
       worldTitle: cart.title,
       hostCityLabel: hostLabel,
       newBest: mode === 'ARCADE' && won && breakdown.totalScore > prevBest,
@@ -754,3 +760,17 @@ function bootstrapMouthLife(): void {
 }
 
 bootstrapMouthLife();
+
+// Offline-capable PWA shell for mobile Home Screen & dead-zone bathroom play (production only)
+if (
+  import.meta.env.PROD &&
+  typeof window !== 'undefined' &&
+  'serviceWorker' in navigator &&
+  window.location.protocol.startsWith('http')
+) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // Non-fatal in private/restricted webviews
+    });
+  });
+}

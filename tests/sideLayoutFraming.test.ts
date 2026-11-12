@@ -3,6 +3,7 @@ import {
   compactToastText,
   countAffordableLockedUpgrades,
   formatZipPromptText,
+  isCampaignWorldUnlocked,
   isCompactViewport,
   pickRecommendedDiveWorld,
   shouldDismissSheetSwipe,
@@ -97,5 +98,21 @@ describe('mobile gameplay screen-room helpers', () => {
     expect(shouldDismissSheetSwipe(36, 60)).toBe(true); // 0.6 px/ms flick
     expect(shouldDismissSheetSwipe(20, 250)).toBe(false);
     expect(shouldDismissSheetSwipe(0, 100)).toBe(false);
+  });
+
+  it('gates locked Globe campaign worlds on Day-1 saves while unlocking via sequential clear or stamps', () => {
+    const day1 = {
+      world_1: { unlocked: true, completed: false },
+      world_2: { unlocked: false, completed: false },
+      world_5: { unlocked: false, completed: false },
+    };
+    expect(isCampaignWorldUnlocked('world_1', day1, 0, 0)).toBe(true);
+    expect(isCampaignWorldUnlocked('world_2', day1, 0, 4)).toBe(false);
+    expect(isCampaignWorldUnlocked('world_5', day1, 0, 20)).toBe(false);
+
+    // Unlocks via prior stage completion OR Habit Stamp milestone
+    const afterW1 = { ...day1, world_1: { unlocked: true, completed: true } };
+    expect(isCampaignWorldUnlocked('world_2', afterW1, 1, 4)).toBe(true);
+    expect(isCampaignWorldUnlocked('world_2', day1, 4, 4)).toBe(true);
   });
 });

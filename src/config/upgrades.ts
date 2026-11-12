@@ -16,7 +16,7 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
     id: 'hydro_sonic_pulse',
     slot: 'brush',
     name: 'Hydro-Sonic Acoustic Streaming',
-    tagline: 'Reduces gingival sulcus pressure buildup by 50% while sweeping.',
+    tagline: 'Extends brush reach +16% (115° arc, +30% fissure shear) & halves sulcus gum pressure.',
     scientificNote:
       'High-frequency bristle oscillation creates micro-bubbles and fluid shear forces slightly beyond physical filament tips without abrading soft tissue.',
     stampUnlockThreshold: 6,
