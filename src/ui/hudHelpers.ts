@@ -340,3 +340,160 @@ export function sideLayoutFraming(
     dolly: Math.max(1, archFraction / (sideFrac * 0.92)),
   };
 }
+
+/**
+ * Matches the mobile/compact HUD media query: narrow portrait/phablet (`<= 700px`) or
+ * short-height landscape phone (`viewW > viewH && viewH <= 520`).
+ */
+export function isCompactViewport(viewW: number, viewH: number): boolean {
+  return viewW <= 700 || (viewW > viewH && viewH <= 520);
+}
+
+/**
+ * Mobile gameplay best practice: when direct touch/pointer drag-to-steer on the 3D tooth is active,
+ * hide the redundant 106px virtual thumb joystick so the bottom-left playfield stays 100% open.
+ * Players who prefer a virtual stick can toggle Steer OFF in Pause to reveal the pad.
+ */
+export function shouldShowVirtualThumbPad(params: {
+  pointerSteerEnabled: boolean;
+  compactViewport: boolean;
+}): boolean {
+  if (!params.compactViewport) return !params.pointerSteerEnabled;
+  return !params.pointerSteerEnabled;
+}
+
+/**
+ * Concise touch-first prompt on mobile so the floating interdental Zip pill never covers the alley,
+ * while preserving the full keyboard/mouse prompt on desktop.
+ */
+export function formatZipPromptText(
+  inZipRange: boolean,
+  compactViewport: boolean,
+  desktopReadyText = 'Press E / Right-Click / Tap Floss to Zip!'
+): string {
+  if (compactViewport) {
+    return inZipRange ? '🧵 Tap to Zip!' : '🦷 Closer to Zip';
+  }
+  return inZipRange ? desktopReadyText : '🦷 Narrow Alley — Move Closer to Zip';
+}
+
+/**
+ * Strips desktop keyboard bracket hints (`[Q]`, `(E)`, `WASD + Space`) on compact touch screens
+ * so transient gameplay toasts stay short and never wrap into multi-line banners.
+ */
+export function compactToastText(msg: string, compactViewport: boolean): string {
+  if (!compactViewport || !msg) return msg;
+  return msg
+    .replace(/\s*\(or WASD \+ Space\)/gi, '')
+    .replace(/Press Q\s*\/\s*tap Surge/gi, 'Tap Surge')
+    .replace(/E\s*\/\s*🧵 Floss/g, '🧵 Floss')
+    .replace(/\s*\[[A-Z]\]/g, '')
+    .replace(/\s*\([EQ]\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export interface RecommendedDiveChoice {
+  worldId: string;
+  stageNumber: number | null; // 1..N when recommending next uncleared campaign stage; null when all cleared
+}
+
+/**
+ * Picks the next uncleared campaign world for the primary Hub Dive CTA so players advance
+ * through Worlds 1..5 in one tap without hunting through the Globe strip; falls back to the
+ * player's Home City world once all campaign worlds are cleared.
+ */
+export function pickRecommendedDiveWorld(
+  completedWorlds: Readonly<Record<string, { completed?: boolean } | undefined>>,
+  homeWorldId: string,
+  campaignWorldIds: readonly string[] = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5']
+): RecommendedDiveChoice {
+  for (let i = 0; i < campaignWorldIds.length; i++) {
+    const id = campaignWorldIds[i];
+    if (!completedWorlds[id]?.completed) {
+      return { worldId: id, stageNumber: i + 1 };
+    }
+  }
+  return { worldId: homeWorldId, stageNumber: null };
+}
+
+/**
+ * Counts how many locked Lab upgrades the player can currently afford with Fluoride Ions,
+ * surfacing a subtle badge on the collapsed mobile `▴ More` / `🔬 Lab` buttons.
+ */
+export function countAffordableLockedUpgrades(
+  fluorideIons: number,
+  unlockedIds: readonly string[],
+  catalog: ReadonlyArray<{ id: string; ionCost: number }>
+): number {
+  const unlocked = new Set(unlockedIds);
+  let count = 0;
+  for (const item of catalog) {
+    if (!unlocked.has(item.id) && fluorideIons >= item.ionCost) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Pure threshold rule for bottom-sheet drag-to-dismiss on mobile headers:
+ * dismiss if pulled down >= 56px or flicked downward quickly (>= 28px at >= 0.45 px/ms).
+ */
+export function shouldDismissSheetSwipe(deltaY: number, elapsedMs: number): boolean {
+  if (deltaY >= 56) return true;
+  if (deltaY >= 28 && elapsedMs > 0 && deltaY / elapsedMs >= 0.45) return true;
+  return false;
+}
+
+/**
+ * Attaches touch/pointer pull-down-to-dismiss to a `.modal-header-sticky` inside `.modal-sheet`.
+ * Ignores taps/drags starting on interactive buttons inside the header.
+ */
+export function bindBottomSheetSwipeClose(
+  headerEl: HTMLElement | null | undefined,
+  sheetEl: HTMLElement | null | undefined,
+  onDismiss: () => void
+): void {
+  if (!headerEl || !sheetEl) return;
+  let activePointerId: number | null = null;
+  let startY = 0;
+  let startMs = 0;
+  let lastDy = 0;
+
+  headerEl.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if ((e.target as HTMLElement | null)?.closest('button, a, input, select, textarea')) return;
+    activePointerId = e.pointerId;
+    startY = e.clientY;
+    startMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    lastDy = 0;
+    sheetEl.style.transition = 'none';
+    try {
+      headerEl.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  headerEl.addEventListener('pointermove', (e: PointerEvent) => {
+    if (activePointerId !== e.pointerId) return;
+    lastDy = Math.max(0, e.clientY - startY);
+    sheetEl.style.transform = lastDy > 0 ? `translate3d(0, ${lastDy.toFixed(1)}px, 0)` : '';
+  });
+
+  const finish = (e: PointerEvent, cancelled: boolean) => {
+    if (activePointerId !== e.pointerId) return;
+    activePointerId = null;
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const dy = Math.max(0, e.clientY - startY, lastDy);
+    sheetEl.style.transition = 'transform 0.18s ease-out';
+    sheetEl.style.transform = '';
+    if (!cancelled && shouldDismissSheetSwipe(dy, nowMs - startMs)) {
+      onDismiss();
+    }
+  };
+
+  headerEl.addEventListener('pointerup', (e) => finish(e, false));
+  headerEl.addEventListener('pointercancel', (e) => finish(e, true));
+}

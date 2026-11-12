@@ -502,6 +502,45 @@ textarea:focus-visible {
   gap: 12px;
 }
 
+.thumb-deck.pad-hidden {
+  justify-content: flex-end;
+}
+
+.thumb-deck.pad-hidden #pad-move {
+  display: none;
+}
+
+.mob-only {
+  display: none;
+}
+
+.hub-drawer-toggle {
+  display: none;
+}
+
+.hub-drawer-collapsible {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.hub-status-banner {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: #fde68a;
+  background: rgba(6, 24, 38, 0.85);
+  padding: 4px 12px;
+  border-radius: 99px;
+  display: inline-block;
+}
+
+.welcome-tip-copy {
+  font-size: 0.76rem;
+  color: #e0f2fe;
+  line-height: 1.38;
+  text-align: left;
+}
+
 .virtual-pad {
   position: relative;
   width: 118px;
@@ -1087,23 +1126,63 @@ textarea:focus-visible {
   line-height: 1.4;
 }
 
-/* Keep the playing field open on phones and narrow tablets. The pause sheet
-   retains the full objective and the less frequently used controls. */
+/* Keep the playing field open on phones and narrow tablets (~70–85% 3D viewport).
+   Progressive disclosure tucks secondary Hub menus into a bottom drawer, converts
+   modals into partial-height bottom sheets, and collapses the arcade controls into
+   a low-profile thumb-zone pill cluster. */
 @media (max-width: 700px), (orientation: landscape) and (max-height: 520px) {
+  #ui-root {
+    padding: max(6px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .mob-hide {
+    display: none !important;
+  }
+
+  .mob-only {
+    display: inline !important;
+  }
+
+  .hub-drawer-toggle {
+    display: inline-flex;
+  }
+
+  .hub-bottom-deck:not(.drawer-open) .hub-drawer-collapsible {
+    display: none !important;
+  }
+
+  /* 1. Arcade & Pulp Rescue HUD: ultra-slim top bar + single-row bottom-right thumb pills */
   .hud-top {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto 40px;
     align-items: center;
-    gap: 6px;
-    padding: 5px 7px;
+    gap: 5px;
+    padding: 3px 6px 6px 8px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 13px;
+    background: rgba(5, 20, 32, 0.74);
   }
   .hud-top-row, .hud-telemetry-pills, .hud-action-pills, .hud-progress-row {
     display: contents;
   }
   .hud-world-title, #hud-ph, #hud-sites, #hud-mechanic, #hud-score,
   #btn-hud-quality, #btn-hud-steer, #btn-hud-mute, #btn-hud-exit,
-  #hud-clean-progress, #hud-districts {
+  #hud-districts {
     display: none !important;
+  }
+  #hud-clean-progress {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.1);
   }
   .hud-objective {
     grid-column: 1;
@@ -1113,13 +1192,420 @@ textarea:focus-visible {
     font-size: 0.68rem;
     line-height: 1.2;
     display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #hud-timer { grid-column: 2; grid-row: 1; white-space: nowrap; font-size: 0.62rem; padding: 2px 5px; }
+  #hud-clean-pct { grid-column: 3; grid-row: 1; min-width: 0 !important; white-space: nowrap; font-size: 0.66rem !important; }
+  #btn-hud-pause { grid-column: 4; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
+
+  .hud-toast {
+    margin-top: 4px;
+    padding: 3px 10px;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    max-width: 88vw;
+    background: rgba(6, 28, 42, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  #hud-timer { grid-column: 2; grid-row: 1; white-space: nowrap; font-size: 0.63rem; padding: 2px 5px; }
-  #hud-clean-pct { grid-column: 3; grid-row: 1; min-width: 0 !important; white-space: nowrap; font-size: 0.68rem !important; }
-  #btn-hud-pause { grid-column: 4; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
+
+  .actuator-cluster {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .actuator-secondary-row {
+    display: contents;
+  }
+  #btn-mob-scan,
+  #btn-mob-surge {
+    min-height: 44px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    border-radius: var(--radius-pill);
+    background: rgba(8, 30, 46, 0.78);
+    white-space: nowrap;
+  }
+  .floss-ring {
+    width: auto;
+    min-width: 78px;
+    height: 46px;
+    min-height: 46px;
+    padding: 0 13px;
+    border-radius: var(--radius-pill);
+    flex-direction: row;
+    gap: 4px;
+    font-size: 0.74rem;
+    background: radial-gradient(circle, rgba(16, 78, 98, 0.86), rgba(6, 24, 38, 0.9));
+  }
+  .floss-ring .floss-sub {
+    display: none;
+  }
+  .virtual-pad {
+    width: 86px;
+    height: 86px;
+    opacity: 0.88;
+  }
+  .virtual-knob {
+    width: 36px;
+    height: 36px;
+    font-size: 0.58rem;
+  }
+  .world-callout {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+  }
+  .zip-prompt {
+    font-size: 0.72rem;
+    min-height: 40px;
+    padding: 4px 11px;
+  }
+  .wayfinder-pill {
+    font-size: 0.63rem;
+    padding: 2px 7px;
+  }
+
+  /* 2. Companion Hub & Earth Globe: single-row header + compact dock + non-stacking callout */
+  .companion-hub:not(.mission-report-shell) .hub-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    padding: 4px 7px;
+    flex-wrap: nowrap;
+    border-radius: 14px;
+  }
+  .companion-hub .hub-header-row-1,
+  .companion-hub .hub-header-row-2 {
+    display: contents;
+  }
+  .companion-hub .hub-mode-tabs {
+    order: 1;
+    padding: 2px;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .companion-hub .hub-mode-tabs .seg-tab {
+    min-height: 40px;
+    padding: 4px 9px;
+    font-size: 0.7rem;
+  }
+  .companion-hub .hub-currency-row {
+    order: 2;
+    gap: 4px;
+    flex-wrap: nowrap;
+    margin-left: auto;
+  }
+  .companion-hub .hub-currency-row .pill-badge {
+    padding: 3px 6px;
+    font-size: 0.68rem;
+  }
+  .companion-hub .currency-lbl,
+  .companion-hub .hub-bonus-readout,
+  .companion-hub .hub-profile-label {
+    display: none !important;
+  }
+  .companion-hub .hub-profile-btn {
+    order: 3;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .hub-center-callout {
+    margin-top: 4px;
+    max-width: 96vw;
+  }
+  .bask-floating-pill,
+  .splat-hint-pill,
+  .hub-status-banner {
+    max-width: 92vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.65rem;
+    padding: 4px 12px;
+    margin-top: 2px;
+  }
+  .hub-center-callout.has-tooth-readout .bask-floating-pill {
+    display: none;
+  }
+  .tooth-readout-pill {
+    font-size: 0.68rem;
+    padding: 4px 10px;
+    max-width: 94vw;
+  }
+  .welcome-tip-card {
+    margin-top: 2px;
+    padding: 4px 6px 4px 10px;
+    gap: 6px;
+    max-width: 94vw;
+    border-radius: var(--radius-pill);
+  }
+  .welcome-tip-copy {
+    font-size: 0.68rem;
+    line-height: 1.22;
+  }
+
+  .hub-bottom-deck {
+    padding: 7px 9px;
+    gap: 6px;
+    border-radius: 15px;
+    max-height: 54dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .hub-bottom-deck .shield-grid {
+    gap: 4px;
+  }
+  .hub-bottom-deck .mini-meter {
+    padding: 3px 5px;
+    border-radius: 8px;
+  }
+  .hub-bottom-deck .mini-meter-label {
+    font-size: 0.6rem;
+    margin-bottom: 2px;
+  }
+  .hub-bottom-deck .mini-meter-bar {
+    height: 4px;
+  }
+  .hub-dock-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+  }
+  .hub-dock-row .btn {
+    min-height: 42px;
+    padding: 6px 8px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  .city-strip {
+    gap: 5px;
+    padding-bottom: 1px;
+  }
+  .city-pill {
+    min-height: 40px;
+    padding: 4px 9px;
+    font-size: 0.71rem;
+  }
+  .globe-launch-row {
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .globe-blurb-copy {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem !important;
+  }
+  .globe-launch-row .btn {
+    min-height: 42px;
+    padding: 6px 10px;
+    font-size: 0.74rem;
+    white-space: nowrap;
+  }
+
+  /* 3. Cosmic Intro, Brush-Along Pacer & Mission Report: slim partial-height docks */
+  .cosmic-inspect-badge {
+    display: none;
+  }
+  .cosmic-top-bar {
+    padding: 4px 8px;
+    border-radius: 14px;
+  }
+  .cosmic-intro-shell .cosmic-card {
+    max-height: 38dvh;
+    padding: 9px 11px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 15px;
+  }
+  .cosmic-intro-shell .cosmic-beat-copy {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .cosmic-intro-shell .cosmic-beat-tag {
+    font-size: 0.62rem !important;
+    margin-bottom: 2px !important;
+  }
+  .cosmic-intro-shell .cosmic-card h2 {
+    font-size: 0.94rem !important;
+    margin-bottom: 3px !important;
+  }
+  .cosmic-intro-shell .cosmic-card p {
+    font-size: 0.74rem !important;
+    line-height: 1.34 !important;
+  }
+  .cosmic-intro-shell .mohs-bar {
+    gap: 4px;
+    margin: 5px 0;
+  }
+  .cosmic-intro-shell .mohs-item {
+    min-height: 40px;
+    padding: 4px 2px;
+  }
+  .cosmic-intro-shell #mohs-detail {
+    font-size: 0.69rem !important;
+    padding: 5px 8px !important;
+  }
+  .cosmic-intro-shell .cosmic-beat-actions {
+    margin-top: 8px !important;
+    flex-shrink: 0;
+  }
+
+  .brush-along-shell .hub-top-bar {
+    padding: 4px 8px;
+    border-radius: 14px;
+  }
+  .brush-along-shell .hub-center-callout {
+    display: none;
+  }
+  .brush-along-shell .cosmic-card {
+    max-height: 42dvh;
+    padding: 9px 12px;
+    border-radius: 15px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #pacer-clock {
+    font-size: 1.85rem !important;
+    margin: 2px 0 !important;
+  }
+  #pacer-quad {
+    font-size: 0.7rem !important;
+  }
+  #pacer-surf {
+    font-size: 0.73rem !important;
+    margin-bottom: 6px !important;
+    line-height: 1.28;
+  }
+
+  .mission-report-shell .hub-top-bar {
+    padding: 4px 8px;
+    border-radius: 14px;
+  }
+  .mission-report-shell .hub-center-callout {
+    display: none;
+  }
+  .mission-report-shell .cosmic-card {
+    max-height: 46dvh;
+    padding: 9px 11px;
+    border-radius: 15px;
+  }
+  .mission-report-shell .cosmic-card.report-flex-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mission-report-shell #report-headline {
+    font-size: 0.93rem !important;
+    margin-bottom: 4px !important;
+  }
+  .mission-report-shell .shield-grid {
+    margin: 5px 0 !important;
+    gap: 4px;
+  }
+  .mission-report-shell .mini-meter {
+    padding: 3px 5px;
+  }
+  .mission-report-shell .report-lesson {
+    margin-bottom: 6px;
+  }
+  .mission-report-shell .report-lesson > summary {
+    min-height: 40px;
+    padding: 4px 10px;
+    font-size: 0.74rem;
+  }
+  .mission-report-shell .charity-cta-strip {
+    margin-top: 6px;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  /* 4. Pop-up Modals & Pause Sheet: partial-height Bottom Sheets keeping 3D background visible */
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+    background: rgba(2, 9, 16, 0.44);
+  }
+  .modal-sheet {
+    max-width: 100%;
+    max-height: 58dvh;
+    border-radius: 18px 18px 0 0;
+    border-bottom: none;
+    padding: 0 12px max(12px, env(safe-area-inset-bottom)) 12px;
+    background: rgba(5, 19, 31, 0.95);
+  }
+  .modal-sheet.modal-sheet-wide {
+    max-height: 66dvh;
+  }
+  .modal-header-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: rgba(5, 19, 31, 0.96);
+    padding: 12px 0 6px 0;
+    margin-bottom: 8px !important;
+    border-bottom: 1px solid rgba(94, 234, 212, 0.16);
+    gap: 8px;
+    flex-wrap: nowrap;
+    touch-action: none;
+    cursor: grab;
+  }
+  .modal-header-sticky::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 3.5px;
+    border-radius: 99px;
+    background: rgba(148, 184, 204, 0.34);
+  }
+  .modal-header-sticky h3 {
+    font-size: 0.88rem !important;
+    min-width: 0;
+    flex: 1;
+    line-height: 1.25;
+  }
+  .modal-header-sticky .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .pause-objective {
+    font-size: 0.72rem;
+    padding: 5px 8px;
+    margin: 0 0 6px 0;
+  }
+  .pause-audio-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .pause-audio-grid .audio-slider-row {
+    gap: 5px;
+    font-size: 0.68rem;
+  }
+  .pause-audio-grid .audio-slider-row span {
+    min-width: 34px;
+  }
 }
 /* Short-height landscape windows (e.g. 1267×651 laptops): tighten hub deck padding so the 3D arch breathes */
 @media (max-height: 700px) and (min-width: 701px) {
@@ -1234,14 +1720,14 @@ textarea:focus-visible {
   animation: none;
 }
 
-/* Landscape phones (e.g. 844×390, 740×360): hub deck becomes a right-hand column so the arch stays visible on the left. */
+/* Landscape phones (e.g. 844×390, 740×360): slim right-hand column (~38%) so 62% of width stays open for the 3D scene. */
 @media (orientation: landscape) and (max-height: 520px) {
   .hub-shell.companion-hub {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(330px, 47%);
+    grid-template-columns: minmax(0, 1fr) minmax(252px, 38%);
     grid-template-rows: auto minmax(0, 1fr);
-    column-gap: 10px;
-    row-gap: 6px;
+    column-gap: 8px;
+    row-gap: 5px;
     align-content: stretch;
     justify-content: stretch;
   }
@@ -1250,7 +1736,7 @@ textarea:focus-visible {
     grid-row: 1;
     max-width: none;
     margin: 0;
-    padding: 6px 10px;
+    padding: 4px 7px;
   }
   .companion-hub .hub-center-callout {
     grid-column: 1;
@@ -1258,64 +1744,76 @@ textarea:focus-visible {
     align-self: start;
     text-align: left;
     margin: 0;
+    max-width: 100%;
   }
   .companion-hub .hub-center-callout .bask-floating-pill {
-    font-size: 0.7rem;
-    padding: 4px 10px;
+    font-size: 0.66rem;
+    padding: 3px 9px;
+    max-width: 56vw;
   }
   .companion-hub .hub-bottom-deck {
     grid-column: 2;
     grid-row: 2;
     max-width: none;
+    max-height: none;
     margin: 0;
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 6px 8px;
+    gap: 5px;
     overflow-y: auto;
     overscroll-behavior: contain;
     min-height: 0;
-  }
-}
-
-@media (orientation: landscape) and (max-height: 520px) {
-  .companion-hub .hub-bottom-deck {
+    align-self: end;
     scrollbar-width: thin;
     scrollbar-color: rgba(94, 234, 212, 0.45) transparent;
   }
-  .companion-hub .hub-bottom-deck .mini-meter { padding: 3px 6px; }
-  .companion-hub .hub-bottom-deck .mini-meter-label { margin-bottom: 2px; font-size: 0.62rem; }
-  .companion-hub .hub-bottom-deck .btn { min-height: 40px; padding-top: 6px; padding-bottom: 6px; font-size: 0.8rem; }
-  .companion-hub .hub-top-bar .row-between { gap: 6px; }
+  .companion-hub .hub-bottom-deck.drawer-open {
+    align-self: stretch;
+  }
+  .companion-hub .hub-bottom-deck .mini-meter { padding: 3px 5px; }
+  .companion-hub .hub-bottom-deck .mini-meter-label { margin-bottom: 2px; font-size: 0.6rem; }
+  .companion-hub .hub-bottom-deck .btn { min-height: 40px; padding-top: 5px; padding-bottom: 5px; font-size: 0.74rem; }
+  .companion-hub .hub-top-bar .row-between { gap: 5px; }
   .companion-hub .hub-profile-label { white-space: nowrap; }
   .companion-hub .hub-top-bar .seg-tabs { margin: 0; }
-}
 
-@media (orientation: landscape) and (max-height: 520px) {
-  .hud-top { max-width: min(560px, 62vw); }
-}
+  .hud-top { max-width: min(460px, 56vw); margin: 0; }
 
-@media (orientation: landscape) and (max-height: 520px) {
+  .hub-shell.cosmic-intro-shell,
   .hub-shell.cosmic-mohs {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(310px, 52%);
+    grid-template-columns: minmax(0, 1fr) minmax(256px, 40%);
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 8px;
+    gap: 6px;
   }
+  .cosmic-intro-shell .hub-top-bar,
   .cosmic-mohs .hub-top-bar {
-    grid-column: 1 / -1;
+    grid-column: 2;
+    grid-row: 1;
+    max-width: none;
+    margin: 0;
   }
+  .cosmic-intro-shell .hub-center-callout,
   .cosmic-mohs .hub-center-callout,
   .cosmic-mohs .cosmic-beat-tag {
     display: none;
   }
+  .cosmic-intro-shell .cosmic-card,
   .cosmic-mohs .cosmic-card {
     display: flex;
     flex-direction: column;
     grid-column: 2;
     grid-row: 2;
+    max-width: none;
+    margin: 0;
     min-height: 0;
     max-height: none;
     overflow: hidden;
+    align-self: end;
   }
+  .cosmic-mohs .cosmic-card {
+    align-self: stretch;
+  }
+  .cosmic-intro-shell .cosmic-beat-copy,
   .cosmic-mohs .cosmic-beat-copy {
     min-height: 0;
     margin: -3px;
@@ -1323,14 +1821,39 @@ textarea:focus-visible {
     overflow-y: auto;
     overscroll-behavior: contain;
   }
+  .cosmic-intro-shell .cosmic-beat-actions,
   .cosmic-mohs .cosmic-beat-actions {
     flex-shrink: 0;
+  }
+
+  .hub-shell.brush-along-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(248px, 38%);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 6px;
+  }
+  .brush-along-shell .hub-top-bar {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: none;
+    margin: 0;
+  }
+  .brush-along-shell .cosmic-card {
+    grid-column: 2;
+    grid-row: 2;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    min-height: 0;
+    overflow-y: auto;
+    align-self: end;
   }
 
   .companion-hub .cosmic-card {
     grid-column: 2;
     grid-row: 2;
     max-width: none;
+    max-height: none;
     margin: 0;
     min-height: 0;
     overflow-y: auto;
@@ -1339,4 +1862,94 @@ textarea:focus-visible {
     scrollbar-color: rgba(94, 234, 212, 0.45) transparent;
     align-self: stretch;
   }
+  .companion-hub .cosmic-card.report-flex-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-sheet {
+    max-width: min(520px, 92vw);
+    max-height: 76dvh;
+    margin: 0 auto;
+  }
+  .modal-sheet.modal-sheet-wide {
+    max-width: min(600px, 94vw);
+    max-height: 82dvh;
+  }
+}
+
+/* ---- Ease-of-use & peripheral-vision UI polish ---- */
+.surge-meter-btn {
+  --surge-pct: 0%;
+  background-image: linear-gradient(
+    90deg,
+    rgba(45, 212, 191, 0.34) 0%,
+    rgba(56, 189, 248, 0.34) var(--surge-pct),
+    transparent var(--surge-pct)
+  ) !important;
+}
+.surge-meter-btn.surge-ready {
+  border-color: #5eead4 !important;
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.32), 0 0 14px rgba(45, 212, 191, 0.48);
+}
+
+.scan-active {
+  border-color: #c084fc !important;
+  color: #f3e8ff !important;
+  background: rgba(59, 7, 100, 0.72) !important;
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.38);
+}
+
+.hub-drawer-toggle.has-badge {
+  border-color: rgba(251, 191, 36, 0.75);
+  color: #fde68a;
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.24);
+}
+
+.pacer-quad-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 6px;
+}
+.pacer-quad-chip {
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 3px 4px;
+  border-radius: 999px;
+  background: rgba(4, 16, 28, 0.7);
+  border: 1px solid rgba(148, 184, 204, 0.22);
+  color: #94b8cc;
+  text-align: center;
+  white-space: nowrap;
+}
+.pacer-quad-chip.active {
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.45);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.28);
+}
+.pacer-quad-chip.done {
+  border-color: rgba(45, 212, 191, 0.55);
+  color: #99f6e4;
+  background: rgba(6, 78, 59, 0.42);
+}
+.pacer-quad-chip.done::before {
+  content: '✓ ';
+}
+
+.report-scroll-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 234, 212, 0.45) transparent;
+}
+.report-sticky-actions {
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(94, 234, 212, 0.16);
 }

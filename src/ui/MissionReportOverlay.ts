@@ -126,7 +126,7 @@ export class MissionReportOverlay implements OverlayView {
 
   mount(root: HTMLElement): void {
     this.container = document.createElement('div');
-    this.container.className = 'hub-shell companion-hub';
+    this.container.className = 'hub-shell companion-hub mission-report-shell';
     root.appendChild(this.container);
 
     const { breakdown, won, mode } = this.report;
@@ -170,94 +170,96 @@ export class MissionReportOverlay implements OverlayView {
         </div>
       </div>
 
-      <div class="cosmic-card glass-card ui-interactive">
-        <h2 id="report-headline" tabindex="-1" style="margin:0 0 6px 0;font-size:1.1rem;color:#fff;">${headline}</h2>
-        ${
-          this.report.newBest
-            ? '<div class="row-wrap" style="margin-bottom:6px;"><span id="pill-new-best" class="pill-badge" style="border-color:#fbbf24;color:#fde68a;">🏆 NEW BEST SCORE!</span></div>'
-            : ''
-        }
-        ${
-          this.report.campaignMastered
-            ? '<div id="badge-campaign-mastery" class="pill-badge" style="border-color:#5eead4;color:#99f6e4;margin-bottom:6px;display:inline-block;">🛰️ EARTH-TO-ORBIT CAMPAIGN MASTERY — All 5 Worlds Remineralized!</div>'
-            : ''
-        }
-        ${
-          upgrades.length
-            ? `<div id="report-upgrades" style="background:rgba(4,16,28,0.78);border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:0.76rem;color:#fde68a;">🔧 Lab Upgrade Unlocked: <strong>${upgrades.map(esc).join(', ')}</strong> — equip it in the Bio-Actuator Lab!</div>`
-            : ''
-        }
+      <div class="cosmic-card glass-card ui-interactive report-flex-card">
+        <div class="report-scroll-body">
+          <h2 id="report-headline" tabindex="-1" style="margin:0 0 6px 0;font-size:1.1rem;color:#fff;">${headline}</h2>
+          ${
+            this.report.newBest
+              ? '<div class="row-wrap" style="margin-bottom:6px;"><span id="pill-new-best" class="pill-badge" style="border-color:#fbbf24;color:#fde68a;">🏆 NEW BEST SCORE!</span></div>'
+              : ''
+          }
+          ${
+            this.report.campaignMastered
+              ? '<div id="badge-campaign-mastery" class="pill-badge" style="border-color:#5eead4;color:#99f6e4;margin-bottom:6px;display:inline-block;">🛰️ EARTH-TO-ORBIT CAMPAIGN MASTERY — All 5 Worlds Remineralized!</div>'
+              : ''
+          }
+          ${
+            upgrades.length
+              ? `<div id="report-upgrades" style="background:rgba(4,16,28,0.78);border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:0.76rem;color:#fde68a;">🔧 Lab Upgrade Unlocked: <strong>${upgrades.map(esc).join(', ')}</strong> — ready in the Bio-Actuator Lab!</div>`
+              : ''
+          }
 
-        <div class="shield-grid" style="margin:8px 0;">
-          <div class="mini-meter">
-            <div class="mini-meter-label"><span>Restoration</span></div>
-            <strong id="report-pts-restoration" class="report-num" style="font-size:0.84rem;color:#5eead4;">${sampleScoreReveal(breakdown.restorationPts, 0, reduced)}</strong>
+          <div class="shield-grid" style="margin:8px 0;">
+            <div class="mini-meter">
+              <div class="mini-meter-label"><span>Restoration</span></div>
+              <strong id="report-pts-restoration" class="report-num" style="font-size:0.84rem;color:#5eead4;">${sampleScoreReveal(breakdown.restorationPts, 0, reduced)}</strong>
+            </div>
+            <div class="mini-meter">
+              <div class="mini-meter-label"><span>Technique</span></div>
+              <strong id="report-pts-technique" class="report-num" style="font-size:0.84rem;color:#38bdf8;">${sampleScoreReveal(breakdown.techniquePts, 0, reduced)}</strong>
+            </div>
+            <div class="mini-meter">
+              <div class="mini-meter-label"><span>Ecology</span></div>
+              <strong id="report-pts-ecology" class="report-num" style="font-size:0.84rem;color:#34d399;">${sampleScoreReveal(breakdown.ecologyPts, 0, reduced)}</strong>
+            </div>
+            <div class="mini-meter">
+              <div class="mini-meter-label"><span>Par Time</span></div>
+              <strong id="report-pts-partime" class="report-num" style="font-size:0.84rem;color:#fbbf24;">${sampleScoreReveal(breakdown.parTimePts, 0, reduced)}</strong>
+            </div>
           </div>
-          <div class="mini-meter">
-            <div class="mini-meter-label"><span>Technique</span></div>
-            <strong id="report-pts-technique" class="report-num" style="font-size:0.84rem;color:#38bdf8;">${sampleScoreReveal(breakdown.techniquePts, 0, reduced)}</strong>
+
+          <div class="row-between" style="font-size:0.8rem;margin-bottom:8px;">
+            <span>Total Score: <strong id="report-total-score" class="report-num">${sampleScoreReveal(breakdown.totalScore, 0, reduced)}</strong> (${breakdown.cleanlinessPct}% Clean)</span>
+            <span style="color:#99f6e4;font-weight:700;">
+              ✦ +${mode === 'PULP_RESCUE' ? this.report.bonusRescueIons : breakdown.ionsEarned} Fluoride Ions
+            </span>
           </div>
-          <div class="mini-meter">
-            <div class="mini-meter-label"><span>Ecology</span></div>
-            <strong id="report-pts-ecology" class="report-num" style="font-size:0.84rem;color:#34d399;">${sampleScoreReveal(breakdown.ecologyPts, 0, reduced)}</strong>
-          </div>
-          <div class="mini-meter">
-            <div class="mini-meter-label"><span>Par Time</span></div>
-            <strong id="report-pts-partime" class="report-num" style="font-size:0.84rem;color:#fbbf24;">${sampleScoreReveal(breakdown.parTimePts, 0, reduced)}</strong>
+
+          ${
+            note
+              ? `<details id="report-field-note" class="report-lesson">
+                  <summary>📜 Field note unlocked: ${esc(note.title)}</summary>
+                  <div class="report-lesson-body">
+                    <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
+                    <div style="font-size:0.76rem;color:#cbd5e1;margin-top:3px;">${esc(note.enamelLesson)}</div>
+                  </div>
+                </details>`
+              : `<details id="report-dental-lesson" class="report-lesson">
+                  <summary>🦷 Dental pearl: ${esc(dentalLesson.headline)}</summary>
+                  <div class="report-lesson-body">
+                    <div style="font-size:0.7rem;color:#5eead4;font-weight:700;">${esc(dentalLesson.focusTeethBadge)}</div>
+                    <div style="font-size:0.75rem;color:#cbd5e1;line-height:1.36;margin-top:3px;">${esc(dentalLesson.lesson)}</div>
+                  </div>
+                </details>`
+          }
+
+          <div id="report-charity-cta" class="charity-cta-strip">
+            <span class="charity-cta-copy">
+              💛 <strong>Enjoyed MouthLife?</strong> Help fund free 501(c)(3) dental relief through <strong>${esc(SMILE_ON_U_CHARITY.name)}</strong>.
+            </span>
+            <div class="row-wrap">
+              <a
+                id="lnk-report-donate"
+                class="btn btn-sm btn-charity-pill"
+                href="${esc(SMILE_ON_U_CHARITY.donateUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >💛 Donate ↗</a>
+              <a
+                id="lnk-report-site"
+                class="btn btn-sm"
+                href="${esc(SMILE_ON_U_CHARITY.websiteUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >SmileOnU.org ↗</a>
+            </div>
           </div>
         </div>
 
-        <div class="row-between" style="font-size:0.8rem;margin-bottom:8px;">
-          <span>Total Score: <strong id="report-total-score" class="report-num">${sampleScoreReveal(breakdown.totalScore, 0, reduced)}</strong> (${breakdown.cleanlinessPct}% Clean)</span>
-          <span style="color:#99f6e4;font-weight:700;">
-            ✦ +${mode === 'PULP_RESCUE' ? this.report.bonusRescueIons : breakdown.ionsEarned} Fluoride Ions
-          </span>
-        </div>
-
-        ${
-          note
-            ? `<details id="report-field-note" class="report-lesson">
-                <summary>📜 Field note unlocked: ${esc(note.title)}</summary>
-                <div class="report-lesson-body">
-                  <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
-                  <div style="font-size:0.76rem;color:#cbd5e1;margin-top:3px;">${esc(note.enamelLesson)}</div>
-                </div>
-              </details>`
-            : `<details id="report-dental-lesson" class="report-lesson">
-                <summary>🦷 Dental pearl: ${esc(dentalLesson.headline)}</summary>
-                <div class="report-lesson-body">
-                  <div style="font-size:0.7rem;color:#5eead4;font-weight:700;">${esc(dentalLesson.focusTeethBadge)}</div>
-                  <div style="font-size:0.75rem;color:#cbd5e1;line-height:1.36;margin-top:3px;">${esc(dentalLesson.lesson)}</div>
-                </div>
-              </details>`
-        }
-
-        <div class="hub-actions-primary">
+        <div class="hub-actions-primary report-sticky-actions">
           ${nextDive}
           <button type="button" id="btn-report-replay" class="btn">↻ Replay Stage</button>
           <button type="button" id="btn-report-hub" class="btn ${nextDive ? '' : 'btn-primary'}">Smooth Bask Hub →</button>
-        </div>
-
-        <div id="report-charity-cta" class="charity-cta-strip">
-          <span class="charity-cta-copy">
-            💛 <strong>Enjoyed MouthLife?</strong> Help fund free 501(c)(3) dental relief through <strong>${esc(SMILE_ON_U_CHARITY.name)}</strong>.
-          </span>
-          <div class="row-wrap">
-            <a
-              id="lnk-report-donate"
-              class="btn btn-sm btn-charity-pill"
-              href="${esc(SMILE_ON_U_CHARITY.donateUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >💛 Donate ↗</a>
-            <a
-              id="lnk-report-site"
-              class="btn btn-sm"
-              href="${esc(SMILE_ON_U_CHARITY.websiteUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >SmileOnU.org ↗</a>
-          </div>
         </div>
       </div>
     `;

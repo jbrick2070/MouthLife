@@ -41,6 +41,19 @@ export class BrushAlongOverlay implements OverlayView {
       this.callbacks.onPauseChanged?.(false);
       this.callbacks.onActiveQuadrantChanged(-1);
       this.callbacks.onExitToHub();
+      return;
+    }
+    if (
+      (e.code === 'Space' || e.key === ' ') &&
+      !e.repeat &&
+      (this.stage === 'brushing' || this.stage === 'flossing') &&
+      !(e.target as HTMLElement | null)?.closest('button, a')
+    ) {
+      e.preventDefault();
+      const nextPaused = !this.clock.isPacerPaused();
+      this.clock.setPacerPaused(nextPaused);
+      this.callbacks.onPauseChanged?.(nextPaused);
+      this.syncPauseUi(nextPaused);
     }
   };
 
@@ -85,7 +98,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.rewardResult = null;
 
     this.container = document.createElement('div');
-    this.container.className = 'hub-shell';
+    this.container.className = 'hub-shell brush-along-shell';
     root.appendChild(this.container);
 
     this.clock.startPacer();
@@ -177,6 +190,11 @@ export class BrushAlongOverlay implements OverlayView {
       if (stepEl && !this.container.querySelector('#pacer-card')?.classList.contains('pacer-cue-flash')) {
         stepEl.textContent = `Quadrant ${quadIdx + 1}/4 • Surface ${surfIdx + 1}/3`;
       }
+      this.container.querySelectorAll<HTMLElement>('[data-pacer-quad]').forEach((chip) => {
+        const idx = Number(chip.dataset.pacerQuad ?? -1);
+        chip.classList.toggle('done', idx < quadIdx);
+        chip.classList.toggle('active', idx === quadIdx);
+      });
     }
     const totalSec = this.stage === 'flossing' ? BRUSH_ALONG_FLOSS_BONUS_SEC : BRUSH_ALONG_TOTAL_SEC;
     const pct = Math.max(0, Math.min(100, Math.round(((totalSec - remSec) / totalSec) * 100)));
@@ -235,13 +253,23 @@ export class BrushAlongOverlay implements OverlayView {
         </div>
 
         <div id="pacer-card" class="cosmic-card glass-card ui-interactive" style="text-align:center;">
-          <div id="pacer-visual-cue" role="status" aria-live="polite" class="pill-badge" style="margin-bottom:6px;">
+          ${
+            !isFloss
+              ? `<div class="pacer-quad-stepper" aria-hidden="true">
+                  <span class="pacer-quad-chip active" data-pacer-quad="0">Q1 UR</span>
+                  <span class="pacer-quad-chip" data-pacer-quad="1">Q2 UL</span>
+                  <span class="pacer-quad-chip" data-pacer-quad="2">Q3 LL</span>
+                  <span class="pacer-quad-chip" data-pacer-quad="3">Q4 LR</span>
+                </div>`
+              : ''
+          }
+          <div id="pacer-visual-cue" role="status" aria-live="polite" class="pill-badge" style="margin-bottom:5px;">
             ${isFloss ? '20s Interdental Bonus' : 'Quadrant 1/4 • Surface 1/3'}
           </div>
           <div id="pacer-quad" style="font-size:0.78rem;font-weight:700;color:#38bdf8;">
             ${isFloss ? 'Mesial & Distal Contacts (M/D) • Hug Each Tooth (#1–#32) in a C-Shape' : QUADRANT_NAMES[0]}
           </div>
-          <div id="pacer-clock" style="font-size:2.7rem;font-weight:800;letter-spacing:0.04em;margin:4px 0;color:#fff;font-variant-numeric:tabular-nums;">
+          <div id="pacer-clock" title="Tap timer to Pause or Resume" style="font-size:2.7rem;font-weight:800;letter-spacing:0.04em;margin:4px 0;color:#fff;font-variant-numeric:tabular-nums;cursor:pointer;">
             ${this.formatClock(initialSec - this.clock.getPacerElapsedSec())}
           </div>
           <div class="clean-progress-outer" style="margin:6px 0 8px 0;" aria-hidden="true">
@@ -269,12 +297,14 @@ export class BrushAlongOverlay implements OverlayView {
         this.callbacks.onExitToHub();
       });
 
-      this.container.querySelector('#btn-pacer-pause')?.addEventListener('click', () => {
+      const togglePause = () => {
         const nextPaused = !this.clock.isPacerPaused();
         this.clock.setPacerPaused(nextPaused);
         this.callbacks.onPauseChanged?.(nextPaused);
         this.syncPauseUi(nextPaused);
-      });
+      };
+      this.container.querySelector('#btn-pacer-pause')?.addEventListener('click', togglePause);
+      this.container.querySelector('#pacer-clock')?.addEventListener('click', togglePause);
       return;
     }
 

@@ -135,7 +135,7 @@ export class CosmicIntroOverlay implements OverlayView {
     this.beatIndex = 0;
     this.selectedMohsIdx = 2;
     this.container = document.createElement('div');
-    this.container.className = 'hub-shell';
+    this.container.className = 'hub-shell cosmic-intro-shell';
     root.appendChild(this.container);
     window.addEventListener('keydown', this.keyHandler);
     if (this.callbacks.bus) {
@@ -213,12 +213,12 @@ export class CosmicIntroOverlay implements OverlayView {
           : '';
 
     this.container.innerHTML = `
-      <div class="hub-top-bar glass-card ui-interactive row-between">
-        <div class="row-wrap">
-          <span style="font-weight:800;font-size:0.86rem;letter-spacing:0.03em;color:#5eead4;">✦ COSMIC ENAMEL ORIGINS</span>
-          <span class="pill-badge">Drag 3D Crystal to Inspect</span>
+      <div class="hub-top-bar cosmic-top-bar glass-card ui-interactive row-between">
+        <div class="row-wrap" style="min-width:0;flex-wrap:nowrap;">
+          <span style="font-weight:800;font-size:0.84rem;letter-spacing:0.03em;color:#5eead4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✦ COSMIC ENAMEL</span>
+          <span class="pill-badge cosmic-inspect-badge">Drag 3D Crystal to Inspect</span>
         </div>
-        <div class="row-wrap">
+        <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
           <button
             type="button"
             id="btn-cosmic-mute"
@@ -229,7 +229,7 @@ export class CosmicIntroOverlay implements OverlayView {
           >
             ${this.callbacks.isMuted() ? '🔇' : '🔊'}
           </button>
-          <button type="button" id="btn-skip-cosmic" class="btn btn-sm">Skip Intro →</button>
+          <button type="button" id="btn-skip-cosmic" class="btn btn-sm">Skip →</button>
         </div>
       </div>
 

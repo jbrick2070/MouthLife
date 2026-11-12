@@ -28,12 +28,20 @@ import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { HubCameraFocus } from '../engine/render/SceneManager';
 import type { OverlayView } from '../engine/types';
 import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
-import { loadSeenHints, saveSeenHints, shouldShowHubWelcome } from './hudHelpers';
+import {
+  bindBottomSheetSwipeClose,
+  countAffordableLockedUpgrades,
+  isCompactViewport,
+  loadSeenHints,
+  pickRecommendedDiveWorld,
+  saveSeenHints,
+  shouldShowHubWelcome,
+} from './hudHelpers';
 
 type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync' | 'charity' | 'chart';
 
 const FOCUSABLE_SEL =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'a[href], button:not([disabled]), summary, input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function escapeHtml(raw: string): string {
   return raw
@@ -64,6 +72,7 @@ export class CompanionHubOverlay implements OverlayView {
   private selectedUniversalTooth = 3;
   private lastTouchedCrownIdx: number | null = null;
   private confirmResetPending = false;
+  private mobileDrawerOpen = false;
 
   private keyHandler = (e: KeyboardEvent): void => {
     if (this.activeModal === 'none') return;
@@ -185,6 +194,17 @@ export class CompanionHubOverlay implements OverlayView {
 
   private closeActiveModal(): void {
     const closingModal = this.activeModal;
+    if (closingModal === 'profile') {
+      const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
+      if (inp) {
+        const save = this.saveSys.getSave();
+        const cleaned = inp.value.trim().slice(0, 24) || save.playerProfile.displayName || 'Explorer';
+        if (cleaned !== save.playerProfile.displayName) {
+          save.playerProfile.displayName = cleaned;
+          this.saveSys.save(save);
+        }
+      }
+    }
     const opener = this.modalOpenerSelector;
     this.modalOpenerSelector = null;
     this.activeModal = 'none';
@@ -232,6 +252,19 @@ export class CompanionHubOverlay implements OverlayView {
     if (this.activeModal === 'none') this.render();
   }
 
+  /** Collapses the mobile secondary drawer in O(1) without rebuilding DOM during active 3D touch/orbit. */
+  private collapseMobileDrawerInPlace(): void {
+    if (!this.mobileDrawerOpen) return;
+    this.mobileDrawerOpen = false;
+    const deck = this.container?.querySelector<HTMLElement>('.hub-bottom-deck');
+    deck?.classList.remove('drawer-open');
+    const toggle = this.container?.querySelector<HTMLButtonElement>('#btn-toggle-hub-drawer');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.textContent = this.tab === 'globe' ? '▴ Info' : '▴ More';
+    }
+  }
+
   /**
    * Live educational readout when the player taps or rubs a sculpted 3D crown on the Companion Arch.
    * Updates only the lightweight readout slot (`O(1)` when staying on the same crown) so rubbing never
@@ -239,11 +272,14 @@ export class CompanionHubOverlay implements OverlayView {
    */
   notifyToothTouched(toothIndex: number): void {
     if (this.tab !== 'companion' || this.activeModal !== 'none') return;
+    this.collapseMobileDrawerInPlace();
     if (this.lastTouchedCrownIdx === toothIndex) return;
     this.lastTouchedCrownIdx = toothIndex;
     const summary = getCompanionCrownSummary(toothIndex);
     this.selectedUniversalTooth = summary.upperTooth.universal;
 
+    const callout = this.container?.querySelector<HTMLElement>('.hub-center-callout');
+    callout?.classList.add('has-tooth-readout');
     const slot = this.container?.querySelector<HTMLElement>('#hub-tooth-readout-slot');
     if (slot) {
       slot.innerHTML = this.buildTouchedCrownPillHtml();
@@ -275,6 +311,7 @@ export class CompanionHubOverlay implements OverlayView {
 
   /** Called when the 3D Companion view is orbited away from (or back to) its default framing. */
   setViewOffCenter(off: boolean): void {
+    if (off) this.collapseMobileDrawerInPlace();
     if (this.viewOffCenter === off) return;
     this.viewOffCenter = off;
     if (this.tab !== 'companion' || this.activeModal !== 'none') return;
@@ -339,14 +376,18 @@ export class CompanionHubOverlay implements OverlayView {
       shouldShowHubWelcome(this.seenHints, save.totalBrushStamps, Boolean(save.worlds.world_1?.completed))
         ? `
           <div id="hub-welcome-tip" class="welcome-tip-card ui-interactive" role="region" aria-label="First-Run Guide">
-            <div style="font-size:0.76rem;color:#e0f2fe;line-height:1.38;text-align:left;">
-              <strong style="color:#5eead4;">👋 First Time Here?</strong> Rub the 3D teeth to hear them chime, run a <strong>2-Min Sink Brush-Along</strong> for real-life brushing, or tap <strong>Dive: Plaque City</strong> to scrub enamel with HYDRA-1!
+            <div class="welcome-tip-copy">
+              <strong style="color:#5eead4;">👋 First Time?</strong>
+              <span class="mob-hide"> Rub the 3D teeth to hear them chime, run a <strong>2-Min Sink Brush-Along</strong>, or tap <strong>Dive: Plaque City</strong>!</span>
+              <span class="mob-only"> Rub 3D teeth to chime, run 2-Min Brush, or Dive!</span>
             </div>
             <button type="button" id="btn-dismiss-welcome" class="btn btn-sm btn-primary">Got it ✓</button>
           </div>
         `
         : '';
     const muted = this.actions.isMuted();
+    const hasToothReadout = this.tab === 'companion' && this.lastTouchedCrownIdx !== null;
+    const showStatusPill = !(splatHint && !needsPulpRescue) && !welcomeTipHtml && !(this.tab === 'globe' && globeHint);
 
     const bottomDeckHtml =
       this.tab === 'companion'
@@ -355,15 +396,15 @@ export class CompanionHubOverlay implements OverlayView {
 
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive">
-        <div class="row-between">
-          <button type="button" id="btn-open-profile" class="btn btn-sm hub-profile-btn" title="Customize Host & Skin Tone">
+        <div class="row-between hub-header-row-1">
+          <button type="button" id="btn-open-profile" class="btn btn-sm hub-profile-btn" aria-label="Host Profile: ${escapeHtml(save.playerProfile.displayName)}" title="Customize Host & Skin Tone">
             <span style="width:14px;height:14px;border-radius:50%;background:${skin.hex};border:1px solid #fff;display:inline-block;flex-shrink:0;"></span>
             <span class="hub-profile-label">${escapeHtml(save.playerProfile.displayName)} • ${escapeHtml(homeCity.city)}</span>
           </button>
 
           <div class="row-wrap hub-currency-row">
-            <span class="pill-badge" title="Fluoride Ions (Currency)">✦ <strong id="val-ions">${save.fluorideIons}</strong> Ions</span>
-            <span class="pill-badge" title="Monotonic Habit Stamps (Never lost on missed days!)">🦷 <strong id="val-stamps">${save.totalBrushStamps}</strong> Stamps</span>
+            <span class="pill-badge" title="Fluoride Ions (Currency)">✦ <strong id="val-ions">${save.fluorideIons}</strong><span class="currency-lbl"> Ions</span></span>
+            <span class="pill-badge" title="Monotonic Habit Stamps (Never lost on missed days!)">🦷 <strong id="val-stamps">${save.totalBrushStamps}</strong><span class="currency-lbl"> Stamps</span></span>
             <button
               type="button"
               id="btn-toggle-mute"
@@ -377,8 +418,8 @@ export class CompanionHubOverlay implements OverlayView {
           </div>
         </div>
 
-        <div class="row-between" style="margin-top:7px;">
-          <div class="seg-tabs" role="tablist" aria-label="Hub View">
+        <div class="row-between hub-header-row-2" style="margin-top:7px;">
+          <div class="seg-tabs hub-mode-tabs" role="tablist" aria-label="Hub View">
             <button
               type="button"
               id="tab-companion"
@@ -386,7 +427,7 @@ export class CompanionHubOverlay implements OverlayView {
               aria-selected="${this.tab === 'companion' ? 'true' : 'false'}"
               class="seg-tab ${this.tab === 'companion' ? 'active' : ''}"
             >
-              🦷 Smooth Bask
+              <span class="mob-hide">🦷 Smooth Bask</span><span class="mob-only">🦷 Bask</span>
             </button>
             <button
               type="button"
@@ -395,31 +436,31 @@ export class CompanionHubOverlay implements OverlayView {
               aria-selected="${this.tab === 'globe' ? 'true' : 'false'}"
               class="seg-tab ${this.tab === 'globe' ? 'active' : ''}"
             >
-              🌍 Earth Campaign
+              <span class="mob-hide">🌍 Earth Campaign</span><span class="mob-only">🌍 Globe</span>
             </button>
           </div>
-          <div style="font-size:0.72rem;color:var(--text-muted);">
+          <div class="hub-bonus-readout" style="font-size:0.72rem;color:var(--text-muted);">
             ${save.remineralizedOverdriveRuns > 0 ? `⚡ Overdrive (${save.remineralizedOverdriveRuns}) ` : ''}
             ${save.pendingSupplyBeacons > 0 ? `📡 Beacons (${save.pendingSupplyBeacons})` : ''}
           </div>
         </div>
       </div>
 
-      <div class="hub-center-callout">
-        ${splatHint && !needsPulpRescue ? '' : `<div class="bask-floating-pill">
+      <div class="hub-center-callout${hasToothReadout ? ' has-tooth-readout' : ''}">
+        ${showStatusPill ? `<div class="bask-floating-pill">
           ${floatingStatusText}
-        </div>`}
+        </div>` : ''}
         <div id="hub-tooth-readout-slot">${this.buildTouchedCrownPillHtml()}</div>
         ${splatHint}${globeHint}
         ${welcomeTipHtml}
         ${
           this.statusBanner
-            ? `<div role="status" aria-live="polite" style="margin-top:6px;font-size:0.76rem;color:#fde68a;background:rgba(6,24,38,0.85);padding:4px 12px;border-radius:99px;display:inline-block;">${escapeHtml(this.statusBanner)}</div>`
+            ? `<div role="status" aria-live="polite" class="hub-status-banner">${escapeHtml(this.statusBanner)}</div>`
             : ''
         }
       </div>
 
-      <div class="hub-bottom-deck glass-card ui-interactive">
+      <div class="hub-bottom-deck glass-card ui-interactive${this.mobileDrawerOpen ? ' drawer-open' : ''}">
         ${bottomDeckHtml}
       </div>
 
@@ -435,8 +476,16 @@ export class CompanionHubOverlay implements OverlayView {
     const homeCity = getHostCityById(save.playerProfile.homeCityId);
     const treat = homeCity.signatureTreat;
     const needsPulpRescue = comp.pulpIntegrity <= 0;
-    const homeWorldId = isPlayableWorld(homeCity.worldId) ? homeCity.worldId : 'world_1';
-    const homeWorldTitle = getCartridgeById(homeWorldId).title;
+    const fallbackHomeWorldId = isPlayableWorld(homeCity.worldId) ? homeCity.worldId : 'world_1';
+    const divePick = pickRecommendedDiveWorld(save.worlds, fallbackHomeWorldId);
+    const diveWorldId = isPlayableWorld(divePick.worldId) ? divePick.worldId : fallbackHomeWorldId;
+    const diveWorldTitle = getCartridgeById(diveWorldId).title;
+    const diveStageTag = divePick.stageNumber !== null ? `W${divePick.stageNumber}` : '';
+    const affordableLabCount = countAffordableLockedUpgrades(
+      save.fluorideIons,
+      save.unlockedUpgrades,
+      UPGRADE_CATALOG
+    );
 
     const meters = [
       {
@@ -481,33 +530,42 @@ export class CompanionHubOverlay implements OverlayView {
 
       ${reservoirHtml}
 
-      <div class="hub-actions-primary">
+      <div class="hub-actions-primary hub-dock-row">
         <button type="button" id="btn-start-brush-along" class="btn btn-primary">
-          🪥 2-Min Sink Brush-Along
+          <span class="mob-hide">🪥 2-Min Sink Brush-Along</span><span class="mob-only">🪥 2m Brush</span>
         </button>
         ${
           needsPulpRescue
             ? `<button type="button" id="btn-launch-rescue" class="btn btn-danger">
-                🚨 90s Pulp Rescue!
+                <span class="mob-hide">🚨 90s Pulp Rescue!</span><span class="mob-only">🚨 Rescue!</span>
               </button>`
-            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${homeWorldId}">
-                🚀 Dive: ${escapeHtml(homeWorldTitle)}
+            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${diveWorldId}" title="Dive: ${escapeHtml(diveWorldTitle)}">
+                <span class="mob-hide">🚀 Dive${diveStageTag ? ` (${diveStageTag})` : ''}: ${escapeHtml(diveWorldTitle)}</span><span class="mob-only">🚀 Dive${diveStageTag ? ` ${diveStageTag}` : ''}</span>
               </button>`
         }
+        <button
+          type="button"
+          id="btn-toggle-hub-drawer"
+          class="btn btn-sm hub-drawer-toggle${affordableLabCount > 0 && !this.mobileDrawerOpen ? ' has-badge' : ''}"
+          aria-expanded="${this.mobileDrawerOpen ? 'true' : 'false'}"
+          aria-label="Toggle Treats, Lab, Chart, and Sync Menu"
+        >${this.mobileDrawerOpen ? '▾ Less' : affordableLabCount > 0 ? `▴ More • ${affordableLabCount}` : '▴ More'}</button>
       </div>
 
-      <div class="row-between" style="flex-wrap:wrap;">
-        <button type="button" id="btn-feed-treat" class="btn btn-sm" title="${escapeHtml(treat.phDropNote)}">
-          ${treat.emoji} Treat: ${escapeHtml(treat.name)} (+20 Ions)
-        </button>
+      <div class="hub-drawer-collapsible">
+        <div class="row-between" style="flex-wrap:wrap;">
+          <button type="button" id="btn-feed-treat" class="btn btn-sm" title="${escapeHtml(treat.phDropNote)}">
+            ${treat.emoji} Treat: ${escapeHtml(treat.name)} (+20 Ions)
+          </button>
 
-        <div class="row-wrap">
-          <button type="button" id="btn-open-lab" class="btn btn-sm">🔬 Lab</button>
-          <button type="button" id="btn-open-history" class="btn btn-sm">📜 History</button>
-          <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart (Universal #1–32, FDI & Palmer)">🦷 Chart</button>
-          <button type="button" id="btn-open-sync" class="btn btn-sm">☁️ Sync</button>
-          <button type="button" id="btn-replay-cosmic" class="btn btn-sm" title="Replay Cosmic Enamel & Diamond Intro">✦ Cosmic</button>
-          <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Charitable Dental Care">💛 SmileOnU</button>
+          <div class="row-wrap">
+            <button type="button" id="btn-open-lab" class="btn btn-sm${affordableLabCount > 0 ? ' btn-gold' : ''}">🔬 Lab${affordableLabCount > 0 ? ` (${affordableLabCount})` : ''}</button>
+            <button type="button" id="btn-open-history" class="btn btn-sm">📜 History</button>
+            <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart (Universal #1–32, FDI & Palmer)">🦷 Chart</button>
+            <button type="button" id="btn-open-sync" class="btn btn-sm">☁️ Sync</button>
+            <button type="button" id="btn-replay-cosmic" class="btn btn-sm" title="Replay Cosmic Enamel & Diamond Intro">✦ Cosmic</button>
+            <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Charitable Dental Care">💛 SmileOnU</button>
+          </div>
         </div>
       </div>
     `;
@@ -529,13 +587,15 @@ export class CompanionHubOverlay implements OverlayView {
     };
 
     return `
-      <div class="row-between" style="flex-wrap:wrap;">
-        <div class="campaign-progress" id="campaign-progress" style="margin-bottom:0;">
-          ${cleared}/5 Worlds Cleared • ${save.unlockedHistoryNotes.length}/${HISTORICAL_FIELD_NOTES.length} Field Notes • ${save.unlockedUpgrades.length}/${UPGRADE_CATALOG.length} Lab Upgrades${cleared >= campaignIds.length ? ' • 🛰️ Campaign Mastered!' : ''}
-        </div>
-        <div class="row-wrap">
-          <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart">🦷 Chart</button>
-          <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Global Dental Relief">💛 SmileOnU</button>
+      <div class="hub-drawer-collapsible globe-drawer-top">
+        <div class="row-between" style="flex-wrap:wrap;">
+          <div class="campaign-progress" id="campaign-progress" style="margin-bottom:0;">
+            ${cleared}/5 Worlds Cleared • ${save.unlockedHistoryNotes.length}/${HISTORICAL_FIELD_NOTES.length} Field Notes • ${save.unlockedUpgrades.length}/${UPGRADE_CATALOG.length} Lab Upgrades${cleared >= campaignIds.length ? ' • 🛰️ Campaign Mastered!' : ''}
+          </div>
+          <div class="row-wrap">
+            <button type="button" id="btn-open-chart" class="btn btn-sm" title="Interactive 32-Tooth Dental Numbering Chart">🦷 Chart</button>
+            <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Enjoyed MouthLife? Support SmileOnU 501(c)(3) Global Dental Relief">💛 SmileOnU</button>
+          </div>
         </div>
       </div>
       <div class="city-strip">
@@ -553,7 +613,7 @@ export class CompanionHubOverlay implements OverlayView {
         ).join('')}
       </div>
 
-      <div style="background:rgba(4,16,28,0.68);border:1px solid rgba(94,234,212,0.2);border-radius:12px;padding:9px 11px;">
+      <div class="hub-drawer-collapsible globe-story-card" style="background:rgba(4,16,28,0.68);border:1px solid rgba(94,234,212,0.2);border-radius:12px;padding:9px 11px;">
         <div class="row-between">
           <div class="row-wrap">
             <span style="width:14px;height:14px;border-radius:50%;background:${city.hostSkinToneHex};border:1px solid #fff;display:inline-block;"></span>
@@ -574,25 +634,34 @@ export class CompanionHubOverlay implements OverlayView {
         }
       </div>
 
-      <div class="row-between">
-        <span style="font-size:0.74rem;color:var(--text-muted);">
+      <div class="row-between globe-launch-row">
+        <span class="globe-blurb-copy" style="font-size:0.74rem;color:var(--text-muted);">
           ${
             city.playableInSlice && isPlayableWorld(city.worldId)
-              ? `<strong style="color:#5eead4;">${escapeHtml(getCartridgeById(city.worldId).title)}</strong> • ${escapeHtml(
+              ? `<strong style="color:#5eead4;">${escapeHtml(getCartridgeById(city.worldId).title)}</strong><span class="mob-hide"> • ${escapeHtml(
                   getCartridgeById(city.worldId).challengeBlurb ?? '3 Districts • Brush + Floss Zip + Fluoride Surge'
-                )}`
-              : `Campaign Expansion Preview • ${stampUnlocked ? 'Milestone Reached!' : `Unlocks at ${city.unlockStampsRequired} Habit Stamps`}`
+                )}</span><span class="mob-only"> • ${escapeHtml(city.hostName)}</span>`
+              : `<span class="mob-hide">Campaign Expansion Preview • </span>${stampUnlocked ? 'Milestone Reached!' : `Unlocks at ${city.unlockStampsRequired} Stamps`}`
           }
         </span>
-        ${
-          city.playableInSlice && isPlayableWorld(city.worldId)
-            ? `<button type="button" id="btn-globe-dive" class="btn btn-primary">
-                🚀 Dive Into ${escapeHtml(city.city)} →
-              </button>`
-            : `<button type="button" id="btn-open-history" class="btn btn-sm">
-                📜 Read ${escapeHtml(city.city)} Dental History
-              </button>`
-        }
+        <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
+          ${
+            city.playableInSlice && isPlayableWorld(city.worldId)
+              ? `<button type="button" id="btn-globe-dive" class="btn btn-primary">
+                  <span class="mob-hide">🚀 Dive Into ${escapeHtml(city.city)} →</span><span class="mob-only">🚀 Dive →</span>
+                </button>`
+              : `<button type="button" id="btn-open-history" class="btn btn-sm">
+                  <span class="mob-hide">📜 Read ${escapeHtml(city.city)} Dental History</span><span class="mob-only">📜 History</span>
+                </button>`
+          }
+          <button
+            type="button"
+            id="btn-toggle-hub-drawer"
+            class="btn btn-sm hub-drawer-toggle"
+            aria-expanded="${this.mobileDrawerOpen ? 'true' : 'false'}"
+            aria-label="Toggle City Story, Dental Chart, and Campaign Progress"
+          >${this.mobileDrawerOpen ? '▾ Less' : '▴ Info'}</button>
+        </div>
       </div>
     `;
   }
@@ -606,7 +675,7 @@ export class CompanionHubOverlay implements OverlayView {
       return `
         <div class="modal-backdrop" id="modal-bg">
           <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-            <div class="row-between" style="margin-bottom:10px;">
+            <div class="row-between modal-header-sticky" style="margin-bottom:10px;">
               <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🧑🏽‍🚀 Host Identity & Inclusive Skin Tone</h3>
               <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
@@ -693,7 +762,7 @@ export class CompanionHubOverlay implements OverlayView {
       return `
         <div class="modal-backdrop" id="modal-bg">
           <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-            <div class="row-between" style="margin-bottom:10px;">
+            <div class="row-between modal-header-sticky" style="margin-bottom:10px;">
               <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🔬 Biophysical Actuator Lab (${save.fluorideIons} Ions)</h3>
               <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
@@ -737,7 +806,7 @@ export class CompanionHubOverlay implements OverlayView {
       return `
         <div class="modal-backdrop" id="modal-bg">
           <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-            <div class="row-between" style="margin-bottom:10px;">
+            <div class="row-between modal-header-sticky" style="margin-bottom:10px;">
               <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">📜 Global Dental History & Enamel Almanac</h3>
               <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
@@ -771,7 +840,7 @@ export class CompanionHubOverlay implements OverlayView {
       return `
         <div class="modal-backdrop" id="modal-bg">
           <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-            <div class="row-between" style="margin-bottom:10px;">
+            <div class="row-between modal-header-sticky" style="margin-bottom:10px;">
               <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">💛 Enjoyed MouthLife? Support Real Smiles!</h3>
               <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
             </div>
@@ -905,7 +974,7 @@ export class CompanionHubOverlay implements OverlayView {
     return `
       <div class="modal-backdrop" id="modal-bg">
         <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-          <div class="row-between" style="margin-bottom:10px;">
+          <div class="row-between modal-header-sticky" style="margin-bottom:10px;">
             <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">☁️ Cross-Device Sync Code (Zero Sign-Up)</h3>
             <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
           </div>
@@ -939,7 +1008,10 @@ export class CompanionHubOverlay implements OverlayView {
                 ${this.confirmResetPending ? '⚠️ Tap Again to Confirm Reset' : '🔄 Reset Save Data'}
               </button>
             </div>
-            <button type="button" id="btn-apply-sync" class="btn btn-gold btn-sm">Import & Merge</button>
+            <div class="row-wrap" style="gap:6px;">
+              <button type="button" id="btn-paste-sync" class="btn btn-sm">📋 Paste</button>
+              <button type="button" id="btn-apply-sync" class="btn btn-gold btn-sm">Import & Merge</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1068,7 +1140,7 @@ export class CompanionHubOverlay implements OverlayView {
     return `
       <div class="modal-backdrop" id="modal-bg">
         <div class="modal-sheet modal-sheet-wide" role="dialog" aria-modal="true" aria-labelledby="hub-modal-title" onclick="event.stopPropagation()">
-          <div class="row-between" style="margin-bottom:8px;">
+          <div class="row-between modal-header-sticky" style="margin-bottom:8px;">
             <h3 id="hub-modal-title" style="margin:0;font-size:1rem;">🦷 How Dentists Number Teeth (32-Tooth Chart)</h3>
             <button type="button" id="btn-close-modal" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
           </div>
@@ -1116,8 +1188,28 @@ export class CompanionHubOverlay implements OverlayView {
             </span>
           </div>
 
-          ${this.chartTab === 'quiz' ? this.buildQuizCardHtml() : `
-          <div id="chart-selected-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+          ${this.chartTab === 'quiz' ? this.buildQuizCardHtml() : ''}
+
+          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:4px;">
+            ▲ UPPER ARCH (MAXILLARY) — Tap Any Tooth to Hear &amp; Inspect
+          </div>
+          <div class="dental-arch-cross">
+            ${renderQuadBox(q1)}
+            ${renderQuadBox(q2)}
+          </div>
+
+          <div class="dental-bite-divider">── Occlusal Bite Plane • Central Midline │ ──</div>
+
+          <div class="dental-arch-cross" style="margin-bottom:4px;">
+            ${renderQuadBox(q4)}
+            ${renderQuadBox(q3)}
+          </div>
+          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:8px;">
+            ▼ LOWER ARCH (MANDIBULAR) — <span style="color:#67e8f9;">CI/LI Incisors</span> • <span style="color:#fde68a;">C Canine</span> • <span style="color:#93c5fd;">1P/2P Premolars</span> • <span style="color:#d8b4fe;">1M–3M Molars</span>
+          </div>
+
+          ${this.chartTab === 'chart' ? `
+          <div id="chart-selected-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;margin-bottom:8px;">
             <div class="row-between" style="flex-wrap:wrap;margin-bottom:5px;">
               <div>
                 <strong id="chart-tooth-name" style="font-size:0.92rem;color:#fff;">${escapeHtml(sel.clinicalName)}</strong>
@@ -1139,49 +1231,27 @@ export class CompanionHubOverlay implements OverlayView {
             </div>
           </div>
 
-`}
-
-          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:4px;">
-            ▲ UPPER ARCH (MAXILLARY) — Tap Any Tooth to Hear &amp; Inspect
-          </div>
-          <div class="dental-arch-cross">
-            ${renderQuadBox(q1)}
-            ${renderQuadBox(q2)}
-          </div>
-
-          <div class="dental-bite-divider">── Occlusal Bite Plane • Central Midline │ ──</div>
-
-          <div class="dental-arch-cross" style="margin-bottom:4px;">
-            ${renderQuadBox(q4)}
-            ${renderQuadBox(q3)}
-          </div>
-          <div style="font-size:0.72rem;font-weight:700;color:#99f6e4;text-align:center;margin-bottom:10px;">
-            ▼ LOWER ARCH (MANDIBULAR) — <span style="color:#67e8f9;">CI/LI Incisors</span> • <span style="color:#fde68a;">C Canine</span> • <span style="color:#93c5fd;">1P/2P Premolars</span> • <span style="color:#d8b4fe;">1M–3M Molars</span>
-          </div>
-
-          ${this.chartTab === 'chart' ? `
-          <div style="background:rgba(4,16,28,0.78);border:1px solid rgba(148,184,204,0.22);border-radius:12px;padding:9px 11px;margin-bottom:8px;">
-            <strong style="font-size:0.8rem;color:#fff;display:block;margin-bottom:4px;">🎓 30-Second Dentistry Decoder</strong>
-            <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.42;display:flex;flex-direction:column;gap:4px;">
-              <div>• <strong>🇺🇸 Universal (#1–#32):</strong> Starts at Upper Right Wisdom Tooth <strong>#1</strong>, sweeps across to Upper Left <strong>#16</strong>, drops down to Lower Left <strong>#17</strong>, and finishes at Lower Right <strong>#32</strong>. <em>(20 baby/primary teeth use letters <strong>A–T</strong> in the same clockwise loop!)</em></div>
-              <div>• <strong>🌍 FDI Two-Digit (ISO 3950):</strong> Used across Canada, Europe &amp; WHO. First digit = Quadrant (<strong>1</strong>=UR, <strong>2</strong>=UL, <strong>3</strong>=LL, <strong>4</strong>=LR; baby teeth <strong>5–8</strong>). Second digit = Tooth from midline (<strong>1</strong>=Central Incisor … <strong>6</strong>=1st Molar … <strong>8</strong>=Wisdom Tooth).</div>
-              <div>• <strong>┼ Palmer Brackets:</strong> Draws the cross of the mouth (<strong>┘ └ ┌ ┐</strong>) with <strong>1–8</strong> counting out from the front midline (<strong>A–E</strong> for baby teeth).</div>
+          <details class="report-lesson"${typeof window !== 'undefined' && isCompactViewport(window.innerWidth, window.innerHeight) ? '' : ' open'}>
+            <summary>🎓 30-Second Numbering Decoder &amp; 5 Clinical Surfaces</summary>
+            <div class="report-lesson-body">
+              <div style="font-size:0.74rem;color:#cbd5e1;line-height:1.42;display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+                <div>• <strong>🇺🇸 Universal (#1–#32):</strong> Starts at Upper Right Wisdom Tooth <strong>#1</strong>, sweeps across to Upper Left <strong>#16</strong>, drops down to Lower Left <strong>#17</strong>, and finishes at Lower Right <strong>#32</strong>. <em>(20 baby/primary teeth use letters <strong>A–T</strong> in the same clockwise loop!)</em></div>
+                <div>• <strong>🌍 FDI Two-Digit (ISO 3950):</strong> Used across Canada, Europe &amp; WHO. First digit = Quadrant (<strong>1</strong>=UR, <strong>2</strong>=UL, <strong>3</strong>=LL, <strong>4</strong>=LR; baby teeth <strong>5–8</strong>). Second digit = Tooth from midline (<strong>1</strong>=Central Incisor … <strong>6</strong>=1st Molar … <strong>8</strong>=Wisdom Tooth).</div>
+                <div>• <strong>┼ Palmer Brackets:</strong> Draws the cross of the mouth (<strong>┘ └ ┌ ┐</strong>) with <strong>1–8</strong> counting out from the front midline (<strong>A–E</strong> for baby teeth).</div>
+              </div>
+              <strong style="font-size:0.77rem;color:#fff;display:block;margin-bottom:4px;">🧭 The 5 Clinical Tooth Surfaces (Why Dentists Say “MOD on #19”)</strong>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                ${TOOTH_SURFACES_GUIDE.map(
+                  (s) => `
+                  <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.35;">
+                    <span class="pill-badge" style="font-size:0.66rem;padding:1px 7px;margin-right:4px;color:#5eead4;">${escapeHtml(s.code)}</span>
+                    <strong style="color:#fff;">${escapeHtml(s.name)}:</strong> ${escapeHtml(s.whereItFaces)} <span style="color:#99f6e4;">(${escapeHtml(s.howToClean)})</span>
+                  </div>
+                `
+                ).join('')}
+              </div>
             </div>
-          </div>
-
-          <div style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.22);border-radius:12px;padding:9px 11px;">
-            <strong style="font-size:0.8rem;color:#fff;display:block;margin-bottom:5px;">🧭 The 5 Clinical Tooth Surfaces (Why Dentists Say “MOD on #19”)</strong>
-            <div style="display:flex;flex-direction:column;gap:5px;">
-              ${TOOTH_SURFACES_GUIDE.map(
-                (s) => `
-                <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.35;">
-                  <span class="pill-badge" style="font-size:0.66rem;padding:1px 7px;margin-right:4px;color:#5eead4;">${escapeHtml(s.code)}</span>
-                  <strong style="color:#fff;">${escapeHtml(s.name)}:</strong> ${escapeHtml(s.whereItFaces)} <span style="color:#99f6e4;">(${escapeHtml(s.howToClean)})</span>
-                </div>
-              `
-              ).join('')}
-            </div>
-          </div>
+          </details>
 ` : ''}
 `}
         </div>
@@ -1194,6 +1264,13 @@ export class CompanionHubOverlay implements OverlayView {
     const save = this.saveSys.getSave();
 
     this.bindTouchedCrownPill();
+
+    this.container.querySelector('#btn-toggle-hub-drawer')?.addEventListener('click', () => {
+      this.mobileDrawerOpen = !this.mobileDrawerOpen;
+      this.actions.onPlayUiTap();
+      this.render();
+      this.container?.querySelector<HTMLElement>('#btn-toggle-hub-drawer')?.focus({ preventScroll: true });
+    });
 
     this.container.querySelector('#btn-dismiss-welcome')?.addEventListener('click', () => {
       this.dismissWelcome();
@@ -1390,6 +1467,11 @@ export class CompanionHubOverlay implements OverlayView {
 
     this.container.querySelector('#btn-close-modal')?.addEventListener('click', () => this.closeActiveModal());
     this.container.querySelector('#modal-bg')?.addEventListener('click', () => this.closeActiveModal());
+    bindBottomSheetSwipeClose(
+      this.container.querySelector<HTMLElement>('.modal-header-sticky'),
+      this.container.querySelector<HTMLElement>('.modal-sheet'),
+      () => this.closeActiveModal()
+    );
 
     // Profile modal handlers
     const syncPendingName = () => {
@@ -1398,6 +1480,10 @@ export class CompanionHubOverlay implements OverlayView {
         save.playerProfile.displayName = inp.value.trim().slice(0, 24) || save.playerProfile.displayName;
       }
     };
+    this.container.querySelector<HTMLInputElement>('#inp-host-name')?.addEventListener('change', () => {
+      syncPendingName();
+      this.saveSys.save(save);
+    });
 
     this.container.querySelectorAll<HTMLButtonElement>('[data-skin-idx]').forEach((sw) => {
       sw.addEventListener('click', () => {
@@ -1464,9 +1550,18 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     // Sync Code handlers
-    this.container.querySelector('#btn-copy-sync')?.addEventListener('click', () => {
+    const showSyncInlineFeedback = (msg: string, ok = true) => {
+      const status = this.container?.querySelector<HTMLElement>('#sync-import-status');
+      if (status) {
+        status.style.color = ok ? '#86efac' : '#fca5a5';
+        status.textContent = msg;
+      }
+    };
+
+    this.container.querySelector('#btn-copy-sync')?.addEventListener('click', (e) => {
       const code = this.saveSys.exportSyncCode();
       const exportArea = this.container?.querySelector<HTMLTextAreaElement>('#txt-sync-export');
+      const btn = e.currentTarget as HTMLButtonElement | null;
       const fallbackSelectAndCopy = () => {
         if (exportArea) {
           exportArea.focus();
@@ -1484,8 +1579,34 @@ export class CompanionHubOverlay implements OverlayView {
       } else {
         fallbackSelectAndCopy();
       }
+      if (btn) btn.textContent = '✓ Copied ML2 Code!';
       this.statusBanner = 'Copied ML2: Sync Code to clipboard!';
-      this.closeActiveModal();
+      showSyncInlineFeedback('✓ Copied ML2: Sync Code to clipboard!');
+    });
+
+    this.container.querySelector('#btn-paste-sync')?.addEventListener('click', () => {
+      const txt = this.container?.querySelector<HTMLTextAreaElement>('#txt-sync-import');
+      if (!txt) return;
+      if (navigator.clipboard?.readText) {
+        navigator.clipboard
+          .readText()
+          .then((clip) => {
+            if (clip.trim()) {
+              txt.value = clip.trim();
+              showSyncInlineFeedback('✓ Pasted code — tap Import & Merge to apply.');
+            } else {
+              txt.focus();
+              showSyncInlineFeedback('Clipboard looks empty — long-press in the box to paste.', false);
+            }
+          })
+          .catch(() => {
+            txt.focus();
+            showSyncInlineFeedback('Long-press inside the import box above to paste your code.', false);
+          });
+      } else {
+        txt.focus();
+        showSyncInlineFeedback('Long-press inside the import box above to paste your code.', false);
+      }
     });
 
     this.container.querySelector('#btn-download-json')?.addEventListener('click', () => {
@@ -1546,7 +1667,7 @@ export class CompanionHubOverlay implements OverlayView {
         fallbackCopy();
       }
       this.statusBanner = 'Copied Beta Diagnostic Report to clipboard!';
-      this.closeActiveModal();
+      showSyncInlineFeedback('✓ Copied Beta Diagnostic Report to clipboard!');
     });
 
     this.container.querySelector('#btn-reset-save')?.addEventListener('click', () => {

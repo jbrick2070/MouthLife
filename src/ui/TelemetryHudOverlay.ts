@@ -8,12 +8,17 @@ import type { SceneManager } from '../engine/render/SceneManager';
 import type { WorldSession } from '../engine/sim/WorldSession';
 import type { OverlayView, QualityTier, Vec2 } from '../engine/types';
 import {
+  bindBottomSheetSwipeClose,
   buildTimerPill,
   clampToScreen,
+  compactToastText,
+  formatZipPromptText,
+  isCompactViewport,
   isEditableEventTarget,
   computeObjectiveBreadcrumb,
   placeWorldCallout,
   shouldHintFlossMiss,
+  shouldShowVirtualThumbPad,
   loadSeenHints,
   saveSeenHints,
   selectWayfinderTargets,
@@ -24,7 +29,7 @@ import {
 } from './hudHelpers';
 
 const FOCUSABLE_SEL =
-  'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface HudAudioControls {
   isMuted: () => boolean;
@@ -69,6 +74,8 @@ export class TelemetryHudOverlay implements OverlayView {
   private sitesBadgeEl: HTMLElement | null = null;
   private scoreBadgeEl: HTMLElement | null = null;
   private districtRowEl: HTMLElement | null = null;
+  private scanBtnEl: HTMLButtonElement | null = null;
+  private scanDeskBtnEl: HTMLButtonElement | null = null;
   private surgeBtnEl: HTMLButtonElement | null = null;
   private surgeDeskBtnEl: HTMLButtonElement | null = null;
   private toastEl: HTMLElement | null = null;
@@ -86,6 +93,7 @@ export class TelemetryHudOverlay implements OverlayView {
   private steerHaloEl: HTMLElement | null = null;
   private flossRingEl: HTMLElement | null = null;
   private flossDeskBtnEl: HTMLElement | null = null;
+  private thumbDeckEl: HTMLElement | null = null;
   private mechanicBadgeEl: HTMLElement | null = null;
   private steerBtnEl: HTMLButtonElement | null = null;
   private lastSynergy = 1;
@@ -143,6 +151,23 @@ export class TelemetryHudOverlay implements OverlayView {
       this.setPaused(true);
     }
   };
+  private resizeHandler = (): void => {
+    this.syncThumbPadVisibility();
+  };
+
+  private isCompactScreen(): boolean {
+    if (typeof window === 'undefined') return false;
+    return isCompactViewport(window.innerWidth, window.innerHeight);
+  }
+
+  private syncThumbPadVisibility(): void {
+    if (!this.thumbDeckEl) return;
+    const showPad = shouldShowVirtualThumbPad({
+      pointerSteerEnabled: this.input.isPointerSteerEnabled(),
+      compactViewport: this.isCompactScreen(),
+    });
+    this.thumbDeckEl.classList.toggle('pad-hidden', !showPad);
+  }
 
   constructor(
     private readonly mode: 'ARCADE' | 'PULP_RESCUE',
@@ -317,7 +342,7 @@ export class TelemetryHudOverlay implements OverlayView {
           </div>
 
           <div class="actuator-cluster ui-interactive">
-            <div class="row-wrap">
+            <div class="row-wrap actuator-secondary-row">
               <button type="button" id="btn-mob-scan" class="btn btn-sm">🔍 Dye Scan</button>
               <button type="button" id="btn-mob-surge" class="btn btn-sm">🌊 Surge 0%</button>
             </div>
@@ -329,7 +354,7 @@ export class TelemetryHudOverlay implements OverlayView {
               title="Tap or Drag Vector to Slice & Capillary Zip"
             >
               <span>🧵 FLOSS</span>
-              <span style="font-size:0.62rem;opacity:0.8;">TAP / AIM</span>
+              <span class="floss-sub" style="font-size:0.62rem;opacity:0.8;">TAP / AIM</span>
             </button>
           </div>
         </div>
@@ -343,19 +368,24 @@ export class TelemetryHudOverlay implements OverlayView {
     this.sitesBadgeEl = this.container.querySelector('#hud-sites');
     this.scoreBadgeEl = this.container.querySelector('#hud-score');
     this.districtRowEl = this.container.querySelector('#hud-districts');
+    this.scanBtnEl = this.container.querySelector('#btn-mob-scan');
+    this.scanDeskBtnEl = this.container.querySelector('#btn-desk-scan');
     this.surgeBtnEl = this.container.querySelector('#btn-mob-surge');
     this.surgeDeskBtnEl = this.container.querySelector('#btn-desk-surge');
     this.toastEl = this.container.querySelector('#hud-toast');
     this.qualityBtnEl = this.container.querySelector('#btn-hud-quality');
     this.flossRingEl = this.container.querySelector('#ring-floss');
     this.flossDeskBtnEl = this.container.querySelector('#btn-desk-floss');
+    this.thumbDeckEl = this.container.querySelector('.thumb-deck');
     this.mechanicBadgeEl = this.container.querySelector('#hud-mechanic');
     this.steerBtnEl = this.container.querySelector('#btn-hud-steer');
     this.muteBtnEl = this.container.querySelector('#btn-hud-mute');
     this.pauseBtnEl = this.container.querySelector('#btn-hud-pause');
     this.timerEl = this.container.querySelector('#hud-timer');
+    this.syncThumbPadVisibility();
     this.buildPauseSheet();
     window.addEventListener('keydown', this.keyHandler);
+    window.addEventListener('resize', this.resizeHandler);
     document.addEventListener('visibilitychange', this.visibilityHandler);
 
     // Callout layer sits above the canvas but outside the flex HUD flow
@@ -406,18 +436,20 @@ export class TelemetryHudOverlay implements OverlayView {
 
   /** Spawns a crisp floating callout anchored to a world position (rises & fades). */
   spawnCallout(text: string, pos: Vec2, tone: CalloutTone = 'mint', life = 1.25, yOffset = 1.6): void {
+    const compact = this.isCompactScreen();
+    const displayMsg = compactToastText(text, compact);
     const slot =
-      this.callouts.find((c) => c.active && c.el.textContent === text) ??
+      this.callouts.find((c) => c.active && c.el.textContent === displayMsg) ??
       this.callouts.find((c) => !c.active) ??
       this.callouts.reduce((a, b) => (a.age > b.age ? a : b));
     const cart = this.session.cartridge;
     slot.active = true;
     slot.age = 0;
-    slot.life = life;
+    slot.life = compact ? Math.min(life, 1.05) : life;
     slot.wx = pos.x;
     slot.wz = pos.z;
     slot.wy = (cart ? sampleTerrainHeight(cart, pos.x, pos.z) : 0.5) + yOffset;
-    slot.el.textContent = text;
+    slot.el.textContent = displayMsg;
     slot.el.className = `world-callout tone-${tone}`;
   }
 
@@ -529,9 +561,8 @@ export class TelemetryHudOverlay implements OverlayView {
         : findNearestZipMouth(this.session.probePos, cart.interdentalAlleys, cart.wallBoxes);
     const show = Boolean(hint && hint.blockedToWalking);
     if (hint && show) {
-      const wantText = hint.inZipRange
-        ? ZIP_PROMPT_TEXT
-        : '🦷 Narrow Alley — Move Closer to Zip';
+      const compact = this.isCompactScreen();
+      const wantText = formatZipPromptText(hint.inZipRange, compact, ZIP_PROMPT_TEXT);
       if (this.zipPromptEl.textContent !== wantText) {
         this.zipPromptEl.textContent = wantText;
       }
@@ -592,6 +623,7 @@ export class TelemetryHudOverlay implements OverlayView {
     this.steerBtnEl?.addEventListener('click', () => {
       const next = !this.input.isPointerSteerEnabled();
       this.input.setPointerSteerEnabled(next);
+      this.syncThumbPadVisibility();
       const label = next ? '🎯 Steer: ON' : '🎯 Steer: OFF';
       if (this.steerBtnEl) {
         this.steerBtnEl.textContent = label;
@@ -605,8 +637,8 @@ export class TelemetryHudOverlay implements OverlayView {
       }
       this.showToast(
         next
-          ? '🎯 Drag/Click-to-Steer ON — touch or hold the tooth surface to sweep HYDRA-1 there'
-          : '🎯 Steer OFF — WASD / Thumb Pad movement, Click/Space scrubs in place'
+          ? '🎯 Touch Steer ON — drag on the tooth to scrub & sweep'
+          : '🕹️ Thumb Pad ON — use the bottom-left pad to steer'
       );
     });
 
@@ -944,9 +976,10 @@ export class TelemetryHudOverlay implements OverlayView {
       this.toastTimerSec = 0;
       return;
     }
-    this.toastEl.textContent = msg;
+    const compact = this.isCompactScreen();
+    this.toastEl.textContent = compactToastText(msg, compact);
     this.toastEl.style.opacity = '1';
-    this.toastTimerSec = durationSec;
+    this.toastTimerSec = compact ? Math.min(durationSec, 2.35) : durationSec;
   }
 
   tickHud(frameDt: number): void {
@@ -1128,10 +1161,24 @@ export class TelemetryHudOverlay implements OverlayView {
         acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
         rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
       });
-      const full = `🎯 ${msg}`;
+      const full = compactToastText(`🎯 ${msg}`, this.isCompactScreen());
       if (objEl.textContent !== full) objEl.textContent = full;
     }
-    if (this.session.discloseActiveRemaining > 0) {
+    const scanSec = Math.ceil(Math.max(0, this.session.discloseActiveRemaining));
+    const scanOn = scanSec > 0;
+    if (this.scanBtnEl) {
+      this.scanBtnEl.textContent = scanOn ? `🔍 ${scanSec}s` : '🔍 Dye Scan';
+      this.scanBtnEl.classList.toggle('scan-active', scanOn);
+      this.scanBtnEl.setAttribute('aria-pressed', scanOn ? 'true' : 'false');
+    }
+    if (this.scanDeskBtnEl) {
+      this.scanDeskBtnEl.textContent = scanOn
+        ? `🔍 Dye Bio-Scan (${scanSec}s) [R]`
+        : '🔍 Dye Bio-Scan [R]';
+      this.scanDeskBtnEl.classList.toggle('scan-active', scanOn);
+      this.scanDeskBtnEl.setAttribute('aria-pressed', scanOn ? 'true' : 'false');
+    }
+    if (scanOn) {
       this.maybeHint(
         'two_tone_dye',
         '🔍 Two-tone dye, like a dentist’s disclosing tablet: pink = fresh, thin plaque • violet = older, thick biofilm. Scrub violet first!'
@@ -1142,14 +1189,23 @@ export class TelemetryHudOverlay implements OverlayView {
     }
     this.lastSurgeReady = surgeReady;
     if (this.surgeBtnEl) {
-      this.surgeBtnEl.textContent = surgeReady ? '🌊 SURGE READY!' : `🌊 Surge ${surgePct}%`;
-      this.surgeBtnEl.className = surgeReady ? 'btn btn-primary btn-sm' : 'btn btn-sm';
+      const compact = this.isCompactScreen();
+      this.surgeBtnEl.textContent = surgeReady
+        ? compact
+          ? '🌊 SURGE!'
+          : '🌊 SURGE READY!'
+        : compact
+          ? `🌊 ${surgePct}%`
+          : `🌊 Surge ${surgePct}%`;
+      this.surgeBtnEl.style.setProperty('--surge-pct', `${surgePct}%`);
+      this.surgeBtnEl.className = surgeReady ? 'btn btn-primary btn-sm surge-meter-btn surge-ready' : 'btn btn-sm surge-meter-btn';
     }
     if (this.surgeDeskBtnEl) {
       this.surgeDeskBtnEl.textContent = surgeReady
         ? '🌊 FLUORIDE SURGE READY! [Q]'
         : `🌊 Fluoride Surge (${surgePct}%) [Q]`;
-      this.surgeDeskBtnEl.className = surgeReady ? 'btn btn-primary btn-sm' : 'btn btn-sm';
+      this.surgeDeskBtnEl.style.setProperty('--surge-pct', `${surgePct}%`);
+      this.surgeDeskBtnEl.className = surgeReady ? 'btn btn-primary btn-sm surge-meter-btn surge-ready' : 'btn btn-sm surge-meter-btn';
     }
 
     const pauseSummary = this.pauseSheetEl?.querySelector<HTMLElement>('#pause-telemetry-summary');
@@ -1189,28 +1245,29 @@ export class TelemetryHudOverlay implements OverlayView {
     const muted = a.isMuted();
     const reduced = a.isReducedMotion();
     const steer = this.input.isPointerSteerEnabled();
+    const openLessonAttr = this.isCompactScreen() ? '' : ' open';
     const sheet = document.createElement('div');
     sheet.className = 'modal-backdrop ui-interactive';
     sheet.id = 'hud-pause-sheet';
     sheet.style.display = 'none';
     sheet.innerHTML = `
       <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="pause-sheet-title">
-        <div class="row-between" style="margin-bottom:8px;">
-          <h3 id="pause-sheet-title" style="margin:0;font-size:1rem;">⏸ Paused</h3>
-          <button type="button" id="btn-pause-resume-x" class="btn btn-sm btn-icon" aria-label="Resume Game">✕</button>
-        </div>
-        <p id="pause-tip" style="margin:0 0 8px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.4;">🎯 ${escTxt(tip)}</p>
-        <p id="pause-objective" class="pause-objective"></p>
-        <div id="pause-telemetry-summary" class="row-wrap" style="margin:0 0 8px 0;gap:5px;"></div>
-        <div id="pause-dental-lesson" style="background:rgba(4,16,28,0.78);border:1px solid rgba(94,234,212,0.28);border-radius:10px;padding:7px 10px;margin-bottom:10px;">
-          <div style="font-size:0.69rem;font-weight:700;color:#5eead4;">🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</div>
-          <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;margin-top:2px;">${escTxt(dentalLesson.lesson)}</div>
-        </div>
-        <div class="audio-block">
-          <div class="row-between" style="margin-bottom:6px;">
-            <span style="font-size:0.78rem;color:#e0f2fe;">Audio</span>
-            <button type="button" id="btn-pause-mute" aria-pressed="${muted ? 'true' : 'false'}" class="btn btn-sm ${muted ? '' : 'btn-primary'}">${muted ? '🔇 Muted' : '🔊 Sound On'}</button>
+        <div class="row-between modal-header-sticky" style="margin-bottom:6px;">
+          <h3 id="pause-sheet-title" style="margin:0;font-size:0.96rem;">⏸ Paused</h3>
+          <div class="row-wrap">
+            <button type="button" id="btn-pause-resume" class="btn btn-sm btn-primary">▶ Resume</button>
+            <button type="button" id="btn-pause-resume-x" class="btn btn-sm btn-icon" aria-label="Resume Game">✕</button>
           </div>
+        </div>
+        <p id="pause-objective" class="pause-objective"></p>
+        <div id="pause-telemetry-summary" class="row-wrap" style="margin:0 0 6px 0;gap:5px;"></div>
+        <div class="row-wrap pause-primary-actions" style="margin:0 0 6px 0;gap:6px;">
+          <button type="button" id="btn-pause-restart" class="btn btn-sm">↻ Restart Dive</button>
+          <button type="button" id="btn-pause-exit" class="btn btn-sm">← Exit to Hub</button>
+          <button type="button" id="btn-pause-mute" aria-pressed="${muted ? 'true' : 'false'}" class="btn btn-sm ${muted ? '' : 'btn-primary'}">${muted ? '🔇 Muted' : '🔊 Sound On'}</button>
+          <button type="button" id="btn-pause-steer" aria-pressed="${steer ? 'true' : 'false'}" class="btn btn-sm ${steer ? 'btn-primary' : ''}">${steer ? '🎯 Steer: ON' : '🎯 Steer: OFF'}</button>
+        </div>
+        <div class="audio-block pause-audio-grid" style="margin-bottom:6px;">
           <label class="audio-slider-row"><span>Music</span>
             <input type="range" id="pause-music" aria-label="Music Volume" min="0" max="100" value="${Math.round(a.getMusicVolume() * 100)}" />
           </label>
@@ -1218,16 +1275,17 @@ export class TelemetryHudOverlay implements OverlayView {
             <input type="range" id="pause-sfx" aria-label="SFX Volume" min="0" max="100" value="${Math.round(a.getSfxVolume() * 100)}" />
           </label>
         </div>
-        <div class="row-wrap" style="margin:10px 0;">
+        <div class="row-wrap" style="margin:0 0 6px 0;gap:6px;">
           <button type="button" id="btn-pause-shake" aria-pressed="${reduced ? 'true' : 'false'}" class="btn btn-sm ${reduced ? 'btn-primary' : ''}">${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}</button>
-          <button type="button" id="btn-pause-steer" aria-pressed="${steer ? 'true' : 'false'}" class="btn btn-sm ${steer ? 'btn-primary' : ''}">${steer ? '🎯 Steer: ON' : '🎯 Steer: OFF'}</button>
           <button type="button" id="btn-pause-quality" class="btn btn-sm" aria-label="Cycle Graphics Quality Tier">${this.formatQualityLabel()}</button>
         </div>
-        <div class="row-wrap" style="justify-content:flex-end;">
-          <button type="button" id="btn-pause-exit" class="btn">Exit to Hub</button>
-          <button type="button" id="btn-pause-restart" class="btn">↻ Restart Dive</button>
-          <button type="button" id="btn-pause-resume" class="btn btn-primary">Resume</button>
-        </div>
+        <details id="pause-dental-lesson" class="report-lesson"${openLessonAttr}>
+          <summary>🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</summary>
+          <div class="report-lesson-body">
+            <div id="pause-tip" style="font-size:0.73rem;color:#99f6e4;margin-bottom:4px;">🎯 ${escTxt(tip)}</div>
+            <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;">${escTxt(dentalLesson.lesson)}</div>
+          </div>
+        </details>
       </div>`;
     this.container.appendChild(sheet);
     this.pauseSheetEl = sheet;
@@ -1235,6 +1293,11 @@ export class TelemetryHudOverlay implements OverlayView {
       if (e.target === sheet) this.setPaused(false);
     });
     const q = <T extends HTMLElement>(sel: string) => sheet.querySelector<T>(sel);
+    bindBottomSheetSwipeClose(
+      q<HTMLElement>('.modal-header-sticky'),
+      q<HTMLElement>('.modal-sheet'),
+      () => this.setPaused(false)
+    );
     q('#btn-pause-resume')?.addEventListener('click', () => this.setPaused(false));
     q('#btn-pause-resume-x')?.addEventListener('click', () => this.setPaused(false));
     q('#btn-pause-exit')?.addEventListener('click', () => {
@@ -1260,6 +1323,7 @@ export class TelemetryHudOverlay implements OverlayView {
     q('#btn-pause-steer')?.addEventListener('click', (e) => {
       const next = !this.input.isPointerSteerEnabled();
       this.input.setPointerSteerEnabled(next);
+      this.syncThumbPadVisibility();
       const label = next ? '🎯 Steer: ON' : '🎯 Steer: OFF';
       const b = e.currentTarget as HTMLElement;
       b.textContent = label;
@@ -1276,6 +1340,9 @@ export class TelemetryHudOverlay implements OverlayView {
   private tickWayfinders(): void {
     const cart = this.session.cartridge;
     const scanActive = this.session.discloseActiveRemaining > 0;
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    const maxSlots = isCompactViewport(w, h) ? 3 : MAX_WAYFINDERS;
     const targets = selectWayfinderTargets(
       {
         sites: this.session.sites,
@@ -1286,10 +1353,8 @@ export class TelemetryHudOverlay implements OverlayView {
         scanActive,
         probe: this.session.probePos,
       },
-      MAX_WAYFINDERS
+      maxSlots
     );
-    const w = Math.max(1, window.innerWidth);
-    const h = Math.max(1, window.innerHeight);
     const hudBottom = this.measureTopClearanceBottom();
     const deckTop = this.measureBottomDeckTop();
     const occupied: ScreenBox[] = [];
@@ -1345,6 +1410,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
   dispose(): void {
     window.removeEventListener('keydown', this.keyHandler);
+    window.removeEventListener('resize', this.resizeHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     if (this.paused) this.audio?.setPaused(false);
     this.disposers.disposeAll();

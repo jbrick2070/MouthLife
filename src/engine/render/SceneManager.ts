@@ -639,7 +639,7 @@ export class SceneManager {
     const header = document.querySelector('.hub-top-bar') as HTMLElement | null;
     const callout = document.querySelector('.hub-center-callout') as HTMLElement | null;
     const deck = document.querySelector(
-      '.hub-bottom-deck, #pacer-card, .pacer-bottom-card, .companion-hub .cosmic-card, .cosmic-mohs .cosmic-card'
+      '.hub-bottom-deck, #pacer-card, .pacer-bottom-card, .cosmic-card'
     ) as HTMLElement | null;
     const w = Math.max(1, window.innerWidth);
     const deckRect = deck?.getBoundingClientRect();
@@ -680,14 +680,13 @@ export class SceneManager {
 
   private applyHubViewShift(dt: number): void {
     const active =
-      (this.currentMode === 'HUB' && this.hubFocus === 'companion') ||
+      this.currentMode === 'HUB' ||
       this.currentMode === 'BRUSH_ALONG' ||
-      this.currentMode === 'REPORT';
-    const globeSide = this.currentMode === 'HUB' && this.hubFocus === 'globe';
-    const mohsSide = this.currentMode === 'COSMIC_INTRO' && this.cosmicBeat === 1;
-    const sideOnly = (globeSide || mohsSide) && this.hubSideFrac > 0;
-    const target = active || sideOnly ? this.hubViewShiftTarget : 0;
-    const targetX = active || sideOnly ? this.hubViewShiftXTarget : 0;
+      this.currentMode === 'REPORT' ||
+      (this.currentMode === 'COSMIC_INTRO' && this.cosmicBeat !== 1);
+    const mohsSide = this.currentMode === 'COSMIC_INTRO' && this.cosmicBeat === 1 && this.hubSideFrac > 0;
+    const target = active || mohsSide ? this.hubViewShiftTarget : 0;
+    const targetX = active || mohsSide ? this.hubViewShiftXTarget : 0;
     const k = this.reducedMotion ? 1 : 1 - Math.exp(-dt * 8);
     this.hubViewShiftPx += (target - this.hubViewShiftPx) * k;
     this.hubViewShiftXPx += (targetX - this.hubViewShiftXPx) * k;
@@ -762,6 +761,7 @@ export class SceneManager {
     const desiredLook = new THREE.Vector3();
 
     if (this.currentMode === 'COSMIC_INTRO') {
+      this.measureHubBand(dt);
       if (this.cosmicBeat <= 2) {
         // Frame the 3D Hexagonal Hydroxyapatite Crystal & Mohs Lineup at (32, 148, 16)
         const cx = EARTH_BACKDROP_POS.x;
@@ -770,7 +770,6 @@ export class SceneManager {
         const swayX = Math.sin(motionTime * 0.35 + this.orbitYaw) * 3.2;
         const mohsBeat = this.cosmicBeat === 1;
         const portrait = this.camera.aspect < 1.0;
-        if (mohsBeat) this.measureHubBand(dt);
         const mohsSide = mohsBeat && this.hubSideFrac > 0;
         const distance = mohsSide ? 21 : portrait ? 23.5 : 16.5;
         const lookDown = mohsSide ? 1.5 : portrait ? 5.6 : 4.6;
