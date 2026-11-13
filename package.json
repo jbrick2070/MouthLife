@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "MouthLife: The Plaque Dimension — Mobile-first 3D biophysical dental arcade & Smooth Bask companion",
+  "description": "MouthLife: The Plaque Dimension \u2014 Mobile-first 3D biophysical dental arcade & Smooth Bask companion",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "i18n:extract": "node scripts/i18n-extract.mjs",
+    "i18n:translate": "node scripts/i18n-translate.mjs"
   },
   "dependencies": {
     "three": "^0.174.0"

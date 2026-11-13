@@ -1,3 +1,4 @@
+import { COACH_LANGUAGES, COACH_LANGUAGE_INFO, isCoachLanguage, type CoachLanguage } from '../config/brushCoach';
 import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   formatToothBadge,
@@ -128,6 +129,8 @@ export class CompanionHubOverlay implements OverlayView {
       setSfxVolume?: (v: number) => void;
       isReducedMotion?: () => boolean;
       onToggleReducedMotion?: () => void;
+      getLanguage?: () => CoachLanguage;
+      setLanguage?: (language: CoachLanguage) => void;
     }
   ) {}
 
@@ -400,7 +403,7 @@ export class CompanionHubOverlay implements OverlayView {
         <div class="row-between hub-header-row-1">
           <button type="button" id="btn-open-profile" class="btn btn-sm hub-profile-btn" aria-label="Host Profile: ${escapeHtml(save.playerProfile.displayName)}" title="Customize Host & Skin Tone">
             <span style="width:14px;height:14px;border-radius:50%;background:${skin.hex};border:1px solid #fff;display:inline-block;flex-shrink:0;"></span>
-            <span class="hub-profile-label">${escapeHtml(save.playerProfile.displayName)} • ${escapeHtml(homeCity.city)}</span>
+            <span class="hub-profile-label"><span data-no-translate>${escapeHtml(save.playerProfile.displayName)}</span> • ${escapeHtml(homeCity.city)}</span>
           </button>
 
           <div class="row-wrap hub-currency-row">
@@ -730,6 +733,14 @@ export class CompanionHubOverlay implements OverlayView {
               `
               ).join('')}
             </div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">🌐 Language</div>
+            <select id="sel-app-language" class="pacer-lang-select" style="margin-top:6px;max-width:none;width:100%;" aria-label="Language">
+              ${COACH_LANGUAGES.map(
+                (code) =>
+                  `<option value="${code}" data-no-translate${code === (this.actions.getLanguage?.() ?? 'en') ? ' selected' : ''}>${COACH_LANGUAGE_INFO[code].nativeName}</option>`
+              ).join('')}
+            </select>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Changes the screens and the spoken brushing coach.</div>
             <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Accessibility & Comfort</div>
             <div class="row-between" style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
               <span style="font-size:0.78rem;color:#e0f2fe;">Less Camera Shake</span>
@@ -1529,6 +1540,14 @@ export class CompanionHubOverlay implements OverlayView {
       this.actions.onToggleReducedMotion?.();
       this.actions.onPlayUiTap();
       this.render();
+    });
+
+    this.container.querySelector<HTMLSelectElement>('#sel-app-language')?.addEventListener('change', (e) => {
+      const value = (e.target as HTMLSelectElement).value;
+      if (isCoachLanguage(value)) {
+        this.actions.setLanguage?.(value);
+        this.actions.onPlayUiTap();
+      }
     });
 
     this.container.querySelector('#btn-modal-mute')?.addEventListener('click', () => {

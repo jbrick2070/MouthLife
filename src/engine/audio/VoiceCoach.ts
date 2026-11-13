@@ -61,6 +61,8 @@ export class VoiceCoach {
   private speakingCount = 0;
   /** Called with true while a cue is being spoken, so music can duck under it. */
   onSpeakingChanged: ((speaking: boolean) => void) | null = null;
+  /** Called after the language changes. The whole game uses this one language setting. */
+  onLanguageChanged: ((language: CoachLanguage) => void) | null = null;
 
   constructor() {
     this.enabled = readPref(ENABLED_KEY) !== '0';
@@ -97,6 +99,7 @@ export class VoiceCoach {
   setLanguage(language: CoachLanguage): void {
     this.language = language;
     writePref(LANGUAGE_KEY, language);
+    this.onLanguageChanged?.(language);
   }
 
   /** True when a voice for the current language is installed (false = the browser falls back). */

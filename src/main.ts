@@ -15,6 +15,7 @@ import { getUpgradeById } from './config/upgrades';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { VoiceCoach } from './engine/audio/VoiceCoach';
+import { uiTranslator } from './i18n/uiTranslator';
 import { evaluateBrushPhase } from './config/brushCoach';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
 import { CosmicIntroOverlay } from './ui/CosmicIntroOverlay';
@@ -74,6 +75,10 @@ function bootstrapMouthLife(): void {
   const sound = new SoundEngine();
   const voiceCoach = new VoiceCoach();
   voiceCoach.onSpeakingChanged = (speaking) => sound.setVoiceDucked(speaking);
+  // One language for the whole game: screens, and the spoken brushing coach.
+  uiTranslator.attach(document.body);
+  void uiTranslator.setLanguage(voiceCoach.getLanguage());
+  voiceCoach.onLanguageChanged = (language) => void uiTranslator.setLanguage(language);
   sound.onPrefsChanged = (prefs) => bus.emit('audio:changed', prefs);
   sound.bindGlobalUnlockListeners();
   window.addEventListener('keydown', (ev) => {
@@ -619,6 +624,8 @@ function bootstrapMouthLife(): void {
         setSfxVolume: (v) => sound.setSfxVolume(v),
         isReducedMotion: () => sceneMgr.isReducedMotion(),
         onToggleReducedMotion: () => sceneMgr.setReducedMotion(!sceneMgr.isReducedMotion()),
+        getLanguage: () => voiceCoach.getLanguage(),
+        setLanguage: (language) => voiceCoach.setLanguage(language),
       });
       activeOverlay = activeHub;
     } else if (next === 'ARCADE' || next === 'PULP_RESCUE') {
