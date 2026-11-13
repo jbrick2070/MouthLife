@@ -48,7 +48,7 @@ public struct MissionReportView: View {
                     HStack {
                         Text(L10n.t(mode == .pulpRescue
                              ? (won ? "PULP RESCUED!" : "SAFE PATCH APPLIED")
-                             : (won ? "ARCH RESTORED • \(cartridge.title.uppercased())" : "MISSION REPORT")))
+                             : (won ? "ARCH RESTORED • \(L10n.t(cartridge.title).uppercased())" : "MISSION REPORT")))
                             .font(.system(.caption, design: .rounded, weight: .heavy))
                             .foregroundStyle(won ? MLTheme.mintClean : MLTheme.amberWarn)
                         Spacer()
@@ -95,7 +95,7 @@ public struct MissionReportView: View {
                 if let noteId = unlockedHistoryNoteId,
                    let note = HostsAndHistory.historicalFieldNotes.first(where: { $0.id == noteId }) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.t("NEW FIELD NOTE UNLOCKED • \(note.yearLabel.uppercased())"))
+                        Text(L10n.t("NEW FIELD NOTE UNLOCKED • \(L10n.t(note.yearLabel).uppercased())"))
                             .font(.system(.caption2, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.fluorapatiteGold)
                         Text(L10n.t(note.title))
@@ -126,7 +126,7 @@ public struct MissionReportView: View {
 
                 // Clinical Dental Lesson Card
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.t(lesson.focusTeethBadge.uppercased()))
+                    Text(L10n.t(lesson.focusTeethBadge).uppercased())
                         .font(.system(.caption2, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.cyanAccent)
                     Text(L10n.t(lesson.headline))

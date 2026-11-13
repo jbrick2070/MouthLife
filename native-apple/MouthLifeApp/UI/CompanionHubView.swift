@@ -313,7 +313,7 @@ public struct CompanionHubView: View {
 
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("\(activeCart.title) • \(activeHost.city)"))
+                        Text("\(L10n.t(activeCart.title)) • \(L10n.t(activeHost.city))")
                             .font(.system(.subheadline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)

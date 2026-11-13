@@ -158,7 +158,7 @@ public struct MLStatChip: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(L10n.t(label.uppercased()))
+                Text(L10n.t(label).uppercased())
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(MLTheme.textMuted)
                 Text(L10n.t(value))
