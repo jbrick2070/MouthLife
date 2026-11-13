@@ -27,7 +27,7 @@ private struct MirrorArchCompassView: View {
                 )
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .frame(width: 40, alignment: .trailing)
+                .frame(width: 34, alignment: .trailing)
 
             Canvas { ctx, size in
                 let cx = size.width * 0.5
@@ -151,7 +151,7 @@ private struct MirrorArchCompassView: View {
                 )
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .frame(width: 40, alignment: .leading)
+                .frame(width: 34, alignment: .leading)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Mirror Mouth Compass")
@@ -492,13 +492,18 @@ public struct BrushAlongView: View {
             .padding(.top, 6)
 
             // Permanent Body-Locked Mirror Arch Compass + 3-Foot Countdown & 3-2-1 Musical Anticipation
-            HStack(spacing: 14) {
+            HStack(spacing: 10) {
                 MirrorArchCompassView(phase: phase, language: coachLanguage, gyro: mouthwashGyro)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatClock(ceil(remaining), pad: true))
                         .font(.system(size: 44, weight: .heavy, design: .rounded))
                         .monospacedDigit()
+                        // Never wrap the timer; shrink a little instead on narrow screens.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
                         .foregroundStyle(
                             isPaused
                                 ? MLTheme.fluorapatiteGold
