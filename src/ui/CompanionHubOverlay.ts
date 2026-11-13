@@ -398,6 +398,13 @@ export class CompanionHubOverlay implements OverlayView {
         ? this.buildCompanionDeckHtml()
         : this.buildGlobeCampaignDeckHtml(activeCity.id);
 
+    const claimPillHtml =
+      save.companion.unclaimedIdleIons > 0
+        ? `<button type="button" id="btn-claim-reservoir" class="btn btn-gold btn-sm hub-claim-pill" title="✨ Claim +${save.companion.unclaimedIdleIons} Fluoride Ions" aria-label="✨ Claim +${save.companion.unclaimedIdleIons} Fluoride Ions">
+            <span class="mob-hide">✨ </span>+${save.companion.unclaimedIdleIons}
+          </button>`
+        : '';
+
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive">
         <div class="row-between hub-header-row-1">
@@ -407,6 +414,7 @@ export class CompanionHubOverlay implements OverlayView {
           </button>
 
           <div class="row-wrap hub-currency-row">
+            ${this.tab === 'companion' ? claimPillHtml : ''}
             <span class="pill-badge" title="Fluoride Ions (game money)">✦ <strong id="val-ions">${save.fluorideIons}</strong><span class="currency-lbl"> Ions</span></span>
             <span class="pill-badge" title="Habit Stamps (you never lose them!)">🦷 <strong id="val-stamps">${save.totalBrushStamps}</strong><span class="currency-lbl"> Stamps</span></span>
             <button
@@ -506,13 +514,6 @@ export class CompanionHubOverlay implements OverlayView {
       },
     ];
 
-    const reservoirHtml =
-      comp.unclaimedIdleIons > 0
-        ? `<button type="button" id="btn-claim-reservoir" class="btn btn-gold btn-sm" style="width:100%;">
-            ✨ Claim +${comp.unclaimedIdleIons} Fluoride Ions
-          </button>`
-        : '';
-
     return `
       <div class="shield-grid">
         ${meters
@@ -531,8 +532,6 @@ export class CompanionHubOverlay implements OverlayView {
           )
           .join('')}
       </div>
-
-      ${reservoirHtml}
 
       <div class="hub-actions-primary hub-dock-row">
         <button type="button" id="btn-start-brush-along" class="btn btn-primary">

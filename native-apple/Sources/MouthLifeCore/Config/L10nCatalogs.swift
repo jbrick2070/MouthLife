@@ -47,7 +47,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% sauber",
 "{0}% Mineral":"{0}% Mineral",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"{0}x Synergie!",
 "/ 10,000 pts":"/ 10.000 Pkt.",
 "• {0}s left":"• noch {0}s",
@@ -961,7 +960,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"Flitze mit Zahnseide durch die Lücke zwischen den Zähnen",
 "Zipped! +{0} Surge":"Geflitzt! +{0} Schub",
 "Zipped! Surge Full":"Geflitzt! Schub voll",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome aus dem All in echte Städte und die Zahngeschichte. Freu dich jeden Tag über glatte, saubere Zähne durch Putzen, Zahnseide und Fluorid!"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome aus dem All in echte Städte und die Zahngeschichte. Freu dich jeden Tag über glatte, saubere Zähne durch Putzen, Zahnseide und Fluorid!",
+"Menu":"Menü"
 }
 """###
 
@@ -994,7 +994,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% limpio",
 "{0}% Mineral":"{0}% Mineral",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"¡Sinergia {0}x!",
 "/ 10,000 pts":"/ 10,000 pts",
 "• {0}s left":"• Quedan {0}s",
@@ -1908,7 +1907,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"Pasa el hilo dental por el hueco entre los dientes",
 "Zipped! +{0} Surge":"¡Lanzado! +{0} de Impulso",
 "Zipped! Surge Full":"¡Lanzado! Impulso lleno",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Acércate desde el espacio a ciudades reales y a la historia de los dientes. ¡Disfruta de dientes lisos y limpios cada día cepillándote, usando hilo dental y flúor!"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Acércate desde el espacio a ciudades reales y a la historia de los dientes. ¡Disfruta de dientes lisos y limpios cada día cepillándote, usando hilo dental y flúor!",
+"Menu":"Menú"
 }
 """###
 
@@ -1941,7 +1941,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% Propre",
 "{0}% Mineral":"{0}% Minéral",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"Synergie {0}x !",
 "/ 10,000 pts":"/ 10 000 pts",
 "• {0}s left":"• {0}s restantes",
@@ -2855,7 +2854,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"Glisse le fil dentaire dans l'espace entre les dents",
 "Zipped! +{0} Surge":"Glissé ! +{0} Vague",
 "Zipped! Surge Full":"Glissé ! Vague pleine",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome depuis l'espace sur de vraies villes et l'histoire des dents. Profite de dents lisses et propres chaque jour grâce au brossage, au fil dentaire et au fluor !"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome depuis l'espace sur de vraies villes et l'histoire des dents. Profite de dents lisses et propres chaque jour grâce au brossage, au fil dentaire et au fluor !",
+"Menu":"Menu"
 }
 """###
 
@@ -2888,7 +2888,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% きれい",
 "{0}% Mineral":"ミネラル {0}%",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"{0}x コンボ！",
 "/ 10,000 pts":"/ 10,000 点",
 "• {0}s left":"• のこり {0}s",
@@ -3802,7 +3801,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"歯と歯のすき間にフロスをシュッと通しましょう",
 "Zipped! +{0} Surge":"ジップ成功！ +{0} サージ",
 "Zipped! Surge Full":"ジップ成功！ サージまんたん",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"うちゅうから本物のまちや歯のれきしにズームイン！歯みがき、フロス、フッそを使って、毎日つるつるできれいな歯を楽しみましょう！"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"うちゅうから本物のまちや歯のれきしにズームイン！歯みがき、フロス、フッそを使って、毎日つるつるできれいな歯を楽しみましょう！",
+"Menu":"メニュー"
 }
 """###
 
@@ -3835,7 +3835,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% 깨끗함",
 "{0}% Mineral":"{0}% 미네랄",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"{0}x 시너지!",
 "/ 10,000 pts":"/ 10,000점",
 "• {0}s left":"• {0}s 남음",
@@ -4749,7 +4748,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"치아 사이 틈으로 치실을 슉 통과시키세요",
 "Zipped! +{0} Surge":"통과! +{0} 파동",
 "Zipped! Surge Full":"통과! 파동 가득 참",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"우주에서 실제 도시와 치아 역사 속으로 쑥 들어가 봐요. 양치질과 치실, 불소로 매일 매끈하고 깨끗한 치아를 느껴 봐요!"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"우주에서 실제 도시와 치아 역사 속으로 쑥 들어가 봐요. 양치질과 치실, 불소로 매일 매끈하고 깨끗한 치아를 느껴 봐요!",
+"Menu":"메뉴"
 }
 """###
 
@@ -4782,7 +4782,6 @@ enum L10nCatalogs {
 "{0}% Clean":"{0}% Limpo",
 "{0}% Mineral":"{0}% Mineral",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"{0}x Sinergia!",
 "/ 10,000 pts":"/ 10.000 pts",
 "• {0}s left":"• {0}s restantes",
@@ -5696,7 +5695,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"Deslize o fio dental pelo vão entre os dentes",
 "Zipped! +{0} Surge":"Passou! +{0} Pulso",
 "Zipped! Surge Full":"Passou! Pulso Cheio",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Dê zoom do espaço até cidades reais e conheça a história dos dentes. Curta dentes lisos e limpos todo dia escovando, passando fio dental e usando flúor!"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Dê zoom do espaço até cidades reais e conheça a história dos dentes. Curta dentes lisos e limpos todo dia escovando, passando fio dental e usando flúor!",
+"Menu":"Menu"
 }
 """###
 
@@ -5729,7 +5729,6 @@ enum L10nCatalogs {
 "{0}% Clean":"已清洁 {0}%",
 "{0}% Mineral":"{0}% 矿物质",
 "{0}Hz":"{0}Hz",
-"{0}Hz PRO":"{0}Hz PRO",
 "{0}x Synergy!":"{0}x 协同加成！",
 "/ 10,000 pts":"/ 10,000 分",
 "• {0}s left":"• 还剩 {0}s",
@@ -6643,7 +6642,8 @@ enum L10nCatalogs {
 "Zip floss through the gap between teeth":"让牙线滑过牙齿之间的缝隙",
 "Zipped! +{0} Surge":"滑过啦！+{0} 爆发",
 "Zipped! Surge Full":"滑过啦！爆发已满",
-"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"从太空飞进真实的城市，探索牙齿历史。每天刷牙、用牙线和使用氟化物，享受光滑干净的牙齿吧！"
+"Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"从太空飞进真实的城市，探索牙齿历史。每天刷牙、用牙线和使用氟化物，享受光滑干净的牙齿吧！",
+"Menu":"菜单"
 }
 """###
 }

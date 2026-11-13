@@ -119,6 +119,8 @@ public struct ArcadeHudView: View {
                     Text(L10n.t(timerState.text))
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
                         .foregroundStyle(timerState.warn ? MLTheme.amberWarn : MLTheme.textPrimary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 5)

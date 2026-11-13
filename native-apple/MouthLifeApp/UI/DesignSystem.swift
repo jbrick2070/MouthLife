@@ -144,24 +144,31 @@ public struct MLStatChip: View {
     public let label: String
     public let value: String
     public let tint: Color
+    /// Compact = icon + number on one line (the name is still read out by VoiceOver).
+    public let compact: Bool
 
-    public init(icon: String, label: String, value: String, tint: Color = MLTheme.cyanAccent) {
+    public init(icon: String, label: String, value: String, tint: Color = MLTheme.cyanAccent, compact: Bool = false) {
         self.icon = icon
         self.label = label
         self.value = value
         self.tint = tint
+        self.compact = compact
     }
 
     public var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: compact ? 5 : 6) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(L10n.t(label).uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(MLTheme.textMuted)
+                if !compact {
+                    Text(L10n.t(label).uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(MLTheme.textMuted)
+                }
                 Text(L10n.t(value))
+                    .lineLimit(1)
+                    .fixedSize()
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(MLTheme.textPrimary)
@@ -177,6 +184,8 @@ public struct MLStatChip: View {
             Capsule(style: .continuous)
                 .strokeBorder(tint.opacity(0.32), lineWidth: 1)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(L10n.t(label)) \(L10n.t(value))"))
     }
 }
 
