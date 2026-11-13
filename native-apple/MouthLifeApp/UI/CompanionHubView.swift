@@ -349,8 +349,11 @@ public struct CompanionHubView: View {
                         onStartBrushAlong()
                     } label: {
                         Label(L10n.t(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage)), systemImage: "timer")
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.55)
+                            // One line where it fits (English, Korean...); long languages may use two
+                            // rather than be cut off.
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                            .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
