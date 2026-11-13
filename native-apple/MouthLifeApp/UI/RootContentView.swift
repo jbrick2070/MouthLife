@@ -54,8 +54,10 @@ public struct RootContentView: View {
                 BrushAlongView(
                     elapsedSec: coordinator.pacerElapsedSec,
                     isPaused: coordinator.pacerIsPaused,
-                    inFlossBonus: coordinator.pacerInFlossBonus,
+                    pacerStage: coordinator.pacerStage,
+                    didCompleteFloss: coordinator.pacerCompletedFlossStage,
                     flossToolStyle: coordinator.flossToolStyle,
+                    mouthwashDurationStyle: coordinator.mouthwashDurationStyle,
                     voiceCoachEnabled: coordinator.voiceCoachEnabled,
                     coachLanguage: coordinator.coachLanguage,
                     stationLabel: coordinator.currentRadioStationLabel,
@@ -64,8 +66,15 @@ public struct RootContentView: View {
                     onSelectLanguage: { lang in coordinator.setCoachLanguage(lang) },
                     onTogglePause: { coordinator.togglePacerPause() },
                     onSelectFlossToolStyle: { style in coordinator.setFlossToolStyle(style) },
+                    onSelectMouthwashDuration: { style in coordinator.setMouthwashDurationStyle(style) },
                     onEnterFlossBonusNow: { coordinator.enterFlossBonusNow() },
-                    onCompleteSession: { withFloss in coordinator.completeBrushAlongSession(withFlossBonus: withFloss) },
+                    onEnterMouthwashBonusNow: { didFloss in coordinator.enterMouthwashBonusNow(completedFloss: didFloss) },
+                    onCompleteSession: { withFloss, withRinse in
+                        coordinator.completeBrushAlongSession(
+                            withFlossBonus: withFloss,
+                            withMouthwashBonus: withRinse
+                        )
+                    },
                     onCancelToHub: { coordinator.returnToHub() }
                 )
                 .transition(.opacity)

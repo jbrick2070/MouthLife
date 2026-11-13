@@ -1,6 +1,9 @@
 import SwiftUI
 import MouthLifeCore
 
+private let totalCarePurple = Color(red: 0.66, green: 0.30, blue: 0.98)
+private let totalCareLavender = Color(red: 0.85, green: 0.70, blue: 1.0)
+
 /// Permanent Body-Locked 2D Mirror Arch Compass.
 /// Screen-Left = Patient Left (`Q2` Top-Left, `Q3` Bottom-Left) and Screen-Right = Patient Right (`Q1` Top-Right, `Q4` Bottom-Right),
 /// matching your reflection in the bathroom mirror and NEVER flipping when the 3D cutaway camera moves.
@@ -15,7 +18,9 @@ private struct MirrorArchCompassView: View {
             Text(sides.left)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
-                    !phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted
+                    phase.inMouthwashBonus
+                        ? totalCareLavender
+                        : (!phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
                 .frame(width: 28, alignment: .trailing)
 
@@ -41,16 +46,37 @@ private struct MirrorArchCompassView: View {
                     let qBit = (1 << q.rawValue)
                     let isCompleted = (phase.completedQuadrantsMask & qBit) != 0
                     let isActive: Bool = {
+                        if phase.inMouthwashBonus {
+                            return true
+                        }
                         if phase.inFlossBonus {
                             return phase.flossIsUpper ? q.isUpper : !q.isUpper
                         }
                         return phase.quadrant == q
                     }()
-                    let isPreEcho = (!phase.inFlossBonus && phase.upcomingQuadrantIndex == q.rawValue && phase.preEcho01 > 0.02)
+                    let isPreEcho = (phase.stage == .brushing && phase.upcomingQuadrantIndex == q.rawValue && phase.preEcho01 > 0.02)
 
                     let arcPath = quadrantArcPath(q: q, cx: cx, cy: cy, rx: rx, ry: ry)
 
-                    if isActive {
+                    if phase.inMouthwashBonus {
+                        let seal = Double(phase.mouthwashProgress01)
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(totalCarePurple.opacity(0.45)),
+                            style: StrokeStyle(lineWidth: 12.5, lineCap: .round)
+                        )
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(totalCareLavender),
+                            style: StrokeStyle(lineWidth: 6.5, lineCap: .round)
+                        )
+                        let rimPath = quadrantArcPath(q: q, cx: cx, cy: cy, rx: rx * 1.18, ry: ry * 1.18)
+                        ctx.stroke(
+                            rimPath,
+                            with: .color(MLTheme.fluorapatiteGold.opacity(0.32 + 0.62 * seal)),
+                            style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: phase.mouthwashStepIndex == 1 ? [3, 2.5] : [])
+                        )
+                    } else if isActive {
                         // Outer warm gold halo + vivid surface core
                         ctx.stroke(
                             arcPath,
@@ -109,7 +135,9 @@ private struct MirrorArchCompassView: View {
             Text(sides.right)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
-                    phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted
+                    phase.inMouthwashBonus
+                        ? totalCareLavender
+                        : (phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
                 .frame(width: 28, alignment: .leading)
         }
@@ -151,8 +179,10 @@ private struct MirrorArchCompassView: View {
 public struct BrushAlongView: View {
     public let elapsedSec: Double
     public let isPaused: Bool
-    public let inFlossBonus: Bool
+    public let pacerStage: PacerStage
+    public let didCompleteFloss: Bool
     public let flossToolStyle: FlossToolStyle
+    public let mouthwashDurationStyle: MouthwashDurationStyle
     public let voiceCoachEnabled: Bool
     public let coachLanguage: CoachLanguage
     public let stationLabel: String
@@ -161,15 +191,19 @@ public struct BrushAlongView: View {
     public let onSelectLanguage: (CoachLanguage) -> Void
     public let onTogglePause: () -> Void
     public let onSelectFlossToolStyle: (FlossToolStyle) -> Void
+    public let onSelectMouthwashDuration: (MouthwashDurationStyle) -> Void
     public let onEnterFlossBonusNow: () -> Void
-    public let onCompleteSession: (Bool) -> Void
+    public let onEnterMouthwashBonusNow: (Bool) -> Void
+    public let onCompleteSession: (Bool, Bool) -> Void
     public let onCancelToHub: () -> Void
 
     public init(
         elapsedSec: Double,
         isPaused: Bool,
-        inFlossBonus: Bool,
+        pacerStage: PacerStage = .brushing,
+        didCompleteFloss: Bool = false,
         flossToolStyle: FlossToolStyle = .flossPick,
+        mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s,
         voiceCoachEnabled: Bool = true,
         coachLanguage: CoachLanguage = .english,
         stationLabel: String,
@@ -178,14 +212,18 @@ public struct BrushAlongView: View {
         onSelectLanguage: @escaping (CoachLanguage) -> Void = { _ in },
         onTogglePause: @escaping () -> Void,
         onSelectFlossToolStyle: @escaping (FlossToolStyle) -> Void = { _ in },
+        onSelectMouthwashDuration: @escaping (MouthwashDurationStyle) -> Void = { _ in },
         onEnterFlossBonusNow: @escaping () -> Void,
-        onCompleteSession: @escaping (Bool) -> Void,
+        onEnterMouthwashBonusNow: @escaping (Bool) -> Void = { _ in },
+        onCompleteSession: @escaping (Bool, Bool) -> Void,
         onCancelToHub: @escaping () -> Void
     ) {
         self.elapsedSec = elapsedSec
         self.isPaused = isPaused
-        self.inFlossBonus = inFlossBonus
+        self.pacerStage = pacerStage
+        self.didCompleteFloss = didCompleteFloss
         self.flossToolStyle = flossToolStyle
+        self.mouthwashDurationStyle = mouthwashDurationStyle
         self.voiceCoachEnabled = voiceCoachEnabled
         self.coachLanguage = coachLanguage
         self.stationLabel = stationLabel
@@ -194,18 +232,36 @@ public struct BrushAlongView: View {
         self.onSelectLanguage = onSelectLanguage
         self.onTogglePause = onTogglePause
         self.onSelectFlossToolStyle = onSelectFlossToolStyle
+        self.onSelectMouthwashDuration = onSelectMouthwashDuration
         self.onEnterFlossBonusNow = onEnterFlossBonusNow
+        self.onEnterMouthwashBonusNow = onEnterMouthwashBonusNow
         self.onCompleteSession = onCompleteSession
         self.onCancelToHub = onCancelToHub
     }
 
     public var body: some View {
-        let totalTarget = inFlossBonus
-            ? (GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec)
-            : GameConfig.brushAlongTotalSec
+        let flossEnd = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+        let mwDur = mouthwashDurationStyle.durationSec
+        let totalTarget: Double = {
+            switch pacerStage {
+            case .brushing: return GameConfig.brushAlongTotalSec
+            case .flossBonus: return flossEnd
+            case .mouthwashBonus: return flossEnd + mwDur
+            }
+        }()
         let remaining = max(0, totalTarget - elapsedSec)
-        let phase = BrushPhaseState.evaluate(elapsedSec: elapsedSec, inFlossBonus: inFlossBonus)
+        let phase = BrushPhaseState.evaluate(
+            elapsedSec: elapsedSec,
+            stage: pacerStage,
+            mouthwashDurationSec: mwDur
+        )
         let buttons = BrushCoachCopy.actionButtonLabels(for: coachLanguage)
+        let mwButtons = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
+        let clockGlow: Color = {
+            if isPaused { return MLTheme.fluorapatiteGold }
+            if phase.inMouthwashBonus { return totalCarePurple }
+            return MLTheme.cyanAccent
+        }()
 
         VStack(spacing: 8) {
             // Top Utility Bar: Hub | Radio | Voice Coach | Language | Pause
@@ -294,8 +350,12 @@ public struct BrushAlongView: View {
                     Text(formatClock(ceil(remaining), pad: true))
                         .font(.system(size: 44, weight: .heavy, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(isPaused ? MLTheme.fluorapatiteGold : MLTheme.textPrimary)
-                        .shadow(color: (isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent).opacity(0.45), radius: 12)
+                        .foregroundStyle(
+                            isPaused
+                                ? MLTheme.fluorapatiteGold
+                                : (phase.inMouthwashBonus ? totalCareLavender : MLTheme.textPrimary)
+                        )
+                        .shadow(color: clockGlow.opacity(0.50), radius: 12)
 
                     if isPaused {
                         Button {
@@ -320,13 +380,18 @@ public struct BrushAlongView: View {
                                 .foregroundStyle(MLTheme.fluorapatiteGold)
                         }
                     } else {
-                        // Clean surface / arch progress bar
+                        // Clean surface / arch / swish sub-phase progress bar
                         let subFill = min(1.0, max(0.0, phase.phaseElapsedSec / max(0.5, phase.phaseDurationSec)))
+                        let barColor: Color = {
+                            if phase.inMouthwashBonus { return totalCarePurple }
+                            if phase.inFlossBonus { return MLTheme.fluorapatiteGold }
+                            return MLTheme.cyanAccent
+                        }()
                         GeometryReader { geo in
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.white.opacity(0.15))
                                 Capsule()
-                                    .fill(inFlossBonus ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent)
+                                    .fill(barColor)
                                     .frame(width: geo.size.width * CGFloat(subFill))
                             }
                         }
@@ -340,18 +405,71 @@ public struct BrushAlongView: View {
             .mlGlassCard(cornerRadius: 24)
             .padding(.horizontal, 14)
 
-            // Wide-open center viewport for the 3D Enamel Awakening Arch, 45° Angle Plane & Floss Pick!
+            // Wide-open center viewport for the 3D Enamel Awakening Arch, Floss Pick & Purple Total Care Swish!
             Spacer(minLength: 0)
 
             // Glanceable 3-Foot Bottom Action Banner (Zero Instructional Paragraphs!)
             VStack(alignment: .leading, spacing: 9) {
-                if inFlossBonus {
+                switch pacerStage {
+                case .mouthwashBonus:
+                    let mwHl = BrushCoachCopy.mouthwashHeadline(
+                        stepIndex: phase.mouthwashStepIndex,
+                        lang: coachLanguage
+                    )
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(mwHl.archTitle)
+                            .font(.system(size: 19, weight: .heavy, design: .rounded))
+                            .foregroundStyle(totalCareLavender)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.70)
+                        Spacer(minLength: 4)
+                        mouthwashDurationPicker
+                    }
+
+                    HStack(spacing: 7) {
+                        Image(systemName: phase.mouthwashStepIndex == 2 ? "shield.lefthalf.filled.badge.checkmark" : "drop.fill")
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundStyle(totalCarePurple)
+                        Text(mwHl.actionBadge)
+                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+
+                        Spacer(minLength: 4)
+
+                        Text(mwHl.ruleTag)
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3.5)
+                            .background(Capsule().fill(phase.mouthwashStepIndex == 2 ? MLTheme.fluorapatiteGold : totalCareLavender))
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            onCompleteSession(didCompleteFloss, true)
+                        } label: {
+                            Label(mwButtons.doneRinse, systemImage: "checkmark.seal.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
+
+                        Button(mwButtons.skipRinse) {
+                            onCompleteSession(didCompleteFloss, false)
+                        }
+                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
+                    }
+
+                case .flossBonus:
                     let hl = BrushCoachCopy.flossHeadline(
                         isUpper: phase.flossIsUpper,
                         style: flossToolStyle,
                         stepIndex: phase.flossStepIndex,
                         lang: coachLanguage
                     )
+                    let flossMwButtons = BrushCoachCopy.mouthwashButtonLabels(didFloss: true, lang: coachLanguage)
+
                     HStack(alignment: .center, spacing: 8) {
                         Text(hl.archTitle)
                             .font(.system(size: 20, weight: .heavy, design: .rounded))
@@ -373,21 +491,27 @@ public struct BrushAlongView: View {
                             .minimumScaleFactor(0.75)
                     }
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         Button {
-                            onCompleteSession(true)
+                            onEnterMouthwashBonusNow(true)
                         } label: {
-                            Label(buttons.doneFloss, systemImage: "checkmark.seal.fill")
+                            Label(flossMwButtons.rinseJump, systemImage: "drop.fill")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
+                        .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
+
+                        Button(buttons.doneFloss) {
+                            onCompleteSession(true, false)
+                        }
+                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.mintClean))
 
                         Button(buttons.skipFloss) {
-                            onCompleteSession(false)
+                            onEnterMouthwashBonusNow(false)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
                     }
-                } else {
+
+                case .brushing:
                     let qHeadline = BrushCoachCopy.quadrantLabel(phase.quadrant, lang: coachLanguage)
                     let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: coachLanguage)
 
@@ -473,6 +597,32 @@ public struct BrushAlongView: View {
                 .padding(.vertical, 4)
                 .background(
                     Capsule().fill(selected ? MLTheme.fluorapatiteGold : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var mouthwashDurationPicker: some View {
+        HStack(spacing: 4) {
+            mouthwashDurationChip(title: "60s", style: .totalCare60s)
+            mouthwashDurationChip(title: "30s", style: .quick30s)
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+    }
+
+    private func mouthwashDurationChip(title: String, style: MouthwashDurationStyle) -> some View {
+        let selected = (mouthwashDurationStyle == style)
+        return Button {
+            onSelectMouthwashDuration(style)
+        } label: {
+            Text(title)
+                .font(.system(.caption2, design: .rounded, weight: .heavy))
+                .foregroundStyle(selected ? Color.black : MLTheme.textMuted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(selected ? totalCareLavender : Color.clear)
                 )
         }
         .buttonStyle(.plain)

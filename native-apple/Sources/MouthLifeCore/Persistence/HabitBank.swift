@@ -51,11 +51,12 @@ public enum HabitBank {
     }
 
     /// Pure evaluation of a 2-Minute Sink Brush-Along session reward.
-    /// Daily cap: 2 full rewards (`50 + 25 floss`) + 3 courtesy tips (`5`),
+    /// Daily cap: 2 full rewards (`50 + 25 floss + 25 fluoride rinse = 100 F⁻`) + 3 courtesy tips (`5`),
     /// +1 monotonic stamp, +1 Supply Beacon (capped at 4), +1 Overdrive Run (capped at 4).
     public static func evaluatePacerReward(
         currentSlot: DailySlotLog,
         withFlossBonus: Bool,
+        withMouthwashBonus: Bool = false,
         currentBeacons: Int = 0,
         currentOverdriveRuns: Int = 0,
         dateKey: String = localDateKey()
@@ -71,7 +72,9 @@ public enum HabitBank {
             nextSlot.fullRewards += 1
             slotType = .full
             stampAwarded = true
-            ionsAwarded = GameConfig.brushAlongFullIons + (withFlossBonus ? GameConfig.brushAlongFlossIons : 0)
+            ionsAwarded = GameConfig.brushAlongFullIons
+                + (withFlossBonus ? GameConfig.brushAlongFlossIons : 0)
+                + (withMouthwashBonus ? GameConfig.brushAlongMouthwashIons : 0)
 
             let nextBeacons = min(GameConfig.maxSupplyBeacons, max(0, currentBeacons) + 1)
             beaconsAdded = max(0, nextBeacons - max(0, currentBeacons))
@@ -101,6 +104,7 @@ public enum HabitBank {
     public static func completeBrushAlong(
         save: inout MouthLifeSaveV2,
         withFlossBonus: Bool,
+        withMouthwashBonus: Bool = false,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -109,6 +113,7 @@ public enum HabitBank {
         let outcome = evaluatePacerReward(
             currentSlot: currentSlot,
             withFlossBonus: withFlossBonus,
+            withMouthwashBonus: withMouthwashBonus,
             currentBeacons: save.pendingSupplyBeacons,
             currentOverdriveRuns: save.remineralizedOverdriveRuns,
             dateKey: dateKey

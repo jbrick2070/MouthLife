@@ -59,6 +59,7 @@ public final class CompanionArchNodes {
     public let coachBristlesNode: SCNNode
     public let coachFlossNode: SCNNode
     public let coachFlossPickNode: SCNNode
+    public let coachMouthwashNode: SCNNode
 
     private var hadVisibleSplats: Bool = true
     private var lastHaloOpacity: CGFloat = -1
@@ -77,7 +78,8 @@ public final class CompanionArchNodes {
         coachBrushNode: SCNNode,
         coachBristlesNode: SCNNode,
         coachFlossNode: SCNNode,
-        coachFlossPickNode: SCNNode
+        coachFlossPickNode: SCNNode,
+        coachMouthwashNode: SCNNode
     ) {
         self.rootNode = rootNode
         self.lowerJawNode = lowerJawNode
@@ -93,6 +95,7 @@ public final class CompanionArchNodes {
         self.coachBristlesNode = coachBristlesNode
         self.coachFlossNode = coachFlossNode
         self.coachFlossPickNode = coachFlossPickNode
+        self.coachMouthwashNode = coachMouthwashNode
     }
 
     public func setHubModeLayout() {
@@ -103,14 +106,17 @@ public final class CompanionArchNodes {
         coachBrushNode.isHidden = true
         coachFlossNode.isHidden = true
         coachFlossPickNode.isHidden = true
+        coachMouthwashNode.isHidden = true
     }
 
-    /// Drives Upper/Lower jaw visibility, smooth tooth-by-tooth 3D Sonic Toothbrush / Y-Bow Floss Pick / C-Curve Silk choreography,
-    /// and dynamic 3D orbital camera targets for the 2-Minute Sink Brush-Along + 45s Floss Pick Bonus Round.
+    /// Drives Upper/Lower jaw visibility, smooth tooth-by-tooth 3D Sonic Toothbrush / Y-Bow Floss Pick / Purple Total Care Swish choreography,
+    /// and dynamic 3D orbital camera targets for the 3-Stage Hands-Free Ritual (2:00 Brush + 0:45 Floss Pick + 1:00 Purple Fluoride Rinse).
     public func updatePacerCoaching(
         elapsedSec: Double,
-        inFlossBonus: Bool,
+        inFlossBonus: Bool = false,
+        pacerStage: PacerStage? = nil,
         flossToolStyle: FlossToolStyle = .flossPick,
+        mouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec,
         nowSec: Float,
         reducedMotion: Bool
     ) -> PacerCoachVisualState {
@@ -135,9 +141,110 @@ public final class CompanionArchNodes {
             )
         }
 
-        let phase = BrushPhaseState.evaluate(elapsedSec: elapsedSec, inFlossBonus: inFlossBonus)
+        let resolvedStage = pacerStage ?? (inFlossBonus ? .flossBonus : .brushing)
+        let phase = BrushPhaseState.evaluate(
+            elapsedSec: elapsedSec,
+            stage: resolvedStage,
+            mouthwashDurationSec: mouthwashDurationSec
+        )
 
-        if inFlossBonus {
+        if resolvedStage == .mouthwashBonus {
+            coachBrushNode.isHidden = true
+            coachFlossNode.isHidden = true
+            coachFlossPickNode.isHidden = true
+            coachMouthwashNode.isHidden = false
+
+            // Open both crystal-clean jaws together so all 28 teeth bathe in Royal Amethyst Total Care Fluoride Rinse!
+            upperJawNode.isHidden = false
+            upperJawNode.simdPosition = SIMD3<Float>(0, 1.05, 0)
+            upperJawNode.opacity = 1.0
+            lowerJawNode.isHidden = false
+            lowerJawNode.simdPosition = SIMD3<Float>(0, -0.55, 0)
+            lowerJawNode.opacity = 1.0
+
+            let mwStart = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+            let mwElapsed = Float(max(0.0, elapsedSec - mwStart))
+            let animT = reducedMotion ? mwElapsed * 0.35 : nowSec
+
+            // 1) First 4.2s: 10 mL Purple Total Care Dosage Cap tips & pours an amethyst ribbon into the arch!
+            if let capNode = coachMouthwashNode.childNode(withName: "mouthwash_cap", recursively: false) {
+                if mwElapsed < 4.2 {
+                    capNode.isHidden = false
+                    let pourIn = simd_smoothstep(0.0, 0.75, mwElapsed)
+                    let pourOut = 1.0 - simd_smoothstep(3.1, 4.2, mwElapsed)
+                    let vis = pourIn * pourOut
+                    capNode.opacity = CGFloat(vis)
+                    let tipAngle: Float = -0.35 - 0.82 * simd_smoothstep(0.25, 1.8, mwElapsed)
+                    capNode.simdPosition = SIMD3<Float>(0, 3.35 + (1.0 - vis) * 1.1, 7.6 + (1.0 - vis) * 1.6)
+                    capNode.simdEulerAngles = SIMD3<Float>(tipAngle, 0, 0)
+                    if let stream = capNode.childNode(withName: "mouthwash_pour_stream", recursively: false) {
+                        let streamVis = simd_smoothstep(0.45, 1.0, mwElapsed) * (1.0 - simd_smoothstep(2.8, 3.6, mwElapsed))
+                        stream.isHidden = streamVis <= 0.02
+                        stream.opacity = CGFloat(streamVis * 0.90)
+                    }
+                } else {
+                    capNode.isHidden = true
+                }
+            }
+
+            // 2) 3-Step Swirling Amethyst Liquid Vortex + Effervescent F⁻ Bubbles
+            var sloshContactLocal = SIMD3<Float>(0, 1.85, 2.2)
+            if let swirlNode = coachMouthwashNode.childNode(withName: "mouthwash_swirl", recursively: false) {
+                switch phase.mouthwashStepIndex {
+                case 0:
+                    // Step 0: Vigorous Cheek-to-Cheek Swish (Right <-> Left lateral wave)
+                    let lateral = sin(animT * 3.6)
+                    let roll = -cos(animT * 3.6) * 0.14
+                    swirlNode.simdPosition = SIMD3<Float>(lateral * 1.15, 1.85 + sin(animT * 7.2) * 0.08, 0)
+                    swirlNode.simdEulerAngles = SIMD3<Float>(0, lateral * 0.14, roll)
+                    swirlNode.simdScale = SIMD3<Float>(1.04, 1.0, 1.0)
+                    sloshContactLocal = SIMD3<Float>(lateral * 3.8, 1.85, 1.2)
+                case 1:
+                    // Step 1: Pump Vigorously In-and-Out Between All 26 Interdental Gaps
+                    let pump = sin(animT * 6.2)
+                    let scaleXZ = 1.0 + 0.15 * pump
+                    swirlNode.simdPosition = SIMD3<Float>(sin(animT * 2.1) * 0.35, 1.85 + cos(animT * 6.2) * 0.16, pump * 0.32)
+                    swirlNode.simdEulerAngles = SIMD3<Float>(pump * 0.06, sin(animT * 2.1) * 0.08, 0)
+                    swirlNode.simdScale = SIMD3<Float>(scaleXZ, 1.0 + 0.10 * abs(pump), scaleXZ)
+                    sloshContactLocal = SIMD3<Float>(sin(animT * 3.1) * 2.6, 1.85, 2.0 + pump * 1.2)
+                default:
+                    // Step 2: Final Fluorapatite Crystal Lock Swish (Smooth full-arch spiral)
+                    let swirlX = sin(animT * 3.0) * 0.65
+                    let swirlZ = cos(animT * 3.0) * 0.38
+                    let breath = 1.02 + 0.06 * sin(animT * 4.8)
+                    swirlNode.simdPosition = SIMD3<Float>(swirlX, 1.85 + sin(animT * 5.4) * 0.10, swirlZ)
+                    swirlNode.simdEulerAngles = SIMD3<Float>(0.04 * cos(animT * 3.0), sin(animT * 1.8) * 0.10, -0.08 * sin(animT * 3.0))
+                    swirlNode.simdScale = SIMD3<Float>(repeating: breath)
+                    sloshContactLocal = SIMD3<Float>(swirlX * 3.2, 1.85, 1.8 + swirlZ)
+                }
+            }
+
+            if let bubblesNode = coachMouthwashNode.childNode(withName: "mouthwash_bubbles", recursively: true) {
+                bubblesNode.simdPosition = SIMD3<Float>(0, sin(animT * 5.0) * 0.14, 0)
+                bubblesNode.simdEulerAngles = SIMD3<Float>(0, sin(animT * 1.7) * 0.22, 0)
+            }
+
+            let camYaw: Float = reducedMotion ? 0 : sin(nowSec * 0.52) * 0.16
+            let contactWorld = rootOrigin + sloshContactLocal
+            let focusWorld = rootOrigin + SIMD3<Float>(0, 1.85, 1.1)
+            return PacerCoachVisualState(
+                activeCrownIndex: -1,
+                activeQuadrant: 0,
+                completedQuadMask: 0b1111,
+                activeSurfaceIdx: -2,
+                preEcho01: phase.mouthwashProgress01,
+                upcomingQuadrant: -1,
+                contactWorldPos: contactWorld,
+                focusWorldPos: focusWorld,
+                camYaw: camYaw,
+                camPitch: 0.04,
+                camDistPortrait: 20.6,
+                camDistLandscape: 14.4
+            )
+        }
+
+        coachMouthwashNode.isHidden = true
+        if resolvedStage == .flossBonus {
             coachBrushNode.isHidden = true
             let usePick = (flossToolStyle == .flossPick)
             coachFlossPickNode.isHidden = !usePick
@@ -1536,11 +1643,13 @@ public enum ProceduralMeshBuilder {
         }
         rootNode.addChildNode(polishHaloNode)
 
-        // 3D Guided Sonic Toothbrush + Y-Bow Floss Pick + C-Curve Silk Rig for 2-Minute Sink Brush-Along
+        // 3D Guided Sonic Toothbrush + Y-Bow Floss Pick + C-Curve Silk + Purple Total Care Rinse Swish Rig
         let (coachBrushNode, coachBristlesNode, coachFlossNode, coachFlossPickNode) = buildPacerCoachRig()
+        let coachMouthwashNode = buildPurpleMouthwashSwishNode()
         rootNode.addChildNode(coachBrushNode)
         rootNode.addChildNode(coachFlossNode)
         rootNode.addChildNode(coachFlossPickNode)
+        rootNode.addChildNode(coachMouthwashNode)
 
         return CompanionArchNodes(
             rootNode: rootNode,
@@ -1556,8 +1665,136 @@ public enum ProceduralMeshBuilder {
             coachBrushNode: coachBrushNode,
             coachBristlesNode: coachBristlesNode,
             coachFlossNode: coachFlossNode,
-            coachFlossPickNode: coachFlossPickNode
+            coachFlossPickNode: coachFlossPickNode,
+            coachMouthwashNode: coachMouthwashNode
         )
+    }
+
+    /// Builds a 3-foot-glanceable 3D Purple Total Care Fluoride Mouthwash Swish rig:
+    /// - `"mouthwash_cap"`: Translucent lavender-amethyst `10 mL` (`2 tsp`) dosage cup with a 24k Gold `10 mL` fill ring & pouring stream
+    /// - `"mouthwash_swirl"`: Twin arched Royal Amethyst (`0x9333EA` / `0xA855F7` / `0xC084FC`) liquid vortex ribbons + 24 effervescent `F⁻` bubbles & crystals
+    private static func buildPurpleMouthwashSwishNode() -> SCNNode {
+        let mwRoot = SCNNode()
+        mwRoot.name = "PacerCoachMouthwash"
+        mwRoot.isHidden = true
+
+        // 1. Translucent 10 mL Purple Total Care Dosage Cup (tips & pours during first 4.2s)
+        let capRoot = SCNNode()
+        capRoot.name = "mouthwash_cap"
+        capRoot.simdPosition = SIMD3<Float>(0, 3.4, 7.6)
+
+        let cupGlassMat = makeGlossyPropMaterial(hex: 0xDDD6FE, emissionHex: 0x7C3AED, roughness: 0.08, metalness: 0.10, opacity: 0.52)
+        let purpleLiquidMat = makeUnlitGlowMaterial(hex: 0x9333EA, opacity: 0.88, additive: true)
+        let lavenderGlowMat = makeUnlitGlowMaterial(hex: 0xC084FC, opacity: 0.82, additive: true)
+        let goldLineMat = makeGlossyPropMaterial(hex: 0xFBBF24, emissionHex: 0xD97706, roughness: 0.16, metalness: 0.86)
+        let mintSparkMat = makeUnlitGlowMaterial(hex: 0x5EEAD4, opacity: 0.90, additive: true)
+
+        let cupOuter = SCNCone(topRadius: 0.86, bottomRadius: 0.64, height: 1.56)
+        cupOuter.radialSegmentCount = 24
+        cupOuter.materials = [cupGlassMat]
+        capRoot.addChildNode(SCNNode(geometry: cupOuter))
+
+        let liquidFill = SCNCone(topRadius: 0.72, bottomRadius: 0.58, height: 0.82)
+        liquidFill.radialSegmentCount = 20
+        liquidFill.materials = [purpleLiquidMat]
+        let liquidNode = SCNNode(geometry: liquidFill)
+        liquidNode.simdPosition = SIMD3<Float>(0, -0.26, 0)
+        capRoot.addChildNode(liquidNode)
+
+        // Glowing 24k Gold "10 mL" dosage indicator ring around the cup
+        let fillRing = SCNTorus(ringRadius: 0.76, pipeRadius: 0.036)
+        fillRing.ringSegmentCount = 28
+        fillRing.materials = [goldLineMat]
+        let ringNode = SCNNode(geometry: fillRing)
+        ringNode.simdPosition = SIMD3<Float>(0, 0.14, 0)
+        capRoot.addChildNode(ringNode)
+
+        // Pouring amethyst stream ribbon flowing from cup rim toward open dental arch
+        let streamCone = SCNCone(topRadius: 0.18, bottomRadius: 0.34, height: 3.4)
+        streamCone.radialSegmentCount = 16
+        streamCone.materials = [lavenderGlowMat]
+        let streamNode = SCNNode(geometry: streamCone)
+        streamNode.name = "mouthwash_pour_stream"
+        streamNode.simdPosition = SIMD3<Float>(0, 1.55, -1.35)
+        streamNode.simdEulerAngles = SIMD3<Float>(-0.78, 0, 0)
+        capRoot.addChildNode(streamNode)
+
+        mwRoot.addChildNode(capRoot)
+
+        // 2. Twin Swirling Royal Amethyst Dental Arch Liquid Vortex Ribbons + Effervescent F⁻ Ion Bubbles
+        let swirlRoot = SCNNode()
+        swirlRoot.name = "mouthwash_swirl"
+        swirlRoot.simdPosition = SIMD3<Float>(0, 1.85, 0)
+
+        let up = SIMD3<Float>(0, 1, 0)
+        let ribbonSteps = 18
+        for passIdx in 0..<2 {
+            let radialScale: Double = (passIdx == 0) ? 1.13 : 0.84
+            let pipeR: CGFloat = (passIdx == 0) ? 0.24 : 0.18
+            let mat = (passIdx == 0) ? purpleLiquidMat : lavenderGlowMat
+            for i in 0..<ribbonSteps {
+                let f0 = Double(i) / Double(ribbonSteps)
+                let f1 = Double(i + 1) / Double(ribbonSteps)
+                let t0 = -archTMax * 0.94 + (2.0 * archTMax * 0.94) * f0
+                let t1 = -archTMax * 0.94 + (2.0 * archTMax * 0.94) * f1
+                let a0 = archPoint(t0)
+                let a1 = archPoint(t1)
+                let wave0 = Float(sin(f0 * .pi * 3.0 + Double(passIdx) * 1.4)) * 0.22
+                let wave1 = Float(sin(f1 * .pi * 3.0 + Double(passIdx) * 1.4)) * 0.22
+                let p0 = SIMD3<Float>(Float(a0.x * radialScale), wave0, Float(a0.z * radialScale))
+                let p1 = SIMD3<Float>(Float(a1.x * radialScale), wave1, Float(a1.z * radialScale))
+                let seg = p1 - p0
+                let len = max(0.05, simd_length(seg))
+                let dir = seg / len
+
+                let cap = SCNCapsule(capRadius: pipeR, height: CGFloat(len + Float(pipeR) * 1.6))
+                cap.materials = [mat]
+                let segNode = SCNNode(geometry: cap)
+                segNode.simdPosition = (p0 + p1) * 0.5
+                if abs(simd_dot(up, dir)) < 0.999 {
+                    segNode.simdOrientation = simd_quatf(from: up, to: dir)
+                }
+                swirlRoot.addChildNode(segNode)
+            }
+        }
+
+        // 24 Effervescent Amethyst / Lavender / Mint / 24k Gold F⁻ Bubbles & Crystal Ions along the arch
+        let bubblesGroup = SCNNode()
+        bubblesGroup.name = "mouthwash_bubbles"
+        let goldGlowMat = makeUnlitGlowMaterial(hex: 0xFBBF24, opacity: 0.92, additive: true)
+        let bubbleCount = 24
+        for bi in 0..<bubbleCount {
+            let frac = Double(bi) / Double(bubbleCount - 1)
+            let t = -archTMax * 0.92 + (2.0 * archTMax * 0.92) * frac
+            let ap = archPoint(t)
+            let radial = 0.88 + 0.28 * Double((bi * 5) % 4) / 3.0
+            let yOff = Float(((bi * 7) % 5) - 2) * 0.22
+            let isIonCrystal = (bi % 4 == 0)
+
+            let bNode: SCNNode
+            if isIonCrystal {
+                let box = SCNBox(width: 0.22, height: 0.22, length: 0.22, chamferRadius: 0.03)
+                box.materials = [(bi % 8 == 0) ? goldGlowMat : mintSparkMat]
+                bNode = SCNNode(geometry: box)
+                bNode.simdEulerAngles = SIMD3<Float>(0.78, Float(bi) * 0.5, 0.78)
+            } else {
+                let r: CGFloat = CGFloat(0.11 + Double(bi % 3) * 0.045)
+                let sph = SCNSphere(radius: r)
+                sph.segmentCount = 12
+                sph.materials = [(bi % 2 == 0) ? lavenderGlowMat : purpleLiquidMat]
+                bNode = SCNNode(geometry: sph)
+            }
+            bNode.simdPosition = SIMD3<Float>(
+                Float(ap.x * radial),
+                yOff,
+                Float(ap.z * radial)
+            )
+            bubblesGroup.addChildNode(bNode)
+        }
+        swirlRoot.addChildNode(bubblesGroup)
+        mwRoot.addChildNode(swirlRoot)
+
+        return mwRoot
     }
 
     /// Builds a sleek, high-visibility 3D Sonic Toothbrush (`local origin = bristle tips`, `+Z = bristle-to-back`,

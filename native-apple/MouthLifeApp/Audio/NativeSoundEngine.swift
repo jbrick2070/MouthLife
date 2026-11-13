@@ -3025,6 +3025,42 @@ public final class NativeSoundEngine {
         )
     }
 
+    /// Effervescent Purple Total Care Fluoride Mouthwash swish earcon:
+    /// Filtered aqua-violet liquid wave + micro-bubble sparkle + rising Glass-Harp & Celesta Fluorapatite triad.
+    public func playMouthwashSwishMotif(stepIndex: Int) {
+        guard canPlaySfx() else { return }
+        let clampedStep = min(2, max(0, stepIndex))
+        emitNoiseSweep(
+            f0: 950 + Float(clampedStep) * 320,
+            f1: 2800 + Float(clampedStep) * 450,
+            durSec: 0.42,
+            peak: 0.055,
+            q: 0.85
+        )
+        for b in 0..<3 {
+            let baseHz = Float(640 + clampedStep * 140 + b * 190)
+            emitBlip(f0: baseHz, f1: baseHz + 520, offsetSec: Double(b) * 0.055, durSec: 0.045, peak: 0.042)
+        }
+        let degrees: [[Int]] = [
+            [0, 4, 7],
+            [2, 5, 9],
+            [4, 7, 11]
+        ]
+        for (i, deg) in degrees[clampedStep].enumerated() {
+            let pan = Float(i - 1) * 0.26
+            emitSfxVoice(
+                i == 2 ? .celesta : .glassHarp,
+                midi: harmonicMidi(degree: deg, octaveShift: 60),
+                offsetSec: 0.05 + Double(i) * 0.065,
+                durationSec: 0.52,
+                vel: 0.54,
+                pan: pan,
+                reverb: 0.72,
+                delay: 0.12
+            )
+        }
+    }
+
     public func playOrbitalDive() {
         guard canPlaySfx() else { return }
         for i in 0..<7 {

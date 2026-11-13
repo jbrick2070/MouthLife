@@ -1004,6 +1004,22 @@ public enum EnamelShaders {
             float3 quadCyan = mix(float3(0.08, 0.84, 0.96), float3(0.98, 0.84, 0.32), preEchoStrength * 0.45);
             baseColor = mix(baseColor, mix(baseColor, quadCyan, (0.24 + 0.28 * quadRim) * surfFocus), 0.82);
             emissionGlow += quadCyan * surfFocus * (0.20 + 0.18 * coachPulse + 0.20 * grooveLift + 0.28 * quadRim);
+        } else if (activeSurfaceIdx <= -2) {
+            // Purple Total Care Fluoride Rinse Bonus: sloshing Royal Amethyst liquid wave + progressive Fluorapatite 24k Gold/Mint crown seal!
+            float sealProg = clamp(preEchoStrength, 0.0, 1.0);
+            float swishWave = 0.5 + 0.5 * sin(worldPos.x * 0.44 + motionTime * 4.1 + sin(worldPos.z * 0.6) * 0.7);
+            float meniscus = smoothstep(0.92, 0.18, hFrac - (swishWave - 0.5) * 0.28);
+            float crystalRim = pow(max(1.0 - NdotV, 0.0), 1.65);
+            float3 royalPurple = float3(0.66, 0.26, 0.98);
+            float3 lavenderMist = float3(0.84, 0.64, 1.0);
+            float3 fluorGold = mix(float3(0.32, 0.94, 0.86), float3(1.0, 0.84, 0.32), sealProg * 0.72);
+            float3 rinseTint = mix(royalPurple, lavenderMist, crystalRim * 0.55);
+
+            baseColor = mix(baseColor * 0.94, float3(0.94, 0.96, 1.0), 0.24);
+            baseColor = mix(baseColor, rinseTint, meniscus * (0.34 - 0.12 * sealProg));
+            emissionGlow += rinseTint * (0.14 + 0.22 * meniscus * swishWave + 0.20 * crystalRim + audioBass * 0.14);
+            emissionGlow += fluorGold * sealProg * (0.10 + 0.24 * crystalRim + audioHigh * 0.10);
+            goldMetalBoost = max(goldMetalBoost, sealProg * 0.32 * crystalRim);
         } else if (quadCompleted) {
             // Completed Crystal Enamel: bright restored porcelain with subtle fluorapatite diamond sheen!
             float crystalRim = pow(max(1.0 - NdotV, 0.0), 1.85);

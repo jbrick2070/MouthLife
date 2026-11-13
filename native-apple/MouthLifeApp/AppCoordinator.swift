@@ -56,15 +56,20 @@ public final class AppCoordinator {
 
     // Active 2-Minute Sink Brush-Along Pacer State
     private static let flossToolDefaultsKey = "mouthlife.pacer.flossToolStyle"
+    private static let mouthwashDurationDefaultsKey = "mouthlife.pacer.mouthwashDurationStyle"
     public var pacerElapsedSec: Double = 0.0
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
+    public var pacerStage: PacerStage = .brushing
+    public var pacerCompletedFlossStage: Bool = false
     public var flossToolStyle: FlossToolStyle = .flossPick
+    public var mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s
     public var voiceCoachEnabled: Bool = NativeSoundEngine.shared.isVoiceCoachEnabled
     public var coachLanguage: CoachLanguage = NativeSoundEngine.shared.coachLanguage
     private var pacerPausedByUser: Bool = false
     private var pacerSuspendedBySystem: Bool = false
     private var announcedFlossLowerHalf: Bool = false
+    private var lastAnnouncedMouthwashStep: Int = 0
     private var pacerTimer: Timer?
     private var lastPacerTickUptime: TimeInterval?
     private var lastAnnouncedQuadrant: Int = -1
@@ -126,6 +131,10 @@ public final class AppCoordinator {
             .flatMap(FlossToolStyle.init(rawValue:)) ?? .flossPick
         self.flossToolStyle = persistedFlossStyle
         self.sceneController.pacerFlossToolStyle = persistedFlossStyle
+        let persistedMouthwashStyle = UserDefaults.standard.string(forKey: Self.mouthwashDurationDefaultsKey)
+            .flatMap(MouthwashDurationStyle.init(rawValue:)) ?? .totalCare60s
+        self.mouthwashDurationStyle = persistedMouthwashStyle
+        self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
         self.voiceCoachEnabled = NativeSoundEngine.shared.isVoiceCoachEnabled
         self.coachLanguage = NativeSoundEngine.shared.coachLanguage
 
@@ -524,7 +533,10 @@ public final class AppCoordinator {
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         pacerInFlossBonus = false
+        pacerStage = .brushing
+        pacerCompletedFlossStage = false
         announcedFlossLowerHalf = false
+        lastAnnouncedMouthwashStep = 0
         brushRadioStation = .livingClock
         lastAnnouncedQuadrant = 0
         lastAnnouncedSurface = 0
@@ -533,7 +545,9 @@ public final class AppCoordinator {
         sceneController.highlightedCrownIndex = nil
         sceneController.pacerElapsedSec = 0
         sceneController.pacerInFlossBonus = false
+        sceneController.pacerStage = .brushing
         sceneController.pacerFlossToolStyle = flossToolStyle
+        sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
         NativeSoundEngine.shared.setPaused(false)
         transition(to: .brushAlong)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
@@ -568,13 +582,23 @@ public final class AppCoordinator {
     }
 
     private func speakCurrentPacerPhaseCue() {
-        let phase = BrushPhaseState.evaluate(elapsedSec: pacerElapsedSec, inFlossBonus: pacerInFlossBonus)
-        if phase.inFlossBonus {
+        let phase = BrushPhaseState.evaluate(
+            elapsedSec: pacerElapsedSec,
+            stage: pacerStage,
+            mouthwashDurationSec: mouthwashDurationStyle.durationSec
+        )
+        switch phase.stage {
+        case .mouthwashBonus:
+            let cue = phase.mouthwashStepIndex == 0
+                ? BrushCoachCopy.spokenMouthwashStartCue(durationSec: Int(mouthwashDurationStyle.durationSec.rounded()), lang: coachLanguage)
+                : BrushCoachCopy.spokenMouthwashStepCue(stepIndex: phase.mouthwashStepIndex, lang: coachLanguage)
+            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+        case .flossBonus:
             let cue = phase.flossIsUpper
                 ? BrushCoachCopy.spokenFlossStartCue(style: flossToolStyle, lang: coachLanguage)
                 : BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
             NativeSoundEngine.shared.speakCoachingPhrase(cue)
-        } else {
+        case .brushing:
             let cue = BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
             NativeSoundEngine.shared.speakCoachingPhrase(cue)
         }
@@ -585,6 +609,22 @@ public final class AppCoordinator {
         flossToolStyle = style
         sceneController.pacerFlossToolStyle = style
         UserDefaults.standard.set(style.rawValue, forKey: Self.flossToolDefaultsKey)
+        NativeSoundEngine.shared.playUiTap()
+    }
+
+    public func setMouthwashDurationStyle(_ style: MouthwashDurationStyle) {
+        guard mouthwashDurationStyle != style else { return }
+        let mwStart = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+        let oldDur = max(6.0, mouthwashDurationStyle.durationSec)
+        let newDur = max(6.0, style.durationSec)
+        if pacerStage == .mouthwashBonus {
+            let frac = min(0.98, max(0.0, (pacerElapsedSec - mwStart) / oldDur))
+            pacerElapsedSec = mwStart + frac * newDur
+            sceneController.pacerElapsedSec = pacerElapsedSec
+        }
+        mouthwashDurationStyle = style
+        sceneController.pacerMouthwashDurationSec = newDur
+        UserDefaults.standard.set(style.rawValue, forKey: Self.mouthwashDurationDefaultsKey)
         NativeSoundEngine.shared.playUiTap()
     }
 
@@ -599,15 +639,17 @@ public final class AppCoordinator {
     }
 
     public func enterFlossBonusNow() {
+        pacerStage = .flossBonus
         pacerInFlossBonus = true
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         announcedFlossLowerHalf = false
         lastCountdownPipKey = ""
-        pacerElapsedSec = max(pacerElapsedSec, GameConfig.brushAlongTotalSec)
+        pacerElapsedSec = GameConfig.brushAlongTotalSec
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = true
+        sceneController.pacerStage = .flossBonus
         sceneController.pacerFlossToolStyle = flossToolStyle
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
         NativeSoundEngine.shared.setPaused(false)
@@ -619,13 +661,43 @@ public final class AppCoordinator {
         updateIdleTimerPolicy()
     }
 
-    public func completeBrushAlongSession(withFlossBonus: Bool) {
+    public func enterMouthwashBonusNow(completedFloss: Bool = true) {
+        pacerCompletedFlossStage = completedFloss
+        pacerStage = .mouthwashBonus
+        pacerInFlossBonus = false
+        pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
+        lastAnnouncedMouthwashStep = 0
+        lastCountdownPipKey = ""
+        pacerElapsedSec = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+        sceneController.pacerElapsedSec = pacerElapsedSec
+        sceneController.pacerInFlossBonus = false
+        sceneController.pacerStage = .mouthwashBonus
+        sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
+        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        NativeSoundEngine.shared.setPaused(false)
+        NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
+        NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: 0)
+        NativeSoundEngine.shared.speakCoachingPhrase(
+            BrushCoachCopy.spokenMouthwashStartCue(
+                durationSec: Int(mouthwashDurationStyle.durationSec.rounded()),
+                lang: coachLanguage
+            )
+        )
+        updateIdleTimerPolicy()
+    }
+
+    public func completeBrushAlongSession(withFlossBonus: Bool, withMouthwashBonus: Bool = false) {
         stopPacerTimer()
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         NativeSoundEngine.shared.setPaused(false)
-        let outcome = saveSystem.recordBrushAlongCompletion(withFlossBonus: withFlossBonus)
+        let outcome = saveSystem.recordBrushAlongCompletion(
+            withFlossBonus: withFlossBonus,
+            withMouthwashBonus: withMouthwashBonus
+        )
         save = saveSystem.getSave()
         sceneController.touchSystem.clearAll()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
@@ -633,9 +705,16 @@ public final class AppCoordinator {
         HapticsEngine.shared.playDistrictSeal()
         transition(to: .hub)
         NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenSessionCompleteCue(lang: coachLanguage)
+            BrushCoachCopy.spokenSessionCompleteCue(
+                includedMouthwash: withMouthwashBonus,
+                lang: coachLanguage
+            )
         )
-        showHubToast("🦷 Fresh Mint Smooth Bask! +\(outcome.ionsAwarded) F⁻\(outcome.stampAwarded ? " & +1 Habit Stamp!" : "")")
+        if withMouthwashBonus {
+            showHubToast("💜 Purple Total Care Seal! +\(outcome.ionsAwarded) F⁻ • Spit out, no water 30m!")
+        } else {
+            showHubToast("🦷 Fresh Mint Smooth Bask! +\(outcome.ionsAwarded) F⁻\(outcome.stampAwarded ? " & +1 Habit Stamp!" : "")")
+        }
     }
 
     private func startPacerTimer() {
@@ -663,28 +742,43 @@ public final class AppCoordinator {
         let dt = min(0.5, max(0.0, now - (lastPacerTickUptime ?? now)))
         lastPacerTickUptime = now
 
-        let cap = pacerInFlossBonus
-            ? (GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec)
-            : GameConfig.brushAlongTotalSec
+        let flossEnd = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+        let mwDur = mouthwashDurationStyle.durationSec
+        let cap: Double
+        switch pacerStage {
+        case .brushing:
+            cap = GameConfig.brushAlongTotalSec
+        case .flossBonus:
+            cap = flossEnd
+        case .mouthwashBonus:
+            cap = flossEnd + mwDur
+        }
         pacerElapsedSec = min(cap, pacerElapsedSec + dt)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = pacerInFlossBonus
+        sceneController.pacerStage = pacerStage
+        sceneController.pacerMouthwashDurationSec = mwDur
 
-        let phase = BrushPhaseState.evaluate(elapsedSec: pacerElapsedSec, inFlossBonus: pacerInFlossBonus)
+        let phase = BrushPhaseState.evaluate(
+            elapsedSec: pacerElapsedSec,
+            stage: pacerStage,
+            mouthwashDurationSec: mwDur
+        )
 
         // Musical 3-second anticipation pickup ("3... 2... 1...") so users watching the mirror prepare to switch
         if let pip = phase.countdownPip {
-            let pipKey = "\(phase.inFlossBonus ? 1 : 0)-\(phase.phaseIndex12)-\(phase.flossIsUpper ? 1 : 0)-\(pip)"
+            let pipKey = "\(phase.stage.rawValue)-\(phase.phaseIndex12)-\(pip)"
             if pipKey != lastCountdownPipKey {
                 lastCountdownPipKey = pipKey
-                let isUpper = phase.inFlossBonus ? phase.flossIsUpper : phase.quadrant.isUpper
+                let isUpper = phase.inMouthwashBonus ? true : (phase.inFlossBonus ? phase.flossIsUpper : phase.quadrant.isUpper)
                 NativeSoundEngine.shared.playPacerAnticipationPip(secondsLeft: pip, isUpper: isUpper)
             }
         }
 
-        if !pacerInFlossBonus {
+        switch pacerStage {
+        case .brushing:
             if pacerElapsedSec >= GameConfig.brushAlongTotalSec - 0.04 {
-                // Seamlessly chime & roll hands-free into the 45s Floss Pick Bonus Round when 2:00 finishes!
+                // Seamlessly chime & roll hands-free into Stage 2: 45s Floss Pick Bonus Round!
                 enterFlossBonusNow()
                 return
             }
@@ -705,7 +799,8 @@ public final class AppCoordinator {
                     BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
                 )
             }
-        } else {
+
+        case .flossBonus:
             let flossElapsed = pacerElapsedSec - GameConfig.brushAlongTotalSec
             if !announcedFlossLowerHalf && flossElapsed >= GameConfig.brushAlongFlossBonusSec * 0.5 {
                 announcedFlossLowerHalf = true
@@ -714,8 +809,21 @@ public final class AppCoordinator {
                     BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
                 )
             }
+            if pacerElapsedSec >= flossEnd - 0.05 {
+                // Seamlessly chime & roll hands-free into Stage 3: 60s Purple Total Care Fluoride Rinse Bonus!
+                enterMouthwashBonusNow(completedFloss: true)
+            }
+
+        case .mouthwashBonus:
+            if phase.mouthwashStepIndex != lastAnnouncedMouthwashStep && phase.mouthwashStepIndex > 0 && pacerElapsedSec < cap - 0.25 {
+                lastAnnouncedMouthwashStep = phase.mouthwashStepIndex
+                NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: phase.mouthwashStepIndex)
+                NativeSoundEngine.shared.speakCoachingPhrase(
+                    BrushCoachCopy.spokenMouthwashStepCue(stepIndex: phase.mouthwashStepIndex, lang: coachLanguage)
+                )
+            }
             if pacerElapsedSec >= cap - 0.05 {
-                completeBrushAlongSession(withFlossBonus: true)
+                completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: true)
             }
         }
     }

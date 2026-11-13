@@ -5,6 +5,24 @@ public enum FlossToolStyle: String, Codable, CaseIterable, Sendable {
     case stringFloss
 }
 
+public enum PacerStage: String, Codable, CaseIterable, Equatable, Sendable {
+    case brushing
+    case flossBonus
+    case mouthwashBonus
+}
+
+public enum MouthwashDurationStyle: String, Codable, CaseIterable, Equatable, Sendable {
+    case totalCare60s
+    case quick30s
+
+    public var durationSec: Double {
+        switch self {
+        case .totalCare60s: return GameConfig.brushAlongMouthwashBonusSec
+        case .quick30s: return 30.0
+        }
+    }
+}
+
 public enum GameConfig {
     // Spatial & Surface Grid Constants
     public static let cellSize: Double = 0.25
@@ -125,10 +143,12 @@ public enum GameConfig {
     // Habit Bank & Pacer Constants
     public static let brushAlongTotalSec: Double = 120.0
     public static let brushAlongFlossBonusSec: Double = 45.0
+    public static let brushAlongMouthwashBonusSec: Double = 60.0
     public static let dailyFullRewardCap: Int = 2
     public static let dailyCourtesyTipCap: Int = 3
     public static let brushAlongFullIons: Int = 50
     public static let brushAlongFlossIons: Int = 25
+    public static let brushAlongMouthwashIons: Int = 25
     public static let brushAlongTipIons: Int = 5
     public static let maxSupplyBeacons: Int = 4
     public static let maxOverdriveRuns: Int = 4

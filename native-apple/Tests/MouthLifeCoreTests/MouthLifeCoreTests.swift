@@ -552,4 +552,82 @@ final class MouthLifeCoreTests: XCTestCase {
             }
         }
     }
+
+    func testPurpleTotalCareMouthwashBonusStageAndRewards() {
+        let mwStart = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec // 165s
+
+        // 1. Default 60s ADA / Purple Listerine Total Care timeline (3 x 20s sub-phases)
+        let step0 = BrushPhaseState.evaluate(elapsedSec: mwStart + 4.0, stage: .mouthwashBonus, mouthwashDurationSec: 60.0)
+        XCTAssertTrue(step0.inMouthwashBonus)
+        XCTAssertFalse(step0.inFlossBonus)
+        XCTAssertEqual(step0.mouthwashStepIndex, 0)
+        XCTAssertEqual(step0.phaseIndex12, 14)
+        XCTAssertEqual(step0.completedQuadrantsMask, 0b1111)
+        XCTAssertNil(step0.countdownPip)
+        XCTAssertEqual(step0.mouthwashProgress01, Float(4.0 / 60.0), accuracy: 0.002)
+
+        // 3-2-1 anticipation pips right before Step 0 -> Step 1 boundary (at mwStart + 20s)
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: mwStart + 17.5, stage: .mouthwashBonus, mouthwashDurationSec: 60.0).countdownPip, 3)
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: mwStart + 18.5, stage: .mouthwashBonus, mouthwashDurationSec: 60.0).countdownPip, 2)
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: mwStart + 19.5, stage: .mouthwashBonus, mouthwashDurationSec: 60.0).countdownPip, 1)
+
+        // Step 1 (Pump Between All 26 Gaps) & Step 2 (Final Swish • Do Not Swallow • No Water 30m)
+        let step1 = BrushPhaseState.evaluate(elapsedSec: mwStart + 30.0, stage: .mouthwashBonus, mouthwashDurationSec: 60.0)
+        XCTAssertEqual(step1.mouthwashStepIndex, 1)
+        XCTAssertEqual(step1.phaseIndex12, 15)
+        XCTAssertEqual(step1.mouthwashProgress01, 0.50, accuracy: 0.002)
+
+        let step2 = BrushPhaseState.evaluate(elapsedSec: mwStart + 54.0, stage: .mouthwashBonus, mouthwashDurationSec: 60.0)
+        XCTAssertEqual(step2.mouthwashStepIndex, 2)
+        XCTAssertEqual(step2.phaseIndex12, 16)
+        XCTAssertGreaterThan(step2.mouthwashProgress01, 0.88)
+
+        // 2. Quick 30s rinse option (3 x 10s sub-phases)
+        let quickStep2 = BrushPhaseState.evaluate(
+            elapsedSec: mwStart + 22.0,
+            stage: .mouthwashBonus,
+            mouthwashDurationSec: MouthwashDurationStyle.quick30s.durationSec
+        )
+        XCTAssertEqual(quickStep2.mouthwashStepIndex, 2)
+        XCTAssertEqual(quickStep2.phaseDurationSec, 10.0, accuracy: 1e-5)
+
+        // 3. HabitBank & SaveSystem 3-Stage Reward Math: 50 Brush + 25 Floss Pick + 25 Purple Fluoride Rinse = 100 F⁻
+        let mem = InMemorySaveStorage()
+        let sys = SaveSystem(bus: EventBus(), storage: mem)
+        _ = sys.load(nowEpochMs: 1_700_000_000_000)
+        let d1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let fullTriple = sys.recordBrushAlongCompletion(withFlossBonus: true, withMouthwashBonus: true, date: d1)
+        XCTAssertEqual(fullTriple.ionsAwarded, 100)
+        XCTAssertTrue(fullTriple.stampAwarded)
+
+        let brushPlusRinseOnly = sys.recordBrushAlongCompletion(withFlossBonus: false, withMouthwashBonus: true, date: d1)
+        XCTAssertEqual(brushPlusRinseOnly.ionsAwarded, 75)
+        XCTAssertTrue(brushPlusRinseOnly.stampAwarded)
+
+        // 4. 8-Language Purple Total Care Headlines & 30-Minute Post-Rinse Spoken Guidance
+        for lang in CoachLanguage.allCases {
+            let btnsFull = BrushCoachCopy.mouthwashButtonLabels(didFloss: true, lang: lang)
+            XCTAssertFalse(btnsFull.rinseJump.isEmpty)
+            XCTAssertTrue(btnsFull.doneRinse.contains("100"))
+            let btnsNoFloss = BrushCoachCopy.mouthwashButtonLabels(didFloss: false, lang: lang)
+            XCTAssertTrue(btnsNoFloss.doneRinse.contains("75"))
+
+            XCTAssertFalse(BrushCoachCopy.spokenMouthwashStartCue(durationSec: 60, lang: lang).isEmpty)
+            XCTAssertFalse(BrushCoachCopy.spokenMouthwashStartCue(durationSec: 30, lang: lang).isEmpty)
+            XCTAssertFalse(BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: true, lang: lang).isEmpty)
+            XCTAssertNotEqual(
+                BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: true, lang: lang),
+                BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: false, lang: lang)
+            )
+            for sIdx in 0..<3 {
+                let hl = BrushCoachCopy.mouthwashHeadline(stepIndex: sIdx, lang: lang)
+                XCTAssertFalse(hl.archTitle.isEmpty)
+                XCTAssertFalse(hl.actionBadge.isEmpty)
+                XCTAssertFalse(hl.ruleTag.isEmpty)
+                if sIdx > 0 {
+                    XCTAssertFalse(BrushCoachCopy.spokenMouthwashStepCue(stepIndex: sIdx, lang: lang).isEmpty)
+                }
+            }
+        }
+    }
 }

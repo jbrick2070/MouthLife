@@ -787,6 +787,7 @@ public final class SaveSystem {
     @discardableResult
     public func recordBrushAlongCompletion(
         withFlossBonus: Bool,
+        withMouthwashBonus: Bool = false,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -794,6 +795,7 @@ public final class SaveSystem {
         let outcome = HabitBank.completeBrushAlong(
             save: &next,
             withFlossBonus: withFlossBonus,
+            withMouthwashBonus: withMouthwashBonus,
             date: date,
             calendar: calendar
         )

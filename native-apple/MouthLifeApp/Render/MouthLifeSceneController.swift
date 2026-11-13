@@ -61,7 +61,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public var companionAcidStress: Float = 0.0
     public var pacerElapsedSec: Double = 0.0
     public var pacerInFlossBonus: Bool = false
+    public var pacerStage: PacerStage = .brushing
     public var pacerFlossToolStyle: FlossToolStyle = .flossPick
+    public var pacerMouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec
     public var highlightedCrownIndex: Int? {
         didSet {
             companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
@@ -266,7 +268,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 latestPacerCoachState = companionNodes.updatePacerCoaching(
                     elapsedSec: pacerElapsedSec,
                     inFlossBonus: pacerInFlossBonus,
+                    pacerStage: pacerStage,
                     flossToolStyle: pacerFlossToolStyle,
+                    mouthwashDurationSec: pacerMouthwashDurationSec,
                     nowSec: sceneNowSec,
                     reducedMotion: reducedMotion
                 )
@@ -567,7 +571,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             let coach = companionNodes.updatePacerCoaching(
                 elapsedSec: pacerElapsedSec,
                 inFlossBonus: pacerInFlossBonus,
+                pacerStage: pacerStage,
                 flossToolStyle: pacerFlossToolStyle,
+                mouthwashDurationSec: pacerMouthwashDurationSec,
                 nowSec: sceneNowSec,
                 reducedMotion: reducedMotion
             )
@@ -577,9 +583,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             activeSurfaceIdx = coach.activeSurfaceIdx
             preEcho01 = coach.preEcho01
             upcomingQuad = coach.upcomingQuadrant
-            companionEnamelController.setHighlightedCrown(index: coach.activeCrownIndex, pulse01: 1.0)
+            companionEnamelController.setHighlightedCrown(
+                index: coach.activeCrownIndex >= 0 ? coach.activeCrownIndex : nil,
+                pulse01: 1.0
+            )
             pacerFoamOrigin = Vec2(x: Double(coach.contactWorldPos.x), z: Double(coach.contactWorldPos.z))
-            pacerFoamStrength = pacerInFlossBonus ? 0.42 : 0.90
+            switch pacerStage {
+            case .brushing:
+                pacerFoamStrength = 0.90
+            case .flossBonus:
+                pacerFoamStrength = 0.42
+            case .mouthwashBonus:
+                pacerFoamStrength = 0.64
+            }
         } else {
             activeQuad = -1
             companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)

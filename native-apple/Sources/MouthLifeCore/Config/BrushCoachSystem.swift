@@ -100,7 +100,9 @@ public enum BrushSurface: Int, CaseIterable, Codable, Sendable {
 /// Single authoritative timeline snapshot driving the 2D Mirror Arch Compass, 3D SceneKit/Metal shaders,
 /// 3-second musical anticipation chimes, and multilingual spoken voice cues in lockstep.
 public struct BrushPhaseState: Equatable, Sendable {
-    public let inFlossBonus: Bool
+    public let stage: PacerStage
+    public var inFlossBonus: Bool { stage == .flossBonus }
+    public var inMouthwashBonus: Bool { stage == .mouthwashBonus }
     public let quadrant: BrushQuadrant
     public let surface: BrushSurface
     public let phaseIndex12: Int
@@ -108,22 +110,68 @@ public struct BrushPhaseState: Equatable, Sendable {
     public let phaseDurationSec: Double
     /// `3`, `2`, or `1` during the final 3 seconds before the next surface/arch/completion transition; `nil` otherwise.
     public let countdownPip: Int?
-    /// `0...1` smooth pulse ramp during the final `0.85s` before switching surfaces or quadrants.
+    /// `0...1` smooth pulse ramp during the final `0.85s` before switching surfaces or quadrants (or `0...1` rinse seal progress in mouthwash bonus).
     public let preEcho01: Float
     /// Next quadrant (`0..3`) when a quadrant boundary is within `0.85s`, otherwise `-1`.
     public let upcomingQuadrantIndex: Int
-    /// Bitmask (`0...15`) of quadrants already completed (`0b1111` = all 4 crystal-clean during Floss Bonus).
+    /// Bitmask (`0...15`) of quadrants already completed (`0b1111` = all 4 crystal-clean during Floss & Mouthwash Bonus).
     public let completedQuadrantsMask: Int
     public let flossIsUpper: Bool
     public let flossContactIndex: Int
     /// `0` = saw-glide past contact, `1` = lean onto wall A, `2` = lean onto wall B & lift.
     public let flossStepIndex: Int
+    /// `0` = Pour 10 mL & Swish Cheek-to-Cheek, `1` = Pump Between All 26 Gaps, `2` = Final Swish & Prepare to Spit (No Water 30m).
+    public let mouthwashStepIndex: Int
+    /// `0...1` overall Purple Total Care Fluoride Rinse progress for progressive Fluorapatite crystal sealing.
+    public let mouthwashProgress01: Float
 
     public static func evaluate(
         elapsedSec: Double,
         inFlossBonus: Bool
     ) -> BrushPhaseState {
-        if inFlossBonus {
+        evaluate(elapsedSec: elapsedSec, stage: inFlossBonus ? .flossBonus : .brushing)
+    }
+
+    public static func evaluate(
+        elapsedSec: Double,
+        stage: PacerStage,
+        mouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec
+    ) -> BrushPhaseState {
+        switch stage {
+        case .mouthwashBonus:
+            let mwStart = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+            let mwTotal = max(6.0, mouthwashDurationSec)
+            let mwElapsed = min(mwTotal - 0.001, max(0.0, elapsedSec - mwStart))
+            let prog01 = Float(min(1.0, max(0.0, mwElapsed / mwTotal)))
+            let subDur = mwTotal / 3.0
+            let stepIdx = min(2, max(0, Int(floor(mwElapsed / subDur))))
+            let subElapsed = mwElapsed - Double(stepIdx) * subDur
+            let remInSub = max(0.0, subDur - subElapsed)
+            let pip: Int? = (remInSub <= 3.0 && remInSub > 0.05) ? max(1, min(3, Int(ceil(remInSub)))) : nil
+
+            // Alternate active mirror side pulse left/right smoothly for compass landmark balance
+            let sloshRight = sin(mwElapsed * 2.4) >= 0
+            let activeQuad: BrushQuadrant = sloshRight ? .upperRight : .upperLeft
+
+            return BrushPhaseState(
+                stage: .mouthwashBonus,
+                quadrant: activeQuad,
+                surface: .outerCheek,
+                phaseIndex12: 14 + stepIdx,
+                phaseElapsedSec: subElapsed,
+                phaseDurationSec: subDur,
+                countdownPip: pip,
+                preEcho01: prog01,
+                upcomingQuadrantIndex: -1,
+                completedQuadrantsMask: 0b1111,
+                flossIsUpper: true,
+                flossContactIndex: 0,
+                flossStepIndex: 0,
+                mouthwashStepIndex: stepIdx,
+                mouthwashProgress01: prog01
+            )
+
+        case .flossBonus:
             let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
             let bonusTotal = max(2.0, GameConfig.brushAlongFlossBonusSec)
             let halfDur = bonusTotal * 0.5
@@ -155,10 +203,10 @@ public struct BrushPhaseState: Equatable, Sendable {
             }
 
             return BrushPhaseState(
-                inFlossBonus: true,
+                stage: .flossBonus,
                 quadrant: activeQuad,
                 surface: .outerCheek,
-                phaseIndex12: 12,
+                phaseIndex12: isUpper ? 12 : 13,
                 phaseElapsedSec: archElapsed,
                 phaseDurationSec: halfDur,
                 countdownPip: pip,
@@ -167,41 +215,46 @@ public struct BrushPhaseState: Equatable, Sendable {
                 completedQuadrantsMask: 0b1111,
                 flossIsUpper: isUpper,
                 flossContactIndex: cIdx,
-                flossStepIndex: stepIdx
+                flossStepIndex: stepIdx,
+                mouthwashStepIndex: 0,
+                mouthwashProgress01: 0
+            )
+
+        case .brushing:
+            let clamped = min(GameConfig.brushAlongTotalSec - 0.001, max(0.0, elapsedSec))
+            let qRaw = min(3, max(0, Int(clamped / 30.0)))
+            let qElapsed = clamped - Double(qRaw) * 30.0
+            let sRaw = min(2, max(0, Int(qElapsed / 10.0)))
+            let sElapsed = qElapsed - Double(sRaw) * 10.0
+            let remSurface = max(0.0, 10.0 - sElapsed)
+
+            let pip: Int? = (remSurface <= 3.0 && remSurface > 0.05) ? max(1, min(3, Int(ceil(remSurface)))) : nil
+            let preEcho: Float = remSurface < 0.85 ? Float(min(1.0, max(0.0, (0.85 - remSurface) / 0.85))) : 0.0
+            let upcomingQuad: Int = (sRaw == 2 && remSurface < 0.85 && qRaw < 3) ? (qRaw + 1) : -1
+
+            var completedMask = 0
+            for i in 0..<qRaw {
+                completedMask |= (1 << i)
+            }
+
+            return BrushPhaseState(
+                stage: .brushing,
+                quadrant: BrushQuadrant(rawValue: qRaw) ?? .upperRight,
+                surface: BrushSurface(rawValue: sRaw) ?? .outerCheek,
+                phaseIndex12: qRaw * 3 + sRaw,
+                phaseElapsedSec: sElapsed,
+                phaseDurationSec: 10.0,
+                countdownPip: pip,
+                preEcho01: preEcho,
+                upcomingQuadrantIndex: upcomingQuad,
+                completedQuadrantsMask: completedMask,
+                flossIsUpper: true,
+                flossContactIndex: 0,
+                flossStepIndex: 0,
+                mouthwashStepIndex: 0,
+                mouthwashProgress01: 0
             )
         }
-
-        let clamped = min(GameConfig.brushAlongTotalSec - 0.001, max(0.0, elapsedSec))
-        let qRaw = min(3, max(0, Int(clamped / 30.0)))
-        let qElapsed = clamped - Double(qRaw) * 30.0
-        let sRaw = min(2, max(0, Int(qElapsed / 10.0)))
-        let sElapsed = qElapsed - Double(sRaw) * 10.0
-        let remSurface = max(0.0, 10.0 - sElapsed)
-
-        let pip: Int? = (remSurface <= 3.0 && remSurface > 0.05) ? max(1, min(3, Int(ceil(remSurface)))) : nil
-        let preEcho: Float = remSurface < 0.85 ? Float(min(1.0, max(0.0, (0.85 - remSurface) / 0.85))) : 0.0
-        let upcomingQuad: Int = (sRaw == 2 && remSurface < 0.85 && qRaw < 3) ? (qRaw + 1) : -1
-
-        var completedMask = 0
-        for i in 0..<qRaw {
-            completedMask |= (1 << i)
-        }
-
-        return BrushPhaseState(
-            inFlossBonus: false,
-            quadrant: BrushQuadrant(rawValue: qRaw) ?? .upperRight,
-            surface: BrushSurface(rawValue: sRaw) ?? .outerCheek,
-            phaseIndex12: qRaw * 3 + sRaw,
-            phaseElapsedSec: sElapsed,
-            phaseDurationSec: 10.0,
-            countdownPip: pip,
-            preEcho01: preEcho,
-            upcomingQuadrantIndex: upcomingQuad,
-            completedQuadrantsMask: completedMask,
-            flossIsUpper: true,
-            flossContactIndex: 0,
-            flossStepIndex: 0
-        )
     }
 }
 
@@ -362,14 +415,14 @@ public enum BrushCoachCopy {
 
     public static func hubStartBrushLabel(for lang: CoachLanguage) -> String {
         switch lang {
-        case .english: return "2m Brush + Pick"
-        case .spanish: return "2m Cepillo + Hilo"
-        case .french: return "2m Brosse + Fil"
-        case .japanese: return "2分 歯みがき＋ピック"
-        case .chinese: return "2分钟刷牙＋牙线棒"
-        case .korean: return "2분 양치 + 치실픽"
-        case .portuguese: return "2m Escova + Fio"
-        case .german: return "2m Putzen + Stick"
+        case .english: return "2m Brush • Pick • Rinse"
+        case .spanish: return "2m Cepillo • Hilo • Enjuague"
+        case .french: return "2m Brosse • Fil • Rinçage"
+        case .japanese: return "2分 歯みがき・ピック・洗口液"
+        case .chinese: return "2分钟 刷牙·牙线·漱口水"
+        case .korean: return "2분 양치·치실픽·가글"
+        case .portuguese: return "2m Escova • Fio • Enxágue"
+        case .german: return "2m Putzen • Stick • Spülung"
         }
     }
 
@@ -383,6 +436,105 @@ public enum BrushCoachCopy {
         case .korean: return ("치실 픽", "완료 (+75 F⁻)", "건너뛰기 (+50 F⁻)")
         case .portuguese: return ("Fio Pick", "Pronto (+75 F⁻)", "Pular (+50 F⁻)")
         case .german: return ("Stick-Runde", "Fertig (+75 F⁻)", "Weiter (+50 F⁻)")
+        }
+    }
+
+    public static func mouthwashButtonLabels(didFloss: Bool, lang: CoachLanguage) -> (rinseJump: String, doneRinse: String, skipRinse: String) {
+        let fullIons = didFloss ? 100 : 75
+        let skipIons = didFloss ? 75 : 50
+        switch lang {
+        case .english: return ("Purple Rinse", "Done (+\(fullIons) F⁻)", "Skip (+\(skipIons) F⁻)")
+        case .spanish: return ("Enjuague Flúor", "Listo (+\(fullIons) F⁻)", "Saltar (+\(skipIons) F⁻)")
+        case .french: return ("Bain Fluoré", "Fini (+\(fullIons) F⁻)", "Passer (+\(skipIons) F⁻)")
+        case .japanese: return ("フッ素洗口", "完了 (+\(fullIons) F⁻)", "スキップ (+\(skipIons) F⁻)")
+        case .chinese: return ("紫色含氟漱口", "完成 (+\(fullIons) F⁻)", "跳过 (+\(skipIons) F⁻)")
+        case .korean: return ("보라 불소가글", "완료 (+\(fullIons) F⁻)", "건너뛰기 (+\(skipIons) F⁻)")
+        case .portuguese: return ("Enxágue Flúor", "Pronto (+\(fullIons) F⁻)", "Pular (+\(skipIons) F⁻)")
+        case .german: return ("Fluorid-Spülung", "Fertig (+\(fullIons) F⁻)", "Weiter (+\(skipIons) F⁻)")
+        }
+    }
+
+    public static func mouthwashHeadline(stepIndex: Int, lang: CoachLanguage) -> (archTitle: String, actionBadge: String, ruleTag: String) {
+        switch lang {
+        case .english:
+            let title = "PURPLE TOTAL CARE RINSE"
+            if stepIndex == 0 {
+                return (title, "SWISH CHEEK TO CHEEK • 10 mL", "ADA FLUORIDE")
+            } else if stepIndex == 1 {
+                return (title, "PUMP VIGOROUSLY BETWEEN TEETH", "ALL 26 GAPS")
+            } else {
+                return (title, "FINAL SWISH • DO NOT SWALLOW", "NO WATER 30m")
+            }
+
+        case .spanish:
+            let title = "ENJUAGUE MORADO TOTAL CARE"
+            if stepIndex == 0 {
+                return (title, "BUCHES DE MEJILLA A MEJILLA • 10 mL", "FLÚOR ADA")
+            } else if stepIndex == 1 {
+                return (title, "EMPUJA FUERTE ENTRE LOS DIENTES", "26 ESPACIOS")
+            } else {
+                return (title, "RECTA FINAL • NO TRAGAR", "SIN AGUA 30m")
+            }
+
+        case .french:
+            let title = "BAIN DE BOUCHE VIOLET TOTAL CARE"
+            if stepIndex == 0 {
+                return (title, "AGITEZ JOUE À JOUE • 10 mL", "FLUOR ADA")
+            } else if stepIndex == 1 {
+                return (title, "FAITES PASSER ENTRE LES DENTS", "26 ESPACES")
+            } else {
+                return (title, "DERNIER TOUR • NE PAS AVALER", "SANS EAU 30m")
+            }
+
+        case .japanese:
+            let title = "パープル・トータルケア洗口液"
+            if stepIndex == 0 {
+                return (title, "10mLを左右の頬へブクブク", "フッ素コート")
+            } else if stepIndex == 1 {
+                return (title, "歯と歯の間へ強く通す", "全26箇所")
+            } else {
+                return (title, "仕上げ • 飲み込まないで吐き出す", "30分飲食なし")
+            }
+
+        case .chinese:
+            let title = "紫色全效含氟漱口水"
+            if stepIndex == 0 {
+                return (title, "10毫升 左右脸颊鼓漱", "含氟护釉")
+            } else if stepIndex == 1 {
+                return (title, "用力把液体冲过所有牙缝", "26处牙缝")
+            } else {
+                return (title, "最后冲刺 • 切勿吞咽", "30分钟禁水食")
+            }
+
+        case .korean:
+            let title = "퍼플 토탈케어 불소 가글"
+            if stepIndex == 0 {
+                return (title, "10mL 양볼로 힘차게 가글", "불소 코팅")
+            } else if stepIndex == 1 {
+                return (title, "치아 사이사이로 강하게 통과", "26개 틈새")
+            } else {
+                return (title, "마무리 가글 • 삼키지 마세요", "30분 물·음식 금지")
+            }
+
+        case .portuguese:
+            let title = "ENXÁGUE ROXO TOTAL CARE"
+            if stepIndex == 0 {
+                return (title, "BOCHECHE DE LADO A LADO • 10 mL", "FLÚOR ADA")
+            } else if stepIndex == 1 {
+                return (title, "PASSE FORTE ENTRE OS DENTES", "26 ESPAÇOS")
+            } else {
+                return (title, "RETA FINAL • NÃO ENGULA", "SEM ÁGUA 30m")
+            }
+
+        case .german:
+            let title = "LILA TOTAL CARE FLUORID-SPÜLUNG"
+            if stepIndex == 0 {
+                return (title, "KRÄFTIG HIN UND HER SPÜLEN • 10 mL", "ADA FLUORID")
+            } else if stepIndex == 1 {
+                return (title, "ZWISCHEN ALLE ZÄHNE PRESSEN", "26 LÜCKEN")
+            } else {
+                return (title, "ENDSPURT • NICHT SCHLUCKEN", "30m KEIN WASSER")
+            }
         }
     }
 
@@ -493,7 +645,91 @@ public enum BrushCoachCopy {
         }
     }
 
-    public static func spokenSessionCompleteCue(lang: CoachLanguage) -> String {
+    public static func spokenMouthwashStartCue(durationSec: Int, lang: CoachLanguage) -> String {
+        let is60 = (durationSec >= 45)
+        switch lang {
+        case .english:
+            return is60
+                ? "Final bonus: Purple Total Care Fluoride Rinse! Pour ten milliliters and swish cheek to cheek for one minute. Do not swallow."
+                : "Final bonus: Purple Fluoride Rinse! Pour ten milliliters and swish cheek to cheek for thirty seconds."
+        case .spanish:
+            return is60
+                ? "Ronda final: Enjuague morado con flúor. Toma diez mililitros y haz buches por un minuto sin tragar."
+                : "Ronda final: Enjuague morado con flúor. Haz buches por treinta segundos sin tragar."
+        case .french:
+            return is60
+                ? "Bonus final : bain de bouche violet au fluor. Prenez dix millilitres et agitez pendant une minute sans avaler."
+                : "Bonus final : bain de bouche violet au fluor pendant trente secondes, sans avaler."
+        case .japanese:
+            return is60
+                ? "最後のボーナス、紫のトータルケア洗口液！10ミリリットルを口に含み、1分間ブクブクゆすぎます。"
+                : "最後のボーナス、紫のフッ素洗口液！30秒間しっかりブクブクゆすぎます。"
+        case .chinese:
+            return is60
+                ? "最后一关：紫色全效含氟漱口水！倒十毫升，左右鼓漱一分钟，不要吞咽。"
+                : "最后一关：紫色含氟漱口水！左右鼓漱三十秒，不要吞咽。"
+        case .korean:
+            return is60
+                ? "마지막 보너스, 퍼플 토탈케어 불소 가글! 10밀리리터를 머금고 1분 동안 양볼로 힘차게 가글하세요."
+                : "마지막 보너스, 퍼플 불소 가글! 30초 동안 힘차게 가글하세요."
+        case .portuguese:
+            return is60
+                ? "Bônus final: enxágue roxo Total Care com flúor! Bocheche dez mililitros por um minuto, sem engolir."
+                : "Bônus final: enxágue roxo com flúor por trinta segundos, sem engolir."
+        case .german:
+            return is60
+                ? "Letzte Bonusrunde: Lila Total Care Fluorid-Spülung! Zehn Milliliter eine Minute kräftig spülen, nicht schlucken."
+                : "Letzte Bonusrunde: Lila Fluorid-Spülung dreißig Sekunden kräftig spülen, nicht schlucken."
+        }
+    }
+
+    public static func spokenMouthwashStepCue(stepIndex: Int, lang: CoachLanguage) -> String {
+        if stepIndex == 1 {
+            switch lang {
+            case .english: return "Pump the rinse vigorously between all your teeth."
+            case .spanish: return "Empuja el líquido con fuerza entre todos los dientes."
+            case .french: return "Faites passer le liquide vigoureusement entre toutes les dents."
+            case .japanese: return "歯と歯の間へ、液体を強く通しましょう。"
+            case .chinese: return "用力把漱口水冲过每一处牙缝。"
+            case .korean: return "치아 사이사이로 가글액을 힘차게 통과시키세요."
+            case .portuguese: return "Passe o líquido com força entre todos os dentes."
+            case .german: return "Spülung kräftig zwischen alle Zähne pressen."
+            }
+        } else {
+            switch lang {
+            case .english: return "Final stretch! Keep swishing, and remember: after spitting, no water or food for thirty minutes."
+            case .spanish: return "Últimos segundos. Al escupir, no tomes agua ni comas por treinta minutos."
+            case .french: return "Dernière ligne droite ! Après avoir craché, ni eau ni repas pendant trente minutes."
+            case .japanese: return "あと少し！吐き出した後は、30分間水ですすいだり飲食しないでください。"
+            case .chinese: return "最后冲刺！吐掉后三十分钟内不要用水漱口或进食。"
+            case .korean: return "거의 다 됐어요! 뱉은 뒤 30분 동안 물로 헹구거나 드시지 마세요."
+            case .portuguese: return "Reta final! Depois de cuspir, fique trinta minutos sem água ou comida."
+            case .german: return "Endspurt! Nach dem Ausspucken dreißig Minuten kein Wasser und nichts essen."
+            }
+        }
+    }
+
+    public static func spokenSessionCompleteCue(includedMouthwash: Bool = false, lang: CoachLanguage) -> String {
+        if includedMouthwash {
+            switch lang {
+            case .english:
+                return "Total Care complete! Spit out completely. Do not rinse with water, eat, or drink for thirty minutes so your fluoride shield locks in."
+            case .spanish:
+                return "¡Total Care completo! Escupe todo. No enjuagues con agua ni comas o bebas por treinta minutos para fijar el flúor."
+            case .french:
+                return "Soin complet terminé ! Crachez tout. Ne rincez pas à l'eau et ne mangez ni buvez pendant trente minutes."
+            case .japanese:
+                return "トータルケア完了！しっかり吐き出して、フッ素が定着するよう30分間は水ゆすぎや飲食を控えてください。"
+            case .chinese:
+                return "全效护理完成！请完全吐出，三十分钟内不要用水漱口、喝水或进食，让氟保护层牢牢锁住。"
+            case .korean:
+                return "토탈케어 완료! 완전히 뱉어내시고, 불소막이 고정되도록 30분 동안 물로 헹구거나 드시지 마세요."
+            case .portuguese:
+                return "Total Care concluído! Cuspa tudo. Não enxágue com água nem coma ou beba por trinta minutos."
+            case .german:
+                return "Total Care geschafft! Komplett ausspucken und dreißig Minuten nicht mit Wasser nachspülen, essen oder trinken."
+            }
+        }
         switch lang {
         case .english: return "All sparkling clean! Spit excess foam, don't rinse right away."
         case .spanish: return "Todo brillante. Escupe la espuma sin enjuagar todavía."
