@@ -15,6 +15,7 @@ import { getUpgradeById } from './config/upgrades';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { VoiceCoach } from './engine/audio/VoiceCoach';
+import { evaluateBrushPhase } from './config/brushCoach';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
 import { CosmicIntroOverlay } from './ui/CosmicIntroOverlay';
 import {
@@ -31,6 +32,7 @@ declare global {
   interface Window {
     __MOUTHLIFE_DEBUG__?: {
       getMode: () => AppMode;
+      clock: ClockController;
       getDrawCalls: () => number;
       getQualityTier: () => string;
       getAudioState: () => string;
@@ -745,6 +747,17 @@ function bootstrapMouthLife(): void {
         companion: saveSys.getSave().companion,
         scrubbingActive,
         activePacerQuadrant,
+        pacer:
+          currentMode === 'BRUSH_ALONG' && clock.isPacerActive()
+            ? {
+                ...evaluateBrushPhase(
+                  clock.getPacerElapsedSec(),
+                  clock.getPacerStage(),
+                  clock.getPacerMouthwashDurationSec()
+                ),
+                paused: clock.isPacerPaused(),
+              }
+            : null,
       });
       session.endRenderInterpolation();
     }
@@ -779,6 +792,7 @@ function bootstrapMouthLife(): void {
 
   window.__MOUTHLIFE_DEBUG__ = {
     getMode: () => currentMode,
+    clock,
     getDrawCalls: () => sceneMgr.getLastDrawCalls(),
     getQualityTier: () => sceneMgr.getActiveQualityTier(),
     getAudioState: () => sound.getAudioState(),

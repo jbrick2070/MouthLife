@@ -32,6 +32,8 @@ import {
 } from './CartridgeMeshBuilder';
 import { EnamelBiophysicsMaterial } from './EnamelBiophysicsMaterial';
 import { EntityBatchRenderer } from './EntityBatchRenderer';
+import { GlowPass } from './GlowPass';
+import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 
 export type HubCameraFocus = 'companion' | 'globe';
@@ -63,6 +65,9 @@ export class SceneManager {
   readonly entityBatch = new EntityBatchRenderer();
 
   private companionArch!: CompanionArchBuild;
+  private readonly glow = new GlowPass();
+  private readonly pacerRig = new PacerPropRig();
+  private rinseWash01 = 0;
   private readonly mirrorRight = new THREE.Vector3();
   private readonly mirrorNormal = new THREE.Vector3();
   private readonly mirrorMatrix = new THREE.Matrix4();
@@ -250,6 +255,7 @@ export class SceneManager {
     this.companionArch = buildCompanionArchGroup(this.enamelMat.material);
     this.scene.add(this.companionArch.group);
     this.scene.add(this.companionArch.upperGroup);
+    this.scene.add(this.pacerRig.group);
     this.scene.add(this.entityBatch.arcadeEntitiesGroup);
     this.scene.add(this.entityBatch.sharedFxGroup);
 
@@ -472,6 +478,8 @@ export class SceneManager {
     companion: CompanionState;
     scrubbingActive: boolean;
     activePacerQuadrant: number;
+    /** Live Brush-Along timeline state, or null when no session is running. */
+    pacer?: PacerVisualState | null;
   }): void {
     if (!this.webglAvailable) return;
     const { frameDt, nowSec, session, companion } = params;
@@ -612,8 +620,19 @@ export class SceneManager {
     // The orbital leg of a dive never needs to render the arcade batches.
     this.entityBatch.arcadeEntitiesGroup.visible = isArcade && !!this.cartridgeStage?.group.visible;
     this.updateUpperArchMirror();
+    const pacer =
+      this.currentMode === 'BRUSH_ALONG' && this.companionArch.group.visible ? (params.pacer ?? null) : null;
+    this.pacerRig.update(frameDt, pacer, this.companionArch.teeth, this.mirrorMatrix);
+    // Ease the purple rinse wash in and out so stage changes never pop.
+    const washTarget = pacer?.stage === 'mouthwashBonus' ? 1 : 0;
+    this.rinseWash01 += (washTarget - this.rinseWash01) * (1 - Math.exp(-4 * frameDt));
+    this.enamelMat.setRinseWash(this.rinseWash01, pacer?.mouthwashProgress01 ?? 0);
+    // Glow is skipped on the low tier, where every draw counts.
+    this.glow.strength = this.activeTier === 'low' ? 0 : this.activeTier === 'medium' ? 0.42 : 0.55;
+    this.glow.prepare(this.renderer, this.scene, this.camera);
     this.renderer.render(this.scene, this.camera);
     this.lastDrawCalls = this.renderer.info.render.calls;
+    this.glow.composite(this.renderer);
     if (import.meta.env.DEV && this.lastDrawCalls >= 25 && !this.warnedDrawBudget) {
       console.assert(false, `MouthLife ${this.currentMode} used ${this.lastDrawCalls} draw calls (budget < 25)`);
       this.warnedDrawBudget = true;

@@ -31,7 +31,7 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 180 Vitest unit tests
+npm test          # Run all 184 Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
@@ -40,7 +40,7 @@ npm run build     # Type-check & build production PWA bundle into dist/
 
 ## 🎮 Playable Modes & Features
 
-- **🪥 3-Stage Hands-Free Bathroom Mirror Ritual (`native-apple/` and web, `+100 F⁻` Total):** *(The web edition has the same timeline, mirror compass, 8-language voice coach via the browser's speech synthesis, upper + lower arches, and rewards. Still native-only: the 3D toothbrush / floss pick / rinse cup props, the bundled music tracks, haptics, and the purple-to-gold enamel shader states.)*
+- **🪥 3-Stage Hands-Free Bathroom Mirror Ritual (`native-apple/` and web, `+100 F⁻` Total):** *(The web edition has the same timeline, mirror compass, 8-language voice coach via the browser's speech synthesis, upper + lower arches, and rewards. The web edition also shows a guided 3D toothbrush, a floss pick and a purple rinse wash. Still native-only: the rinse cup model, the bundled music tracks, haptics and tilt slosh on desktop.)*
   1. **Stage 1 (`2:00` Brushing, `+50 F⁻`):** Hands-free, eyes-optional progression (`12 × 10s`: `Q1 → Q2 → Q3 → Q4`, `Outer 45° Gumline → Chewing Grooves → Inner Vertical`), body-locked **Mirror Arch Compass** (`Screen-Left = Patient Left`, `Screen-Right = Patient Right`), 3D **45° Bristle Angle Wedge**, **3-State Metal Enamel Awakening**, **8-Language Spoken Voice Coach** (`EN`, `ES`, `FR`, `JA`, `ZH`, `KO`, `PT`, `DE`) with `-8.4 dB` music ducking, and `3… 2… 1…` final 3-second musical anticipation.
   2. **Stage 2 (`0:45` 3D Y-Bow Floss Pick Bonus, `+25 F⁻`):** Animated 3D Y-bow floss pick (`Pick` / `String` toggle) demonstrating gentle wiggle-glide past contact points and two-wall C-hug sweeps across all 26 interdental gaps (Upper → Lower arch).
   3. **Stage 3 (`1:00` Fluoride Rinse, `+25 F⁻`):** Follows common fluoride-rinse label directions; optional, age 6+ (`10 mL`, `[60s | 30s]` toggle, 30-minute post-rinse no-water lock-in reminder) with a 3D `10 mL` pouring cup, swirling Royal Amethyst vortex + `24` `F⁻` bubbles, 28-crown purple-to-24k-gold Fluorapatite Metal shader seal, and **auto-detecting 120Hz `CoreMotion` Gyroscope Liquid Slosh + Cheek-to-Cheek Spirit-Level Bubble Gauge** when picked up during the swish!
@@ -76,7 +76,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 24 Vitest suites (180 deterministic web tests)
+└── tests/                                # 25 Vitest suites (184 deterministic web tests)
 ```
 
 ---

@@ -687,6 +687,20 @@ public enum EnamelShaders {
     float matureBiofilm = smoothstep(0.52, 0.84, rawPlaque);
     float plaqueMask = cleanEdge * mix(0.68, 0.98, smoothstep(0.18, 0.72, rawPlaque));
 
+    // Arcade stages: slope of the plaque layer from 4 neighbouring taps of the surface grid. It gives the
+    // biofilm real thickness (lit and shaded edges) and a soft contact shadow on the enamel beside it.
+    // Same maths as the web edition (EnamelBiophysicsMaterial.ts) so both look alike.
+    float2 plaqueGrad = float2(0.0, 0.0);
+    if (globalSmoothnessOverride < 0.0 && detailTier > 0) {
+        float2 tap = float2(0.32, 0.32) / worldSize;
+        float plaqueXPos = surfaceMap.sample(surfSampler, uv + float2(tap.x, 0.0)).r;
+        float plaqueXNeg = surfaceMap.sample(surfSampler, uv - float2(tap.x, 0.0)).r;
+        float plaqueZPos = surfaceMap.sample(surfSampler, uv + float2(0.0, tap.y)).r;
+        float plaqueZNeg = surfaceMap.sample(surfSampler, uv - float2(0.0, tap.y)).r;
+        plaqueGrad = float2(plaqueXPos - plaqueXNeg, plaqueZPos - plaqueZNeg);
+    }
+    float plaqueEdge = clamp(length(plaqueGrad) * 2.2, 0.0, 1.0);
+
     float3 V = enamelSafeUnit(camPos - worldPos);
     float2 plaqueUv = worldPos.xz + float2(0.31, 0.58) * worldPos.y;
     float n1 = 0.5;
@@ -713,6 +727,10 @@ public enum EnamelShaders {
         N = enamelSafeUnit(N + bumpOffset + ridgeNormalOffset);
     } else {
         N = enamelSafeUnit(N + ridgeNormalOffset);
+    }
+    if (plaqueEdge > 0.001) {
+        // Plaque is higher where it is denser, so the surface tilts away from the dense side.
+        N = enamelSafeUnit(N - float3(plaqueGrad.x, 0.0, plaqueGrad.y) * 1.7);
     }
     _surface.normal = enamelSafeUnit((scn_frame.viewTransform * float4(N, 0.0)).xyz);
 
@@ -777,6 +795,8 @@ public enum EnamelShaders {
     }
 
     float3 baseColor = mix(cleanEnamel, plaqueLit, plaqueMask);
+    // Contact shadow on clean enamel right beside a plaque edge, and a darker foot under thick biofilm.
+    baseColor *= 1.0 - plaqueEdge * (0.26 * (1.0 - plaqueMask) + 0.12 * matureBiofilm);
     baseColor *= 1.0 + enamelHeadlamp(worldPos, N, camPos, headlampVec);
 
     // 4 B-Channel biophysical context tints

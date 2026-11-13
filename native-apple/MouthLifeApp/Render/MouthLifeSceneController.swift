@@ -1,7 +1,9 @@
 import Foundation
 import Metal
+import ModelIO
 import MouthLifeCore
 import SceneKit
+import SceneKit.ModelIO
 import simd
 
 #if canImport(UIKit)
@@ -191,6 +193,20 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         cameraNode.simdPosition = camCurrentPos
         scene.rootNode.addChildNode(cameraNode)
         scene.lightingEnvironment.intensity = 0.30
+        // A soft procedural sky for image-based lighting. Without any contents the line above did
+        // nothing, so glossy props (gold seals, the glass rinse cup, the probe hull) had nothing to
+        // reflect and looked flat. This affects physically based props only; enamel, gums and Earth
+        // use their own shaders. To switch it off, delete the next two statements.
+        let reflectionSky = MDLSkyCubeTexture(
+            name: nil,
+            channelEncoding: .uInt8,
+            textureDimensions: vector_int2(64, 64),
+            turbidity: 0.35,
+            sunElevation: 0.62,
+            upperAtmosphereScattering: 0.25,
+            groundAlbedo: 0.18
+        )
+        scene.lightingEnvironment.contents = reflectionSky
 
         // 3-Point Studio Lighting for Arcade Props (HYDRA-1, Sucrose Crystals, Mutans)
         let keyLightNode = SCNNode()

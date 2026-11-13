@@ -67,6 +67,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec4 uFoam[12];
   // Soft contact shadows under the probe and creatures: (x, z, radius, strength); radius 0 = unused
   uniform vec4 uContactShadows[16];
+  // Brush-Along fluoride rinse: (strength 0..1, unused, seal progress 0..1)
+  uniform vec3 uRinseWash;
   // Companion touch specular ripples: (x, y, z, startTime)
   uniform vec4 uRipples[4];
   // Companion Regional Treat sugar-plaque splats: (x, y, z, amount 0..1)
@@ -282,6 +284,16 @@ const FRAGMENT_SHADER = /* glsl */ `
       baseColor += vec3(0.76, 0.84, 1.0) * (fractureRim * 0.82 + domeSpec + fresnel * domeCore * 0.34);
     }
 
+    // Brush-Along rinse stage: a purple wash rolls across the teeth, and a gold shimmer grows as the
+    // fluoride seal builds toward the end of the rinse.
+    if (uRinseWash.x > 0.001) {
+      float washWave = 0.5 + 0.5 * sin(vWorldPos.x * 0.55 - uMotionTime * 2.6 + vWorldPos.y * 1.4);
+      float washBody = smoothstep(0.25, 0.85, washWave) * (1.0 - uRinseWash.z * 0.7);
+      baseColor = mix(baseColor, vec3(0.62, 0.36, 0.95), uRinseWash.x * 0.42 * washBody);
+      float sealShimmer = 0.5 + 0.5 * sin(vWorldPos.x * 4.0 + vWorldPos.y * 6.0 + uMotionTime * 3.0);
+      baseColor += vec3(0.95, 0.78, 0.30) * uRinseWash.z * sealShimmer * 0.16 * uRinseWash.x;
+    }
+
     // Companion acid stress visual warning when shields are eroded
     if (uAcidStress > 0.01) {
       float stressPulse = 0.55 + 0.45 * sin(uMotionTime * 4.2 + vWorldPos.x * 0.4);
@@ -491,6 +503,7 @@ export class EnamelBiophysicsMaterial {
         uHighlightPulse: { value: 0 },
         uFoam: { value: Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, -99, 0)) },
         uContactShadows: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+        uRinseWash: { value: new THREE.Vector3(0, 0, 0) },
         uRipples: { value: Array.from({ length: 4 }, () => new THREE.Vector4(0, 0, 0, -99)) },
         uSplats: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0)) },
       },
@@ -647,6 +660,15 @@ export class EnamelBiophysicsMaterial {
       if (f) arr[i].set(f.x, f.z, f.t, f.s);
       else arr[i].set(0, 0, -99, 0);
     }
+  }
+
+  /** Brush-Along rinse wash: strength 0 turns it off; sealProgress01 grows the gold shimmer. */
+  setRinseWash(strength01: number, sealProgress01: number): void {
+    (this.material.uniforms.uRinseWash.value as THREE.Vector3).set(
+      Math.max(0, Math.min(1, strength01)),
+      0,
+      Math.max(0, Math.min(1, sealProgress01))
+    );
   }
 
   /** Writes ground-contact shadow spots (x, z, radius); pass count 0 to clear them all. */
