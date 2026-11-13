@@ -273,6 +273,19 @@ function bootstrapMouthLife(): void {
     });
   });
   bus.on('mutans:bumped', () => sound.playMutansBoing());
+  /**
+   * A big moment: freeze the sim for an instant and rumble the controller.
+   * Skipped with Reduced Motion on, so the game never stutters for players who asked for calm.
+   */
+  const punch = (hitStopSec: number, rumble01: number, rumbleMs: number): void => {
+    if (sceneMgr.isReducedMotion()) return;
+    clock.requestHitStop(hitStopSec);
+    input.rumble(rumble01, rumbleMs);
+  };
+  input.onPauseRequested = () => {
+    if (activeTelemetryHud) activeTelemetryHud.setPaused(!activeTelemetryHud.isPaused());
+  };
+
   bus.on('mutans:popped', ({ pos }) => {
     sound.playMutansPop();
     sceneMgr.entityBatch.spawnBurst({
@@ -332,6 +345,7 @@ function bootstrapMouthLife(): void {
   });
 
   bus.on('site:restored', ({ pos }) => {
+    punch(0.035, 0.45, 90);
     sound.playSiteRestored();
     sceneMgr.entityBatch.spawnBurst({
       x: pos.x,
@@ -345,6 +359,7 @@ function bootstrapMouthLife(): void {
 
   bus.on('district:sealed', () => {
     sound.playDistrictSealed();
+    punch(0.08, 0.9, 220);
     sceneMgr.entityBatch.spawnBurst({
       x: session.probePos.x,
       y: session.probeY + 0.8,
@@ -358,6 +373,7 @@ function bootstrapMouthLife(): void {
 
   bus.on('sucrose:shattered', ({ pos }) => {
     sound.playCrystalShatter();
+    punch(0.045, 0.55, 110);
     const y = session.cartridge ? sampleTerrainHeight(session.cartridge, pos.x, pos.z) : 0.5;
     sceneMgr.entityBatch.spawnShatter(pos.x, y, pos.z, 12);
   });
@@ -397,6 +413,7 @@ function bootstrapMouthLife(): void {
 
   bus.on('eps:cracked', ({ pos, via }) => {
     sound.playEpsCrack();
+    punch(0.06, 0.75, 160);
     const y = session.cartridge ? sampleTerrainHeight(session.cartridge, pos.x, pos.z) : 0.6;
     sceneMgr.entityBatch.spawnBurst({
       x: pos.x,
@@ -712,6 +729,7 @@ function bootstrapMouthLife(): void {
     },
     (frameDt, nowSec, simAlpha) => {
       lastNowSec = nowSec;
+      input.pollGamepad();
       touch.step(frameDt);
       activeTelemetryHud?.tickHud(frameDt);
       const scrubbingActive =

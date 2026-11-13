@@ -461,6 +461,9 @@ function buildZipReticleGeometry(): THREE.BufferGeometry {
   return merged;
 }
 
+/** How many soft contact shadows the enamel shader can draw at once. */
+export const MAX_CONTACT_SHADOWS = 16;
+
 export class EntityBatchRenderer {
   readonly arcadeEntitiesGroup = new THREE.Group();
   readonly sharedFxGroup = new THREE.Group();
@@ -500,6 +503,9 @@ export class EntityBatchRenderer {
   private beaconInst: THREE.InstancedMesh;
   private acidPoolInst: THREE.InstancedMesh;
   private shadowInst: THREE.InstancedMesh;
+  /** Ground-contact spots (x, z, radius) for the enamel shader's soft shadows; see contactShadowCount. */
+  readonly contactShadows = Array.from({ length: MAX_CONTACT_SHADOWS }, () => new THREE.Vector3());
+  contactShadowCount = 0;
   private shadowTex: THREE.DataTexture;
 
   private siteRestoredAt = new Map<string, number>();
@@ -899,7 +905,11 @@ export class EntityBatchRenderer {
   ): void {
     const cart = session.cartridge;
     let shadowCount = 0;
+    this.contactShadowCount = 0;
     const pushShadow = (x: number, y: number, z: number, scale: number) => {
+      if (this.contactShadowCount < MAX_CONTACT_SHADOWS) {
+        this.contactShadows[this.contactShadowCount++].set(x, z, scale * 0.52);
+      }
       if (shadowCount >= 64) return;
       this.dummy.position.set(x, y + 0.04, z);
       this.dummy.rotation.set(-Math.PI / 2, 0, 0);
@@ -1210,7 +1220,9 @@ export class EntityBatchRenderer {
     }
     this.commit(this.acidPoolInst, apCount);
 
-    this.shadowInst.count = shadowCount;
+    // The enamel shader now draws these shadows on the surface itself (they follow every bump and
+    // are never clipped by a slope), so the flat shadow cards only cover whatever did not fit.
+    this.shadowInst.count = shadowCount > MAX_CONTACT_SHADOWS ? shadowCount : 0;
     this.shadowInst.instanceMatrix.needsUpdate = true;
   }
 

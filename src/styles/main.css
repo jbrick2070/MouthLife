@@ -598,11 +598,12 @@ textarea:focus-visible {
   display: none;
 }
 
-@media (min-width: 900px) and (pointer: fine) {
+@media (min-width: 640px) and (pointer: fine) and (hover: hover) {
   .desktop-hotkey-bar {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 10px;
     padding: 8px 16px;
     margin: 0 auto;
@@ -2345,5 +2346,18 @@ textarea:focus-visible {
   }
   .pacer-head {
     gap: 8px;
+  }
+}
+
+/* Big desktop monitors: grow all rem-sized HUD text and pills so they stay readable from a chair.
+   Phones and laptops are untouched. */
+@media (min-width: 1800px) and (min-height: 950px) {
+  html {
+    font-size: 18px;
+  }
+}
+@media (min-width: 2400px) and (min-height: 1250px) {
+  html {
+    font-size: 21px;
   }
 }

@@ -31,7 +31,7 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 170 Vitest unit tests
+npm test          # Run all 179 Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
@@ -76,7 +76,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 23 Vitest suites (170 deterministic web tests)
+└── tests/                                # 24 Vitest suites (179 deterministic web tests)
 ```
 
 ---

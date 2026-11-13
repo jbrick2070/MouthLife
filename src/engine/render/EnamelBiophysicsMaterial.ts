@@ -65,6 +65,8 @@ const FRAGMENT_SHADER = /* glsl */ `
 
   // Recently-scrubbed bubbling foam trail samples: (x, z, birthTime, strength)
   uniform vec4 uFoam[12];
+  // Soft contact shadows under the probe and creatures: (x, z, radius, strength); radius 0 = unused
+  uniform vec4 uContactShadows[16];
   // Companion touch specular ripples: (x, y, z, startTime)
   uniform vec4 uRipples[4];
   // Companion Regional Treat sugar-plaque splats: (x, y, z, amount 0..1)
@@ -228,6 +230,17 @@ const FRAGMENT_SHADER = /* glsl */ `
       plaqueLit += sheen * (0.16 + 0.72 * fresnel) * matureBiofilm;
     }
     vec3 baseColor = mix(cleanEnamel, plaqueLit, plaqueMask);
+    // Soft shadows where the probe and creatures touch the tooth, nudged away from the key light.
+    if (uGlobalSmoothnessOverride < 0.0) {
+      float contactShade = 0.0;
+      for (int i = 0; i < 16; i++) {
+        vec4 cs = uContactShadows[i];
+        if (cs.z <= 0.0) continue;
+        float d = distance(vWorldPos.xz, cs.xy - vec2(0.22, 0.2));
+        contactShade = max(contactShade, cs.w * (1.0 - smoothstep(cs.z * 0.25, cs.z, d)));
+      }
+      baseColor *= 1.0 - contactShade;
+    }
     // Contact shadow on clean enamel right beside a plaque edge, and a darker foot under thick biofilm.
     baseColor *= 1.0 - plaqueEdge * (0.26 * (1.0 - plaqueMask) + 0.12 * matureBiofilm);
     baseColor *= 1.0 + headlamp(vWorldPos, N);
@@ -477,6 +490,7 @@ export class EnamelBiophysicsMaterial {
         uHighlightedTooth: { value: -1 },
         uHighlightPulse: { value: 0 },
         uFoam: { value: Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, -99, 0)) },
+        uContactShadows: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, 0, 0, 0)) },
         uRipples: { value: Array.from({ length: 4 }, () => new THREE.Vector4(0, 0, 0, -99)) },
         uSplats: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0)) },
       },
@@ -632,6 +646,16 @@ export class EnamelBiophysicsMaterial {
       const f = samples[i];
       if (f) arr[i].set(f.x, f.z, f.t, f.s);
       else arr[i].set(0, 0, -99, 0);
+    }
+  }
+
+  /** Writes ground-contact shadow spots (x, z, radius); pass count 0 to clear them all. */
+  setContactShadows(spots: ReadonlyArray<THREE.Vector3>, count: number, strength = 0.4): void {
+    const arr = this.material.uniforms.uContactShadows.value as THREE.Vector4[];
+    for (let i = 0; i < arr.length; i++) {
+      const s = i < count ? spots[i] : undefined;
+      if (s) arr[i].set(s.x, s.y, s.z, strength);
+      else arr[i].set(0, 0, 0, 0);
     }
   }
 

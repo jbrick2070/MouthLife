@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { SessionInputCommand } from './sim/WorldSession';
 import type { AppMode, Vec2 } from './types';
 
+import { GAMEPAD_IDLE, GamepadInput, type GamepadSnapshot } from './GamepadInput';
 export type CanvasPointerPhase = 'down' | 'move' | 'up';
 export type PointerSteerPref = 'auto' | 'on' | 'off';
 
@@ -93,6 +94,10 @@ export class InputManager {
 
   // Edge-triggered one-shot requests
   private pendingFloss = false;
+  private readonly gamepad = new GamepadInput();
+  private padState: GamepadSnapshot = GAMEPAD_IDLE;
+  /** Called when the controller's Start button is pressed. */
+  onPauseRequested: (() => void) | null = null;
   private pendingRinse = false;
   private pendingDisclose = false;
 
@@ -387,8 +392,43 @@ export class InputManager {
     this.pendingDisclose = true;
   }
 
+  /**
+   * Read the game controller. Call once per rendered frame (also while paused, so Start can unpause).
+   */
+  pollGamepad(): void {
+    const pads =
+      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        ? navigator.getGamepads()
+        : [];
+    this.applyGamepadSnapshot(this.gamepad.poll(pads));
+  }
+
+  /** Split out so tests can feed a snapshot without a real controller. */
+  applyGamepadSnapshot(snap: GamepadSnapshot): void {
+    this.padState = snap;
+    if (!snap.connected) return;
+    if (snap.anyInput) this.onUserGesture?.();
+    if (snap.pausePressed) this.onPauseRequested?.();
+    const mode = this.currentModeGetter();
+    if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
+      if (snap.flossPressed) this.pendingFloss = true;
+      if (snap.rinsePressed) this.pendingRinse = true;
+      if (snap.scanPressed) this.pendingDisclose = true;
+    }
+  }
+
+  isGamepadConnected(): boolean {
+    return this.padState.connected;
+  }
+
+  /** Controller rumble for hits and big moments (no-op without a controller). */
+  rumble(strength01: number, durationMs: number): void {
+    this.gamepad.rumble(strength01, durationMs);
+  }
+
   isScrubInputActive(): boolean {
     return (
+      this.padState.scrubHeld ||
       this.mouseLeftHeld ||
       this.keysDown.has('Space') ||
       this.virtualScrubHeld ||
@@ -427,6 +467,8 @@ export class InputManager {
     if (this.keysDown.has('KeyD') || this.keysDown.has('ArrowRight')) moveX += 1;
     if (this.keysDown.has('KeyW') || this.keysDown.has('ArrowUp')) moveZ -= 1;
     if (this.keysDown.has('KeyS') || this.keysDown.has('ArrowDown')) moveZ += 1;
+    moveX += this.padState.moveX;
+    moveZ += this.padState.moveZ;
 
     // Drag/click-to-steer: sweep HYDRA-1 toward the touched tooth surface (keys & thumb pad win)
     if (this.steerPointerId !== null && Math.hypot(moveX, moveZ) < 0.05) {
@@ -448,7 +490,13 @@ export class InputManager {
     }
 
     let aimWorldPos: Vec2 | null = null;
-    if (this.virtualFlossAim) {
+    if (this.padState.aimX !== 0 || this.padState.aimZ !== 0) {
+      // Right stick aims the floss from the probe outward.
+      aimWorldPos = {
+        x: probePos.x + this.padState.aimX * 4.5,
+        z: probePos.z + this.padState.aimZ * 4.5,
+      };
+    } else if (this.virtualFlossAim) {
       aimWorldPos = {
         x: probePos.x + this.virtualFlossAim.x * 4.5,
         z: probePos.z + this.virtualFlossAim.z * 4.5,

@@ -599,6 +599,10 @@ export class SceneManager {
       reducedMotion: this.reducedMotion,
       companionVisible: this.companionArch.group.visible,
     });
+    this.enamelMat.setContactShadows(
+      this.entityBatch.contactShadows,
+      isArcade ? this.entityBatch.contactShadowCount : 0
+    );
 
     this.updateCameraRig(frameDt, nowSec, session, params.activePacerQuadrant);
     this.applyHubViewShift(frameDt);
@@ -850,8 +854,10 @@ export class SceneManager {
       } else {
         // Pocket Tamagotchi Smooth Bask Companion Arch 3D Showcase!
         if (this.orbitResetActive) {
-          this.orbitYaw *= 0.9;
-          this.orbitPitch += (0.42 - this.orbitPitch) * 0.1;
+          // Same easing at any refresh rate (these used to run once per frame, so 144 Hz snapped back faster).
+          const keep = Math.pow(0.9, dt * 60);
+          this.orbitYaw *= keep;
+          this.orbitPitch += (0.42 - this.orbitPitch) * (1 - keep);
           if (Math.abs(this.orbitYaw) < 0.01 && Math.abs(this.orbitPitch - 0.42) < 0.01) {
             this.orbitYaw = 0;
             this.orbitPitch = 0.42;
@@ -920,7 +926,7 @@ export class SceneManager {
       desiredLook.set(px + leadX, session.probeY + 0.4, pz + leadZ - 0.8);
     }
 
-    const damp = Math.min(1, dt * 6.5);
+    const damp = 1 - Math.exp(-6.5 * dt);
     this.rigPos.lerp(desiredPos, damp);
     this.currentLookAt.lerp(desiredLook, damp);
     this.camera.position.copy(this.rigPos);

@@ -12,6 +12,7 @@ import type { EventBus } from './EventBus';
 
 export const FIXED_DT = 1 / 60;
 const MAX_FRAME_DELTA_SEC = 0.1;
+const MAX_HIT_STOP_SEC = 0.09;
 /** The brushing pacer follows real time (a slow frame must not stretch 2:00), but never jumps more than this. */
 const MAX_PACER_DELTA_SEC = 0.5;
 
@@ -19,6 +20,8 @@ export class ClockController {
   private rafId: number | null = null;
   private lastNowMs = 0;
   private accumulatorSec = 0;
+  /** Seconds the simulation stays frozen to punctuate a big hit (rendering continues). */
+  private hitStopSec = 0;
 
   private pacerActive = false;
   private pacerPausedManual = false;
@@ -70,6 +73,14 @@ export class ClockController {
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);
+  }
+
+  /**
+   * Freeze the simulation for a few hundredths of a second so a big moment lands with weight.
+   * Capped so it can never feel like a hang; a second request extends to the longer of the two.
+   */
+  requestHitStop(seconds: number): void {
+    this.hitStopSec = Math.max(this.hitStopSec, Math.min(MAX_HIT_STOP_SEC, Math.max(0, seconds)));
   }
 
   stop(): void {
@@ -194,7 +205,9 @@ export class ClockController {
     const clampedDt = Math.min(rawDeltaSec, MAX_FRAME_DELTA_SEC);
 
     // Fixed-step simulation accumulator
-    if (this.onSimFixedStep) {
+    if (this.hitStopSec > 0) {
+      this.hitStopSec = Math.max(0, this.hitStopSec - clampedDt);
+    } else if (this.onSimFixedStep) {
       this.accumulatorSec += clampedDt;
       let subSteps = 0;
       while (this.accumulatorSec >= FIXED_DT && subSteps < 8) {
