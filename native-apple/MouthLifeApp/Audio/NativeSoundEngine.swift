@@ -484,9 +484,10 @@ private final class RealtimeSynthKernel {
     private var apPosL = [0, 0]
     private var apPosR = [0, 0]
 
-    // Master DC blocker (30Hz HP)
+    // Master DC blocker (30Hz HP) & reverb tail activity tracker
     private var dcPrevInL: Float = 0, dcPrevOutL: Float = 0
     private var dcPrevInR: Float = 0, dcPrevOutR: Float = 0
+    private var tailFramesRemaining: Int = 0
 
     init(sampleRate: Double) {
         let sr = Float(max(22050.0, min(96000.0, sampleRate)))
@@ -582,6 +583,16 @@ private final class RealtimeSynthKernel {
     }
 
     // MARK: Real-Time Audio Render Callback
+
+    @inline(__always)
+    private func wrapPhase(_ p: Float) -> Float {
+        var x = p
+        if x >= 1.0 {
+            x -= 1.0
+            if x >= 1.0 { x -= floor(x) }
+        }
+        return x
+    }
 
     @inline(__always)
     private func nextWhiteNoise() -> Float {
@@ -705,6 +716,31 @@ private final class RealtimeSynthKernel {
         let scrubGoalGain: Float = (locMuted < 0.5 && locScrubAct > 0.5 && locSfxGain > 0.002)
             ? (0.18 + locScrubSpd * 0.24)
             : 0.0
+
+        // Fast O(1) idle DSP bypass when muted or when Suno hardware AAC is playing with zero active SFX/scrub
+        var anyVoiceActive = false
+        for vi in 0..<Self.maxVoices where voices[vi].active {
+            anyVoiceActive = true
+            break
+        }
+        if anyVoiceActive || scrubGoalGain > 0.0002 || smoothScrubGain > 0.0002 {
+            tailFramesRemaining = Int(sampleRate * 2.4)
+        }
+        if (locMuted > 0.5 && smoothMaster < 0.0001)
+            || (!anyVoiceActive && scrubGoalGain <= 0.0002 && smoothScrubGain <= 0.0002 && tailFramesRemaining <= 0)
+        {
+            if let outR {
+                outL.update(repeating: 0, count: frameCount)
+                if outR != outL {
+                    outR.update(repeating: 0, count: frameCount)
+                }
+            } else {
+                outL.update(repeating: 0, count: frameCount * 2)
+            }
+            return
+        }
+        tailFramesRemaining = max(0, tailFramesRemaining - frameCount)
+
         let baseScrubTone: Float = (locScrubProf == 1) ? 740.0 : ((locScrubProf == 2) ? 1550.0 : 1020.0)
         let scrubCenterHz = baseScrubTone + locScrubSpd * 780.0 + locScrubCln * 480.0
         let scrubLfoHz: Float = ((locScrubProf == 2) ? 4.2 : 1.7) + locScrubSpd * 5.2
@@ -751,13 +787,13 @@ private final class RealtimeSynthKernel {
                     let env = atk * (0.28 + 0.72 * dec) * rel * 0.16 * vel
 
                     let modHz = min(nyquistSafe, f0 * 14.0)
-                    voices[vi].phaseMod = fmod(voices[vi].phaseMod + modHz * invSampleRate, 1.0)
+                    voices[vi].phaseMod = wrapPhase(voices[vi].phaseMod + modHz * invSampleRate)
                     let modIdx = (0.45 + vel * 1.15) * exp(-t * 9.5)
                     let modSig = sin(voices[vi].phaseMod * twoPi) * modIdx
 
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
-                    voices[vi].phase2 = fmod(voices[vi].phase2 + (f0 * 1.0035) * invSampleRate, 1.0)
-                    voices[vi].phase3 = fmod(voices[vi].phase3 + (f0 * 0.5) * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
+                    voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * 1.0035) * invSampleRate)
+                    voices[vi].phase3 = wrapPhase(voices[vi].phase3 + (f0 * 0.5) * invSampleRate)
 
                     let c1 = sin(voices[vi].phase1 * twoPi + modSig)
                     let c2 = sin(voices[vi].phase2 * twoPi) * 0.5
@@ -770,14 +806,14 @@ private final class RealtimeSynthKernel {
                     let decRate: Float = isKal ? 3.2 : 6.2
                     let env = atk * exp(-t * decRate) * 0.21 * vel
 
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
                     let baseWave = sin(voices[vi].phase1 * twoPi)
                     let triHarm = isKal ? sin(voices[vi].phase1 * twoPi * 3.0) * 0.12 : 0.0
 
                     let overMult: Float = isKal ? 5.4 : 4.0
                     var over: Float = 0
                     if f0 * overMult < nyquistSafe {
-                        voices[vi].phase2 = fmod(voices[vi].phase2 + (f0 * overMult) * invSampleRate, 1.0)
+                        voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * overMult) * invSampleRate)
                         over = sin(voices[vi].phase2 * twoPi) * exp(-t * 28.0) * 0.38
                     }
                     let woodClick = t < 0.025 ? (pink * exp(-t * 140.0) * 0.25) : 0.0
@@ -791,16 +827,16 @@ private final class RealtimeSynthKernel {
                     let shim = isGlass ? (0.86 + 0.14 * sin(t * 36.0)) : 1.0
                     let env = atk * exp(-t * decRate) * shim * 0.145 * vel
 
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
                     var s = sin(voices[vi].phase1 * twoPi)
                     let m2: Float = isBell ? 2.76 : 2.0
                     let m3: Float = isBell ? 5.40 : 4.0
                     if f0 * m2 < nyquistSafe {
-                        voices[vi].phase2 = fmod(voices[vi].phase2 + (f0 * m2) * invSampleRate, 1.0)
+                        voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * m2) * invSampleRate)
                         s += sin(voices[vi].phase2 * twoPi) * (isBell ? 0.28 : 0.18) * exp(-t * 1.8)
                     }
                     if f0 * m3 < nyquistSafe {
-                        voices[vi].phase3 = fmod(voices[vi].phase3 + (f0 * m3) * invSampleRate, 1.0)
+                        voices[vi].phase3 = wrapPhase(voices[vi].phase3 + (f0 * m3) * invSampleRate)
                         s += sin(voices[vi].phase3 * twoPi) * 0.11 * exp(-t * 3.5)
                     }
                     sample = s * env
@@ -811,7 +847,7 @@ private final class RealtimeSynthKernel {
                     let rel = t > voices[vi].holdDurSec ? exp(-(t - voices[vi].holdDurSec) * 16.0) : 1.0
                     let env = atk * dec * rel * 0.28 * vel
 
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
                     let p = voices[vi].phase1
                     let tri = 1.0 - 4.0 * abs(p - 0.5)
                     let sub = sin(p * twoPi)
@@ -829,8 +865,8 @@ private final class RealtimeSynthKernel {
                     let rel = t > voices[vi].holdDurSec ? exp(-(t - voices[vi].holdDurSec) * 2.6) : 1.0
                     let env = atk * rel * 0.075 * vel
 
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
-                    voices[vi].phase2 = fmod(voices[vi].phase2 + (f0 * 1.004) * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
+                    voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * 1.004) * invSampleRate)
                     let tri1 = 1.0 - 4.0 * abs(voices[vi].phase1 - 0.5)
                     let tri2 = 1.0 - 4.0 * abs(voices[vi].phase2 - 0.5)
 
@@ -848,8 +884,8 @@ private final class RealtimeSynthKernel {
 
                     let vibDepth = min(1.0, t / 0.25) * 0.0055 * sin(t * twoPi * 5.2)
                     let fInst = f0 * (1.0 + vibDepth)
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + fInst * invSampleRate, 1.0)
-                    voices[vi].phase2 = fmod(voices[vi].phase2 + (fInst * 1.003) * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + fInst * invSampleRate)
+                    voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (fInst * 1.003) * invSampleRate)
                     let saw = 2.0 * voices[vi].phase1 - 1.0
                     let tri = 1.0 - 4.0 * abs(voices[vi].phase2 - 0.5)
 
@@ -863,7 +899,7 @@ private final class RealtimeSynthKernel {
                 case .pluck:
                     let atk = min(1.0, t / 0.004)
                     let env = atk * exp(-t * 6.8) * 0.135 * vel
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + f0 * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + f0 * invSampleRate)
                     let saw = 2.0 * voices[vi].phase1 - 1.0
                     let cutHz = 620.0 + 2580.0 * exp(-t * 14.0)
                     let fc = min(0.72, 2.0 * sin(.pi * min(cutHz, nyquistSafe) * invSampleRate))
@@ -894,14 +930,14 @@ private final class RealtimeSynthKernel {
                     let atk = min(1.0, t / 0.003)
                     let env = atk * exp(-t * 38.0) * 0.13 * vel
                     let fInst = 700.0 + 220.0 * exp(-t * 55.0)
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + fInst * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + fInst * invSampleRate)
                     sample = sin(voices[vi].phase1 * twoPi) * env
 
                 case .kick:
                     let atk = min(1.0, t / 0.006)
                     let env = atk * exp(-t * 14.5) * 0.32 * vel
                     let fInst = 48.0 + 54.0 * exp(-t * 24.0)
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + fInst * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + fInst * invSampleRate)
                     sample = sin(voices[vi].phase1 * twoPi) * env
 
                 case .sfxBlip:
@@ -909,7 +945,7 @@ private final class RealtimeSynthKernel {
                     let fInst = f0 * pow(max(0.05, voices[vi].freq1 / max(1.0, f0)), progress)
                     let atk = min(1.0, t / 0.006)
                     let env = atk * exp(-progress * 3.8) * vel
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + min(nyquistSafe, fInst) * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + min(nyquistSafe, fInst) * invSampleRate)
                     sample = sin(voices[vi].phase1 * twoPi) * env
 
                 case .sfxBoing:
@@ -918,7 +954,7 @@ private final class RealtimeSynthKernel {
                     let fInst = min(nyquistSafe, f0 * lift * vib)
                     let atk = min(1.0, t / 0.008)
                     let env = atk * exp(-t * 8.5) * vel
-                    voices[vi].phase1 = fmod(voices[vi].phase1 + fInst * invSampleRate, 1.0)
+                    voices[vi].phase1 = wrapPhase(voices[vi].phase1 + fInst * invSampleRate)
                     sample = sin(voices[vi].phase1 * twoPi) * env
 
                 case .sfxNoiseSweep:
@@ -953,7 +989,7 @@ private final class RealtimeSynthKernel {
 
             // 2. Continuous Velocity & Cleanliness Modulated ASMR Sonic Foam Scrub
             if smoothScrubGain > 0.0002 {
-                scrubLfoPhase = fmod(scrubLfoPhase + scrubLfoHz * invSampleRate, 1.0)
+                scrubLfoPhase = wrapPhase(scrubLfoPhase + scrubLfoHz * invSampleRate)
                 let lfo = sin(scrubLfoPhase * twoPi)
                 let modCenter = min(nyquistSafe, max(280.0, scrubCenterHz + lfo * 380.0))
                 let fcMain = min(0.80, 2.0 * sin(.pi * modCenter * invSampleRate))
@@ -1058,10 +1094,157 @@ private final class RealtimeSynthKernel {
     }
 }
 
+// MARK: - Hardware-Decoded Suno Background Track Crossfader
+
+/// Plays hardware-decoded `.m4a`/`.mp3`/`.caf`/`.wav` tracks dropped into `MouthLifeApp/Music/`
+/// with dual-deck 850ms crossfades. When a recorded track is active for the current theme,
+/// procedural music notes sleep (`~0%` CPU) while harmonic chord tracking stays active for in-key SFX.
+private final class SunoStreamDeck {
+    private static let supportedExtensions = ["m4a", "mp3", "caf", "wav", "aac"]
+
+    private let lock = NSLock()
+    private var resolvedURLCache: [MusicThemeId: URL?] = [:]
+    private var activePlayer: AVAudioPlayer?
+    private var activeURL: URL?
+    private var fadingOutPlayers: [AVAudioPlayer] = []
+
+    var isPlayingRecordedTrack: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return activePlayer != nil
+    }
+
+    func sync(themeId: MusicThemeId, targetVolume: Float, muted: Bool, interrupted: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        reapFinishedFadesLocked()
+        let nextURL = resolveTrackURLLocked(for: themeId)
+        let clampedGain = min(1.0, max(0.0, targetVolume))
+
+        if nextURL == activeURL {
+            applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.22)
+            return
+        }
+
+        if let outgoing = activePlayer {
+            outgoing.setVolume(0, fadeDuration: 0.85)
+            fadingOutPlayers.append(outgoing)
+            scheduleCleanup()
+        }
+        activePlayer = nil
+        activeURL = nextURL
+
+        guard let url = nextURL, let incoming = try? AVAudioPlayer(contentsOf: url) else {
+            return
+        }
+        incoming.numberOfLoops = -1
+        incoming.volume = 0
+        incoming.prepareToPlay()
+        activePlayer = incoming
+
+        if !muted && !interrupted && clampedGain > 0.0005 {
+            incoming.play()
+            incoming.setVolume(clampedGain, fadeDuration: 0.85)
+        }
+    }
+
+    func updateMix(targetVolume: Float, muted: Bool, interrupted: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        reapFinishedFadesLocked()
+        let clampedGain = min(1.0, max(0.0, targetVolume))
+        applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.20)
+    }
+
+    func stopAll() {
+        lock.lock()
+        let current = activePlayer
+        let fading = fadingOutPlayers
+        activePlayer = nil
+        activeURL = nil
+        fadingOutPlayers.removeAll()
+        lock.unlock()
+
+        current?.stop()
+        for p in fading { p.stop() }
+    }
+
+    private func applyGainLocked(
+        to player: AVAudioPlayer?,
+        gain: Float,
+        muted: Bool,
+        interrupted: Bool,
+        fadeSec: TimeInterval
+    ) {
+        guard let player else { return }
+        if interrupted {
+            if player.isPlaying { player.pause() }
+            return
+        }
+        if muted || gain <= 0.0005 {
+            player.setVolume(0, fadeDuration: min(0.18, fadeSec))
+            return
+        }
+        if !player.isPlaying {
+            player.play()
+        }
+        player.setVolume(gain, fadeDuration: fadeSec)
+    }
+
+    private func reapFinishedFadesLocked() {
+        guard !fadingOutPlayers.isEmpty else { return }
+        fadingOutPlayers.removeAll { player in
+            if !player.isPlaying || player.volume <= 0.001 {
+                player.stop()
+                return true
+            }
+            return false
+        }
+    }
+
+    private func scheduleCleanup() {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.95) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            self.reapFinishedFadesLocked()
+            self.lock.unlock()
+        }
+    }
+
+    private func resolveTrackURLLocked(for themeId: MusicThemeId) -> URL? {
+        if let cached = resolvedURLCache[themeId] {
+            return cached
+        }
+        var candidates: [String] = [themeId.rawValue]
+        if themeId == .hubGlobe || themeId == .hubReady {
+            candidates.append("hub")
+        }
+        candidates.append("background")
+
+        let bundle = Bundle.main
+        var found: URL?
+        outer: for stem in candidates {
+            for ext in Self.supportedExtensions {
+                if let url = bundle.url(forResource: stem, withExtension: ext, subdirectory: "Music") {
+                    found = url
+                    break outer
+                }
+                if let url = bundle.url(forResource: stem, withExtension: ext) {
+                    found = url
+                    break outer
+                }
+            }
+        }
+        resolvedURLCache[themeId] = found
+        return found
+    }
+}
+
 // MARK: - Public NativeSoundEngine
 
 /// Real-time procedural `AVAudioEngine` + `AVAudioSourceNode` polyphonic synthesizer & adaptive
-/// music/SFX director for MouthLife on iOS 17+ and macOS 14+ (zero `.mp3`/`.wav` assets required!).
+/// music/SFX director for MouthLife on iOS 17+ and macOS 14+ (with automatic hardware Suno track crossfading).
 public final class NativeSoundEngine {
     public static let shared = NativeSoundEngine()
 
@@ -1077,6 +1260,7 @@ public final class NativeSoundEngine {
     private let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
     private var kernel: RealtimeSynthKernel?
+    private let sunoDeck = SunoStreamDeck()
     private let sequencerQueue = DispatchQueue(label: "com.mouthlife.audio.sequencer", qos: .userInteractive)
     private var sequencerTimer: DispatchSourceTimer?
 
@@ -1129,6 +1313,7 @@ public final class NativeSoundEngine {
     deinit {
         sequencerTimer?.cancel()
         sequencerTimer = nil
+        sunoDeck.stopAll()
         if engine.isRunning {
             engine.stop()
         }
@@ -1234,6 +1419,7 @@ public final class NativeSoundEngine {
         case .began:
             isInterrupted = true
             stopScrub()
+            pushMixStateToKernel()
         case .ended:
             isInterrupted = false
             configureAudioSessionIfNeeded()
@@ -1323,6 +1509,22 @@ public final class NativeSoundEngine {
             sfxGain: effectiveSfx,
             musicCutoffHz: cutoff,
             delaySec: dotted8th
+        )
+
+        let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72)
+        let effectiveSuno: Float
+        if isPaused {
+            effectiveSuno = baseSuno * 0.38
+        } else if acidTensionActive && activeTheme.id == .world3 {
+            effectiveSuno = baseSuno * 0.82
+        } else {
+            effectiveSuno = baseSuno
+        }
+        sunoDeck.sync(
+            themeId: activeTheme.id,
+            targetVolume: effectiveSuno,
+            muted: isMuted,
+            interrupted: isInterrupted
         )
     }
 
@@ -1473,11 +1675,7 @@ public final class NativeSoundEngine {
 
     private func scheduleMusicalStep(gs: Int, baseOffsetSec: Double, kernel: RealtimeSynthKernel) {
         let theme = activeTheme
-        let step = ((gs % 16) + 16) % 16
         let bar = Int(floor(Double(gs) / 16.0))
-        let barInLoop = ((bar % 16) + 16) % 16
-        let section = barInLoop < 8 ? 0 : 1
-        let phraseBar = barInLoop % 4
 
         let chord: ChordDef
         let nextChord: ChordDef
@@ -1490,6 +1688,17 @@ public final class NativeSoundEngine {
             nextChord = MusicCatalog.chordAtBar(theme, bar: bar + 1)
         }
         self.currentChord = chord
+
+        // When a hardware-decoded Suno track is active for this theme, skip procedural synth notes
+        // (`~0%` synth CPU) while keeping `currentChord` updated above for in-key glass-harp & chime SFX.
+        if sunoDeck.isPlayingRecordedTrack {
+            return
+        }
+
+        let step = ((gs % 16) + 16) % 16
+        let barInLoop = ((bar % 16) + 16) % 16
+        let section = barInLoop < 8 ? 0 : 1
+        let phraseBar = barInLoop % 4
 
         let tr = (theme.id == .brushAlong) ? MusicCatalog.pacerTranspose[pacerQuadrant] : 0
         let intensity: Float = (acidTensionActive && theme.id == .world3) ? 0.85 : 1.0

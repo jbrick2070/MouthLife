@@ -68,6 +68,20 @@ public final class AppCoordinator {
 
     private var toastClearTask: Task<Void, Never>?
     private var unsubscribeToken: (() -> Void)?
+    private var lastHudPublishUptime: TimeInterval = 0
+
+    private func shouldPublishHudSnapshot(_ next: SessionSnapshot, now: TimeInterval) -> Bool {
+        guard let prev = latestSnapshot else { return true }
+        if now - lastHudPublishUptime >= 0.05 { return true } // 20Hz HUD cadence
+        if prev.isCompleted != next.isCompleted { return true }
+        if prev.scrubActive != next.scrubActive { return true }
+        if prev.sealedDistricts != next.sealedDistricts { return true }
+        if (prev.flossCooldown > 0) != (next.flossCooldown > 0) { return true }
+        if (prev.discloseCooldown > 0) != (next.discloseCooldown > 0) { return true }
+        if (prev.surgeMeter >= GameConfig.surgeMax) != (next.surgeMeter >= GameConfig.surgeMax) { return true }
+        if (prev.probeZip != nil) != (next.probeZip != nil) { return true }
+        return false
+    }
 
     public init() {
         let storage = UserDefaultsSaveStorage()
@@ -117,7 +131,11 @@ public final class AppCoordinator {
 
         sceneController.onSessionStepped = { [weak self] snap in
             guard let self else { return }
-            self.latestSnapshot = snap
+            let now = ProcessInfo.processInfo.systemUptime
+            if self.shouldPublishHudSnapshot(snap, now: now) {
+                self.lastHudPublishUptime = now
+                self.latestSnapshot = snap
+            }
             NativeSoundEngine.shared.updateScrub(
                 active: snap.scrubActive,
                 probeSpeed: snap.probeSpeed,
@@ -136,7 +154,9 @@ public final class AppCoordinator {
         sceneController.onCompanionCrownRubbed = { [weak self] crownIdx, feedback in
             guard let self else { return }
             if let crownIdx {
-                self.tappedCrownSummary = DentalChart.companionCrownSummary(forToothIndex: crownIdx)
+                if self.tappedCrownSummary?.toothIndex != crownIdx {
+                    self.tappedCrownSummary = DentalChart.companionCrownSummary(forToothIndex: crownIdx)
+                }
                 NativeSoundEngine.shared.playCrownRub(
                     crownIndex: crownIdx,
                     smoothnessIndex: self.save.companion.smoothnessIndex

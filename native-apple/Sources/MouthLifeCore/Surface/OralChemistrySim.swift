@@ -6,7 +6,9 @@ public final class OralChemistrySim {
     public private(set) var baselinePh: Float
 
     /// Spatial plaque/enamel surface pH buffer (`gridW * gridH`).
-    public var localPh: [Float]
+    public var localPh: [Float] {
+        didSet { hasActiveDeviation = true }
+    }
 
     /// Alias matching TypeScript `spatialPh`.
     public var spatialPh: [Float] {
@@ -15,13 +17,19 @@ public final class OralChemistrySim {
     }
 
     /// Gingival sulcus irritation buffer (`0...1`, `gridW * gridH`).
-    public var gumIrritation: [Float]
+    public var gumIrritation: [Float] {
+        didSet { hasActiveDeviation = true }
+    }
 
     /// Remaining seconds in the 1940 Stephan Curve 20-second sucrose acid drop window.
     public private(set) var stephanTimerSec: Double = 0
 
     /// Dirty flag consumed by `OralSurfaceGrid.syncRgbaBuffer` to avoid redundant GPU uploads.
     public var chemistryDirty: Bool = true
+
+    /// Tracks whether any cell currently deviates from neutral pH or zero gum irritation so
+    /// equilibrium frames skip the 32,768-cell scan in O(1).
+    private var hasActiveDeviation: Bool = false
 
     private var playableCellIndices: [Int] = []
 
@@ -55,6 +63,7 @@ public final class OralChemistrySim {
             gumIrritation[i] = 0
         }
         stephanTimerSec = 0
+        hasActiveDeviation = false
         chemistryDirty = true
     }
 
@@ -93,6 +102,7 @@ public final class OralChemistrySim {
         }
 
         stephanTimerSec = 0
+        hasActiveDeviation = false
         chemistryDirty = true
     }
 
@@ -374,26 +384,49 @@ public final class OralChemistrySim {
             chemistryDirty = true
         }
 
+        guard hasActiveDeviation else { return }
+
         let phRecoveryStep = Float(0.08 * dt)
         let gumCoolStep = Float(0.12 * dt)
-        let len = localPh.count
+        let basePh = baselinePh
+        var stillDeviated = false
+        var didMutate = false
 
-        for i in 0..<len {
-            let ph = localPh[i]
-            if abs(ph - baselinePh) > 0.001 {
-                if ph < baselinePh {
-                    localPh[i] = min(baselinePh, ph + phRecoveryStep)
-                } else {
-                    localPh[i] = max(baselinePh, ph - phRecoveryStep * 0.5)
+        localPh.withUnsafeMutableBufferPointer { phBuf in
+            gumIrritation.withUnsafeMutableBufferPointer { gumBuf in
+                let len = min(phBuf.count, gumBuf.count)
+                for i in 0..<len {
+                    let ph = phBuf[i]
+                    if abs(ph - basePh) > 0.001 {
+                        let nextPh: Float
+                        if ph < basePh {
+                            nextPh = min(basePh, ph + phRecoveryStep)
+                        } else {
+                            nextPh = max(basePh, ph - phRecoveryStep * 0.5)
+                        }
+                        phBuf[i] = nextPh
+                        didMutate = true
+                        if abs(nextPh - basePh) > 0.001 {
+                            stillDeviated = true
+                        }
+                    }
+                    let gum = gumBuf[i]
+                    if gum > 0 {
+                        let nextGum = max(0, gum - gumCoolStep)
+                        gumBuf[i] = nextGum
+                        didMutate = true
+                        if nextGum > 0 {
+                            stillDeviated = true
+                        }
+                    }
                 }
-                chemistryDirty = true
-            }
-            let gum = gumIrritation[i]
-            if gum > 0 {
-                gumIrritation[i] = max(0, gum - gumCoolStep)
-                chemistryDirty = true
             }
         }
+
+        if didMutate {
+            chemistryDirty = true
+        }
+        hasActiveDeviation = stillDeviated
     }
 
     public func consumeDirtyFlag() -> Bool {

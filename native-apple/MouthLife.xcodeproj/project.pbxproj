@@ -17,6 +17,7 @@
 		79B3B73E78A6A68D18090C87 /* MouthLife3DViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850EA58EF72EEF9D81393447 /* MouthLife3DViewport.swift */; };
 		7AC08195CAB641C304F7E0AF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 11AC53FF0589E69AE36EE527 /* PrivacyInfo.xcprivacy */; };
 		7BF6C1251C43077C582AE14A /* ArcadeHudView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4547A05E5D031164D834E42E /* ArcadeHudView.swift */; };
+		83A1C9E04D2B7105F98E6C12 /* Music in Resources */ = {isa = PBXBuildFile; fileRef = 59C4D8B12E7A3094C61B8E23 /* Music */; };
 		8925FC778E80747D37F530E8 /* DentalChartSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B58A49FD759014C0A76CDB8 /* DentalChartSheet.swift */; };
 		9B4C63EB690FDDAB5A71A19C /* MissionReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D893AF0797D7CF7E367F84B /* MissionReportView.swift */; };
 		BD73DEFA5F53F745C560E3CE /* UpgradeLabSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */; };
@@ -42,6 +43,7 @@
 		2E618D1BF0D2200AB4F5AECB /* CosmicIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CosmicIntroView.swift; path = MouthLifeApp/UI/CosmicIntroView.swift; sourceTree = "<group>"; };
 		3CBE3F13FC1E0ACFAEB2C84E /* RootContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RootContentView.swift; path = MouthLifeApp/UI/RootContentView.swift; sourceTree = "<group>"; };
 		4547A05E5D031164D834E42E /* ArcadeHudView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ArcadeHudView.swift; path = MouthLifeApp/UI/ArcadeHudView.swift; sourceTree = "<group>"; };
+		59C4D8B12E7A3094C61B8E23 /* Music */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Music; path = MouthLifeApp/Music; sourceTree = "<group>"; };
 		645A9F1D82F3A2C3C2D24EB2 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppCoordinator.swift; path = MouthLifeApp/AppCoordinator.swift; sourceTree = "<group>"; };
 		6D893AF0797D7CF7E367F84B /* MissionReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MissionReportView.swift; path = MouthLifeApp/UI/MissionReportView.swift; sourceTree = "<group>"; };
 		786643EF56BD1B883FEF820C /* CharitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CharitySheet.swift; path = MouthLifeApp/UI/Sheets/CharitySheet.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */,
 				0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */,
 				8738225AC4938AA2222183FA /* Assets.xcassets */,
+				59C4D8B12E7A3094C61B8E23 /* Music */,
 				11AC53FF0589E69AE36EE527 /* PrivacyInfo.xcprivacy */,
 				7D9C198668B79B43ACDB6E4A /* Info.plist */,
 			);
@@ -185,6 +188,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F186065720BDAA29853D480C /* Assets.xcassets in Resources */,
+				83A1C9E04D2B7105F98E6C12 /* Music in Resources */,
 				7AC08195CAB641C304F7E0AF /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -306,12 +310,16 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = fast;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LLVM_LTO = YES_THIN;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";

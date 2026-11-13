@@ -428,4 +428,55 @@ final class MouthLifeCoreTests: XCTestCase {
         let snap = session.makeSnapshot()
         XCTAssertGreaterThan(snap.worldCleanRatio, initialClean)
     }
+
+    func testDirtySubRectRgbaSyncParityAndEquilibriumChemistryFastPath() {
+        let cart = WorldRegistry.world1
+        let grid = OralSurfaceGrid(cartridge: cart)
+        let chem = OralChemistrySim(cartridge: cart)
+
+        // Initial full sync
+        XCTAssertTrue(grid.syncRgbaBuffer(bChannelMode: .localPh, chemistry: chem))
+        XCTAssertEqual(grid.lastSyncedRect?.width, grid.gridW)
+        XCTAssertEqual(grid.lastSyncedRect?.height, grid.gridH)
+
+        // Neutral equilibrium step is O(1) and does not dirty chemistry
+        chem.step(dt: 1.0 / 60.0)
+        XCTAssertFalse(chem.consumeDirtyFlag())
+
+        // Localized brush sweep should only dirty and sync a small bounding sub-rectangle
+        _ = grid.applyBrush(
+            BrushApplyParams(
+                cx: 12.0,
+                cz: 16.0,
+                facingRad: 0.4,
+                arcRad: GameConfig.brushBaseArcRad,
+                radius: GameConfig.brushBaseRadius,
+                removalPerSec: GameConfig.brushMovingRate,
+                dt: 0.1,
+                hasBassUpgrade: false,
+                isMovingSweep: true
+            ),
+            chemistry: chem
+        )
+        XCTAssertTrue(grid.syncRgbaBuffer(bChannelMode: .localPh, chemistry: chem))
+        guard let subRect = grid.lastSyncedRect else {
+            return XCTFail("Expected non-nil lastSyncedRect after localized brush stroke")
+        }
+        XCTAssertLessThan(subRect.width * subRect.height, (grid.gridW * grid.gridH) / 8)
+
+        // Verify byte-for-byte RGBA parity against a forced full-grid chemistry sync
+        let subRectBytes = grid.rgbaBuffer
+        chem.applyAcidZone(cx: 12.0, cz: 16.0, radius: 0.01, targetPh: cart.baselinePh)
+        _ = grid.syncRgbaBuffer(bChannelMode: .localPh, chemistry: chem)
+        XCTAssertEqual(subRectBytes, grid.rgbaBuffer)
+
+        // Acid + gum irritation recover cleanly back to neutral equilibrium
+        chem.applyAcidZone(cx: 14.0, cz: 14.0, radius: 3.0, targetPh: 5.1)
+        chem.addGumIrritation(cx: 14.0, cz: 14.0, radius: 2.5, amount: 0.4)
+        for _ in 0..<600 {
+            chem.step(dt: 0.1)
+        }
+        XCTAssertEqual(chem.samplePh(atX: 14.0, z: 14.0), cart.baselinePh, accuracy: 0.02)
+        XCTAssertEqual(chem.maxGumIrritation, 0.0, accuracy: 0.01)
+    }
 }

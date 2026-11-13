@@ -22,11 +22,17 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public let cosmicNodes: CosmicBackdropNodes
     public let companionNodes: CompanionArchNodes
     public let probeRig: HydraProbeRig
+    private let companionCrownAnchors: [TouchHit]
 
     private var activeStageNodes: CartridgeStageNodes?
     private var activeCartridgeId: String?
+    private var cachedArcadeSnapshot: SessionSnapshot?
+    private var cachedDistrictBoxes: [AABB2D] = []
     private var mutansPool: [Int: SCNNode] = [:]
     private var acidPoolNodes: [Int: SCNNode] = [:]
+    private var liveMutansIds = Set<Int>(minimumCapacity: 16)
+    private var livePoolIds = Set<Int>(minimumCapacity: 16)
+    private var deadEntityIds: [Int] = []
     private var districtSealBirthSec: [Float] = [-1, -1, -1, -1]
     private var foamTrail: [FoamTrailSample] = []
     private var lastFoamSampleSec: Float = -10
@@ -122,9 +128,18 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         self.cosmicNodes = ProceduralMeshBuilder.buildCosmicBackdropNodes(
             cities: HostsAndHistory.hostCities
         )
-        self.companionNodes = ProceduralMeshBuilder.buildCompanionArchSceneNodes(
+        let builtCompanion = ProceduralMeshBuilder.buildCompanionArchSceneNodes(
             enamelMaterial: companionEnamelController.material
         )
+        self.companionNodes = builtCompanion
+        self.companionCrownAnchors = builtCompanion.crownFrames.map { frame in
+            TouchHit(
+                x: Double(frame.worldPosition.x),
+                y: Double(frame.worldPosition.y + frame.halfHeight * 0.35),
+                z: Double(frame.worldPosition.z),
+                crownIndex: frame.index
+            )
+        }
         self.probeRig = ProceduralMeshBuilder.buildHydraProbe()
 
         super.init()
@@ -268,8 +283,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         scene.rootNode.addChildNode(stage.rootNode)
         self.activeStageNodes = stage
         self.activeCartridgeId = cart.id
+        self.cachedDistrictBoxes = cart.districts.map(\.bounds)
+        arcadeEnamelController.setDistrictSeals(boxes: cachedDistrictBoxes, sealAges: districtSealBirthSec)
 
         let snap = session.makeSnapshot()
+        self.cachedArcadeSnapshot = snap
         prevProbePos = snap.probePos
         currProbePos = snap.probePos
         prevProbeY = snap.probeY
@@ -310,15 +328,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     public func spawnCompanionTreatSplats() {
-        let anchors = companionNodes.crownFrames.map { frame in
-            TouchHit(
-                x: Double(frame.worldPosition.x),
-                y: Double(frame.worldPosition.y + frame.halfHeight * 0.35),
-                z: Double(frame.worldPosition.z),
-                crownIndex: frame.index
-            )
-        }
-        touchSystem.spawnTreatSplats(anchors: anchors, count: 3)
+        touchSystem.spawnTreatSplats(anchors: companionCrownAnchors, count: 3)
     }
 
     // MARK: - Direct Viewport Touch / Pointer Handling (120Hz Responsive)
@@ -454,9 +464,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             }
         }
 
-        // Update Cosmic Orbital Earth + Mohs Showcase
-        cosmicNodes.update(dt: dtFloat, nowSec: sceneNowSec, reducedMotion: reducedMotion)
-        EnamelShaders.updateEarthGlobeTime(cosmicNodes.earthGlobeMaterial, timeSec: motionTime)
+        // Update Cosmic Orbital Earth + Mohs Showcase only when visible
+        if !cosmicNodes.rootNode.isHidden {
+            cosmicNodes.update(dt: dtFloat, nowSec: sceneNowSec, reducedMotion: reducedMotion)
+        }
 
         if appMode == .hub || appMode == .brushAlong {
             updateCompanionFrame(dt: dtFloat, motionTime: motionTime)
@@ -493,7 +504,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             EnamelFrameUniforms(nowSec: sceneNowSec, motionTimeSec: motionTime)
         )
 
-        let ripples = touchSystem.activeRipples(nowSec: Double(sceneNowSec)).map { r in
+        let rawRipples = touchSystem.activeRipples(nowSec: Double(sceneNowSec))
+        let ripples: [CrownTouchRipple] = rawRipples.isEmpty ? [] : rawRipples.map { r in
             CrownTouchRipple(
                 position: SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z)),
                 startTime: sceneNowSec - Float(r.ageSec)
@@ -501,7 +513,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         }
         companionEnamelController.setTouchRipples(ripples)
 
-        let splats = touchSystem.getRenderSplats().map { s in
+        let rawSplats = touchSystem.getRenderSplats()
+        let splats: [SugarPlaqueSplat] = rawSplats.isEmpty ? [] : rawSplats.map { s in
             SugarPlaqueSplat(
                 position: SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z)),
                 amount: Float(s.amount)
@@ -527,14 +540,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         if appMode != .report && !session.isCompleted {
             accumulator = min(0.12, accumulator + rawDt)
             var didStep = false
-            var latestSnapshot: SessionSnapshot?
+            var steppedSnapshot: SessionSnapshot?
 
             while accumulator >= fixedDt && !session.isCompleted {
                 prevProbePos = currProbePos
                 prevProbeY = currProbeY
                 prevProbeFacing = currProbeFacing
                 prevMutansPos.removeAll(keepingCapacity: true)
-                for m in session.makeSnapshot().mutans {
+                for m in session.mutans {
                     prevMutansPos[m.id] = m.pos
                 }
 
@@ -561,7 +574,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 currProbePos = snap.probePos
                 currProbeY = snap.probeY
                 currProbeFacing = snap.probeFacingRad
-                latestSnapshot = snap
+                steppedSnapshot = snap
+                cachedArcadeSnapshot = snap
 
                 if let beam = snap.flossBeamSegment, snap.flossBeamRemaining > 0.16 {
                     let yA = Float(sampleTerrainHeight(cartridge: cart, x: beam.a.x, z: beam.a.z) + 0.45)
@@ -574,13 +588,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 }
             }
 
-            if didStep, let snap = latestSnapshot {
-                // Upload dirty RGBA enamel texture to Metal shared memory (< 0.015 ms)
+            if didStep, let snap = steppedSnapshot {
+                // Upload only the dirty RGBA sub-rectangle to Metal shared memory (~0.005 ms)
                 if session.grid.syncRgbaBuffer(bChannelMode: cart.bChannelMode, chemistry: session.chemistry) {
                     arcadeEnamelController.uploadDirtySurface(
                         rgbaBytes: session.grid.rgbaBuffer,
                         width: session.grid.gridW,
-                        height: session.grid.gridH
+                        height: session.grid.gridH,
+                        dirtyRect: session.grid.lastSyncedRect
                     )
                 }
 
@@ -606,7 +621,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         probeRig.rootNode.simdPosition = SIMD3<Float>(Float(interpX), Float(interpY + 0.52), Float(interpZ))
         probeRig.rootNode.simdEulerAngles = SIMD3<Float>(0, Float(-interpFacing), 0)
 
-        let snap = session.makeSnapshot()
+        let snap = cachedArcadeSnapshot ?? session.makeSnapshot()
+        if cachedArcadeSnapshot == nil {
+            cachedArcadeSnapshot = snap
+        }
         probeRig.updateAnimation(
             dt: dtFloat,
             nowSec: sceneNowSec,
@@ -662,13 +680,15 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         )
         arcadeEnamelController.setFoamSamples(foamTrail)
 
-        let sealAges = districtSealBirthSec.map { birth in
-            birth >= 0 ? max(0, sceneNowSec - birth) : Float(-1)
+        if districtSealBirthSec.contains(where: { $0 >= 0 }) {
+            let sealAges = districtSealBirthSec.map { birth in
+                birth >= 0 ? max(0, sceneNowSec - birth) : Float(-1)
+            }
+            arcadeEnamelController.setDistrictSeals(
+                boxes: cachedDistrictBoxes,
+                sealAges: sealAges
+            )
         }
-        arcadeEnamelController.setDistrictSeals(
-            boxes: cart.districts.map(\.bounds),
-            sealAges: sealAges
-        )
 
         syncStageEntities(snap: snap, cart: cart, alpha: alpha)
     }
@@ -687,7 +707,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
         for crystal in snap.sucroseCrystals {
             if let node = stage.sucroseCrystalNodes[crystal.id] {
-                node.isHidden = !crystal.intact
+                if node.isHidden == crystal.intact {
+                    node.isHidden = !crystal.intact
+                }
                 if crystal.intact {
                     node.simdEulerAngles.y = sceneNowSec * 0.9
                 }
@@ -695,13 +717,17 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         }
 
         for bridge in snap.bridges {
-            stage.biofilmBridgeNodes[bridge.id]?.isHidden = !bridge.intact
+            if let bNode = stage.biofilmBridgeNodes[bridge.id], bNode.isHidden == bridge.intact {
+                bNode.isHidden = !bridge.intact
+            }
         }
 
         for beacon in snap.beacons {
             if beacon.index < stage.relayBeaconNodes.count {
                 let bNode = stage.relayBeaconNodes[beacon.index]
-                bNode.isHidden = beacon.collected
+                if bNode.isHidden != beacon.collected {
+                    bNode.isHidden = beacon.collected
+                }
                 if !beacon.collected {
                     bNode.simdEulerAngles.y = sceneNowSec * 1.4
                 }
@@ -709,16 +735,16 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         }
 
         if let zipHint = snap.nearestZipMouth, zipHint.distToEntry <= GameConfig.zipPromptRadius {
-            stage.zipReticleNode.isHidden = false
+            if stage.zipReticleNode.isHidden { stage.zipReticleNode.isHidden = false }
             let y = Float(sampleTerrainHeight(cartridge: cart, x: zipHint.entry.x, z: zipHint.entry.z) + 0.35)
             stage.zipReticleNode.simdPosition = SIMD3<Float>(Float(zipHint.entry.x), y, Float(zipHint.entry.z))
             stage.zipReticleNode.simdEulerAngles.y = sceneNowSec * 2.4
-        } else {
+        } else if !stage.zipReticleNode.isHidden {
             stage.zipReticleNode.isHidden = true
         }
 
-        // Dynamic S. mutans Hopping Cocci Pool (120Hz Interpolated!)
-        var liveMutansIds = Set<Int>()
+        // Dynamic S. mutans Hopping Cocci Pool (120Hz Interpolated, Zero-Alloc Set Reuse!)
+        liveMutansIds.removeAll(keepingCapacity: true)
         for m in snap.mutans {
             liveMutansIds.insert(m.id)
             let node: SCNNode
@@ -740,13 +766,18 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 node.simdEulerAngles.y = Float(-atan2(m.vel.z, m.vel.x))
             }
         }
-        for (id, node) in mutansPool where !liveMutansIds.contains(id) {
-            node.removeFromParentNode()
-            mutansPool.removeValue(forKey: id)
+        if mutansPool.count > liveMutansIds.count {
+            deadEntityIds.removeAll(keepingCapacity: true)
+            for id in mutansPool.keys where !liveMutansIds.contains(id) {
+                deadEntityIds.append(id)
+            }
+            for id in deadEntityIds {
+                mutansPool.removeValue(forKey: id)?.removeFromParentNode()
+            }
         }
 
-        // Dynamic Acid Pools
-        var livePoolIds = Set<Int>()
+        // Dynamic Acid Pools (Zero-Alloc Set Reuse!)
+        livePoolIds.removeAll(keepingCapacity: true)
         for p in snap.acidPools {
             livePoolIds.insert(p.id)
             let node: SCNNode
@@ -765,9 +796,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             node.simdPosition = SIMD3<Float>(Float(p.pos.x), Float(py), Float(p.pos.z))
             node.opacity = CGFloat(min(0.82, p.remainingSec / 1.5))
         }
-        for (id, node) in acidPoolNodes where !livePoolIds.contains(id) {
-            node.removeFromParentNode()
-            acidPoolNodes.removeValue(forKey: id)
+        if acidPoolNodes.count > livePoolIds.count {
+            deadEntityIds.removeAll(keepingCapacity: true)
+            for id in acidPoolNodes.keys where !livePoolIds.contains(id) {
+                deadEntityIds.append(id)
+            }
+            for id in deadEntityIds {
+                acidPoolNodes.removeValue(forKey: id)?.removeFromParentNode()
+            }
         }
     }
 

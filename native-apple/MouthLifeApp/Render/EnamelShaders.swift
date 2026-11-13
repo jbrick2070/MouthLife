@@ -357,9 +357,28 @@ public final class SurfaceTextureUploader {
         uploadCGImageFallback()
     }
 
-    public func upload(rgbaBytes: [UInt8], width: Int, height: Int) {
+    public func upload(rgbaBytes: [UInt8], width: Int, height: Int, dirtyRect: SurfaceDirtyRect? = nil) {
         rgbaBytes.withUnsafeBytes { raw in
             guard let ptr = raw.baseAddress else { return }
+            if let rect = dirtyRect,
+               width == self.width,
+               height == self.height,
+               let tex = mtlTexture
+            {
+                let rx = max(0, min(width - 1, rect.x))
+                let ry = max(0, min(height - 1, rect.y))
+                let rw = max(1, min(width - rx, rect.width))
+                let rh = max(1, min(height - ry, rect.height))
+                let byteOffset = (ry * width + rx) * 4
+                guard byteOffset + ((rh - 1) * width + rw) * 4 <= raw.count else { return }
+                tex.replace(
+                    region: MTLRegionMake2D(rx, ry, rw, rh),
+                    mipmapLevel: 0,
+                    withBytes: ptr.advanced(by: byteOffset),
+                    bytesPerRow: width * 4
+                )
+                return
+            }
             upload(unsafePointer: ptr, count: raw.count, width: width, height: height)
         }
     }
@@ -1309,12 +1328,14 @@ public enum EnamelShaders {
         worldWidth: Double,
         worldDepth: Double,
         palette: WorldVisualPalette,
+        landmarkColors: LandmarkPaletteColors? = nil,
         bChannelMode: BChannelMode,
         detailTier: Float = 2.0,
         depthCue: SIMD4<Float> = SIMD4<Float>(18.0, 0.085, -1.0, 0.0),
-        companionState: SIMD4<Float> = SIMD4<Float>(0.0, -1.0, -1.0, 0.0)
+        companionState: SIMD4<Float> = SIMD4<Float>(0.0, -1.0, -1.0, 0.0),
+        resetWorldSizeAndTime: Bool = true
     ) {
-        let landmarks = LandmarkPaletteColors.resolve(for: palette)
+        let landmarks = landmarkColors ?? LandmarkPaletteColors.resolve(for: palette)
         let enamel = RenderBridge.srgbSIMD3(hex: palette.enamelBaseHex)
         let pellicle = RenderBridge.srgbSIMD3(hex: palette.pellicleSlimeHex)
         let biofilm = RenderBridge.srgbSIMD3(hex: palette.matureBiofilmHex)
@@ -1322,10 +1343,12 @@ public enum EnamelShaders {
         let acidWash = RenderBridge.srgbSIMD3(hex: landmarks.acidWashHex)
         let epsDome = RenderBridge.srgbSIMD3(hex: landmarks.epsDomeHex)
 
-        material.setValue(
-            NSValue(scnVector4: RenderBridge.scnVec4(Float(worldWidth), Float(worldDepth), 0, 0)),
-            forKey: "worldSizeAndTime"
-        )
+        if resetWorldSizeAndTime {
+            material.setValue(
+                NSValue(scnVector4: RenderBridge.scnVec4(Float(worldWidth), Float(worldDepth), 0, 0)),
+                forKey: "worldSizeAndTime"
+            )
+        }
         let matA = RenderBridge.scnMat4(
             SIMD4<Float>(enamel.x, enamel.y, enamel.z, Float(bChannelMode.shaderIndex)),
             SIMD4<Float>(pellicle.x, pellicle.y, pellicle.z, detailTier),
@@ -1463,6 +1486,17 @@ public final class EnamelMaterialController {
     private var overflowSplat4 = SIMD4<Float>(0, 0, 0, 0)
     private var overflowSplat5 = SIMD4<Float>(0, 0, 0, 0)
 
+    // Cached uniform shadows to avoid redundant SceneKit KVO/lock & NSValue boxing at 120Hz
+    private var lastHeadlampVec: SIMD4<Float>?
+    private var lastWaveCols: simd_float4x4?
+    private var lastDistrictCols: simd_float4x4?
+    private var lastDistrictAges: SIMD4<Float>?
+    private var lastFoamSamples: [FoamTrailSample]?
+    private var lastRipples: [CrownTouchRipple]?
+    private var lastSplats: [SugarPlaqueSplat]?
+    private var cachedLandmarkPaletteKey: WorldVisualPalette?
+    private var cachedLandmarkColors: LandmarkPaletteColors?
+
     public init(
         gridWidth: Int = 256,
         gridHeight: Int = 128,
@@ -1499,21 +1533,36 @@ public final class EnamelMaterialController {
         activeQuadrant = -1
         highlightedCrown = -1
         highlightPulse = 0.0
+        lastDistrictCols = nil
+        lastDistrictAges = nil
+        lastFoamSamples = nil
 
         uploader.upload(rgbaBytes: rgbaBytes, width: gridWidth, height: gridHeight)
+        material.setValue(
+            NSValue(scnVector4: RenderBridge.scnVec4(worldWidth, worldDepth, 0, 0)),
+            forKey: "worldSizeAndTime"
+        )
         pushPaletteAndCompanionMatrices()
     }
 
-    public func uploadDirtySurface(rgbaBytes: [UInt8], width: Int, height: Int) {
-        uploader.upload(rgbaBytes: rgbaBytes, width: width, height: height)
+    public func uploadDirtySurface(
+        rgbaBytes: [UInt8],
+        width: Int,
+        height: Int,
+        dirtyRect: SurfaceDirtyRect? = nil
+    ) {
+        uploader.upload(rgbaBytes: rgbaBytes, width: width, height: height, dirtyRect: dirtyRect)
     }
 
     public func setQualityTier(_ tier: QualityTier) {
+        let nextTier: Float
         switch tier {
-        case .low: detailTierFloat = 0
-        case .medium: detailTierFloat = 1
-        case .ultra: detailTierFloat = 2
+        case .low: nextTier = 0
+        case .medium: nextTier = 1
+        case .ultra: nextTier = 2
         }
+        guard nextTier != detailTierFloat else { return }
+        detailTierFloat = nextTier
         pushPaletteAndCompanionMatrices()
     }
 
@@ -1524,37 +1573,41 @@ public final class EnamelMaterialController {
         acidStress01: Float = 0.0,
         activeQuadrant: Int = -1
     ) {
+        let nextSmooth: Float = active ? min(1, max(0, smoothness01)) : -1.0
+        let nextFluoride: Float = active ? min(1, max(0, fluorideGlow01)) : 0.0
+        let nextAcid: Float = active ? min(1, max(0, acidStress01)) : 0.0
+        let nextQuad: Int = active ? activeQuadrant : -1
+
+        guard companionModeActive != active
+            || abs(self.smoothnessOverride - nextSmooth) > 1e-4
+            || abs(self.fluorideGlow - nextFluoride) > 1e-4
+            || abs(self.acidStress - nextAcid) > 1e-4
+            || self.activeQuadrant != nextQuad
+        else { return }
+
         companionModeActive = active
-        if active {
-            self.smoothnessOverride = min(1, max(0, smoothness01))
-            self.fluorideGlow = min(1, max(0, fluorideGlow01))
-            self.acidStress = min(1, max(0, acidStress01))
-            self.activeQuadrant = activeQuadrant
-        } else {
-            self.smoothnessOverride = -1.0
-            self.fluorideGlow = 0.0
-            self.acidStress = 0.0
-            self.activeQuadrant = -1
-        }
+        self.smoothnessOverride = nextSmooth
+        self.fluorideGlow = nextFluoride
+        self.acidStress = nextAcid
+        self.activeQuadrant = nextQuad
         pushPaletteAndCompanionMatrices()
     }
 
     public func setHighlightedCrown(index: Int?, pulse01: Float = 1.0) {
-        if let index {
-            highlightedCrown = index
-            highlightPulse = min(1, max(0, pulse01))
-        } else {
-            highlightedCrown = -1
-            highlightPulse = 0.0
-        }
+        let nextCrown = index ?? -1
+        let nextPulse: Float = index != nil ? min(1, max(0, pulse01)) : 0.0
+        guard highlightedCrown != nextCrown || abs(highlightPulse - nextPulse) > 1e-4 else { return }
+        highlightedCrown = nextCrown
+        highlightPulse = nextPulse
         pushPaletteAndCompanionMatrices()
     }
 
     public func setHeadlamp(worldPos: SIMD3<Float>, weight: Float, depthStart: Float = 18.0, depthDensity: Float = 0.085) {
-        material.setValue(
-            NSValue(scnVector4: RenderBridge.scnVec4(worldPos.x, worldPos.y, worldPos.z, weight)),
-            forKey: "headlampVec"
-        )
+        let vec = SIMD4<Float>(worldPos.x, worldPos.y, worldPos.z, weight)
+        if lastHeadlampVec != vec {
+            lastHeadlampVec = vec
+            material.setValue(NSValue(scnVector4: RenderBridge.scnVec4(vec)), forKey: "headlampVec")
+        }
         if depthStart != self.depthStart || depthDensity != self.depthDensity {
             self.depthStart = depthStart
             self.depthDensity = depthDensity
@@ -1567,36 +1620,53 @@ public final class EnamelMaterialController {
             NSValue(scnVector4: RenderBridge.scnVec4(worldWidth, worldDepth, u.nowSec, u.motionTimeSec)),
             forKey: "worldSizeAndTime"
         )
-        let waveMat = RenderBridge.scnMat4(
-            SIMD4<Float>(Float(u.discloseOrigin.x), Float(u.discloseOrigin.z), u.discloseRadius, u.discloseStrength),
-            SIMD4<Float>(Float(u.rinseOrigin.x), Float(u.rinseOrigin.z), u.rinseRadius, u.rinseStrength),
-            SIMD4<Float>(Float(u.probePosition.x), Float(u.probePosition.z), u.probeFoamRadius, u.probeFoamStrength),
-            SIMD4<Float>(u.bufferedRinse ? 1.0 : 0.0, 0, 0, 0)
-        )
-        material.setValue(NSValue(scnMatrix4: waveMat), forKey: "waveMatrix")
+        let c0 = SIMD4<Float>(Float(u.discloseOrigin.x), Float(u.discloseOrigin.z), u.discloseRadius, u.discloseStrength)
+        let c1 = SIMD4<Float>(Float(u.rinseOrigin.x), Float(u.rinseOrigin.z), u.rinseRadius, u.rinseStrength)
+        let c2 = SIMD4<Float>(Float(u.probePosition.x), Float(u.probePosition.z), u.probeFoamRadius, u.probeFoamStrength)
+        let c3 = SIMD4<Float>(u.bufferedRinse ? 1.0 : 0.0, 0, 0, 0)
+        let waveSimd = simd_float4x4(c0, c1, c2, c3)
+        if lastWaveCols != waveSimd {
+            lastWaveCols = waveSimd
+            material.setValue(NSValue(scnMatrix4: SCNMatrix4(waveSimd)), forKey: "waveMatrix")
+        }
 
-        if let stress = u.acidStress, stress != self.acidStress {
+        if let stress = u.acidStress, abs(stress - self.acidStress) > 1e-4 {
             self.acidStress = stress
             pushPaletteAndCompanionMatrices()
         }
     }
 
     public func setDistrictSeals(boxes: [AABB2D], sealAges: [Float]) {
-        var cols = [SIMD4<Float>](repeating: SIMD4<Float>(0, 0, 0, 0), count: 4)
+        var c0 = SIMD4<Float>(0, 0, 0, 0)
+        var c1 = SIMD4<Float>(0, 0, 0, 0)
+        var c2 = SIMD4<Float>(0, 0, 0, 0)
+        var c3 = SIMD4<Float>(0, 0, 0, 0)
         var ages = SIMD4<Float>(-1, -1, -1, -1)
         for i in 0..<4 where i < boxes.count {
             let b = boxes[i]
-            cols[i] = SIMD4<Float>(Float(b.minX), Float(b.minZ), Float(b.maxX), Float(b.maxZ))
+            let col = SIMD4<Float>(Float(b.minX), Float(b.minZ), Float(b.maxX), Float(b.maxZ))
+            switch i {
+            case 0: c0 = col
+            case 1: c1 = col
+            case 2: c2 = col
+            default: c3 = col
+            }
             ages[i] = i < sealAges.count ? sealAges[i] : -1
         }
-        material.setValue(
-            NSValue(scnMatrix4: RenderBridge.scnMat4(cols[0], cols[1], cols[2], cols[3])),
-            forKey: "districtBoxesMatrix"
-        )
-        material.setValue(NSValue(scnVector4: RenderBridge.scnVec4(ages)), forKey: "districtSealAges")
+        let boxSimd = simd_float4x4(c0, c1, c2, c3)
+        if lastDistrictCols != boxSimd {
+            lastDistrictCols = boxSimd
+            material.setValue(NSValue(scnMatrix4: SCNMatrix4(boxSimd)), forKey: "districtBoxesMatrix")
+        }
+        if lastDistrictAges != ages {
+            lastDistrictAges = ages
+            material.setValue(NSValue(scnVector4: RenderBridge.scnVec4(ages)), forKey: "districtSealAges")
+        }
     }
 
     public func setFoamSamples(_ samples: [FoamTrailSample]) {
+        guard lastFoamSamples != samples else { return }
+        lastFoamSamples = samples
         let off = SIMD4<Float>(0, 0, -99, 0)
         func vec(_ idx: Int) -> SIMD4<Float> {
             guard idx < samples.count else { return off }
@@ -1613,6 +1683,8 @@ public final class EnamelMaterialController {
     }
 
     public func setTouchRipples(_ ripples: [CrownTouchRipple]) {
+        guard lastRipples != ripples else { return }
+        lastRipples = ripples
         let off = SIMD4<Float>(0, 0, 0, -99)
         func vec(_ idx: Int) -> SIMD4<Float> {
             guard idx < ripples.count else { return off }
@@ -1626,6 +1698,8 @@ public final class EnamelMaterialController {
     }
 
     public func setSugarSplats(_ splats: [SugarPlaqueSplat]) {
+        guard lastSplats != splats else { return }
+        lastSplats = splats
         let off = SIMD4<Float>(0, 0, 0, 0)
         func vec(_ idx: Int) -> SIMD4<Float> {
             guard idx < splats.count else { return off }
@@ -1663,15 +1737,27 @@ public final class EnamelMaterialController {
             effectivePalette = arcadePalette
         }
 
+        let landmarks: LandmarkPaletteColors
+        if cachedLandmarkPaletteKey == effectivePalette, let cached = cachedLandmarkColors {
+            landmarks = cached
+        } else {
+            let resolved = LandmarkPaletteColors.resolve(for: effectivePalette)
+            cachedLandmarkPaletteKey = effectivePalette
+            cachedLandmarkColors = resolved
+            landmarks = resolved
+        }
+
         EnamelShaders.configureEnamelPalette(
             material: material,
             worldWidth: Double(worldWidth),
             worldDepth: Double(worldDepth),
             palette: effectivePalette,
+            landmarkColors: landmarks,
             bChannelMode: bChannelMode,
             detailTier: detailTierFloat,
             depthCue: SIMD4<Float>(depthStart, depthDensity, smoothnessOverride, fluorideGlow),
-            companionState: SIMD4<Float>(acidStress, Float(activeQuadrant), Float(highlightedCrown), highlightPulse)
+            companionState: SIMD4<Float>(acidStress, Float(activeQuadrant), Float(highlightedCrown), highlightPulse),
+            resetWorldSizeAndTime: false
         )
     }
 }

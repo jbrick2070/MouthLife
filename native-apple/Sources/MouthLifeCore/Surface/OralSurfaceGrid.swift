@@ -36,6 +36,20 @@ public func distancePointToSegmentSq2D(_ p: Vec2, _ a: Vec2, _ b: Vec2) -> Doubl
     distancePointToSegmentSq2D(px: p.x, pz: p.z, ax: a.x, az: a.z, bx: b.x, bz: b.z)
 }
 
+public struct SurfaceDirtyRect: Equatable, Sendable {
+    public let x: Int
+    public let y: Int
+    public let width: Int
+    public let height: Int
+
+    public init(x: Int, y: Int, width: Int, height: Int) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+}
+
 public final class OralSurfaceGrid {
     public private(set) var worldWidth: Double
     public private(set) var worldDepth: Double
@@ -60,10 +74,52 @@ public final class OralSurfaceGrid {
     public private(set) var activeEpsCells: Int = 0
     public private(set) var fluorideSealedCells: Int = 0
 
-    public var dirty: Bool = true
+    private var dirtyMinX: Int = 0
+    private var dirtyMinZ: Int = 0
+    private var dirtyMaxX: Int = 0
+    private var dirtyMaxZ: Int = 0
+    public private(set) var lastSyncedRect: SurfaceDirtyRect?
+
+    public var dirty: Bool = true {
+        didSet {
+            if dirty && dirtyMinX > dirtyMaxX {
+                dirtyMinX = 0
+                dirtyMinZ = 0
+                dirtyMaxX = max(0, gridW - 1)
+                dirtyMaxZ = max(0, gridH - 1)
+            }
+        }
+    }
     public var textureDirty: Bool {
         get { dirty }
         set { dirty = newValue }
+    }
+
+    @inline(__always)
+    private func markCellDirty(_ idx: Int) {
+        let gx = idx % gridW
+        let gz = idx / gridW
+        if dirtyMinX > dirtyMaxX {
+            dirtyMinX = gx
+            dirtyMaxX = gx
+            dirtyMinZ = gz
+            dirtyMaxZ = gz
+        } else {
+            if gx < dirtyMinX { dirtyMinX = gx }
+            if gx > dirtyMaxX { dirtyMaxX = gx }
+            if gz < dirtyMinZ { dirtyMinZ = gz }
+            if gz > dirtyMaxZ { dirtyMaxZ = gz }
+        }
+        dirty = true
+    }
+
+    @inline(__always)
+    private func markAllDirty() {
+        dirtyMinX = 0
+        dirtyMinZ = 0
+        dirtyMaxX = max(0, gridW - 1)
+        dirtyMaxZ = max(0, gridH - 1)
+        dirty = true
     }
 
     public init(worldWidth: Double, worldDepth: Double) {
@@ -80,6 +136,10 @@ public final class OralSurfaceGrid {
         self.districtIdxMap = Array(repeating: -1, count: count)
         self.districtCellIndices = []
         self.rgbaBuffer = Array(repeating: 0, count: count * 4)
+        self.dirtyMinX = 0
+        self.dirtyMinZ = 0
+        self.dirtyMaxX = w - 1
+        self.dirtyMaxZ = h - 1
     }
 
     public convenience init(cartridge: WorldCartridge) {
@@ -238,7 +298,7 @@ public final class OralSurfaceGrid {
             }
         }
 
-        dirty = true
+        markAllDirty()
     }
 
     @discardableResult
@@ -253,7 +313,7 @@ public final class OralSurfaceGrid {
         let wasClean = prev <= GameConfig.cleanThreshold
         let nowClean = next <= GameConfig.cleanThreshold
         biofilmDensity[idx] = next
-        dirty = true
+        markCellDirty(idx)
 
         if !wasClean && nowClean {
             cleanCellsCount += 1
@@ -278,7 +338,7 @@ public final class OralSurfaceGrid {
         guard f.contains(.paintable), !f.contains(.fluorideSealed) else { return false }
         flags[idx] = f.union(.fluorideSealed)
         fluorideSealedCells += 1
-        dirty = true
+        markCellDirty(idx)
         return true
     }
 
@@ -288,7 +348,7 @@ public final class OralSurfaceGrid {
         guard f.contains(.epsArmor) else { return false }
         flags[idx] = f.subtracting(.epsArmor)
         activeEpsCells = max(0, activeEpsCells - 1)
-        dirty = true
+        markCellDirty(idx)
         return true
     }
 
@@ -809,34 +869,71 @@ public final class OralSurfaceGrid {
         if !dirty && !chemDirty {
             return false
         }
-
-        for idx in 0..<cellCount {
-            let base = idx * 4
-            let f = flags[idx]
-            let paintable = f.contains(.paintable)
-
-            rgbaBuffer[base] = UInt8(clamping: Int((biofilmDensity[idx] * 255.0).rounded()))
-            rgbaBuffer[base + 1] = f.contains(.fluorideSealed) ? 255 : 0
-
-            let bVal: UInt8
-            switch bChannelMode {
-            case .marginDensity:
-                bVal = f.contains(.marginFissure) ? 220 : 0
-            case .gumIrritation:
-                let sulcusBase: Float = f.contains(.sulcus) ? 0.16 : 0
-                let gum = chemistry?.gumIrritationCell(at: idx) ?? 0
-                bVal = UInt8(clamping: Int((max(sulcusBase, gum) * 255.0).rounded()))
-            case .localPh:
-                let ph = chemistry?.cellPh(at: idx) ?? GameConfig.neutralSalivaPh
-                let acidNorm = min(Float(1), max(Float(0), (6.5 - ph) / 2.2))
-                bVal = UInt8(clamping: Int((acidNorm * 255.0).rounded()))
-            case .epsArmor:
-                bVal = f.contains(.epsArmor) ? 255 : 0
-            }
-            rgbaBuffer[base + 2] = bVal
-            rgbaBuffer[base + 3] = paintable ? 255 : 0
+        if chemDirty || dirtyMinX > dirtyMaxX {
+            dirtyMinX = 0
+            dirtyMinZ = 0
+            dirtyMaxX = max(0, gridW - 1)
+            dirtyMaxZ = max(0, gridH - 1)
         }
 
+        let minX = max(0, min(gridW - 1, dirtyMinX))
+        let maxX = max(minX, min(gridW - 1, dirtyMaxX))
+        let minZ = max(0, min(gridH - 1, dirtyMinZ))
+        let maxZ = max(minZ, min(gridH - 1, dirtyMaxZ))
+        let w = gridW
+        let stephanOffset = chemistry?.stephanGlobalPhOffset ?? 0
+
+        rgbaBuffer.withUnsafeMutableBufferPointer { rgbaPtr in
+            biofilmDensity.withUnsafeBufferPointer { densPtr in
+                flags.withUnsafeBufferPointer { flagsPtr in
+                    for gz in minZ...maxZ {
+                        let rowBase = gz * w
+                        for gx in minX...maxX {
+                            let idx = rowBase + gx
+                            let base = idx &* 4
+                            let f = flagsPtr[idx]
+                            let paintable = f.contains(.paintable)
+
+                            let dClamped = min(Float(1), max(Float(0), densPtr[idx]))
+                            rgbaPtr[base] = UInt8(dClamped * 255.0 + 0.5)
+                            rgbaPtr[base &+ 1] = f.contains(.fluorideSealed) ? 255 : 0
+
+                            let bVal: UInt8
+                            switch bChannelMode {
+                            case .marginDensity:
+                                bVal = f.contains(.marginFissure) ? 220 : 0
+                            case .gumIrritation:
+                                let sulcusBase: Float = f.contains(.sulcus) ? 0.16 : 0
+                                let gum = chemistry?.gumIrritationCell(at: idx) ?? 0
+                                let gClamped = min(Float(1), max(Float(0), max(sulcusBase, gum)))
+                                bVal = UInt8(gClamped * 255.0 + 0.5)
+                            case .localPh:
+                                let rawPh = (chemistry != nil && idx < chemistry!.localPh.count)
+                                    ? min(Float(7.6), max(Float(4.0), chemistry!.localPh[idx] + stephanOffset))
+                                    : GameConfig.neutralSalivaPh
+                                let acidNorm = min(Float(1), max(Float(0), (6.5 - rawPh) / 2.2))
+                                bVal = UInt8(acidNorm * 255.0 + 0.5)
+                            case .epsArmor:
+                                bVal = f.contains(.epsArmor) ? 255 : 0
+                            }
+                            rgbaPtr[base &+ 2] = bVal
+                            rgbaPtr[base &+ 3] = paintable ? 255 : 0
+                        }
+                    }
+                }
+            }
+        }
+
+        lastSyncedRect = SurfaceDirtyRect(
+            x: minX,
+            y: minZ,
+            width: maxX - minX + 1,
+            height: maxZ - minZ + 1
+        )
+        dirtyMinX = 1
+        dirtyMaxX = 0
+        dirtyMinZ = 1
+        dirtyMaxZ = 0
         dirty = false
         return true
     }

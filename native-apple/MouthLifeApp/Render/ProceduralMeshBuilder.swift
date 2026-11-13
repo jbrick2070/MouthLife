@@ -36,6 +36,9 @@ public final class CompanionArchNodes {
     public let sugarSplatNodes: [SCNNode]
     public let polishHaloNode: SCNNode
 
+    private var hadVisibleSplats: Bool = true
+    private var lastHaloOpacity: CGFloat = -1
+
     public init(
         rootNode: SCNNode,
         archContainerNode: SCNNode,
@@ -58,30 +61,41 @@ public final class CompanionArchNodes {
 
     /// Updates 3D sticky sugar-plaque overlay blobs on the Companion Arch (0..6 active splats).
     public func updateSugarSplats(_ splats: [SugarPlaqueSplat]) {
+        if splats.isEmpty && !hadVisibleSplats { return }
+        var anyVisible = false
         let rootPos = rootNode.simdPosition
         for (idx, node) in sugarSplatNodes.enumerated() {
             guard idx < splats.count, splats[idx].amount > 0.01 else {
-                node.isHidden = true
+                if !node.isHidden { node.isHidden = true }
                 continue
             }
+            anyVisible = true
             let sp = splats[idx]
-            node.isHidden = false
+            if node.isHidden { node.isHidden = false }
             node.simdPosition = sp.position - rootPos
             let scale = 0.42 + 0.58 * sp.amount
             node.simdScale = SIMD3<Float>(scale, scale * 0.55, scale)
             node.opacity = CGFloat(min(0.88, 0.30 + sp.amount * 0.60))
         }
+        hadVisibleSplats = anyVisible
     }
 
     /// Animates the floating Smooth Bask crystalline motes halo above the arch when smoothness >= 85%.
     public func updatePolishHalo(smoothnessIndex: Double, nowSec: Float, reducedMotion: Bool = false) {
         let visible = smoothnessIndex >= GameConfig.smoothBaskThreshold
-        polishHaloNode.isHidden = !visible
+        if polishHaloNode.isHidden == visible {
+            polishHaloNode.isHidden = !visible
+        }
         guard visible else { return }
-        let t = reducedMotion ? Float(0) : nowSec
-        polishHaloNode.simdEulerAngles = SIMD3<Float>(0, sin(t * 0.35) * 0.08, 0)
+        if !reducedMotion {
+            polishHaloNode.simdEulerAngles = SIMD3<Float>(0, sin(nowSec * 0.35) * 0.08, 0)
+        }
         let norm = Float(min(1.0, max(0.0, (smoothnessIndex - 84.0) / 16.0)))
-        polishHaloNode.opacity = CGFloat(0.45 + 0.55 * norm)
+        let nextOpacity = CGFloat(0.45 + 0.55 * norm)
+        if abs(nextOpacity - lastHaloOpacity) > 0.002 {
+            lastHaloOpacity = nextOpacity
+            polishHaloNode.opacity = nextOpacity
+        }
     }
 }
 
@@ -281,6 +295,19 @@ public final class CartridgeStageNodes {
     public let zipReticleNode: SCNNode
     public let landmarkColors: LandmarkPaletteColors
 
+    private struct ColonyNodeCache {
+        let core: SCNNode?
+        let halo: SCNNode?
+        let material: SCNMaterial?
+        var wasRestored: Bool?
+    }
+
+    private var colonyCache: [String: ColonyNodeCache]
+    private let restoredDiffuseColor: PlatformColor
+    private let restoredEmissionColor: PlatformColor
+    private let beaconDiffuseColor: PlatformColor
+    private let beaconEmissionColor: PlatformColor
+
     public init(
         rootNode: SCNNode,
         enamelTerrainNode: SCNNode,
@@ -307,24 +334,44 @@ public final class CartridgeStageNodes {
         self.relayBeaconNodes = relayBeaconNodes
         self.zipReticleNode = zipReticleNode
         self.landmarkColors = landmarkColors
+
+        self.restoredDiffuseColor = RenderBridge.color(hex: landmarkColors.colonyRestoredHex)
+        self.restoredEmissionColor = RenderBridge.color(hex: landmarkColors.colonyRestoredHex, alpha: 0.55)
+        self.beaconDiffuseColor = RenderBridge.color(hex: landmarkColors.colonyBeaconHex)
+        self.beaconEmissionColor = RenderBridge.color(hex: landmarkColors.colonyBeaconHex, alpha: 0.25)
+
+        var cache: [String: ColonyNodeCache] = [:]
+        cache.reserveCapacity(commensalSiteNodes.count)
+        for (id, siteRoot) in commensalSiteNodes {
+            let core = siteRoot.childNode(withName: "colony_core", recursively: false)
+            let halo = siteRoot.childNode(withName: "colony_halo", recursively: false)
+            cache[id] = ColonyNodeCache(
+                core: core,
+                halo: halo,
+                material: core?.geometry?.firstMaterial,
+                wasRestored: nil
+            )
+        }
+        self.colonyCache = cache
     }
 
     public func updateCommensalSite(id: String, restored: Bool, localCleanRatio: Double, nowSec: Float) {
-        guard let siteRoot = commensalSiteNodes[id] else { return }
-        let core = siteRoot.childNode(withName: "colony_core", recursively: false)
-        let halo = siteRoot.childNode(withName: "colony_halo", recursively: false)
-        let hex = restored ? landmarkColors.colonyRestoredHex : landmarkColors.colonyBeaconHex
-        if let mat = core?.geometry?.firstMaterial {
-            mat.diffuse.contents = RenderBridge.color(hex: hex)
-            mat.emission.contents = RenderBridge.color(hex: hex, alpha: restored ? 0.55 : 0.25)
+        guard var entry = colonyCache[id] else { return }
+        if entry.wasRestored != restored {
+            entry.wasRestored = restored
+            if let mat = entry.material {
+                mat.diffuse.contents = restored ? restoredDiffuseColor : beaconDiffuseColor
+                mat.emission.contents = restored ? restoredEmissionColor : beaconEmissionColor
+            }
+            entry.halo?.isHidden = !restored
+            colonyCache[id] = entry
         }
         let clean01 = Float(min(1.0, max(0.0, localCleanRatio)))
         let scale: Float = restored ? (1.12 + 0.08 * sin(nowSec * 3.4)) : (0.85 + 0.20 * clean01)
-        core?.simdScale = SIMD3<Float>(repeating: scale)
-        core?.simdEulerAngles.y = nowSec * (restored ? 1.5 : 0.65)
-        halo?.isHidden = !restored
+        entry.core?.simdScale = SIMD3<Float>(repeating: scale)
+        entry.core?.simdEulerAngles.y = nowSec * (restored ? 1.5 : 0.65)
         if restored {
-            halo?.simdEulerAngles.y = -nowSec * 0.95
+            entry.halo?.simdEulerAngles.y = -nowSec * 0.95
         }
     }
 }
