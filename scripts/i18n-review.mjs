@@ -44,7 +44,7 @@ mkdirSync(work, { recursive: true });
 const localeDir = join(ROOT, 'src', 'i18n', 'locales');
 const outPath = join(localeDir, `${lang}.json`);
 const glossaryPath = join(localeDir, `${lang}.glossary.json`);
-const reportPath = join(localeDir, `${lang}.review.md`);
+const reportPath = join(localeDir, process.argv.includes('--since') ? `${lang}.review-native.md` : `${lang}.review.md`);
 const source = JSON.parse(readFileSync(join(ROOT, 'src', 'i18n', 'strings.en.json'), 'utf8'));
 const catalog = JSON.parse(readFileSync(outPath, 'utf8'));
 const glossary = existsSync(glossaryPath) ? JSON.parse(readFileSync(glossaryPath, 'utf8')) : {};
@@ -120,7 +120,10 @@ ${glossaryText}
 Reply with ONE JSON object containing ONLY the items you changed: number -> corrected translation.
 If everything in a batch is fine, reply {}. No markdown, no comments.`;
 
-const keys = source.filter((s) => s in catalog);
+// --since <old strings.en.json>: review only strings added after that list was made.
+const sinceIdx = process.argv.indexOf('--since');
+const already = sinceIdx > 0 ? new Set(JSON.parse(readFileSync(process.argv[sinceIdx + 1], 'utf8'))) : new Set();
+const keys = source.filter((s) => s in catalog && !already.has(s));
 const autoFlags = Object.fromEntries(keys.map((k) => [k, flagsFor(k, catalog[k])]).filter(([, f]) => f.length));
 log(`${keys.length} strings, ${Object.keys(autoFlags).length} with automatic warnings; reviewer model ${model}`);
 

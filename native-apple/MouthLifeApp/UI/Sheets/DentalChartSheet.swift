@@ -40,9 +40,9 @@ public struct DentalChartSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Picker("Section", selection: $activeTab) {
+                    Picker(L10n.t("Section"), selection: $activeTab) {
                         ForEach(ChartTab.allCases) { tab in
-                            Text(tab.rawValue).tag(tab)
+                            Text(L10n.t(tab.rawValue)).tag(tab)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -56,7 +56,7 @@ public struct DentalChartSheet: View {
                         surfacesSection
                     }
 
-                    Text(CharityInfo.clinicalDisclaimer)
+                    Text(L10n.t(CharityInfo.clinicalDisclaimer))
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(MLTheme.textMuted)
                         .padding(.top, 4)
@@ -64,13 +64,13 @@ public struct DentalChartSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("Tooth Atlas")
+            .navigationTitle(L10n.t("Tooth Atlas"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t("Done")) { dismiss() }
                         .foregroundStyle(MLTheme.cyanAccent)
                 }
             }
@@ -83,10 +83,10 @@ public struct DentalChartSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             // Notation Switcher + Spot Quiz Toggle
             HStack(spacing: 8) {
-                Picker("Notation", selection: $numberingSystem) {
-                    Text("US #1–32").tag(ToothNumberingSystem.universal)
-                    Text("FDI 11–48").tag(ToothNumberingSystem.fdi)
-                    Text("Palmer").tag(ToothNumberingSystem.palmer)
+                Picker(L10n.t("Notation"), selection: $numberingSystem) {
+                    Text(L10n.t("US #1–32")).tag(ToothNumberingSystem.universal)
+                    Text(L10n.t("FDI 11–48")).tag(ToothNumberingSystem.fdi)
+                    Text(L10n.t("Palmer")).tag(ToothNumberingSystem.palmer)
                 }
                 .pickerStyle(.segmented)
 
@@ -97,7 +97,7 @@ public struct DentalChartSheet: View {
                         currentQuestion = DentalChart.generateSpotQuizQuestion()
                     }
                 } label: {
-                    Label(quizActive ? "Exit Quiz" : "Spot Quiz", systemImage: "target")
+                    Label(L10n.t(quizActive ? "Exit Quiz" : "Spot Quiz"), systemImage: "target")
                 }
                 .buttonStyle(MLGlassPillButtonStyle(tint: quizActive ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent))
             }
@@ -105,17 +105,17 @@ public struct DentalChartSheet: View {
             if quizActive {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("SPOT QUIZ CHALLENGE")
+                        Text(L10n.t("SPOT QUIZ CHALLENGE"))
                             .font(.system(.caption2, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.fluorapatiteGold)
                         Spacer()
-                        Text("Streak \(currentStreak) • Best \(bestStreak)")
+                        Text(L10n.t("Streak \(currentStreak) • Best \(bestStreak)"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .monospacedDigit()
                             .foregroundStyle(MLTheme.mintClean)
                     }
 
-                    Text(currentQuestion.prompt)
+                    Text(L10n.t(currentQuestion.prompt))
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
                         .foregroundStyle(MLTheme.textPrimary)
 
@@ -123,12 +123,12 @@ public struct DentalChartSheet: View {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: feedback.correct ? "checkmark.circle.fill" : "arrow.uturn.backward.circle.fill")
                                 .foregroundStyle(feedback.correct ? MLTheme.mintClean : MLTheme.amberWarn)
-                            Text(feedback.message)
+                            Text(L10n.t(feedback.message))
                                 .font(.system(.caption, design: .rounded, weight: .semibold))
                                 .foregroundStyle(MLTheme.textPrimary)
                             Spacer()
                             if feedback.correct {
-                                Button("Next") {
+                                Button(L10n.t("Next")) {
                                     quizFeedback = nil
                                     currentQuestion = DentalChart.generateSpotQuizQuestion(
                                         excludingUniversalNumbers: [currentQuestion.targetUniversal]
@@ -177,16 +177,16 @@ public struct DentalChartSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(tooth.clinicalName)
+                        Text(L10n.t(tooth.clinicalName))
                             .font(.system(.headline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.textPrimary)
-                        Text("\(tooth.commonNickname) • Erupts \(tooth.eruptionAge)")
+                        Text(L10n.t("\(tooth.commonNickname) • Erupts \(tooth.eruptionAge)"))
                             .font(.system(.caption, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.cyanAccent)
                     }
                     Spacer()
                     if tooth.isWisdomTooth {
-                        Text("WISDOM")
+                        Text(L10n.t("WISDOM"))
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.deepOcean)
                             .padding(.horizontal, 8)
@@ -202,21 +202,21 @@ public struct DentalChartSheet: View {
                 }
 
                 HStack(spacing: 14) {
-                    Label("\(tooth.roots) root\(tooth.roots == 1 ? "" : "s")", systemImage: "arrow.down.to.line")
-                    Label(tooth.cusps == 0 ? "Incisal ridge" : "\(tooth.cusps) cusps", systemImage: "mountain.2.fill")
-                    Label(tooth.category.rawValue.capitalized, systemImage: "sparkles")
+                    Label(L10n.t("\(tooth.roots) root\(tooth.roots == 1 ? "" : "s")"), systemImage: "arrow.down.to.line")
+                    Label(L10n.t(tooth.cusps == 0 ? "Incisal ridge" : "\(tooth.cusps) cusps"), systemImage: "mountain.2.fill")
+                    Label(L10n.t(tooth.category.rawValue.capitalized), systemImage: "sparkles")
                 }
                 .font(.system(.caption, design: .rounded, weight: .semibold))
                 .foregroundStyle(MLTheme.textSecondary)
 
-                Text(tooth.anatomyFact)
+                Text(L10n.t(tooth.anatomyFact))
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(MLTheme.textPrimary)
 
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "hand.sparkles.fill")
                         .foregroundStyle(MLTheme.mintClean)
-                    Text(tooth.careTip)
+                    Text(L10n.t(tooth.careTip))
                         .font(.system(.caption, design: .rounded, weight: .medium))
                         .foregroundStyle(MLTheme.textSecondary)
                 }
@@ -236,7 +236,7 @@ public struct DentalChartSheet: View {
                     .fill(Color.black.opacity(0.28))
 
                 VStack(spacing: 10) {
-                    Text("TAP ANY TISSUE LAYER")
+                    Text(L10n.t("TAP ANY TISSUE LAYER"))
                         .font(.system(.caption2, design: .rounded, weight: .bold))
                         .foregroundStyle(MLTheme.textMuted)
 
@@ -281,7 +281,7 @@ public struct DentalChartSheet: View {
                             .frame(width: 78, height: 74)
                             .onTapGesture { selectedLayer = .pulp }
 
-                        Text("❤️ PULP")
+                        Text(L10n.t("❤️ PULP"))
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
                             .allowsHitTesting(false)
@@ -298,7 +298,7 @@ public struct DentalChartSheet: View {
                     Button {
                         selectedLayer = layer.layerKind
                     } label: {
-                        Text("\(layer.emoji) \(layer.layerKind.rawValue.capitalized)")
+                        Text(L10n.t("\(layer.emoji) \(layer.layerKind.rawValue.capitalized)"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textPrimary)
                             .padding(.horizontal, 10)
@@ -313,27 +313,27 @@ public struct DentalChartSheet: View {
             let info = DentalChart.layer(selectedLayer)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("\(info.emoji) \(info.name)")
+                    Text(L10n.t("\(info.emoji) \(info.name)"))
                         .font(.system(.headline, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.textPrimary)
                     Spacer()
                     if let pct = info.mineralPercent {
-                        Text("\(pct)% Mineral")
+                        Text(L10n.t("\(pct)% Mineral"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
                     } else {
-                        Text("Living Tissue")
+                        Text(L10n.t("Living Tissue"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.coralGum)
                     }
                 }
-                Text(info.tagline)
+                Text(L10n.t(info.tagline))
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(MLTheme.fluorapatiteGold)
-                Text(info.detail)
+                Text(L10n.t(info.detail))
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary)
-                Text("Care tip: \(info.careTip)")
+                Text(L10n.t("Care tip: \(info.careTip)"))
                     .font(.system(.caption, design: .rounded, weight: .semibold))
                     .foregroundStyle(MLTheme.mintClean)
             }
@@ -344,7 +344,7 @@ public struct DentalChartSheet: View {
     // MARK: - 5 Clinical Crown Surfaces
     private var surfacesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Every tooth has 5 sides. A brush reaches 3. Floss reaches the 2 hidden sides between teeth, about a third of the tooth!")
+            Text(L10n.t("Every tooth has 5 sides. A brush reaches 3. Floss reaches the 2 hidden sides between teeth, about a third of the tooth!"))
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(MLTheme.textSecondary)
                 .mlGlassCard()
@@ -352,20 +352,20 @@ public struct DentalChartSheet: View {
             ForEach(DentalChart.surfaces) { surface in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(surface.code)
+                        Text(L10n.t(surface.code))
                             .font(.system(.subheadline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.deepOcean)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
                             .background(Capsule().fill(MLTheme.cyanAccent))
-                        Text(surface.name)
+                        Text(L10n.t(surface.name))
                             .font(.system(.headline, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.textPrimary)
                     }
-                    Text(surface.whereItFaces)
+                    Text(L10n.t(surface.whereItFaces))
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
-                    Text("Technique: \(surface.howToClean)")
+                    Text(L10n.t("Technique: \(surface.howToClean)"))
                         .font(.system(.caption, design: .rounded, weight: .semibold))
                         .foregroundStyle(MLTheme.mintClean)
                 }
@@ -394,26 +394,26 @@ private struct InteractiveHorseshoeArchView: View {
             ZStack {
                 // Midline & Arch Labels
                 VStack {
-                    Text("UPPER ARCH (MAXILLARY)")
+                    Text(L10n.t("UPPER ARCH (MAXILLARY)"))
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(MLTheme.textMuted)
                     Spacer()
                     HStack {
-                        Text("PATIENT\nRIGHT")
+                        Text(L10n.t("PATIENT\nRIGHT"))
                             .multilineTextAlignment(.center)
                         Spacer()
-                        Text("32 ADULT\nTEETH")
+                        Text(L10n.t("32 ADULT\nTEETH"))
                             .multilineTextAlignment(.center)
                             .foregroundStyle(MLTheme.cyanAccent.opacity(0.8))
                         Spacer()
-                        Text("PATIENT\nLEFT")
+                        Text(L10n.t("PATIENT\nLEFT"))
                             .multilineTextAlignment(.center)
                     }
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(MLTheme.textMuted)
                     .padding(.horizontal, 36)
                     Spacer()
-                    Text("LOWER ARCH (MANDIBULAR)")
+                    Text(L10n.t("LOWER ARCH (MANDIBULAR)"))
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(MLTheme.textMuted)
                 }
@@ -453,7 +453,7 @@ private struct InteractiveHorseshoeArchView: View {
         Button {
             onTapTooth(universal)
         } label: {
-            Text(DentalChart.formatBadge(for: tooth, system: numberingSystem))
+            Text(L10n.t(DentalChart.formatBadge(for: tooth, system: numberingSystem)))
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .minimumScaleFactor(0.65)
                 .lineLimit(1)
@@ -480,6 +480,6 @@ private struct InteractiveHorseshoeArchView: View {
                 .shadow(color: isSelected ? MLTheme.cyanAccent.opacity(0.6) : .clear, radius: 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(tooth.clinicalName), Universal \(tooth.universal), FDI \(tooth.fdi)")
+        .accessibilityLabel(L10n.t("\(tooth.clinicalName), Universal \(tooth.universal), FDI \(tooth.fdi)"))
     }
 }

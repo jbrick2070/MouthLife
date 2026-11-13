@@ -205,6 +205,8 @@ function isTextLike(s) {
   if (s.length < 2 || s.length > 1200) return false;
   if (!/[A-Za-z]{2,}/.test(s)) return false;
   if (/^\{\d+\}$/.test(s)) return false;
+  // Launch arguments and regular-expression sources are not on-screen text.
+  if (s.startsWith('--') || s.includes('\\s') || s.includes('\\(')) return false;
   if (/^(https?:|mailto:|data:|\.\.?\/|#|@|ML2)/.test(s)) return false;
   if (/=>|;\s*$|\bfunction\b|\brgba?\(|\bvar\(--|^[.#][\w-]+\s*\{|px\b|\b(querySelector|innerHTML)\b/.test(s)) return false;
   if (/[{}]/.test(s.replace(/\{\d+\}/g, ''))) return false;
@@ -225,6 +227,84 @@ function isTextLike(s) {
   return true;
 }
 
+// ---------------------------------------------------------------- Swift (native app)
+
+const SWIFT_SCAN = [
+  'native-apple/MouthLifeApp/UI',
+  'native-apple/MouthLifeApp/AppCoordinator.swift',
+  'native-apple/Sources/MouthLifeCore/Config',
+  'native-apple/Sources/MouthLifeCore/Worlds',
+  'native-apple/Sources/MouthLifeCore/Sim/HudHelpers.swift',
+  'native-apple/Sources/MouthLifeCore/Persistence/SaveSystem.swift',
+];
+const SWIFT_SKIP = new Set([
+  'native-apple/Sources/MouthLifeCore/Config/BrushCoachSystem.swift',
+  'native-apple/Sources/MouthLifeCore/Config/GameConfig.swift',
+  'native-apple/Sources/MouthLifeCore/Config/L10n.swift',
+  'native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift',
+]);
+
+/** Yields the text of every "…" literal in Swift source, with \(…) and printf codes as slots. */
+function* swiftStrings(src) {
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const close = src.indexOf('*/', i + 2);
+      i = close < 0 ? n : close + 2;
+      continue;
+    }
+    if (c === '#' && src[i + 1] === '"') {
+      // Raw strings hold shader or data text, never on-screen copy.
+      const triple = src.startsWith('#"""', i);
+      const close = src.indexOf(triple ? '"""#' : '"#', i + 2);
+      i = close < 0 ? n : close + (triple ? 4 : 2);
+      continue;
+    }
+    if (c === '"') {
+      if (src.startsWith('"""', i)) {
+        const close = src.indexOf('"""', i + 3);
+        i = close < 0 ? n : close + 3;
+        continue;
+      }
+      let j = i + 1;
+      let out = '';
+      while (j < n && src[j] !== '"' && src[j] !== '\n') {
+        if (src[j] === '\\') {
+          const e = src[j + 1];
+          if (e === '(') {
+            let depth = 1;
+            j += 2;
+            while (j < n && depth > 0) {
+              if (src[j] === '"') {
+                j++;
+                while (j < n && src[j] !== '"') j += src[j] === '\\' ? 2 : 1;
+              } else if (src[j] === '(') depth++;
+              else if (src[j] === ')') depth--;
+              j++;
+            }
+            out += SLOT;
+            continue;
+          }
+          out += unescapeChar(e);
+          j += 2;
+        } else {
+          out += src[j++];
+        }
+      }
+      yield out.replace(/%(?:\d+\$)?[-+0 ]*\d*(?:\.\d+)?(?:lld|ld|d|f|g|@|s)/g, SLOT);
+      i = j + 1;
+      continue;
+    }
+    i++;
+  }
+}
+
 // ---------------------------------------------------------------- main
 
 const keys = new Set();
@@ -241,6 +321,17 @@ for (const rel of SCAN.flatMap(listFiles)) {
       continue;
     }
     for (const run of runsOf(flat)) if (isTextLike(run)) keys.add(run);
+  }
+}
+
+for (const rel of SWIFT_SCAN.flatMap(listFiles)) {
+  if (!rel.endsWith('.swift') || SWIFT_SKIP.has(rel)) continue;
+  const src = readFileSync(join(ROOT, rel), 'utf8');
+  for (const flat of swiftStrings(src)) {
+    if (/^Invalid static |^mouthlife\.|^org\./.test(flat)) continue;
+    let k = 0;
+    const text = flat.replace(/\s+/g, ' ').trim().replace(new RegExp(SLOT, 'g'), () => `{${k++}}`);
+    if (isTextLike(text)) keys.add(text);
   }
 }
 

@@ -29,15 +29,15 @@ public struct SyncSaveSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("CROSS-PLATFORM ML2: SYNC CODE")
+                        Text(L10n.t("CROSS-PLATFORM ML2: SYNC CODE"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
-                        Text("Works on iPhone, iPad, Mac and the MouthLife web game. No account needed.")
+                        Text(L10n.t("Works on iPhone, iPad, Mac and the MouthLife web game. No account needed."))
                             .font(.system(.footnote, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
 
-                        Text(exportedCode)
+                        Text(L10n.t(exportedCode))
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(4)
@@ -50,7 +50,7 @@ public struct SyncSaveSheet: View {
                             statusIsError = false
                             statusMessage = "Copied ML2: Sync Code to clipboard!"
                         } label: {
-                            Label("Copy Current ML2: Code", systemImage: "doc.on.doc.fill")
+                            Label(L10n.t("Copy Current ML2: Code"), systemImage: "doc.on.doc.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.cyanAccent, darkText: true))
@@ -58,11 +58,11 @@ public struct SyncSaveSheet: View {
                     .mlGlassCard()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("IMPORT ML2: SYNC CODE")
+                        Text(L10n.t("IMPORT ML2: SYNC CODE"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.mintClean)
 
-                        TextField("Paste ML2:... sync code here", text: $importInput, axis: .vertical)
+                        TextField(L10n.t("Paste ML2:... sync code here"), text: $importInput, axis: .vertical)
                             .lineLimit(3...6)
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(MLTheme.textPrimary)
@@ -70,7 +70,7 @@ public struct SyncSaveSheet: View {
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.06)))
 
                         HStack(spacing: 10) {
-                            Button("Paste Clipboard") {
+                            Button(L10n.t("Paste Clipboard")) {
                                 if let str = readClipboard() {
                                     importInput = str
                                 }
@@ -88,7 +88,7 @@ public struct SyncSaveSheet: View {
                                     statusMessage = err.localizedDescription
                                 }
                             } label: {
-                                Label("Apply Sync Code", systemImage: "arrow.down.doc.fill")
+                                Label(L10n.t("Apply Sync Code"), systemImage: "arrow.down.doc.fill")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
@@ -96,7 +96,7 @@ public struct SyncSaveSheet: View {
                         }
 
                         if let statusMessage {
-                            Text(statusMessage)
+                            Text(L10n.t(statusMessage))
                                 .font(.system(.caption, design: .rounded, weight: .semibold))
                                 .foregroundStyle(statusIsError ? MLTheme.coralGum : MLTheme.mintClean)
                         }
@@ -106,13 +106,13 @@ public struct SyncSaveSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("Save & ML2: Sync")
+            .navigationTitle(L10n.t("Save & ML2: Sync"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t("Done")) { dismiss() }
                         .foregroundStyle(MLTheme.cyanAccent)
                 }
             }

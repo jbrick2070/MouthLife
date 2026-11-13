@@ -48,19 +48,19 @@ public struct UpgradeLabSheet: View {
                         Spacer()
                     }
 
-                    Text("Upgrades unlock when you earn Brush-Along Habit Stamps or clear worlds. You can also buy them with Fluoride Ions.")
+                    Text(L10n.t("Upgrades unlock when you earn Brush-Along Habit Stamps or clear worlds. You can also buy them with Fluoride Ions."))
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
 
                     ForEach(ActuatorKind.allCases, id: \.rawValue) { slot in
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Label(slotTitle(slot), systemImage: slotIcon(slot))
+                                Label(L10n.t(slotTitle(slot)), systemImage: slotIcon(slot))
                                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
                                     .foregroundStyle(MLTheme.cyanAccent)
                                 Spacer()
                                 if equippedUpgrades[slot] != nil {
-                                    Button("Use Standard") {
+                                    Button(L10n.t("Use Standard")) {
                                         onEquipToggle(slot, nil)
                                     }
                                     .font(.system(.caption2, design: .rounded, weight: .bold))
@@ -76,16 +76,16 @@ public struct UpgradeLabSheet: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(alignment: .top) {
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(upg.name)
+                                            Text(L10n.t(upg.name))
                                                 .font(.system(.headline, design: .rounded, weight: .bold))
                                                 .foregroundStyle(MLTheme.textPrimary)
-                                            Text(upg.tagline)
+                                            Text(L10n.t(upg.tagline))
                                                 .font(.system(.footnote, design: .rounded, weight: .semibold))
                                                 .foregroundStyle(MLTheme.mintClean)
                                         }
                                         Spacer()
                                         if isEquipped {
-                                            Text("EQUIPPED")
+                                            Text(L10n.t("EQUIPPED"))
                                                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                                                 .foregroundStyle(MLTheme.deepOcean)
                                                 .padding(.horizontal, 9)
@@ -94,25 +94,25 @@ public struct UpgradeLabSheet: View {
                                         }
                                     }
 
-                                    Text(upg.scientificNote)
+                                    Text(L10n.t(upg.scientificNote))
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(MLTheme.textSecondary)
 
                                     HStack {
                                         if let stamps = upg.stampUnlockThreshold {
-                                            Text("Auto: \(stamps) Stamps")
+                                            Text(L10n.t("Auto: \(stamps) Stamps"))
                                                 .font(.system(.caption2, design: .rounded, weight: .semibold))
                                                 .foregroundStyle(MLTheme.textMuted)
                                         }
                                         if let worldId = upg.worldClearUnlockId {
-                                            Text("• or Clear \(worldId.replacingOccurrences(of: "_", with: " ").capitalized)")
+                                            Text(L10n.t("• or Clear \(worldId.replacingOccurrences(of: "_", with: " ").capitalized)"))
                                                 .font(.system(.caption2, design: .rounded, weight: .semibold))
                                                 .foregroundStyle(MLTheme.textMuted)
                                         }
                                         Spacer()
 
                                         if isUnlocked {
-                                            Button(isEquipped ? "Unequip" : "Equip") {
+                                            Button(L10n.t(isEquipped ? "Unequip" : "Equip")) {
                                                 onEquipToggle(slot, isEquipped ? nil : upg.id)
                                             }
                                             .buttonStyle(
@@ -125,7 +125,7 @@ public struct UpgradeLabSheet: View {
                                             Button {
                                                 onPurchase(upg.id)
                                             } label: {
-                                                Label("\(upg.ionCost) F⁻", systemImage: canAfford ? "lock.open.fill" : "lock.fill")
+                                                Label(L10n.t("\(upg.ionCost) F⁻"), systemImage: canAfford ? "lock.open.fill" : "lock.fill")
                                             }
                                             .buttonStyle(
                                                 MLPrimaryButtonStyle(
@@ -157,13 +157,13 @@ public struct UpgradeLabSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("HYDRA-1 Upgrade Lab")
+            .navigationTitle(L10n.t("HYDRA-1 Upgrade Lab"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t("Done")) { dismiss() }
                         .foregroundStyle(MLTheme.cyanAccent)
                 }
             }

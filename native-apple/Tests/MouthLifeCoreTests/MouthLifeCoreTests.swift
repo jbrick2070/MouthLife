@@ -655,6 +655,43 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(save.fluorideIons, before + 100)
     }
 
+    // MARK: - Translations (same rules as the web edition's uiTranslator)
+
+    func testL10nMatcherTranslatesExactPatternsNamesAndIconPrefixes() {
+        let m = L10nMatcher(catalog: [
+            "Save Player": "Guardar jugador",
+            "Restore {0} colonies — scrub glowing rings!": "¡Recupera {0} colonias: frota los anillos!",
+            "{0} Treat: {1} (+{2} Ions)": "{0} Golosina: {1} (+{2} iones)",
+            "Sites {0}/{1}": "Sitios {0}/{1}",
+            "Sites 0/{0}": "Sitios 0/{0}",
+            "{0}%": "nunca",
+            "Dive (W1): {0}": "Inmersión (W1): {0}",
+            "Plaque City": "Ciudad Placa"
+        ])
+        XCTAssertEqual(m.translate("Save Player"), "Guardar jugador")
+        XCTAssertEqual(m.translate("Restore 10 colonies — scrub glowing rings!"), "¡Recupera 10 colonias: frota los anillos!")
+        XCTAssertEqual(m.translate("☕ Treat: Maple Oat Cortado (+5 Ions)"), "☕ Golosina: Maple Oat Cortado (+5 iones)")
+        XCTAssertEqual(m.translate("Sites 0/10"), "Sitios 0/10")
+        XCTAssertEqual(m.translate("Sites 3/10"), "Sitios 3/10")
+        XCTAssertEqual(m.translate("45%"), "45%")
+        XCTAssertEqual(m.translate("0:15 / 4:30"), "0:15 / 4:30")
+        XCTAssertEqual(m.translate("Dive (W1): Plaque City"), "Inmersión (W1): Ciudad Placa")
+        XCTAssertEqual(m.translate("🎯 Restore 10 colonies — scrub glowing rings!"), "🎯 ¡Recupera 10 colonias: frota los anillos!")
+        XCTAssertEqual(m.translate("Something new"), "Something new")
+    }
+
+    func testL10nLoadsEveryBundledLanguageAndFallsBackToEnglish() {
+        for code in ["es", "fr", "de", "pt", "ja", "zh", "ko"] {
+            L10n.setLanguage(code)
+            XCTAssertEqual(L10n.languageCode, code)
+            XCTAssertNotEqual(L10n.t("Tooth Atlas"), "Tooth Atlas", "\(code) should translate a common label")
+        }
+        L10n.setLanguage("xx")
+        XCTAssertEqual(L10n.languageCode, "en")
+        XCTAssertEqual(L10n.t("Tooth Atlas"), "Tooth Atlas")
+        L10n.setLanguage("en")
+    }
+
     // MARK: - 9. 120Hz GyroSloshSim Counter-vs-Handheld Auto-Detection & Liquid Spirit-Level Physics
 
     func testGyroSloshCounterVsHandheldAndLiquidPhysics() {

@@ -18,7 +18,7 @@ private struct MirrorArchCompassView: View {
         let tiltRight = phase.inMouthwashBonus && gyro.isHandheld && gyro.sloshPosition > 0.18
 
         HStack(spacing: 5) {
-            Text(sides.left)
+            Text(L10n.t(sides.left))
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
                     phase.inMouthwashBonus
@@ -142,7 +142,7 @@ private struct MirrorArchCompassView: View {
             }
             .frame(width: 78, height: 74)
 
-            Text(sides.right)
+            Text(L10n.t(sides.right))
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
                     phase.inMouthwashBonus
@@ -154,7 +154,7 @@ private struct MirrorArchCompassView: View {
                 .frame(width: 34, alignment: .leading)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Mirror Mouth Compass")
+        .accessibilityLabel(L10n.t("Mirror Mouth Compass"))
     }
 
     private func quadrantArcPath(q: BrushQuadrant, cx: CGFloat, cy: CGFloat, rx: CGFloat, ry: CGFloat) -> Path {
@@ -280,7 +280,7 @@ private struct MouthwashGyroLevelBar: View {
                 Image(systemName: "gyroscope")
                     .font(.system(size: 10, weight: .heavy))
                     .foregroundStyle(gyro.isHandheld ? MLTheme.mintClean : totalCareLavender)
-                Text(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language))
+                Text(L10n.t(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language)))
                     .font(.system(size: 9.5, weight: .heavy, design: .rounded))
                     .foregroundStyle(gyro.isHandheld ? MLTheme.mintClean : MLTheme.textMuted)
                     .lineLimit(1)
@@ -289,7 +289,7 @@ private struct MouthwashGyroLevelBar: View {
                 Spacer(minLength: 4)
 
                 if gyro.swishCount > 0 {
-                    Text("×\(gyro.swishCount)")
+                    Text(L10n.t("×\(gyro.swishCount)"))
                         .font(.system(size: 10, weight: .heavy, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Color.black)
@@ -300,7 +300,7 @@ private struct MouthwashGyroLevelBar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language))
+        .accessibilityLabel(L10n.t(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language)))
     }
 
     private func cheekPill(label: String, charge: Double, isLit: Bool) -> some View {
@@ -311,7 +311,7 @@ private struct MouthwashGyroLevelBar: View {
         let bg: Color = complete
             ? MLTheme.mintClean
             : (isLit ? MLTheme.fluorapatiteGold : Color.white.opacity(0.08))
-        return Text(label)
+        return Text(L10n.t(label))
             .font(.system(size: 9.5, weight: .heavy, design: .rounded))
             .foregroundStyle(fg)
             .lineLimit(1)
@@ -418,7 +418,7 @@ public struct BrushAlongView: View {
                 Button {
                     onCancelToHub()
                 } label: {
-                    Label("Hub", systemImage: "chevron.left")
+                    Label(L10n.t("Hub"), systemImage: "chevron.left")
                         .font(.system(.caption, design: .rounded, weight: .bold))
                 }
                 .buttonStyle(MLGlassPillButtonStyle())
@@ -431,7 +431,7 @@ public struct BrushAlongView: View {
                     HStack(spacing: 5) {
                         Image(systemName: stationLabel == "Sanctuary" ? "moon.stars.fill" : "dot.radiowaves.left.and.right")
                             .font(.system(size: 11, weight: .bold))
-                        Text(stationLabel)
+                        Text(L10n.t(stationLabel))
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .lineLimit(1)
                     }
@@ -451,7 +451,7 @@ public struct BrushAlongView: View {
                 .buttonStyle(
                     MLGlassPillButtonStyle(tint: voiceCoachEnabled ? MLTheme.mintClean : MLTheme.textMuted)
                 )
-                .accessibilityLabel(voiceCoachEnabled ? "Voice Coach On" : "Voice Coach Off")
+                .accessibilityLabel(L10n.t(voiceCoachEnabled ? "Voice Coach On" : "Voice Coach Off"))
 
                 Menu {
                     ForEach(CoachLanguage.allCases) { lang in
@@ -459,7 +459,7 @@ public struct BrushAlongView: View {
                             onSelectLanguage(lang)
                         } label: {
                             HStack {
-                                Text("\(lang.flagEmoji) \(lang.nativeName)")
+                                Text(L10n.t("\(lang.flagEmoji) \(lang.nativeName)"))
                                 if lang == coachLanguage {
                                     Image(systemName: "checkmark")
                                 }
@@ -468,9 +468,9 @@ public struct BrushAlongView: View {
                     }
                 } label: {
                     HStack(spacing: 3) {
-                        Text(coachLanguage.flagEmoji)
+                        Text(L10n.t(coachLanguage.flagEmoji))
                             .font(.system(size: 12))
-                        Text(coachLanguage.shortCode)
+                        Text(L10n.t(coachLanguage.shortCode))
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                     }
                     .foregroundStyle(MLTheme.textPrimary)
@@ -496,7 +496,7 @@ public struct BrushAlongView: View {
                 MirrorArchCompassView(phase: phase, language: coachLanguage, gyro: mouthwashGyro)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(formatClock(ceil(remaining), pad: true))
+                    Text(L10n.t(formatClock(ceil(remaining), pad: true)))
                         .font(.system(size: 44, weight: .heavy, design: .rounded))
                         .monospacedDigit()
                         // Never wrap the timer; shrink a little instead on narrow screens.
@@ -515,7 +515,7 @@ public struct BrushAlongView: View {
                         Button {
                             onTogglePause()
                         } label: {
-                            Label("TAP TO RESUME", systemImage: "play.circle.fill")
+                            Label(L10n.t("TAP TO RESUME"), systemImage: "play.circle.fill")
                                 .font(.system(.caption2, design: .rounded, weight: .heavy))
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
@@ -528,7 +528,7 @@ public struct BrushAlongView: View {
                                     .frame(width: step == pip ? 10 : 7, height: step == pip ? 10 : 7)
                                     .shadow(color: step == pip ? MLTheme.fluorapatiteGold : .clear, radius: 6)
                             }
-                            Text("\(pip)…")
+                            Text(L10n.t("\(pip)…"))
                                 .font(.system(.caption, design: .rounded, weight: .heavy))
                                 .monospacedDigit()
                                 .foregroundStyle(MLTheme.fluorapatiteGold)
@@ -571,7 +571,7 @@ public struct BrushAlongView: View {
                         lang: coachLanguage
                     )
                     HStack(alignment: .center, spacing: 8) {
-                        Text(mwHl.archTitle)
+                        Text(L10n.t(mwHl.archTitle))
                             .font(.system(size: 19, weight: .heavy, design: .rounded))
                             .foregroundStyle(totalCareLavender)
                             .lineLimit(1)
@@ -584,7 +584,7 @@ public struct BrushAlongView: View {
                         Image(systemName: phase.mouthwashStepIndex == 2 ? "shield.lefthalf.filled.badge.checkmark" : "drop.fill")
                             .font(.system(size: 13, weight: .heavy))
                             .foregroundStyle(totalCarePurple)
-                        Text(mwHl.actionBadge)
+                        Text(L10n.t(mwHl.actionBadge))
                             .font(.system(size: 15, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
@@ -592,7 +592,7 @@ public struct BrushAlongView: View {
 
                         Spacer(minLength: 4)
 
-                        Text(mwHl.ruleTag)
+                        Text(L10n.t(mwHl.ruleTag))
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                             .foregroundStyle(Color.black)
                             .padding(.horizontal, 8)
@@ -610,12 +610,12 @@ public struct BrushAlongView: View {
                         Button {
                             onCompleteSession(didCompleteFloss, true)
                         } label: {
-                            Label(mwButtons.doneRinse, systemImage: "checkmark.seal.fill")
+                            Label(L10n.t(mwButtons.doneRinse), systemImage: "checkmark.seal.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
 
-                        Button(mwButtons.skipRinse) {
+                        Button(L10n.t(mwButtons.skipRinse)) {
                             onCompleteSession(didCompleteFloss, false)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
@@ -631,7 +631,7 @@ public struct BrushAlongView: View {
                     let flossMwButtons = BrushCoachCopy.mouthwashButtonLabels(didFloss: true, lang: coachLanguage)
 
                     HStack(alignment: .center, spacing: 8) {
-                        Text(hl.archTitle)
+                        Text(L10n.t(hl.archTitle))
                             .font(.system(size: 20, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.fluorapatiteGold)
                             .lineLimit(1)
@@ -644,7 +644,7 @@ public struct BrushAlongView: View {
                         Image(systemName: "sparkles")
                             .font(.system(size: 13, weight: .heavy))
                             .foregroundStyle(MLTheme.mintClean)
-                        Text(hl.actionBadge)
+                        Text(L10n.t(hl.actionBadge))
                             .font(.system(size: 15, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
@@ -655,17 +655,17 @@ public struct BrushAlongView: View {
                         Button {
                             onEnterMouthwashBonusNow(true)
                         } label: {
-                            Label(flossMwButtons.rinseJump, systemImage: "drop.fill")
+                            Label(L10n.t(flossMwButtons.rinseJump), systemImage: "drop.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
 
-                        Button(buttons.doneFloss) {
+                        Button(L10n.t(buttons.doneFloss)) {
                             onCompleteSession(true, false)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.mintClean))
 
-                        Button(buttons.skipFloss) {
+                        Button(L10n.t(buttons.skipFloss)) {
                             onEnterMouthwashBonusNow(false)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
@@ -676,7 +676,7 @@ public struct BrushAlongView: View {
                     let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: coachLanguage)
 
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(qHeadline)
+                        Text(L10n.t(qHeadline))
                             .font(.system(size: 23, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
@@ -684,7 +684,7 @@ public struct BrushAlongView: View {
 
                         Spacer(minLength: 4)
 
-                        Text(badge.angleTag)
+                        Text(L10n.t(badge.angleTag))
                             .font(.system(size: 12, weight: .heavy, design: .rounded))
                             .foregroundStyle(Color.black)
                             .padding(.horizontal, 10)
@@ -696,7 +696,7 @@ public struct BrushAlongView: View {
                         Image(systemName: surfaceIconName(phase.surface))
                             .font(.system(size: 14, weight: .heavy))
                             .foregroundStyle(surfaceAccentColor(phase.surface))
-                        Text(badge.headline)
+                        Text(L10n.t(badge.headline))
                             .font(.system(size: 16, weight: .heavy, design: .rounded))
                             .foregroundStyle(surfaceAccentColor(phase.surface))
                             .lineLimit(1)
@@ -707,7 +707,7 @@ public struct BrushAlongView: View {
                         Button {
                             onEnterFlossBonusNow()
                         } label: {
-                            Label(buttons.flossJump, systemImage: "sparkles")
+                            Label(L10n.t(buttons.flossJump), systemImage: "sparkles")
                                 .font(.system(.caption2, design: .rounded, weight: .bold))
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
@@ -750,7 +750,7 @@ public struct BrushAlongView: View {
         return Button {
             onSelectFlossToolStyle(style)
         } label: {
-            Text(title)
+            Text(L10n.t(title))
                 .font(.system(.caption2, design: .rounded, weight: .heavy))
                 .foregroundStyle(selected ? Color.black : MLTheme.textMuted)
                 .padding(.horizontal, 8)
@@ -776,7 +776,7 @@ public struct BrushAlongView: View {
         return Button {
             onSelectMouthwashDuration(style)
         } label: {
-            Text(title)
+            Text(L10n.t(title))
                 .font(.system(.caption2, design: .rounded, weight: .heavy))
                 .foregroundStyle(selected ? Color.black : MLTheme.textMuted)
                 .padding(.horizontal, 8)

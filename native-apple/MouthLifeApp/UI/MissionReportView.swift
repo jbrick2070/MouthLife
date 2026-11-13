@@ -46,13 +46,13 @@ public struct MissionReportView: View {
                 // Grade & Total Score Hero
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text(mode == .pulpRescue
+                        Text(L10n.t(mode == .pulpRescue
                              ? (won ? "PULP RESCUED!" : "SAFE PATCH APPLIED")
-                             : (won ? "ARCH RESTORED • \(cartridge.title.uppercased())" : "MISSION REPORT"))
+                             : (won ? "ARCH RESTORED • \(cartridge.title.uppercased())" : "MISSION REPORT")))
                             .font(.system(.caption, design: .rounded, weight: .heavy))
                             .foregroundStyle(won ? MLTheme.mintClean : MLTheme.amberWarn)
                         Spacer()
-                        Text(breakdown.grade.displayLabel)
+                        Text(L10n.t(breakdown.grade.displayLabel))
                             .font(.system(.caption, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.deepOcean)
                             .padding(.horizontal, 10)
@@ -65,11 +65,11 @@ public struct MissionReportView: View {
                     }
 
                     HStack(alignment: .firstTextBaseline) {
-                        Text("\(breakdown.totalScore)")
+                        Text(L10n.t("\(breakdown.totalScore)"))
                             .font(.system(size: 42, weight: .heavy, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(MLTheme.textPrimary)
-                        Text("/ 10,000 pts")
+                        Text(L10n.t("/ 10,000 pts"))
                             .font(.system(.subheadline, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textMuted)
                         Spacer()
@@ -95,13 +95,13 @@ public struct MissionReportView: View {
                 if let noteId = unlockedHistoryNoteId,
                    let note = HostsAndHistory.historicalFieldNotes.first(where: { $0.id == noteId }) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("NEW FIELD NOTE UNLOCKED • \(note.yearLabel.uppercased())")
+                        Text(L10n.t("NEW FIELD NOTE UNLOCKED • \(note.yearLabel.uppercased())"))
                             .font(.system(.caption2, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.fluorapatiteGold)
-                        Text(note.title)
+                        Text(L10n.t(note.title))
                             .font(.system(.subheadline, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.textPrimary)
-                        Text(note.enamelLesson)
+                        Text(L10n.t(note.enamelLesson))
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
                     }
@@ -110,12 +110,12 @@ public struct MissionReportView: View {
 
                 if !newlyUnlockedUpgradeIds.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("HYDRA-1 UPGRADE UNLOCKED & EQUIPPED!")
+                        Text(L10n.t("HYDRA-1 UPGRADE UNLOCKED & EQUIPPED!"))
                             .font(.system(.caption2, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.mintClean)
                         ForEach(newlyUnlockedUpgradeIds, id: \.self) { id in
                             if let upg = UpgradeCatalog.get(id) {
-                                Text("⚡ \(upg.name) — \(upg.tagline)")
+                                Text(L10n.t("⚡ \(upg.name) — \(upg.tagline)"))
                                     .font(.system(.caption, design: .rounded, weight: .semibold))
                                     .foregroundStyle(MLTheme.textPrimary)
                             }
@@ -126,13 +126,13 @@ public struct MissionReportView: View {
 
                 // Clinical Dental Lesson Card
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(lesson.focusTeethBadge.uppercased())
+                    Text(L10n.t(lesson.focusTeethBadge.uppercased()))
                         .font(.system(.caption2, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.cyanAccent)
-                    Text(lesson.headline)
+                    Text(L10n.t(lesson.headline))
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
                         .foregroundStyle(MLTheme.textPrimary)
-                    Text(lesson.lesson)
+                    Text(L10n.t(lesson.lesson))
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
                 }
@@ -143,14 +143,14 @@ public struct MissionReportView: View {
                     Button {
                         onReturnToHub()
                     } label: {
-                        Label("Arch Hub", systemImage: "house.fill")
+                        Label(L10n.t("Arch Hub"), systemImage: "house.fill")
                     }
                     .buttonStyle(MLGlassPillButtonStyle())
 
                     Button {
                         onReplay()
                     } label: {
-                        Label("Replay", systemImage: "arrow.counterclockwise")
+                        Label(L10n.t("Replay"), systemImage: "arrow.counterclockwise")
                     }
                     .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
 
@@ -160,7 +160,7 @@ public struct MissionReportView: View {
                         Button {
                             onPlayNextWorld(nextWorldId)
                         } label: {
-                            Label("Next World", systemImage: "arrow.right")
+                            Label(L10n.t("Next World"), systemImage: "arrow.right")
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
                     }
@@ -173,11 +173,11 @@ public struct MissionReportView: View {
     private func pillarRow(_ label: String, pts: Int, maxPts: Int, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(label)
+                Text(L10n.t(label))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary)
                 Spacer()
-                Text("\(pts) / \(maxPts)")
+                Text(L10n.t("\(pts) / \(maxPts)"))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(tint)

@@ -126,6 +126,8 @@ public struct RootContentView: View {
                 }
             }
         }
+        // Rebuild every screen when the language changes, so all text is translated again.
+        .id(coordinator.coachLanguage)
         .preferredColorScheme(.dark)
         .sheet(item: $coordinator.activeSheet) { sheet in
             Group {

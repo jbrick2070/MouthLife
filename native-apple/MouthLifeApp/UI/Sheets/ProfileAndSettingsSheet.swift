@@ -71,11 +71,11 @@ public struct ProfileAndSettingsSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // Host Profile Card
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("HOST PROFILE")
+                        Text(L10n.t("HOST PROFILE"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
-                        TextField("Display Name", text: $displayName)
+                        TextField(L10n.t("Display Name"), text: $displayName)
                             .textFieldStyle(.plain)
                             .font(.system(.body, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textPrimary)
@@ -85,7 +85,7 @@ public struct ProfileAndSettingsSheet: View {
                                 onSaveProfile(newValue, skinToneIndex, homeCityId)
                             }
 
-                        Text("Skin Tone Swatch")
+                        Text(L10n.t("Skin Tone Swatch"))
                             .font(.system(.caption, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textSecondary)
 
@@ -104,11 +104,11 @@ public struct ProfileAndSettingsSheet: View {
                                                 .strokeBorder(selected ? MLTheme.cyanAccent : Color.white.opacity(0.25), lineWidth: selected ? 3 : 1)
                                         )
                                 }
-                                .accessibilityLabel(swatch.label)
+                                .accessibilityLabel(L10n.t(swatch.label))
                             }
                         }
 
-                        Text("Home City")
+                        Text(L10n.t("Home City"))
                             .font(.system(.caption, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textSecondary)
 
@@ -120,7 +120,7 @@ public struct ProfileAndSettingsSheet: View {
                                         homeCityId = city.id
                                         onSaveProfile(displayName, skinToneIndex, city.id)
                                     } label: {
-                                        Text("\(city.signatureTreat.emoji) \(city.city)")
+                                        Text(L10n.t("\(city.signatureTreat.emoji) \(city.city)"))
                                             .font(.system(.caption, design: .rounded, weight: .bold))
                                             .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textPrimary)
                                             .padding(.horizontal, 12)
@@ -138,34 +138,34 @@ public struct ProfileAndSettingsSheet: View {
                     // 120Hz ProMotion & GPU Quality Card
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("120Hz PROMOTION & METAL GPU")
+                            Text(L10n.t("120Hz PROMOTION & METAL GPU"))
                                 .font(.system(.caption, design: .rounded, weight: .bold))
                                 .foregroundStyle(MLTheme.cyanAccent)
                             Spacer()
-                            Text("NATIVE METAL")
+                            Text(L10n.t("NATIVE METAL"))
                                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                                 .foregroundStyle(MLTheme.mintClean)
                         }
 
-                        Picker("GPU Tier", selection: $qualityPref) {
-                            Text("Auto").tag(QualityPreference.auto)
-                            Text("Ultra").tag(QualityPreference.ultra)
-                            Text("Med").tag(QualityPreference.medium)
-                            Text("Low").tag(QualityPreference.low)
+                        Picker(L10n.t("GPU Tier"), selection: $qualityPref) {
+                            Text(L10n.t("Auto")).tag(QualityPreference.auto)
+                            Text(L10n.t("Ultra")).tag(QualityPreference.ultra)
+                            Text(L10n.t("Med")).tag(QualityPreference.medium)
+                            Text(L10n.t("Low")).tag(QualityPreference.low)
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: qualityPref) { _, next in
                             onChangeQuality(next)
                         }
 
-                        Toggle("Show Live Hz / Frame Telemetry Pill", isOn: $showProMotionTelemetry)
+                        Toggle(L10n.t("Show Live Hz / Frame Telemetry Pill"), isOn: $showProMotionTelemetry)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.cyanAccent)
                             .onChange(of: showProMotionTelemetry) { _, next in
                                 onToggleProMotionTelemetry(next)
                             }
 
-                        Toggle("Less Camera Motion", isOn: $reducedMotion)
+                        Toggle(L10n.t("Less Camera Motion"), isOn: $reducedMotion)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.cyanAccent)
                             .onChange(of: reducedMotion) { _, next in
@@ -177,16 +177,16 @@ public struct ProfileAndSettingsSheet: View {
                     // Hands-Free Multilingual Voice Coach Card
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("HANDS-FREE VOICE & LANGUAGE")
+                            Text(L10n.t("HANDS-FREE VOICE & LANGUAGE"))
                                 .font(.system(.caption, design: .rounded, weight: .bold))
                                 .foregroundStyle(MLTheme.cyanAccent)
                             Spacer()
-                            Text("\(coachLanguage.flagEmoji) \(coachLanguage.nativeName)")
+                            Text(L10n.t("\(coachLanguage.flagEmoji) \(coachLanguage.nativeName)"))
                                 .font(.system(.caption2, design: .rounded, weight: .bold))
                                 .foregroundStyle(MLTheme.mintClean)
                         }
 
-                        Toggle("Spoken Brushing Coach", isOn: $voiceCoachEnabled)
+                        Toggle(L10n.t("Spoken Brushing Coach"), isOn: $voiceCoachEnabled)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.mintClean)
                             .onChange(of: voiceCoachEnabled) { _, next in
@@ -201,7 +201,7 @@ public struct ProfileAndSettingsSheet: View {
                                         coachLanguage = lang
                                         onChangeLanguage(lang)
                                     } label: {
-                                        Text("\(lang.flagEmoji) \(lang.nativeName)")
+                                        Text(L10n.t("\(lang.flagEmoji) \(lang.nativeName)"))
                                             .font(.system(.caption, design: .rounded, weight: .bold))
                                             .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textPrimary)
                                             .padding(.horizontal, 12)
@@ -218,11 +218,11 @@ public struct ProfileAndSettingsSheet: View {
 
                     // Procedural Audio Synthesizer Card
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("PROCEDURAL AVAUDIOENGINE SYNTH")
+                        Text(L10n.t("PROCEDURAL AVAUDIOENGINE SYNTH"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
-                        Toggle("Mute All Game Audio", isOn: $isMuted)
+                        Toggle(L10n.t("Mute All Game Audio"), isOn: $isMuted)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.coralGum)
                             .onChange(of: isMuted) { _, next in
@@ -231,9 +231,9 @@ public struct ProfileAndSettingsSheet: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Text("Adaptive Music")
+                                Text(L10n.t("Adaptive Music"))
                                 Spacer()
-                                Text("\(Int((musicVolume * 100).rounded()))%")
+                                Text(L10n.t("\(Int((musicVolume * 100).rounded()))%"))
                                     .monospacedDigit()
                             }
                             .font(.system(.caption, design: .rounded, weight: .semibold))
@@ -248,9 +248,9 @@ public struct ProfileAndSettingsSheet: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Text("ASMR Scrub & Glass-Harp SFX")
+                                Text(L10n.t("ASMR Scrub & Glass-Harp SFX"))
                                 Spacer()
-                                Text("\(Int((sfxVolume * 100).rounded()))%")
+                                Text(L10n.t("\(Int((sfxVolume * 100).rounded()))%"))
                                     .monospacedDigit()
                             }
                             .font(.system(.caption, design: .rounded, weight: .semibold))
@@ -271,16 +271,16 @@ public struct ProfileAndSettingsSheet: View {
                             dismiss()
                             onReplayCosmicIntro()
                         } label: {
-                            Label("Replay the Star Story Intro", systemImage: "sparkles.tv.fill")
+                            Label(L10n.t("Replay the Star Story Intro"), systemImage: "sparkles.tv.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
 
-                        Text("Stays on your device • No tracking • No ads")
+                        Text(L10n.t("Stays on your device • No tracking • No ads"))
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.mintClean)
 
-                        Text(CharityInfo.clinicalDisclaimer)
+                        Text(L10n.t(CharityInfo.clinicalDisclaimer))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(MLTheme.textMuted)
                     }
@@ -289,13 +289,13 @@ public struct ProfileAndSettingsSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("Profile & Settings")
+            .navigationTitle(L10n.t("Profile & Settings"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t("Done")) { dismiss() }
                         .foregroundStyle(MLTheme.cyanAccent)
                 }
             }

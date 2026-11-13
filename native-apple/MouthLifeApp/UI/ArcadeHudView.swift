@@ -72,7 +72,7 @@ public struct ArcadeHudView: View {
                     // Cleanliness + District Seal Pips
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
-                            Text("\(cleanPct)% / \(targetPct)% CLEAN")
+                            Text(L10n.t("\(cleanPct)% / \(targetPct)% CLEAN"))
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(cleanPct >= targetPct ? MLTheme.mintClean : MLTheme.textPrimary)
@@ -107,7 +107,7 @@ public struct ArcadeHudView: View {
                     Spacer(minLength: 4)
 
                     // Synergy Pill
-                    Text(String(format: "%.2gx", snapshot.synergyMultiplier))
+                    Text(L10n.t(String(format: "%.2gx", snapshot.synergyMultiplier)))
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(snapshot.synergyMultiplier >= 2.0 ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent)
@@ -116,7 +116,7 @@ public struct ArcadeHudView: View {
                         .background(Capsule().fill(MLTheme.cardBg))
 
                     // Timer Pill
-                    Text(timerState.text)
+                    Text(L10n.t(timerState.text))
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(timerState.warn ? MLTheme.amberWarn : MLTheme.textPrimary)
@@ -125,7 +125,7 @@ public struct ArcadeHudView: View {
                         .background(Capsule().fill(MLTheme.cardBg))
 
                     if showProMotionBadge {
-                        Text(liveFps >= 95 ? "\(liveFps)Hz" : "\(max(60, liveFps))/120Hz")
+                        Text(L10n.t(liveFps >= 95 ? "\(liveFps)Hz" : "\(max(60, liveFps))/120Hz"))
                             .font(.system(size: 10, weight: .heavy, design: .monospaced))
                             .foregroundStyle(MLTheme.mintClean)
                             .padding(.horizontal, 7)
@@ -146,7 +146,7 @@ public struct ArcadeHudView: View {
                 // World Mechanic / Capillary Zip / Toast Sub-Pill
                 HStack(spacing: 8) {
                     if let mech = worldMechanicBadge {
-                        Text(mech.label)
+                        Text(L10n.t(mech.label))
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundStyle(mech.warn ? MLTheme.amberWarn : MLTheme.cyanAccent)
                             .padding(.horizontal, 10)
@@ -158,7 +158,7 @@ public struct ArcadeHudView: View {
                         Button {
                             onFireFlossSmart()
                         } label: {
-                            Label("Floss Zip Ready • Tap Floss!", systemImage: "bolt.horizontal.fill")
+                            Label(L10n.t("Floss Zip Ready • Tap Floss!"), systemImage: "bolt.horizontal.fill")
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                                 .foregroundStyle(MLTheme.deepOcean)
                                 .padding(.horizontal, 11)
@@ -170,7 +170,7 @@ public struct ArcadeHudView: View {
                 }
 
                 if let toastMessage {
-                    Text(toastMessage)
+                    Text(L10n.t(toastMessage))
                         .font(.system(.caption, design: .rounded, weight: .bold))
                         .foregroundStyle(MLTheme.textPrimary)
                         .padding(.horizontal, 14)
@@ -214,7 +214,7 @@ public struct ArcadeHudView: View {
                                 onVirtualStickMove(0, 0, false)
                             }
                     )
-                    .accessibilityLabel("Brush Thumbstick")
+                    .accessibilityLabel(L10n.t("Brush Thumbstick"))
 
                     Spacer()
 
@@ -227,7 +227,7 @@ public struct ArcadeHudView: View {
                             VStack(spacing: 2) {
                                 Image(systemName: "waveform.path.ecg")
                                     .font(.system(size: 18, weight: .bold))
-                                Text(snapshot.discloseCooldown > 0.05 ? String(format: "%.1fs", snapshot.discloseCooldown) : "SCAN")
+                                Text(L10n.t(snapshot.discloseCooldown > 0.05 ? String(format: "%.1fs", snapshot.discloseCooldown) : "SCAN"))
                                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                                     .monospacedDigit()
                             }
@@ -246,7 +246,7 @@ public struct ArcadeHudView: View {
                             VStack(spacing: 2) {
                                 Image(systemName: "drop.triangle.fill")
                                     .font(.system(size: 20, weight: .bold))
-                                Text(surgeReady ? "SURGE!" : "\(Int(snapshot.surgeMeter.rounded()))%")
+                                Text(L10n.t(surgeReady ? "SURGE!" : "\(Int(snapshot.surgeMeter.rounded()))%"))
                                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                                     .monospacedDigit()
                             }
@@ -284,7 +284,7 @@ public struct ArcadeHudView: View {
                             VStack(spacing: 2) {
                                 Image(systemName: "line.diagonal.arrow")
                                     .font(.system(size: 22, weight: .heavy))
-                                Text("FLOSS")
+                                Text(L10n.t("FLOSS"))
                                     .font(.system(size: 10, weight: .heavy, design: .rounded))
                             }
                             .foregroundStyle(MLTheme.deepOcean)
@@ -312,7 +312,7 @@ public struct ArcadeHudView: View {
                                     }
                                 }
                         )
-                        .accessibilityLabel("Floss & Floss Zip")
+                        .accessibilityLabel(L10n.t("Floss & Floss Zip"))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -325,21 +325,21 @@ public struct ArcadeHudView: View {
                     .onTapGesture { isPausedSheet = false }
 
                 VStack(spacing: 14) {
-                    Text(cartridge.title)
+                    Text(L10n.t(cartridge.title))
                         .font(.system(.title3, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.textPrimary)
-                    Text("Touch any tooth to steer and scrub. Double-tap to Floss, or drag the Floss ring to aim.")
+                    Text(L10n.t("Touch any tooth to steer and scrub. Double-tap to Floss, or drag the Floss ring to aim."))
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
                         .multilineTextAlignment(.center)
 
                     HStack(spacing: 12) {
-                        Button("Resume") {
+                        Button(L10n.t("Resume")) {
                             isPausedSheet = false
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.cyanAccent))
 
-                        Button("Exit to Hub") {
+                        Button(L10n.t("Exit to Hub")) {
                             isPausedSheet = false
                             onExitToHub()
                         }

@@ -138,6 +138,8 @@ public final class AppCoordinator {
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
         self.voiceCoachEnabled = NativeSoundEngine.shared.isVoiceCoachEnabled
         self.coachLanguage = NativeSoundEngine.shared.coachLanguage
+        // One language for the screens and the spoken coach.
+        L10n.setLanguage(self.coachLanguage.rawValue)
 
         setupSceneAndAudioBridges()
         NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
@@ -374,6 +376,11 @@ public final class AppCoordinator {
                 if let b = Int(arg.dropFirst("--beat=".count)) {
                     cosmicBeatIndex = max(0, min(3, b))
                 }
+            } else if arg.hasPrefix("--lang=") {
+                // For screenshots and testing: start in a given language, e.g. --lang=ja
+                if let language = CoachLanguage(rawValue: String(arg.dropFirst("--lang=".count))) {
+                    setCoachLanguage(language)
+                }
             } else if arg.hasPrefix("--sheet=") {
                 let s = String(arg.dropFirst("--sheet=".count))
                 activeSheet = HubSheetKind(rawValue: s)
@@ -587,6 +594,7 @@ public final class AppCoordinator {
 
     public func setCoachLanguage(_ language: CoachLanguage) {
         guard coachLanguage != language else { return }
+        L10n.setLanguage(language.rawValue)
         coachLanguage = language
         NativeSoundEngine.shared.setCoachLanguage(language)
         NativeSoundEngine.shared.playUiTap()
@@ -955,7 +963,7 @@ public final class AppCoordinator {
     }
 
     private func showHubToast(_ text: String) {
-        hubToast = text
+        hubToast = L10n.t(text)
         toastClearTask?.cancel()
         toastClearTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_200_000_000)
@@ -964,7 +972,7 @@ public final class AppCoordinator {
     }
 
     private func showArcadeToast(_ text: String) {
-        arcadeToast = text
+        arcadeToast = L10n.t(text)
         toastClearTask?.cancel()
         toastClearTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_800_000_000)

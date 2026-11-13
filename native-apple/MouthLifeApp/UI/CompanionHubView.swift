@@ -103,7 +103,7 @@ public struct CompanionHubView: View {
                     Spacer(minLength: 0)
 
                     if showProMotionBadge {
-                        Text(liveFps >= 95 ? "\(liveFps)Hz PRO" : "\(max(60, liveFps))/120Hz")
+                        Text(L10n.t(liveFps >= 95 ? "\(liveFps)Hz PRO" : "\(max(60, liveFps))/120Hz"))
                             .font(.system(size: 10, weight: .heavy, design: .monospaced))
                             .foregroundStyle(MLTheme.mintClean)
                             .padding(.horizontal, 8)
@@ -120,7 +120,7 @@ public struct CompanionHubView: View {
                             Button {
                                 onClaimIdleIons()
                             } label: {
-                                Label("Claim +\(comp.unclaimedIdleIons) F⁻ Bask", systemImage: "sparkles")
+                                Label(L10n.t("Claim +\(comp.unclaimedIdleIons) F⁻ Bask"), systemImage: "sparkles")
                             }
                             .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
                         }
@@ -129,7 +129,7 @@ public struct CompanionHubView: View {
                         Button {
                             onReplayIntro()
                         } label: {
-                            Label("Cosmic Intro", systemImage: "sparkles")
+                            Label(L10n.t("Cosmic Intro"), systemImage: "sparkles")
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
                         sheetPill(
@@ -150,7 +150,7 @@ public struct CompanionHubView: View {
 
             // Tapped Crown / Toast Floating Callout (Non-blocking!)
             if let statusToast {
-                Text(statusToast)
+                Text(L10n.t(statusToast))
                     .font(.system(.caption, design: .rounded, weight: .bold))
                     .foregroundStyle(MLTheme.textPrimary)
                     .padding(.horizontal, 14)
@@ -165,7 +165,7 @@ public struct CompanionHubView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkle.magnifyingglass")
                             .foregroundStyle(MLTheme.cyanAccent)
-                        Text("\(crown.toothTypeLabel) • Upper #\(crown.upperTooth.universal) (FDI \(crown.upperTooth.fdi))")
+                        Text(L10n.t("\(crown.toothTypeLabel) • Upper #\(crown.upperTooth.universal) (FDI \(crown.upperTooth.fdi))"))
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.textPrimary)
                     }
@@ -176,7 +176,7 @@ public struct CompanionHubView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Rub teeth to play notes & polish • Drag sky to turn")
+                Text(L10n.t("Rub teeth to play notes & polish • Drag sky to turn"))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary.opacity(0.85))
                     .padding(.horizontal, 12)
@@ -200,15 +200,15 @@ public struct CompanionHubView: View {
                 if needsPulpRescue {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("PULP RESCUE SCRAMBLE READY")
+                            Text(L10n.t("PULP RESCUE SCRAMBLE READY"))
                                 .font(.system(.caption, design: .rounded, weight: .heavy))
                                 .foregroundStyle(MLTheme.coralGum)
-                            Text("90s tooth rescue (+\(GameConfig.pulpRescueWinIons) F⁻ if you win, and you can’t lose the tooth!)")
+                            Text(L10n.t("90s tooth rescue (+\(GameConfig.pulpRescueWinIons) F⁻ if you win, and you can’t lose the tooth!)"))
                                 .font(.system(.caption2, design: .rounded))
                                 .foregroundStyle(MLTheme.textSecondary)
                         }
                         Spacer()
-                        Button("Launch Rescue") {
+                        Button(L10n.t("Launch Rescue")) {
                             onLaunchPulpRescue()
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.coralGum, darkText: false))
@@ -228,7 +228,7 @@ public struct CompanionHubView: View {
                                 Image(systemName: isSanctuaryActive ? "waveform" : "moon.stars.fill")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(isSanctuaryActive ? MLTheme.deepOcean : MLTheme.mintClean)
-                                Text("Sanctuary")
+                                Text(L10n.t("Sanctuary"))
                                     .font(.system(.caption, design: .rounded, weight: .bold))
                                     .foregroundStyle(isSanctuaryActive ? MLTheme.deepOcean : MLTheme.textPrimary)
                             }
@@ -248,7 +248,7 @@ public struct CompanionHubView: View {
                                 Image(systemName: isPlanetActive ? "waveform" : "sparkles")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(isPlanetActive ? MLTheme.deepOcean : MLTheme.fluorapatiteGold)
-                                Text("Planet")
+                                Text(L10n.t("Planet"))
                                     .font(.system(.caption, design: .rounded, weight: .bold))
                                     .foregroundStyle(isPlanetActive ? MLTheme.deepOcean : MLTheme.textPrimary)
                             }
@@ -278,11 +278,11 @@ public struct CompanionHubView: View {
                                     Image(systemName: iconName)
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(selected ? MLTheme.deepOcean : (unlocked ? MLTheme.cyanAccent : MLTheme.textMuted))
-                                    Text(host.city)
+                                    Text(L10n.t(host.city))
                                         .font(.system(.caption, design: .rounded, weight: .bold))
                                         .foregroundStyle(selected ? MLTheme.deepOcean : (unlocked ? MLTheme.textPrimary : MLTheme.textMuted))
                                     if let grade = rec?.bestGrade, grade != .none {
-                                        Text(grade == .fluorapatiteGold ? "★" : grade.rawValue)
+                                        Text(L10n.t(grade == .fluorapatiteGold ? "★" : grade.rawValue))
                                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                                             .foregroundStyle(selected ? MLTheme.deepOcean : MLTheme.fluorapatiteGold)
                                     }
@@ -313,11 +313,11 @@ public struct CompanionHubView: View {
 
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(activeCart.title) • \(activeHost.city)")
+                        Text(L10n.t("\(activeCart.title) • \(activeHost.city)"))
                             .font(.system(.subheadline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
-                        Text(activeUnlocked ? activeCart.subtitle : "Needs \(activeHost.unlockStampsRequired) Brush Stamps, or clear the world before it")
+                        Text(L10n.t(activeUnlocked ? activeCart.subtitle : "Needs \(activeHost.unlockStampsRequired) Brush Stamps, or clear the world before it"))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(activeUnlocked ? MLTheme.textSecondary : MLTheme.amberWarn)
                             .lineLimit(1)
@@ -327,7 +327,7 @@ public struct CompanionHubView: View {
                     Button {
                         onFeedTreat()
                     } label: {
-                        Text("\(activeHost.signatureTreat.emoji) Treat")
+                        Text(L10n.t("\(activeHost.signatureTreat.emoji) Treat"))
                     }
                     .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
                 }
@@ -336,7 +336,7 @@ public struct CompanionHubView: View {
                     Button {
                         onStartBrushAlong()
                     } label: {
-                        Label(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage), systemImage: "timer")
+                        Label(L10n.t(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage)), systemImage: "timer")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
@@ -344,7 +344,7 @@ public struct CompanionHubView: View {
                     Button {
                         onLaunchWorld(activeHost.worldId)
                     } label: {
-                        Label(activeUnlocked ? "Dive Arch" : "Locked", systemImage: activeUnlocked ? "play.fill" : "lock.fill")
+                        Label(L10n.t(activeUnlocked ? "Dive Arch" : "Locked"), systemImage: activeUnlocked ? "play.fill" : "lock.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: activeUnlocked ? MLTheme.cyanAccent : MLTheme.textMuted, darkText: true))
@@ -367,7 +367,7 @@ public struct CompanionHubView: View {
         Button {
             onOpenSheet(sheet)
         } label: {
-            Label(label, systemImage: icon)
+            Label(L10n.t(label), systemImage: icon)
         }
         .buttonStyle(MLGlassPillButtonStyle(tint: tint))
     }

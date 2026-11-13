@@ -66,7 +66,7 @@ public struct CosmicIntroView: View {
                     onComplete()
                 } label: {
                     Label(
-                        hasSeenBefore ? "Enter Arch" : "Skip Intro",
+                        L10n.t(hasSeenBefore ? "Enter Arch" : "Skip Intro"),
                         systemImage: hasSeenBefore ? "arrow.right.circle.fill" : "forward.fill"
                     )
                 }
@@ -79,15 +79,15 @@ public struct CosmicIntroView: View {
 
             // Bottom Story Card leaving the 3D Orbital Earth & Mohs Crystals unobstructed above
             VStack(alignment: .leading, spacing: 12) {
-                Text(beat.kicker)
+                Text(L10n.t(beat.kicker))
                     .font(.system(.caption2, design: .rounded, weight: .heavy))
                     .foregroundStyle(MLTheme.fluorapatiteGold)
 
-                Text(beat.title)
+                Text(L10n.t(beat.title))
                     .font(.system(.title3, design: .rounded, weight: .heavy))
                     .foregroundStyle(MLTheme.textPrimary)
 
-                Text(beat.body)
+                Text(L10n.t(beat.body))
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +120,7 @@ public struct CosmicIntroView: View {
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Text(idx + 1 < beats.count ? "Next Scale" : "Dive Into Your Arch")
+                            Text(L10n.t(idx + 1 < beats.count ? "Next Scale" : "Dive Into Your Arch"))
                             Image(systemName: idx + 1 < beats.count ? "arrow.right" : "sparkles")
                         }
                     }
@@ -147,10 +147,10 @@ public struct CosmicIntroView: View {
 
     private func mohsChip(_ name: String, _ rank: String, active: Bool) -> some View {
         VStack(spacing: 2) {
-            Text(rank)
+            Text(L10n.t(rank))
                 .font(.system(size: 12, weight: .heavy, design: .rounded))
                 .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.cyanAccent)
-            Text(name)
+            Text(L10n.t(name))
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textSecondary)
         }

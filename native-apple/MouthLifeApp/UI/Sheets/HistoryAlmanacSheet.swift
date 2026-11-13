@@ -15,15 +15,15 @@ public struct HistoryAlmanacSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("ORAL SCIENCE & HISTORY ALMANAC")
+                            Text(L10n.t("ORAL SCIENCE & HISTORY ALMANAC"))
                                 .font(.system(.caption, design: .rounded, weight: .bold))
                                 .foregroundStyle(MLTheme.cyanAccent)
-                            Text("From ancient stardust to germs on the Skylab space station.")
+                            Text(L10n.t("From ancient stardust to germs on the Skylab space station."))
                                 .font(.system(.footnote, design: .rounded))
                                 .foregroundStyle(MLTheme.textSecondary)
                         }
                         Spacer()
-                        Text("\(unlockedCount)/\(HostsAndHistory.historicalFieldNotes.count)")
+                        Text(L10n.t("\(unlockedCount)/\(HostsAndHistory.historicalFieldNotes.count)"))
                             .font(.system(.headline, design: .rounded, weight: .heavy))
                             .monospacedDigit()
                             .foregroundStyle(MLTheme.fluorapatiteGold)
@@ -37,28 +37,28 @@ public struct HistoryAlmanacSheet: View {
                         let isUnlocked = unlockedNoteIds.contains(note.id)
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text(note.yearLabel)
+                                Text(L10n.t(note.yearLabel))
                                     .font(.system(.caption, design: .rounded, weight: .bold))
                                     .foregroundStyle(isUnlocked ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                                 Spacer()
                                 Label(
-                                    isUnlocked ? "Unlocked" : "Clear Campaign World",
+                                    L10n.t(isUnlocked ? "Unlocked" : "Clear Campaign World"),
                                     systemImage: isUnlocked ? "checkmark.seal.fill" : "lock.fill"
                                 )
                                 .font(.system(.caption2, design: .rounded, weight: .bold))
                                 .foregroundStyle(isUnlocked ? MLTheme.mintClean : MLTheme.textMuted)
                             }
 
-                            Text(isUnlocked ? note.title : "Locked Tooth Science Note")
+                            Text(L10n.t(isUnlocked ? note.title : "Locked Tooth Science Note"))
                                 .font(.system(.headline, design: .rounded, weight: .bold))
                                 .foregroundStyle(isUnlocked ? MLTheme.textPrimary : MLTheme.textSecondary)
 
-                            Text(note.locationLabel + " • " + note.scientistOrCulture)
+                            Text(L10n.t(note.locationLabel + " • " + note.scientistOrCulture))
                                 .font(.system(.caption, design: .rounded, weight: .semibold))
                                 .foregroundStyle(MLTheme.cyanAccent.opacity(isUnlocked ? 0.95 : 0.55))
 
                             if isUnlocked {
-                                Text(note.summary)
+                                Text(L10n.t(note.summary))
                                     .font(.system(.footnote, design: .rounded))
                                     .foregroundStyle(MLTheme.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -68,7 +68,7 @@ public struct HistoryAlmanacSheet: View {
                                         .font(.system(size: 13, weight: .bold))
                                         .foregroundStyle(MLTheme.mintClean)
                                         .padding(.top, 2)
-                                    Text(note.enamelLesson)
+                                    Text(L10n.t(note.enamelLesson))
                                         .font(.system(.caption, design: .rounded, weight: .medium))
                                         .foregroundStyle(MLTheme.textPrimary)
                                 }
@@ -78,7 +78,7 @@ public struct HistoryAlmanacSheet: View {
                                         .fill(MLTheme.mintClean.opacity(0.10))
                                 )
                             } else {
-                                Text("Finish missions or earn Brush-Along Habit Stamps to unlock this discovery.")
+                                Text(L10n.t("Finish missions or earn Brush-Along Habit Stamps to unlock this discovery."))
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(MLTheme.textMuted)
                             }
@@ -93,13 +93,13 @@ public struct HistoryAlmanacSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("History Almanac")
+            .navigationTitle(L10n.t("History Almanac"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L10n.t("Done")) { dismiss() }
                         .foregroundStyle(MLTheme.cyanAccent)
                 }
             }

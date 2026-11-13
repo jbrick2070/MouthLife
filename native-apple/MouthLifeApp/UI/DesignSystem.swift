@@ -1,3 +1,4 @@
+import MouthLifeCore
 import SwiftUI
 
 public enum MLTheme {
@@ -157,10 +158,10 @@ public struct MLStatChip: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text(label.uppercased())
+                Text(L10n.t(label.uppercased()))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(MLTheme.textMuted)
-                Text(value)
+                Text(L10n.t(value))
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(MLTheme.textPrimary)
@@ -193,11 +194,11 @@ public struct MLShieldBar: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(label)
+                Text(L10n.t(label))
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary)
                 Spacer()
-                Text("\(Int(value.rounded()))%")
+                Text(L10n.t("\(Int(value.rounded()))%"))
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(tint)

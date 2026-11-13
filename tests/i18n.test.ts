@@ -71,6 +71,12 @@ describe('string list and translation files', () => {
     expect(res.status).toBe(0);
   });
 
+  it('native app catalogs match the translation files (run node scripts/i18n-native.mjs after changes)', () => {
+    const res = spawnSync(process.execPath, [join(ROOT, 'scripts/i18n-native.mjs'), '--check'], { encoding: 'utf8' });
+    expect(res.stderr).toBe('');
+    expect(res.status).toBe(0);
+  });
+
   it('has a non-trivial English list with no duplicates', () => {
     expect(EN.length).toBeGreaterThan(500);
     expect(new Set(EN).size).toBe(EN.length);
