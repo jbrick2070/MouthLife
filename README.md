@@ -1,41 +1,51 @@
 # MouthLife: The Plaque Dimension
 
-A progressive stylized-3D biophysical dental arcade adventure and daily **"Smooth Bask"** oral-care companion (`TypeScript` + `Vite 6` + `Three.js r174`), where real dental-care habits and microscopic enamel-restoration missions unlock five global-to-orbital worlds — with **zero punitive streak tracking**, **zero sign-up**, and **100% on-device privacy**.
+A stylized-3D biophysical dental arcade adventure and daily **"Smooth Bask"** oral-care ritual — featuring **two complete implementations** in one repository:
+
+1. **🍎 `native-apple/` — Primary 100% Native Swift + Metal 120Hz ProMotion App (iOS / iPadOS / macOS):** Zero WebViews, zero JS wrappers — pure Swift 6, custom Metal enamel/gingiva/Earth shaders, dual-deck hardware AAC Suno Live Earth Radio + 48-voice `AVAudioEngine` procedural DSP synth, 8-language hands-free `AVSpeechSynthesizer` mirror coach, `CoreMotion` 120Hz gyroscope liquid-slosh spirit-level physics, `CoreHaptics` enamel feedback, and Liquid-Glass `SwiftUI` overlays.
+2. **🌐 `src/` — Cross-Platform Web / Offline PWA Edition (`TypeScript` + `Vite 6` + `Three.js r174`):** Runs in any desktop or mobile browser with byte-compatible `ML2:` Base64URL Sync Codes shared with `native-apple/`.
 
 ---
 
-## 🚀 Quick Start (Mac, Windows, or Linux)
+## 🍎 Quick Start — Native iOS / iPadOS / macOS (`native-apple/`)
 
 ```bash
-git clone https://github.com/jbrick2070/MouthLife.git
-cd MouthLife
+cd native-apple
+
+# 1. Run all 15 deterministic MouthLifeCore biophysics, coach & gyro unit tests
+swift test
+
+# 2. Open in Xcode (Simulator, Mac, or Physical 120Hz ProMotion iPhone)
+open MouthLife.xcodeproj
+
+# 3. Headless CLI Release Builds (iOS + macOS)
+xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build
+```
+
+See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](AGENTS.md)** for the full native Swift/Metal architecture map, shader uniform layout, audio/gyro pipelines, and AI coding-agent handoff notes.
+
+---
+
+## 🌐 Quick Start — Web / PWA (`src/`)
+
+```bash
 npm install
-
-# Run all 137 engine, cartridge, chemistry, audio & UX unit tests
-npm test
-
-# Start local dev server (http://localhost:5173)
-npm run dev
-
-# Type-check & build production offline-capable PWA bundle into dist/
-npm run build
+npm test          # Run all 137 Vitest unit tests
+npm run dev       # Start local Vite dev server (http://localhost:5173)
+npm run build     # Type-check & build production PWA bundle into dist/
 ```
 
 ---
 
-## 🍎 Porting to iPhone, iPad & Mac (Xcode Handoff Ready)
+## 🎮 Playable Modes & Features
 
-Pointing a Mac or an AI coding agent at this repository? Start with these two specs:
-- **🍎 [Mac & iOS Native Porting Blueprint (`docs/MAC_AND_IOS_PORTING_SPEC.md`)](docs/MAC_AND_IOS_PORTING_SPEC.md)** — Covers **both** the 15-minute **Ionic Capacitor Xcode wrapper** and a **ground-up native Swift (`SwiftUI` + `SceneKit`/`Metal` + `AVAudioEngine` + `CoreHaptics`)** module-by-module architecture map, `ML2:` cross-platform save compatibility, Apple App Store Review checklist, and a ready-to-paste Mac agent kickoff prompt.
-- **🧬 [Master Game Design & Engine Architecture Spec (`docs/GDD_AND_ARCHITECTURE.md`)](docs/GDD_AND_ARCHITECTURE.md)** — Complete biophysics formulas, `OralSurfaceGrid` RGBA shader channel spec, 4-pillar scoring math, Saliva Stasis curves, and event bus contracts.
-
----
-
-## 🎮 Playable Modes & Features (v1.0 Golden Master)
-
+- **🪥 3-Stage Hands-Free Bathroom Mirror Ritual (`native-apple/`, `+100 F⁻` Total):**
+  1. **Stage 1 (`2:00` Brushing, `+50 F⁻`):** Hands-free, eyes-optional progression (`12 × 10s`: `Q1 → Q2 → Q3 → Q4`, `Outer 45° Gumline → Chewing Grooves → Inner Vertical`), body-locked **Mirror Arch Compass** (`Screen-Left = Patient Left`, `Screen-Right = Patient Right`), 3D **45° Bristle Angle Wedge**, **3-State Metal Enamel Awakening**, **8-Language Spoken Voice Coach** (`EN`, `ES`, `FR`, `JA`, `ZH`, `KO`, `PT`, `DE`) with `-8.4 dB` music ducking, and `3… 2… 1…` final 3-second musical anticipation.
+  2. **Stage 2 (`0:45` 3D Y-Bow Floss Pick Bonus, `+25 F⁻`):** Animated 3D Y-bow floss pick (`Pick` / `String` toggle) demonstrating gentle wiggle-glide past contact points and two-wall C-hug sweeps across all 26 interdental gaps (Upper → Lower arch).
+  3. **Stage 3 (`1:00` Purple Total Care Anticavity Fluoride Rinse, `+25 F⁻`):** ADA / Purple Listerine Total Care protocol (`10 mL`, `[60s | 30s]` toggle, 30-minute post-rinse no-water lock-in reminder) with a 3D `10 mL` pouring cup, swirling Royal Amethyst vortex + `24` `F⁻` bubbles, 28-crown purple-to-24k-gold Fluorapatite Metal shader seal, and **auto-detecting 120Hz `CoreMotion` Gyroscope Liquid Slosh + Cheek-to-Cheek Spirit-Level Bubble Gauge** when picked up during the swish!
 - **✦ Cosmic Stardust & Mohs Hardness Intro** — Interactive 3D journey from stellar nucleosynthesis (`²⁰Ca`, `¹⁵P`) to hydroxyapatite (`Mohs 5.0`, harder than steel) vs. bacterial acid (`pH 5.5` vs. fluorapatite `pH 4.5`).
-- **🦷 Smooth Bask Companion Hub** — Interactive 14-crown 3D dental arch (rub teeth for crystalline glass-harp chimes + live tooth identification), **Interactive 32-Tooth Clinical Chart** (`ADA Universal #1–#32`, `ISO 3950 FDI 11–48`, `Palmer` + Spot Quiz + 4-layer SVG Tooth Anatomy), regional treats, non-punitive **Saliva Stasis** offline protection, **Biophysical Actuator Lab**, **Global Dental History Almanac**, and portable `ML2:` sync codes.
-- **🪥 2-Minute Sink Brush-Along (+20s C-Curve Floss Bonus)** — Wake-Lock-protected quadrant/surface pacer teaching clinical quadrants (`Q1–Q4`) and surfaces (`B/F`, `O/I`, `L/P`, `M/D`) while banking monotonic Habit Stamps, Fluoride Ions, Supply Beacons, and Overdrive charges.
+- **🦷 Smooth Bask Companion Hub & Live Earth Radio** — Interactive 14-crown 3D dental arch (rub teeth for crystalline glass-harp chimes + handheld wet-enamel specular glint), **10-Track Mastered AAC Suno Soundtrack** (`Sanctuary`, `Toronto`, `New Orleans`, `Tokyo`, `Accra`, `Aurora`, `Brush-Along`, `Cosmic`, `Pulp Rescue`, `Victory`) driving 3-band 120Hz audio-reactive shaders, **Interactive 32-Tooth Clinical Chart** (`ADA Universal #1–#32`, `ISO 3950 FDI 11–48`, `Palmer` + Spot Quiz + 4-layer Cross-Section), non-punitive **Saliva Stasis** (`>= 45%`), and portable `ML2:` sync codes.
 - **🌍 5-World Earth-to-Orbit Arcade Campaign + 90s Pulp Rescue:**
   1. **`world_1` — Plaque City** *(Toronto • 1498 Beijing & 1683 Leeuwenhoek)* — Pellicle shear, interdental Floss Tether-Zips & molar fissures.
   2. **`world_2` — Crescent Sulcus** *(New Orleans • 1819 Parmly & 1948 Dr. Charles Bass)* — Gentle moving 45° sulcus care vs. heavy stationary gum irritation.
@@ -43,7 +53,6 @@ Pointing a Mac or an AI coding agent at this repository? Start with these two sp
   4. **`world_4` — Fluorapatite Coast** *(Accra & Colorado Springs • Ancient Miswak & 1901–1945 Fluoride Discovery)* — Tart organic-acid basins & live enamel conversion into acid-defying fluorapatite (`pH 4.5` critical).
   5. **`world_5` — Quorum Dome** *(Station Aurora, 408 km LEO • 1973 NASA Skylab & 1978 Costerton Biofilms)* — Zero-G quorum-sensing EPS polymer shields cracked via Floss shear & Fluoride-Bicarb Surge waves.
   6. **`pulp_rescue` — 90s Emergency Molar Scramble** — Fast non-punitive rescue when repeated treats breach Enamel → Dentin → Pulp (with a safe `50%` Calcium-Hydroxide stabilization floor on timeout).
-- **📱 Streamlined Mobile-First Viewport & Offline PWA** — Compact floating pills + swipe-to-dismiss bottom sheets (`60–88%` open 3D viewport on portrait & landscape phones), direct touch-on-tooth steering, and offline Service Worker caching (`public/sw.js`).
 
 ---
 
@@ -51,25 +60,23 @@ Pointing a Mac or an AI coding agent at this repository? Start with these two sp
 
 ```text
 MouthLife/
+├── AGENTS.md                             # AI coding-agent orientation & architectural invariants
+├── native-apple/                         # 🍎 100% Native Swift + Metal 120Hz ProMotion App (iOS/iPadOS/macOS)
+│   ├── MouthLife.xcodeproj/              # Xcode project + shared MouthLife scheme (bundle ID: org.mouthlife.plaque)
+│   ├── Package.swift                     # Pure SwiftPM package for MouthLifeCore + MouthLifeCoreTests
+│   ├── Sources/MouthLifeCore/            # Deterministic Swift biophysics, 3-stage coach, GyroSloshSim & ML2: saves
+│   ├── Tests/MouthLifeCoreTests/         # 15 XCTest suites (biophysics, subrect RGBA, 3-stage coach, gyro slosh)
+│   └── MouthLifeApp/                     # AppCoordinator, Metal shaders, SceneKit 120Hz loop, Audio/Gyro & SwiftUI
+│       ├── Audio/                        # NativeSoundEngine (Suno deck + 48-voice DSP + TTS), Haptics, MotionTiltMonitor
+│       ├── Music/                        # 10 mastered hardware-AAC (.m4a) Suno tracks + prompt/alias guide
+│       ├── Render/                       # EnamelShaders.swift, ProceduralMeshBuilder, MouthLifeSceneController
+│       └── UI/                           # Liquid-Glass SwiftUI views (Hub, BrushAlong + Gyro Bar, Arcade, 6 Sheets)
 ├── docs/
-│   ├── GDD_AND_ARCHITECTURE.md       # Biophysical & engine design specification
-│   └── MAC_AND_IOS_PORTING_SPEC.md   # Capacitor + Native Swift (iOS/macOS) porting blueprint
-├── public/                           # PWA manifest, icons, privacy.html & offline sw.js
-├── src/
-│   ├── main.ts                       # Deterministic bootstrap, mode router & lifecycle hooks
-│   ├── config/                       # Constants, upgrades, hosts/history, 32-tooth chart, charity
-│   ├── engine/
-│   │   ├── audio/                    # Procedural Web Audio synthesizer & musical theory
-│   │   ├── companion/                # Smooth Bask offline curve, treats & touch chime system
-│   │   ├── persistence/              # SaveSystem (V1->V2 migration + ML2: sync codes) & HabitBank
-│   │   ├── physics/                  # Cusp heightfield, derived alley walls & Capillary Tether-Zip
-│   │   ├── render/                   # Three.js single-pass EnamelBiophysicsMaterial & 3D Earth
-│   │   ├── scoring/                  # 10,000-pt 4-pillar scoring & actuator Synergy multiplier
-│   │   ├── sim/                      # 60Hz WorldSession simulation across all cartridges
-│   │   └── surface/                  # OralSurfaceGrid (256x128 RGBA) & OralChemistrySim (pH/sulcus)
-│   ├── worlds/                       # 5 Earth-to-Orbit campaign cartridges + 90s Pulp Rescue
-│   └── ui/                           # Mobile-first overlays, bottom sheets & pure HUD helpers
-└── tests/                            # 19 Vitest suites (137 deterministic tests)
+│   ├── GDD_AND_ARCHITECTURE.md           # Biophysical & engine design specification
+│   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
+├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
+├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
+└── tests/                                # 19 Vitest suites (137 deterministic web tests)
 ```
 
 ---
