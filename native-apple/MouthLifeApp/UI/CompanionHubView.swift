@@ -350,7 +350,7 @@ public struct CompanionHubView: View {
                     } label: {
                         Label(L10n.t(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage)), systemImage: "timer")
                             .lineLimit(1)
-                            .minimumScaleFactor(0.62)
+                            .minimumScaleFactor(0.55)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
@@ -360,8 +360,7 @@ public struct CompanionHubView: View {
                     } label: {
                         Label(L10n.t(activeUnlocked ? "Dive Arch" : "Locked"), systemImage: activeUnlocked ? "play.fill" : "lock.fill")
                             .lineLimit(1)
-                            .minimumScaleFactor(0.62)
-                            .frame(maxWidth: .infinity)
+                            .fixedSize()
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: activeUnlocked ? MLTheme.cyanAccent : MLTheme.textMuted, darkText: true))
                     .disabled(!activeUnlocked)
