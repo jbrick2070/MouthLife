@@ -1,0 +1,13 @@
+# Swift Package Manager & Xcode build artifacts
+.build/
+.swiftpm/
+DerivedData/
+build/
+
+# User-specific Xcode workspace state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# macOS metadata
+.DS_Store
