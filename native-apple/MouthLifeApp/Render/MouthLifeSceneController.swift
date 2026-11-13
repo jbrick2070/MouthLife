@@ -61,6 +61,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public var companionAcidStress: Float = 0.0
     public var pacerElapsedSec: Double = 0.0
     public var pacerInFlossBonus: Bool = false
+    public var pacerFlossToolStyle: FlossToolStyle = .flossPick
     public var highlightedCrownIndex: Int? {
         didSet {
             companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
@@ -265,6 +266,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 latestPacerCoachState = companionNodes.updatePacerCoaching(
                     elapsedSec: pacerElapsedSec,
                     inFlossBonus: pacerInFlossBonus,
+                    flossToolStyle: pacerFlossToolStyle,
                     nowSec: sceneNowSec,
                     reducedMotion: reducedMotion
                 )
@@ -561,6 +563,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             let coach = companionNodes.updatePacerCoaching(
                 elapsedSec: pacerElapsedSec,
                 inFlossBonus: pacerInFlossBonus,
+                flossToolStyle: pacerFlossToolStyle,
                 nowSec: sceneNowSec,
                 reducedMotion: reducedMotion
             )
@@ -974,6 +977,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             let coach = latestPacerCoachState ?? companionNodes.updatePacerCoaching(
                 elapsedSec: pacerElapsedSec,
                 inFlossBonus: pacerInFlossBonus,
+                flossToolStyle: pacerFlossToolStyle,
                 nowSec: sceneNowSec,
                 reducedMotion: reducedMotion
             )

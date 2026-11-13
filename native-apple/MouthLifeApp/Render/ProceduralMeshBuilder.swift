@@ -54,6 +54,7 @@ public final class CompanionArchNodes {
     public let coachBrushNode: SCNNode
     public let coachBristlesNode: SCNNode
     public let coachFlossNode: SCNNode
+    public let coachFlossPickNode: SCNNode
 
     private var hadVisibleSplats: Bool = true
     private var lastHaloOpacity: CGFloat = -1
@@ -71,7 +72,8 @@ public final class CompanionArchNodes {
         polishHaloNode: SCNNode,
         coachBrushNode: SCNNode,
         coachBristlesNode: SCNNode,
-        coachFlossNode: SCNNode
+        coachFlossNode: SCNNode,
+        coachFlossPickNode: SCNNode
     ) {
         self.rootNode = rootNode
         self.lowerJawNode = lowerJawNode
@@ -86,6 +88,7 @@ public final class CompanionArchNodes {
         self.coachBrushNode = coachBrushNode
         self.coachBristlesNode = coachBristlesNode
         self.coachFlossNode = coachFlossNode
+        self.coachFlossPickNode = coachFlossPickNode
     }
 
     public func setHubModeLayout() {
@@ -95,13 +98,15 @@ public final class CompanionArchNodes {
         upperJawNode.isHidden = true
         coachBrushNode.isHidden = true
         coachFlossNode.isHidden = true
+        coachFlossPickNode.isHidden = true
     }
 
-    /// Drives Upper/Lower jaw visibility, smooth tooth-by-tooth 3D Sonic Toothbrush / C-Curve Floss choreography,
-    /// and dynamic 3D orbital camera targets for the 2-Minute Sink Brush-Along.
+    /// Drives Upper/Lower jaw visibility, smooth tooth-by-tooth 3D Sonic Toothbrush / Y-Bow Floss Pick / C-Curve Silk choreography,
+    /// and dynamic 3D orbital camera targets for the 2-Minute Sink Brush-Along + 45s Floss Pick Bonus Round.
     public func updatePacerCoaching(
         elapsedSec: Double,
         inFlossBonus: Bool,
+        flossToolStyle: FlossToolStyle = .flossPick,
         nowSec: Float,
         reducedMotion: Bool
     ) -> PacerCoachVisualState {
@@ -124,7 +129,9 @@ public final class CompanionArchNodes {
 
         if inFlossBonus {
             coachBrushNode.isHidden = true
-            coachFlossNode.isHidden = false
+            let usePick = (flossToolStyle == .flossPick)
+            coachFlossPickNode.isHidden = !usePick
+            coachFlossNode.isHidden = usePick
 
             let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
             let bonusTotal = max(1.0, GameConfig.brushAlongFlossBonusSec)
@@ -139,42 +146,116 @@ public final class CompanionArchNodes {
             lowerJawNode.simdPosition = .zero
             lowerJawNode.opacity = 1.0
 
-            let contactCount = max(1, crownFrames.count - 1) // 13 contacts (0..12)
-            let contactProg = halfNorm * Float(contactCount - 1)
-            let cIdx = min(contactCount - 1, max(0, Int(contactProg.rounded())))
+            let contactCount = max(1, crownFrames.count - 1) // 13 interdental contacts (0..12) per arch
+            let contactProg = min(Float(contactCount) - 0.001, max(0.0, halfNorm * Float(contactCount)))
+            let cIdx = min(contactCount - 1, max(0, Int(floor(contactProg))))
+            let gapFrac = contactProg - Float(cIdx)
+            let nextCrownIdx = min(crownFrames.count - 1, cIdx + 1)
             let fA = crownFrames[cIdx]
-            let fB = crownFrames[min(crownFrames.count - 1, cIdx + 1)]
+            let fB = crownFrames[nextCrownIdx]
 
             let posA = isUpper ? SIMD3<Float>(fA.localPosition.x, Self.upperMirrorY - fA.localPosition.y, fA.localPosition.z) : fA.localPosition
             let posB = isUpper ? SIMD3<Float>(fB.localPosition.x, Self.upperMirrorY - fB.localPosition.y, fB.localPosition.z) : fB.localPosition
             let mid = (posA + posB) * 0.5
+            let halfH = (fA.halfHeight + fB.halfHeight) * 0.5
             let outAvg = simd_normalize(SIMD3<Float>(fA.outwardXZ.x + fB.outwardXZ.x, 0, fA.outwardXZ.y + fB.outwardXZ.y))
-            let slideY: Float = reducedMotion ? 0 : sin(nowSec * 6.2) * 0.32
+            let archSpan = SIMD3<Float>(posB.x - posA.x, 0, posB.z - posA.z)
+            let archDir = simd_length_squared(archSpan) > 1e-5
+                ? simd_normalize(archSpan)
+                : SIMD3<Float>(outAvg.z, 0, -outAvg.x)
             let gumSign: Float = isUpper ? 1.0 : -1.0
 
-            let flossLocal = mid + SIMD3<Float>(0, gumSign * 0.18 + slideY, 0)
-            coachFlossNode.simdPosition = flossLocal
-            let yaw = atan2(outAvg.x, outAvg.z)
-            coachFlossNode.simdEulerAngles = SIMD3<Float>(isUpper ? .pi : 0, yaw, 0)
+            // 3-Phase Floss Pick Technique per gap:
+            //   1) 0.00..<0.30: Gentle saw-wiggle in-and-out past tight contact (never snap!)
+            //   2) 0.30..<0.65: Lean pick onto Tooth A wall & sweep into gingival sulcus
+            //   3) 0.65...1.00: Lean pick onto Tooth B wall, sweep sulcus & lift out over cusp
+            let depthIntoGap: Float
+            let leanSide: Float
+            let sawZ: Float
+            let spotlightCrown: Int
+
+            if gapFrac < 0.30 {
+                let t = gapFrac / 0.30
+                let ease = simd_smoothstep(0.0, 1.0, t)
+                depthIntoGap = simd_mix(-(halfH + 0.18), halfH * 0.10, ease)
+                leanSide = 0.0
+                sawZ = reducedMotion ? 0 : sin(t * .pi * 4.0) * 0.15
+                spotlightCrown = cIdx
+            } else if gapFrac < 0.65 {
+                let t = (gapFrac - 0.30) / 0.35
+                depthIntoGap = halfH * (0.10 + 0.28 * sin(t * .pi))
+                leanSide = -simd_smoothstep(0.0, 0.22, t) * (1.0 - 0.35 * simd_smoothstep(0.80, 1.0, t))
+                sawZ = reducedMotion ? 0 : sin(t * .pi * 2.0) * 0.05
+                spotlightCrown = cIdx
+            } else {
+                let t = (gapFrac - 0.65) / 0.35
+                if t < 0.72 {
+                    let sub = t / 0.72
+                    depthIntoGap = halfH * (0.10 + 0.28 * sin(sub * .pi))
+                    leanSide = simd_smoothstep(0.0, 0.25, sub)
+                    sawZ = reducedMotion ? 0 : sin(sub * .pi * 2.0) * 0.05
+                } else {
+                    let lift = simd_smoothstep(0.0, 1.0, (t - 0.72) / 0.28)
+                    depthIntoGap = simd_mix(halfH * 0.10, -(halfH + 0.20), lift)
+                    leanSide = 1.0 - lift
+                    sawZ = 0
+                }
+                spotlightCrown = nextCrownIdx
+            }
+
+            let contactLocal = mid
+                + SIMD3<Float>(0, gumSign * depthIntoGap, 0)
+                + archDir * (leanSide * 0.14)
+                + outAvg * sawZ
+
+            if usePick {
+                var yAxis = SIMD3<Float>(0, -gumSign, 0) + archDir * (leanSide * 0.24)
+                yAxis = simd_normalize(yAxis - outAvg * simd_dot(yAxis, outAvg))
+                let xAxis = simd_normalize(simd_cross(yAxis, outAvg))
+                let zAxis = outAvg
+                coachFlossPickNode.simdTransform = simd_float4x4(
+                    SIMD4<Float>(xAxis.x, xAxis.y, xAxis.z, 0),
+                    SIMD4<Float>(yAxis.x, yAxis.y, yAxis.z, 0),
+                    SIMD4<Float>(zAxis.x, zAxis.y, zAxis.z, 0),
+                    SIMD4<Float>(contactLocal.x, contactLocal.y, contactLocal.z, 1)
+                )
+            } else {
+                let slideY: Float = reducedMotion ? 0 : sin(nowSec * 6.2) * 0.28
+                let flossLocal = mid + SIMD3<Float>(0, gumSign * 0.18 + slideY, 0) + archDir * (leanSide * 0.12)
+                coachFlossNode.simdPosition = flossLocal
+                let yaw = atan2(outAvg.x, outAvg.z) + leanSide * 0.18
+                coachFlossNode.simdEulerAngles = SIMD3<Float>(isUpper ? .pi : 0, yaw, 0)
+            }
+
+            // Crisp ~24° three-quarter oblique angle so the Floss Pick's U-bow, horns, taut string & handle never foreshorten!
+            let baseYaw = atan2(outAvg.x, outAvg.z)
+            let camYaw: Float
+            if cIdx <= 5 {
+                camYaw = max(-0.92, min(0.85, baseYaw + 0.42))
+            } else if cIdx == 6 {
+                camYaw = 0.38
+            } else {
+                camYaw = max(-0.85, min(0.92, baseYaw - 0.42))
+            }
 
             let activeQuad = isUpper ? (cIdx < 6 ? 0 : 1) : (cIdx < 6 ? 3 : 2)
-            let contactWorld = rootOrigin + flossLocal
-            let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.85 : 1.35, 1.2)
-            let camYaw = (halfNorm - 0.5) * 1.35
+            let contactWorld = rootOrigin + contactLocal
+            let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.85 : 1.35, 1.0)
             return PacerCoachVisualState(
-                activeCrownIndex: cIdx,
+                activeCrownIndex: spotlightCrown,
                 activeQuadrant: activeQuad,
                 contactWorldPos: contactWorld,
-                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.52)),
+                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.66)),
                 camYaw: camYaw,
-                camPitch: isUpper ? -0.22 : 0.28,
-                camDistPortrait: 20.5,
-                camDistLandscape: 14.2
+                camPitch: isUpper ? -0.26 : 0.30,
+                camDistPortrait: 18.6,
+                camDistLandscape: 13.0
             )
         }
 
         // Standard 2-Minute 4-Quadrant x 3-Surface Guided Brushing
         coachFlossNode.isHidden = true
+        coachFlossPickNode.isHidden = true
         coachBrushNode.isHidden = false
 
         let qIdx = min(3, max(0, Int(elapsedSec / 30.0)))
@@ -1430,10 +1511,11 @@ public enum ProceduralMeshBuilder {
         }
         rootNode.addChildNode(polishHaloNode)
 
-        // 3D Guided Sonic Toothbrush + C-Curve Floss Rig for 2-Minute Sink Brush-Along
-        let (coachBrushNode, coachBristlesNode, coachFlossNode) = buildPacerCoachRig()
+        // 3D Guided Sonic Toothbrush + Y-Bow Floss Pick + C-Curve Silk Rig for 2-Minute Sink Brush-Along
+        let (coachBrushNode, coachBristlesNode, coachFlossNode, coachFlossPickNode) = buildPacerCoachRig()
         rootNode.addChildNode(coachBrushNode)
         rootNode.addChildNode(coachFlossNode)
+        rootNode.addChildNode(coachFlossPickNode)
 
         return CompanionArchNodes(
             rootNode: rootNode,
@@ -1448,13 +1530,14 @@ public enum ProceduralMeshBuilder {
             polishHaloNode: polishHaloNode,
             coachBrushNode: coachBrushNode,
             coachBristlesNode: coachBristlesNode,
-            coachFlossNode: coachFlossNode
+            coachFlossNode: coachFlossNode,
+            coachFlossPickNode: coachFlossPickNode
         )
     }
 
     /// Builds a sleek, high-visibility 3D Sonic Toothbrush (`local origin = bristle tips`, `+Z = bristle-to-back`,
-    /// `+Y = handle shaft out of lips`) plus a curved C-Shape Floss Silk guide for `BrushAlongView`.
-    private static func buildPacerCoachRig() -> (brush: SCNNode, bristles: SCNNode, floss: SCNNode) {
+    /// `+Y = handle shaft out of lips`), a sculpted 3D Mint-Pearl Dental Floss Pick, and a C-Shape Floss Silk guide.
+    private static func buildPacerCoachRig() -> (brush: SCNNode, bristles: SCNNode, floss: SCNNode, flossPick: SCNNode) {
         let brushRoot = SCNNode()
         brushRoot.name = "PacerCoachToothbrush"
         brushRoot.isHidden = true
@@ -1583,7 +1666,132 @@ public enum ProceduralMeshBuilder {
             flossRoot.addChildNode(tNode)
         }
 
-        return (brushRoot, bristlesGroup, flossRoot)
+        let flossPickRoot = buildFlossPickGuideNode()
+        return (brushRoot, bristlesGroup, flossRoot, flossPickRoot)
+    }
+
+    /// Builds a sculpted, unmistakable 3D Mint-Pearl Dental Floss Pick:
+    /// - Local origin `(0, 0, 0)` = center of the taut PTFE floss string right inside the interdental gap
+    /// - `Z` (`-1.08 ... +1.08`) = Lingual-to-Buccal span across the gap (`+Z` extends handle out through cheek/lips)
+    /// - `+Y` = Bite-opening direction (`0 -> +1.68` U-bow arch cleanly clear of tooth cusps!)
+    /// - `X` = Flat-molded ribbon thickness along the dental arch
+    private static func buildFlossPickGuideNode() -> SCNNode {
+        let pickRoot = SCNNode()
+        pickRoot.name = "PacerCoachFlossPick"
+        pickRoot.isHidden = true
+
+        let mintPolymerMat = makeGlossyPropMaterial(hex: 0xCCFBF1, emissionHex: 0x0D9488, roughness: 0.14, metalness: 0.12)
+        let cyanGripMat = makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.94)
+        let goldAccentMat = makeGlossyPropMaterial(hex: 0xFBBF24, emissionHex: 0xD97706, roughness: 0.18, metalness: 0.85)
+        let ptfeCoreMat = makeUnlitGlowMaterial(hex: 0xFFFFFF, opacity: 0.98, additive: true)
+        let ptfeHaloMat = makeUnlitGlowMaterial(hex: 0x5EEAD4, opacity: 0.72, additive: true)
+
+        // 1. Taut glowing PTFE floss string spanning z = -1.08 ... +1.08 through the tooth contact
+        let threadCore = SCNCylinder(radius: 0.042, height: 2.16)
+        threadCore.materials = [ptfeCoreMat]
+        let coreNode = SCNNode(geometry: threadCore)
+        coreNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
+        pickRoot.addChildNode(coreNode)
+
+        let threadHalo = SCNCylinder(radius: 0.098, height: 2.12)
+        threadHalo.materials = [ptfeHaloMat]
+        let haloCylNode = SCNNode(geometry: threadHalo)
+        haloCylNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
+        pickRoot.addChildNode(haloCylNode)
+
+        // Subtle glowing interdental contact ring right where the taut string hugs the tooth wall
+        let gapHalo = SCNTorus(ringRadius: 0.34, pipeRadius: 0.032)
+        gapHalo.ringSegmentCount = 28
+        gapHalo.materials = [makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.80, additive: true)]
+        let gapHaloNode = SCNNode(geometry: gapHalo)
+        gapHaloNode.simdEulerAngles = SIMD3<Float>(0, 0, .pi * 0.5)
+        pickRoot.addChildNode(gapHaloNode)
+
+        // 2. Twin molded inner (z = -1.08) & outer (z = +1.08) fork horns rising cleanly past tooth cusps
+        for sideZ: Float in [-1.08, 1.08] {
+            let prongTip = SCNSphere(radius: 0.088)
+            prongTip.segmentCount = 14
+            prongTip.materials = [cyanGripMat]
+            let tipNode = SCNNode(geometry: prongTip)
+            tipNode.simdScale = SIMD3<Float>(0.65, 1.0, 1.0)
+            tipNode.simdPosition = SIMD3<Float>(0, 0, sideZ)
+            pickRoot.addChildNode(tipNode)
+
+            // Tapered horn: narrow (0.075) at floss tip (y=0), wider (0.17) where it joins the U-bow (y=1.54)
+            let horn = SCNCone(topRadius: 0.168, bottomRadius: 0.074, height: 1.54)
+            horn.radialSegmentCount = 16
+            horn.materials = [mintPolymerMat]
+            let hornNode = SCNNode(geometry: horn)
+            hornNode.simdScale = SIMD3<Float>(0.58, 1.0, 1.08)
+            hornNode.simdPosition = SIMD3<Float>(0, 0.77, sideZ)
+            hornNode.simdEulerAngles = SIMD3<Float>(sideZ < 0 ? 0.04 : -0.04, 0, 0)
+            pickRoot.addChildNode(hornNode)
+        }
+
+        // 3. Arched U-Bow spine bridging z = -1.08 ... +1.08 cleanly above/below the biting cusps
+        let bowSegments = 6
+        let up = SIMD3<Float>(0, 1, 0)
+        for i in 0..<bowSegments {
+            let f0 = Float(i) / Float(bowSegments)
+            let f1 = Float(i + 1) / Float(bowSegments)
+            let z0 = -1.08 + f0 * 2.16
+            let z1 = -1.08 + f1 * 2.16
+            let y0: Float = 1.50 + sin(f0 * .pi) * 0.22
+            let y1: Float = 1.50 + sin(f1 * .pi) * 0.22
+            let p0 = SIMD3<Float>(0, y0, z0)
+            let p1 = SIMD3<Float>(0, y1, z1)
+            let seg = p1 - p0
+            let len = max(0.05, simd_length(seg))
+            let dir = seg / len
+
+            let bowCap = SCNCapsule(capRadius: 0.165, height: CGFloat(len + 0.30))
+            bowCap.materials = [mintPolymerMat]
+            let bNode = SCNNode(geometry: bowCap)
+            bNode.simdPosition = (p0 + p1) * 0.5
+            if abs(simd_dot(up, dir)) < 0.999 {
+                bNode.simdOrientation = simd_quatf(from: up, to: dir)
+            }
+            bNode.simdScale = SIMD3<Float>(0.58, 1.0, 1.0)
+            pickRoot.addChildNode(bNode)
+        }
+
+        // 4. Flat-molded ergonomic Thumb-Pinch Pad + Handle extending outward along +Z (out through open lips)
+        let pinchPad = SCNCapsule(capRadius: 0.34, height: 1.55)
+        pinchPad.materials = [mintPolymerMat]
+        let pinchNode = SCNNode(geometry: pinchPad)
+        pinchNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
+        pinchNode.simdScale = SIMD3<Float>(0.34, 1.0, 1.0)
+        pinchNode.simdPosition = SIMD3<Float>(0, 1.50, 1.98)
+        pickRoot.addChildNode(pinchNode)
+
+        // 3 raised glowing tactile grip ribs + 24k gold collar accent on the thumb-pinch pad
+        for rIdx in 0..<3 {
+            let rib = SCNCapsule(capRadius: 0.036, height: 0.44)
+            rib.materials = [rIdx == 1 ? goldAccentMat : cyanGripMat]
+            let rNode = SCNNode(geometry: rib)
+            rNode.simdScale = SIMD3<Float>(3.6, 1.0, 1.0)
+            rNode.simdPosition = SIMD3<Float>(0, 1.50, 1.72 + Float(rIdx) * 0.26)
+            pickRoot.addChildNode(rNode)
+        }
+
+        let handleStem = SCNCapsule(capRadius: 0.21, height: 2.35)
+        handleStem.materials = [mintPolymerMat]
+        let stemNode = SCNNode(geometry: handleStem)
+        stemNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
+        stemNode.simdScale = SIMD3<Float>(0.42, 1.0, 1.0)
+        stemNode.simdPosition = SIMD3<Float>(0, 1.48, 3.55)
+        pickRoot.addChildNode(stemNode)
+
+        // 5. Signature curved interdental pick tail at the far end of the handle
+        let tailPick = SCNCone(topRadius: 0.022, bottomRadius: 0.115, height: 1.08)
+        tailPick.radialSegmentCount = 14
+        tailPick.materials = [cyanGripMat]
+        let tailNode = SCNNode(geometry: tailPick)
+        tailNode.simdPosition = SIMD3<Float>(0, 1.66, 5.02)
+        tailNode.simdEulerAngles = SIMD3<Float>(1.18, 0, 0)
+        pickRoot.addChildNode(tailNode)
+
+        return pickRoot
     }
 
     private static func buildScallopedGingivaCollarGeometry(

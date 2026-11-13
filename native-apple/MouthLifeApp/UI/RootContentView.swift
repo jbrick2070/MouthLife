@@ -54,9 +54,11 @@ public struct RootContentView: View {
                     elapsedSec: coordinator.pacerElapsedSec,
                     isPaused: coordinator.pacerIsPaused,
                     inFlossBonus: coordinator.pacerInFlossBonus,
+                    flossToolStyle: coordinator.flossToolStyle,
                     stationLabel: coordinator.currentRadioStationLabel,
                     onCycleStation: { coordinator.cycleRadioStation() },
                     onTogglePause: { coordinator.togglePacerPause() },
+                    onSelectFlossToolStyle: { style in coordinator.setFlossToolStyle(style) },
                     onEnterFlossBonusNow: { coordinator.enterFlossBonusNow() },
                     onCompleteSession: { withFloss in coordinator.completeBrushAlongSession(withFlossBonus: withFloss) },
                     onCancelToHub: { coordinator.returnToHub() }

@@ -333,7 +333,7 @@ public struct CompanionHubView: View {
                     Button {
                         onStartBrushAlong()
                     } label: {
-                        Label("2-Min Brush", systemImage: "timer")
+                        Label("2m Brush + Pick", systemImage: "timer")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))

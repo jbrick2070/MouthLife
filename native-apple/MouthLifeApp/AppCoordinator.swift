@@ -55,11 +55,14 @@ public final class AppCoordinator {
     public var lastUnlockedUpgradeIds: [String] = []
 
     // Active 2-Minute Sink Brush-Along Pacer State
+    private static let flossToolDefaultsKey = "mouthlife.pacer.flossToolStyle"
     public var pacerElapsedSec: Double = 0.0
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
+    public var flossToolStyle: FlossToolStyle = .flossPick
     private var pacerPausedByUser: Bool = false
     private var pacerSuspendedBySystem: Bool = false
+    private var announcedFlossLowerHalf: Bool = false
     private var pacerTimer: Timer?
     private var lastPacerTickUptime: TimeInterval?
     private var lastAnnouncedQuadrant: Int = -1
@@ -116,6 +119,10 @@ public final class AppCoordinator {
         self.activeRadioWorldId = initialWorld
         self.earthRadioEnabled = NativeSoundEngine.shared.isEarthRadioEnabled
         self.hubRadioStation = self.earthRadioEnabled ? .city(initialWorld) : .sanctuary
+        let persistedFlossStyle = UserDefaults.standard.string(forKey: Self.flossToolDefaultsKey)
+            .flatMap(FlossToolStyle.init(rawValue:)) ?? .flossPick
+        self.flossToolStyle = persistedFlossStyle
+        self.sceneController.pacerFlossToolStyle = persistedFlossStyle
 
         setupSceneAndAudioBridges()
         NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
@@ -511,6 +518,7 @@ public final class AppCoordinator {
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         pacerInFlossBonus = false
+        announcedFlossLowerHalf = false
         brushRadioStation = .livingClock
         lastAnnouncedQuadrant = 0
         lastAnnouncedSurface = 0
@@ -518,12 +526,21 @@ public final class AppCoordinator {
         sceneController.highlightedCrownIndex = nil
         sceneController.pacerElapsedSec = 0
         sceneController.pacerInFlossBonus = false
+        sceneController.pacerFlossToolStyle = flossToolStyle
         NativeSoundEngine.shared.setPaused(false)
         transition(to: .brushAlong)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
         NativeSoundEngine.shared.playPacerCue(.quadrant)
         HapticsEngine.shared.playPacerQuadrantCue()
         startPacerTimer()
+    }
+
+    public func setFlossToolStyle(_ style: FlossToolStyle) {
+        guard flossToolStyle != style else { return }
+        flossToolStyle = style
+        sceneController.pacerFlossToolStyle = style
+        UserDefaults.standard.set(style.rawValue, forKey: Self.flossToolDefaultsKey)
+        NativeSoundEngine.shared.playUiTap()
     }
 
     public func togglePacerPause() {
@@ -541,9 +558,11 @@ public final class AppCoordinator {
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
+        announcedFlossLowerHalf = false
         pacerElapsedSec = max(pacerElapsedSec, GameConfig.brushAlongTotalSec)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = true
+        sceneController.pacerFlossToolStyle = flossToolStyle
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
@@ -601,6 +620,11 @@ public final class AppCoordinator {
         sceneController.pacerInFlossBonus = pacerInFlossBonus
 
         if !pacerInFlossBonus {
+            if pacerElapsedSec >= GameConfig.brushAlongTotalSec - 0.04 {
+                // Seamlessly chime & roll hands-free into the 45s Floss Pick Bonus Round when 2:00 finishes!
+                enterFlossBonusNow()
+                return
+            }
             let qIdx = min(3, Int(pacerElapsedSec / 30.0))
             let sIdx = min(2, Int((pacerElapsedSec - Double(qIdx) * 30.0) / 10.0))
             if qIdx != lastAnnouncedQuadrant && pacerElapsedSec < GameConfig.brushAlongTotalSec - 0.2 {
@@ -614,8 +638,16 @@ public final class AppCoordinator {
                 NativeSoundEngine.shared.playPacerCue(.surface)
                 HapticsEngine.shared.playPacerSurfaceTick()
             }
-        } else if pacerElapsedSec >= cap - 0.05 {
-            completeBrushAlongSession(withFlossBonus: true)
+        } else {
+            let flossElapsed = pacerElapsedSec - GameConfig.brushAlongTotalSec
+            if !announcedFlossLowerHalf && flossElapsed >= GameConfig.brushAlongFlossBonusSec * 0.5 {
+                announcedFlossLowerHalf = true
+                NativeSoundEngine.shared.playPacerCue(.surface)
+                HapticsEngine.shared.playPacerQuadrantCue()
+            }
+            if pacerElapsedSec >= cap - 0.05 {
+                completeBrushAlongSession(withFlossBonus: true)
+            }
         }
     }
 

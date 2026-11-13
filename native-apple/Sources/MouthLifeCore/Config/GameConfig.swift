@@ -1,5 +1,10 @@
 import Foundation
 
+public enum FlossToolStyle: String, Codable, CaseIterable, Sendable {
+    case flossPick
+    case stringFloss
+}
+
 public enum GameConfig {
     // Spatial & Surface Grid Constants
     public static let cellSize: Double = 0.25
@@ -119,7 +124,7 @@ public enum GameConfig {
 
     // Habit Bank & Pacer Constants
     public static let brushAlongTotalSec: Double = 120.0
-    public static let brushAlongFlossBonusSec: Double = 20.0
+    public static let brushAlongFlossBonusSec: Double = 45.0
     public static let dailyFullRewardCap: Int = 2
     public static let dailyCourtesyTipCap: Int = 3
     public static let brushAlongFullIons: Int = 50
