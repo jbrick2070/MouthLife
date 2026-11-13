@@ -385,7 +385,7 @@ export function compactToastText(msg: string, compactViewport: boolean): string 
   if (!compactViewport || !msg) return msg;
   return msg
     .replace(/\s*\(or WASD \+ Space\)/gi, '')
-    .replace(/Press Q\s*\/\s*tap Surge/gi, 'Tap Surge')
+    .replace(/Press Q\s*(?:\/|or)\s*tap Surge/gi, 'Tap Surge')
     .replace(/E\s*\/\s*🧵 Floss/g, '🧵 Floss')
     .replace(/\s*\[[A-Z]\]/g, '')
     .replace(/\s*\([EQ]\)/g, '')

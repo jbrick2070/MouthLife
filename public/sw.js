@@ -1,12 +1,14 @@
 // MouthLife Offline PWA Service Worker
 // Network-first for HTML/shell (instant updates when online) + cache-first for immutable hashed Vite bundles.
-const CACHE_NAME = 'mouthlife-shell-v1';
+const CACHE_NAME = 'mouthlife-shell-v2';
 const SHELL_URLS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icon.svg',
   './apple-touch-icon.png',
+  './icon-192.png',
+  './icon-512.png',
   './privacy.html',
 ];
 
@@ -32,6 +34,25 @@ self.addEventListener('activate', (event) => {
         )
       )
       .then(() => self.clients.claim())
+  );
+});
+
+// The page sends the hashed bundle URLs it loaded; cache them so the first visit already works offline.
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'precache' || !Array.isArray(data.urls)) return;
+  const urls = data.urls.filter(
+    (u) => typeof u === 'string' && u.startsWith(self.location.origin) && u.includes('/assets/')
+  );
+  if (urls.length === 0) return;
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        urls.slice(0, 40).map((u) =>
+          cache.match(u).then((hit) => hit || cache.add(u).catch(() => undefined))
+        )
+      )
+    )
   );
 });
 

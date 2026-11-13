@@ -106,6 +106,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
   // Pause / audio / timer / wayfinders / hints
   private paused = false;
+  private lastPadConnected = false;
   private pauseSheetEl: HTMLElement | null = null;
   private pauseBtnEl: HTMLButtonElement | null = null;
   private muteBtnEl: HTMLButtonElement | null = null;
@@ -345,7 +346,8 @@ export class TelemetryHudOverlay implements OverlayView {
 
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div class="desktop-hotkey-bar glass-card ui-interactive">
-          <span class="pill-badge">WASD + Click/Space: Sonic Scrub</span>
+          <span class="pill-badge" id="hud-move-hint">WASD + Click/Space: Scrub</span>
+          <span class="pill-badge" id="hud-fullscreen-hint">[F] Full Screen</span>
           <button type="button" id="btn-desk-floss" class="btn btn-sm">🧵 Floss & Zip [Right-Click / E]</button>
           <button type="button" id="btn-desk-surge" class="btn btn-sm">🌊 Fluoride Surge (0%) [Q]</button>
           <button type="button" id="btn-desk-scan" class="btn btn-sm">🔍 Dye Bio-Scan [R]</button>
@@ -1000,6 +1002,17 @@ export class TelemetryHudOverlay implements OverlayView {
   }
 
   tickHud(frameDt: number): void {
+    // Show controller buttons instead of keys as soon as a controller is in use.
+    const padConnected = this.input.isGamepadConnected();
+    if (padConnected !== this.lastPadConnected) {
+      this.lastPadConnected = padConnected;
+      const hint = this.container?.querySelector('#hud-move-hint');
+      if (hint) {
+        hint.textContent = padConnected
+          ? '🎮 Stick + A: Scrub • X Floss • Y Surge • B Scan • Start Pause'
+          : 'WASD + Click/Space: Scrub';
+      }
+    }
     this.acidCalloutCooldown = Math.max(0, this.acidCalloutCooldown - frameDt);
     this.gumCalloutCooldown = Math.max(0, this.gumCalloutCooldown - frameDt);
     this.epsCalloutCooldown = Math.max(0, this.epsCalloutCooldown - frameDt);

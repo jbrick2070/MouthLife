@@ -765,6 +765,18 @@ function bootstrapMouthLife(): void {
     }
   });
 
+  // F toggles full screen (never while typing in a field).
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'KeyF' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (target?.closest('input, textarea, select, [contenteditable]')) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    } else {
+      void document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  });
+
   window.__MOUTHLIFE_DEBUG__ = {
     getMode: () => currentMode,
     getDrawCalls: () => sceneMgr.getLastDrawCalls(),
@@ -798,5 +810,16 @@ if (
     navigator.serviceWorker.register('./sw.js').catch(() => {
       // Non-fatal in private/restricted webviews
     });
+    // Tell the worker which script and style files this visit loaded, so the game works offline
+    // after the very first visit (their hashed names are not known to the worker ahead of time).
+    navigator.serviceWorker.ready
+      .then((reg) => {
+        const urls = performance
+          .getEntriesByType('resource')
+          .map((entry) => entry.name)
+          .filter((name) => name.startsWith(window.location.origin) && name.includes('/assets/'));
+        if (urls.length > 0) reg.active?.postMessage({ type: 'precache', urls });
+      })
+      .catch(() => {});
   });
 }

@@ -44,6 +44,18 @@ describe('mobile gameplay screen-room helpers', () => {
     expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: false, compactViewport: false })).toBe(true);
   });
 
+  it('drops key names from the current plain-language toasts on phones', () => {
+    expect(compactToastText('🌊 Surge is full! Press Q or tap Surge to blast a fluoride wave.', true)).toBe(
+      '🌊 Surge is full! Tap Surge to blast a fluoride wave.'
+    );
+    expect(
+      compactToastText('🕹️ Drag on the tooth (or WASD + Space) to scrub • E / 🧵 Floss cleans the narrow gaps!', true)
+    ).toBe('🕹️ Drag on the tooth to scrub • 🧵 Floss cleans the narrow gaps!');
+    expect(compactToastText('🛡️ Slime dome blocks the brush! Crack it with Floss (E) or Surge (Q).', true)).toBe(
+      '🛡️ Slime dome blocks the brush! Crack it with Floss or Surge.'
+    );
+  });
+
   it('shortens the floating interdental Zip prompt on mobile while keeping full hotkey text on desktop', () => {
     expect(formatZipPromptText(true, true)).toBe('🧵 Tap to Zip!');
     expect(formatZipPromptText(false, true)).toBe('🦷 Closer to Zip');
