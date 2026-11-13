@@ -121,6 +121,18 @@ const FRAGMENT_SHADER = /* glsl */ `
       }
     }
 
+    // Arcade stages: slope of the plaque layer from 4 neighbouring taps of the surface grid. It gives the
+    // biofilm real thickness (lit and shaded edges) and a soft contact shadow on the enamel beside it.
+    vec2 plaqueGrad = vec2(0.0);
+    if (uGlobalSmoothnessOverride < 0.0 && uDetail > 0) {
+      vec2 tap = vec2(0.32) / uWorldSize;
+      plaqueGrad = vec2(
+        texture2D(uSurfaceTex, uv + vec2(tap.x, 0.0)).r - texture2D(uSurfaceTex, uv - vec2(tap.x, 0.0)).r,
+        texture2D(uSurfaceTex, uv + vec2(0.0, tap.y)).r - texture2D(uSurfaceTex, uv - vec2(0.0, tap.y)).r
+      );
+    }
+    float plaqueEdge = clamp(length(plaqueGrad) * 2.2, 0.0, 1.0);
+
     // Crisp liquid-to-glassy contour magnification right around CLEAN_THRESHOLD = 0.10,
     // while keeping thin morning pellicle semi-translucent so enamel landmarks & scrubbing progress read clearly.
     float cleanEdge = smoothstep(0.085, 0.135, rawPlaque);
@@ -145,6 +157,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     if (plaqueMask > 0.01) {
       vec3 bumpOffset = vec3(n1 - 0.5, 0.0, n2 - 0.5) * (0.38 * plaqueMask);
       N = safeUnit(N + bumpOffset);
+    }
+    if (plaqueEdge > 0.001) {
+      // Plaque is higher where it is denser, so the surface tilts away from the dense side.
+      N = safeUnit(N - vec3(plaqueGrad.x, 0.0, plaqueGrad.y) * 1.7);
     }
 
     vec3 L1 = normalize(vec3(0.36, 0.86, 0.35));
@@ -212,6 +228,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       plaqueLit += sheen * (0.16 + 0.72 * fresnel) * matureBiofilm;
     }
     vec3 baseColor = mix(cleanEnamel, plaqueLit, plaqueMask);
+    // Contact shadow on clean enamel right beside a plaque edge, and a darker foot under thick biofilm.
+    baseColor *= 1.0 - plaqueEdge * (0.26 * (1.0 - plaqueMask) + 0.12 * matureBiofilm);
     baseColor *= 1.0 + headlamp(vWorldPos, N);
 
     // B-channel biophysical cue tinting (palette-contrasted per world)
@@ -261,7 +279,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     float cleanSpec1 = pow(max(dot(N, H1), 0.0), 92.0) * 0.92;
     float cleanSpec2 = uDetail > 0 ? pow(max(dot(N, H2), 0.0), 34.0) * 0.32 : 0.0;
     float dullSpec = pow(max(dot(N, H1), 0.0), 9.0) * 0.14;
-    float spec = mix(cleanSpec1 + cleanSpec2, dullSpec, plaqueMask);
+    // From the high arcade camera the tight highlight almost never lines up, so cleaned enamel
+    // also gets a broad wet sheen there; otherwise freshly scrubbed tooth reads as matte.
+    float cleanSheen = uGlobalSmoothnessOverride < 0.0 ? pow(max(dot(N, H1), 0.0), 10.0) * 0.26 : 0.0;
+    float spec = mix(cleanSpec1 + cleanSpec2 + cleanSheen, dullSpec, plaqueMask);
     baseColor += vec3(0.94, 0.99, 1.0) * spec;
 
     // Wet saliva meniscus glint pooled along the gingival collar (vVertColor.b near 0)

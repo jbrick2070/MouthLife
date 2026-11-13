@@ -119,11 +119,14 @@ export const PULP_RESCUE_STABILIZE_VALUE = 50;
 
 // Habit Bank & Pacer Constants
 export const BRUSH_ALONG_TOTAL_SEC = 120;
-export const BRUSH_ALONG_FLOSS_BONUS_SEC = 20;
+export const BRUSH_ALONG_FLOSS_BONUS_SEC = 45;
+export const BRUSH_ALONG_MOUTHWASH_BONUS_SEC = 60;
+export const BRUSH_ALONG_MOUTHWASH_QUICK_SEC = 30;
 export const DAILY_FULL_REWARD_CAP = 2;
 export const DAILY_COURTESY_TIP_CAP = 3;
 export const BRUSH_ALONG_FULL_IONS = 50;
 export const BRUSH_ALONG_FLOSS_IONS = 25;
+export const BRUSH_ALONG_MOUTHWASH_IONS = 25;
 export const BRUSH_ALONG_TIP_IONS = 5;
 export const MAX_SUPPLY_BEACONS = 4;
 export const MAX_OVERDRIVE_RUNS = 4;

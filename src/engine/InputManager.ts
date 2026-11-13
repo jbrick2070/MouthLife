@@ -79,6 +79,8 @@ const STEER_PREF_KEY = 'mouthlife.pointerSteer';
 export class InputManager {
   private keysDown = new Set<string>();
   private mouseLeftHeld = false;
+  /** Mouse button bitmask from the last mouse event (1 = left, 2 = right). */
+  private mouseButtons = 0;
   private cursorNdc = new THREE.Vector2(0, 0);
   private hasCursorMoved = false;
 
@@ -192,11 +194,12 @@ export class InputManager {
   private bindEvents(): void {
     window.addEventListener('keydown', (e) => {
       this.onUserGesture?.();
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || isModalDialogOpen()) return;
+      const target = e.target instanceof Element ? e.target : null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isModalDialogOpen()) return;
 
       const code = e.code;
-      if (code === 'Space' && (e.target as HTMLElement | null)?.closest('button, a, [role="button"]')) return;
+      if (code === 'Space' && target?.closest('button, a, [role="button"]')) return;
       this.keysDown.add(code);
 
       if (code === 'KeyE') {
@@ -219,6 +222,7 @@ export class InputManager {
     window.addEventListener('blur', () => {
       this.keysDown.clear();
       this.mouseLeftHeld = false;
+      this.mouseButtons = 0;
       this.steerPointerId = null;
       this.touchPointerId = null;
       this.virtualMoveX = 0;
@@ -247,6 +251,7 @@ export class InputManager {
         }
         const shouldSteer = resolvePointerSteerForType(this.steerPref, e.pointerType);
         if (e.pointerType === 'mouse') {
+          this.mouseButtons = e.buttons;
           if (e.button === 0) {
             this.mouseLeftHeld = true;
             if (shouldSteer) {
@@ -290,6 +295,23 @@ export class InputManager {
       if (e.pointerType === 'mouse') {
         this.updateCursorNdc(e.clientX, e.clientY);
         this.hasCursorMoved = true;
+        // A second mouse button pressed or released while another is held arrives as a
+        // pointermove (not pointerdown/up), so chords are read from the button bitmask.
+        const prev = this.mouseButtons;
+        this.mouseButtons = e.buttons;
+        const mode = this.currentModeGetter();
+        const inPlay = mode === 'ARCADE' || mode === 'PULP_RESCUE';
+        const overCanvas = e.target === this.canvas;
+        if ((e.buttons & 2) !== 0 && (prev & 2) === 0 && inPlay && overCanvas) {
+          this.pendingFloss = true; // right-click floss while still holding left to scrub
+        }
+        if ((e.buttons & 1) !== 0 && (prev & 1) === 0 && inPlay && overCanvas) {
+          this.mouseLeftHeld = true; // left pressed while right is still down
+        }
+        if ((e.buttons & 1) === 0 && this.mouseLeftHeld) {
+          this.mouseLeftHeld = false; // left released while right is still down
+          if (this.steerPointerId === e.pointerId) this.steerPointerId = null;
+        }
       }
       if (this.steerPointerId === e.pointerId) {
         const ndc = this.toNdc(e.clientX, e.clientY);
@@ -309,7 +331,10 @@ export class InputManager {
     });
 
     const endPointer = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse' && e.button === 0) this.mouseLeftHeld = false;
+      if (e.pointerType === 'mouse') {
+        this.mouseButtons = e.buttons;
+        if ((e.buttons & 1) === 0) this.mouseLeftHeld = false;
+      }
       if (this.steerPointerId === e.pointerId) this.steerPointerId = null;
       if (this.touchPointerId === e.pointerId) {
         this.touchPointerId = null;

@@ -290,10 +290,10 @@ public enum BrushCoachCopy {
         case (.spanish, .lowerLeft): return "ABAJO IZQUIERDA"
         case (.spanish, .lowerRight): return "ABAJO DERECHA"
 
-        case (.french, .upperRight): return "HAUT DROITE"
-        case (.french, .upperLeft): return "HAUT GAUCHE"
-        case (.french, .lowerLeft): return "BAS GAUCHE"
-        case (.french, .lowerRight): return "BAS DROITE"
+        case (.french, .upperRight): return "EN HAUT À DROITE"
+        case (.french, .upperLeft): return "EN HAUT À GAUCHE"
+        case (.french, .lowerLeft): return "EN BAS À GAUCHE"
+        case (.french, .lowerRight): return "EN BAS À DROITE"
 
         case (.japanese, .upperRight): return "右上"
         case (.japanese, .upperLeft): return "左上"
@@ -325,11 +325,11 @@ public enum BrushCoachCopy {
     public static func surfaceActionBadge(_ s: BrushSurface, lang: CoachLanguage) -> (headline: String, angleTag: String) {
         switch (lang, s) {
         case (.english, .outerCheek): return ("OUTSIDE • GUMLINE", "45° ANGLE")
-        case (.english, .chewingGrooves): return ("CHEWING GROOVES", "FLAT SCRUB")
+        case (.english, .chewingGrooves): return ("CHEWING GROOVES", "SHORT STROKES")
         case (.english, .innerTongue): return ("INSIDE • TILT FRONT", "VERTICAL TIP")
 
         case (.spanish, .outerCheek): return ("AFUERA • ENCÍA", "ÁNGULO 45°")
-        case (.spanish, .chewingGrooves): return ("MUELAS • ARRIBA", "PLANO")
+        case (.spanish, .chewingGrooves): return ("CARAS DE MASTICAR", "PLANO")
         case (.spanish, .innerTongue): return ("ADENTRO • VERTICAL", "PUNTA 90°")
 
         case (.french, .outerCheek): return ("EXTÉRIEUR • GENCIVE", "ANGLE 45°")
@@ -377,7 +377,7 @@ public enum BrushCoachCopy {
             return (usePick ? arch : silk, step)
 
         case .spanish:
-            let arch = isUpper ? "ARCO HILO • DIENTES ARRIBA" : "ARCO HILO • DIENTES ABAJO"
+            let arch = isUpper ? "HILO DENTAL • DIENTES ARRIBA" : "HILO DENTAL • DIENTES ABAJO"
             let step = stepIndex == 0 ? "DESLIZA SUAVE SIN GOLPEAR" : "INCLINA A CADA LADO DEL DIENTE"
             return (arch, step)
 
@@ -415,14 +415,14 @@ public enum BrushCoachCopy {
 
     public static func hubStartBrushLabel(for lang: CoachLanguage) -> String {
         switch lang {
-        case .english: return "2m Brush • Pick • Rinse"
-        case .spanish: return "2m Cepillo • Hilo • Enjuague"
-        case .french: return "2m Brosse • Fil • Rinçage"
+        case .english: return "2 min Brush • Pick • Rinse"
+        case .spanish: return "2 min Cepillo • Hilo • Enjuague"
+        case .french: return "2 min Brosse • Fil • Rinçage"
         case .japanese: return "2分 歯みがき・ピック・洗口液"
         case .chinese: return "2分钟 刷牙·牙线·漱口水"
         case .korean: return "2분 양치·치실픽·가글"
-        case .portuguese: return "2m Escova • Fio • Enxágue"
-        case .german: return "2m Putzen • Stick • Spülung"
+        case .portuguese: return "2 min Escova • Fio • Enxaguante"
+        case .german: return "2 min Putzen • Stick • Spülung"
         }
     }
 
@@ -434,7 +434,7 @@ public enum BrushCoachCopy {
         case .japanese: return ("フロスピック", "完了 (+75 F⁻)", "スキップ (+50 F⁻)")
         case .chinese: return ("牙线棒", "完成 (+75 F⁻)", "跳过 (+50 F⁻)")
         case .korean: return ("치실 픽", "완료 (+75 F⁻)", "건너뛰기 (+50 F⁻)")
-        case .portuguese: return ("Fio Pick", "Pronto (+75 F⁻)", "Pular (+50 F⁻)")
+        case .portuguese: return ("Fio Dental", "Pronto (+75 F⁻)", "Pular (+50 F⁻)")
         case .german: return ("Stick-Runde", "Fertig (+75 F⁻)", "Weiter (+50 F⁻)")
         }
     }
@@ -443,13 +443,13 @@ public enum BrushCoachCopy {
         let fullIons = didFloss ? 100 : 75
         let skipIons = didFloss ? 75 : 50
         switch lang {
-        case .english: return ("Purple Rinse", "Done (+\(fullIons) F⁻)", "Skip (+\(skipIons) F⁻)")
+        case .english: return ("Fluoride Rinse", "Done (+\(fullIons) F⁻)", "Skip (+\(skipIons) F⁻)")
         case .spanish: return ("Enjuague Flúor", "Listo (+\(fullIons) F⁻)", "Saltar (+\(skipIons) F⁻)")
-        case .french: return ("Bain Fluoré", "Fini (+\(fullIons) F⁻)", "Passer (+\(skipIons) F⁻)")
+        case .french: return ("Rinçage Fluor", "Fini (+\(fullIons) F⁻)", "Passer (+\(skipIons) F⁻)")
         case .japanese: return ("フッ素洗口", "完了 (+\(fullIons) F⁻)", "スキップ (+\(skipIons) F⁻)")
-        case .chinese: return ("紫色含氟漱口", "完成 (+\(fullIons) F⁻)", "跳过 (+\(skipIons) F⁻)")
-        case .korean: return ("보라 불소가글", "완료 (+\(fullIons) F⁻)", "건너뛰기 (+\(skipIons) F⁻)")
-        case .portuguese: return ("Enxágue Flúor", "Pronto (+\(fullIons) F⁻)", "Pular (+\(skipIons) F⁻)")
+        case .chinese: return ("含氟漱口", "完成 (+\(fullIons) F⁻)", "跳过 (+\(skipIons) F⁻)")
+        case .korean: return ("불소 가글", "완료 (+\(fullIons) F⁻)", "건너뛰기 (+\(skipIons) F⁻)")
+        case .portuguese: return ("Enxaguante Flúor", "Pronto (+\(fullIons) F⁻)", "Pular (+\(skipIons) F⁻)")
         case .german: return ("Fluorid-Spülung", "Fertig (+\(fullIons) F⁻)", "Weiter (+\(skipIons) F⁻)")
         }
     }
@@ -457,39 +457,39 @@ public enum BrushCoachCopy {
     public static func mouthwashHeadline(stepIndex: Int, lang: CoachLanguage) -> (archTitle: String, actionBadge: String, ruleTag: String) {
         switch lang {
         case .english:
-            let title = "PURPLE TOTAL CARE RINSE"
+            let title = "FLUORIDE RINSE"
             if stepIndex == 0 {
-                return (title, "SWISH CHEEK TO CHEEK • 10 mL", "ADA FLUORIDE")
+                return (title, "SWISH CHEEK TO CHEEK • 10 mL", "OPTIONAL • AGE 6+")
             } else if stepIndex == 1 {
                 return (title, "PUMP VIGOROUSLY BETWEEN TEETH", "ALL 26 GAPS")
             } else {
-                return (title, "FINAL SWISH • DO NOT SWALLOW", "NO WATER 30m")
+                return (title, "FINAL SWISH • DO NOT SWALLOW", "NO WATER 30 min")
             }
 
         case .spanish:
-            let title = "ENJUAGUE MORADO TOTAL CARE"
+            let title = "ENJUAGUE CON FLÚOR"
             if stepIndex == 0 {
-                return (title, "BUCHES DE MEJILLA A MEJILLA • 10 mL", "FLÚOR ADA")
+                return (title, "BUCHES DE MEJILLA A MEJILLA • 10 mL", "OPCIONAL • 6+")
             } else if stepIndex == 1 {
                 return (title, "EMPUJA FUERTE ENTRE LOS DIENTES", "26 ESPACIOS")
             } else {
-                return (title, "RECTA FINAL • NO TRAGAR", "SIN AGUA 30m")
+                return (title, "RECTA FINAL • NO TRAGAR", "SIN AGUA 30 min")
             }
 
         case .french:
-            let title = "BAIN DE BOUCHE VIOLET TOTAL CARE"
+            let title = "BAIN DE BOUCHE AU FLUOR"
             if stepIndex == 0 {
-                return (title, "AGITEZ JOUE À JOUE • 10 mL", "FLUOR ADA")
+                return (title, "RINCEZ D'UNE JOUE À L'AUTRE • 10 mL", "FACULTATIF • 6 ANS+")
             } else if stepIndex == 1 {
                 return (title, "FAITES PASSER ENTRE LES DENTS", "26 ESPACES")
             } else {
-                return (title, "DERNIER TOUR • NE PAS AVALER", "SANS EAU 30m")
+                return (title, "DERNIER TOUR • NE PAS AVALER", "SANS EAU 30 min")
             }
 
         case .japanese:
-            let title = "パープル・トータルケア洗口液"
+            let title = "フッ素洗口液"
             if stepIndex == 0 {
-                return (title, "10mLを左右の頬へブクブク", "フッ素コート")
+                return (title, "10mLを左右の頬へブクブク", "任意 • 6歳以上")
             } else if stepIndex == 1 {
                 return (title, "歯と歯の間へ強く通す", "全26箇所")
             } else {
@@ -497,9 +497,9 @@ public enum BrushCoachCopy {
             }
 
         case .chinese:
-            let title = "紫色全效含氟漱口水"
+            let title = "含氟漱口水"
             if stepIndex == 0 {
-                return (title, "10毫升 左右脸颊鼓漱", "含氟护釉")
+                return (title, "10毫升 左右脸颊鼓漱", "可选 • 6岁以上")
             } else if stepIndex == 1 {
                 return (title, "用力把液体冲过所有牙缝", "26处牙缝")
             } else {
@@ -507,9 +507,9 @@ public enum BrushCoachCopy {
             }
 
         case .korean:
-            let title = "퍼플 토탈케어 불소 가글"
+            let title = "불소 가글"
             if stepIndex == 0 {
-                return (title, "10mL 양볼로 힘차게 가글", "불소 코팅")
+                return (title, "10mL 양볼로 힘차게 가글", "선택 • 6세 이상")
             } else if stepIndex == 1 {
                 return (title, "치아 사이사이로 강하게 통과", "26개 틈새")
             } else {
@@ -517,23 +517,23 @@ public enum BrushCoachCopy {
             }
 
         case .portuguese:
-            let title = "ENXÁGUE ROXO TOTAL CARE"
+            let title = "ENXAGUANTE COM FLÚOR"
             if stepIndex == 0 {
-                return (title, "BOCHECHE DE LADO A LADO • 10 mL", "FLÚOR ADA")
+                return (title, "BOCHECHE DE LADO A LADO • 10 mL", "OPCIONAL • 6+")
             } else if stepIndex == 1 {
                 return (title, "PASSE FORTE ENTRE OS DENTES", "26 ESPAÇOS")
             } else {
-                return (title, "RETA FINAL • NÃO ENGULA", "SEM ÁGUA 30m")
+                return (title, "RETA FINAL • NÃO ENGULA", "SEM ÁGUA 30 min")
             }
 
         case .german:
-            let title = "LILA TOTAL CARE FLUORID-SPÜLUNG"
+            let title = "FLUORID-MUNDSPÜLUNG"
             if stepIndex == 0 {
-                return (title, "KRÄFTIG HIN UND HER SPÜLEN • 10 mL", "ADA FLUORID")
+                return (title, "KRÄFTIG HIN UND HER SPÜLEN • 10 mL", "OPTIONAL • AB 6 J.")
             } else if stepIndex == 1 {
-                return (title, "ZWISCHEN ALLE ZÄHNE PRESSEN", "26 LÜCKEN")
+                return (title, "DURCH DIE ZAHNZWISCHENRÄUME SPÜLEN", "26 LÜCKEN")
             } else {
-                return (title, "ENDSPURT • NICHT SCHLUCKEN", "30m KEIN WASSER")
+                return (title, "ENDSPURT • NICHT SCHLUCKEN", "30 min KEIN WASSER")
             }
         }
     }
@@ -573,7 +573,7 @@ public enum BrushCoachCopy {
             case (.korean, .lowerLeft): return "왼쪽 아래, 바깥쪽."
             case (.korean, .lowerRight): return "마지막 구역, 오른쪽 아래 바깥쪽."
 
-            case (.portuguese, .upperRight): return "Em cima à direita, por fora. Incline na gengiva."
+            case (.portuguese, .upperRight): return "Em cima à direita, por fora. Incline em direção à gengiva."
             case (.portuguese, .upperLeft): return "Troque. Em cima à esquerda, por fora."
             case (.portuguese, .lowerLeft): return "Embaixo à esquerda, por fora."
             case (.portuguese, .lowerRight): return "Última parte. Embaixo à direita, por fora."
@@ -635,7 +635,7 @@ public enum BrushCoachCopy {
     public static func spokenFlossLowerCue(lang: CoachLanguage) -> String {
         switch lang {
         case .english: return "Halfway. Bottom teeth."
-        case .spanish: return "Mitad. Dientes de abajo."
+        case .spanish: return "Vamos a la mitad. Dientes de abajo."
         case .french: return "À mi-chemin. Dents du bas."
         case .japanese: return "半分です。下の歯へ。"
         case .chinese: return "过半啦，换下排牙齿。"
@@ -650,36 +650,36 @@ public enum BrushCoachCopy {
         switch lang {
         case .english:
             return is60
-                ? "Final bonus: Purple Total Care Fluoride Rinse! Pour ten milliliters and swish cheek to cheek for one minute. Do not swallow."
-                : "Final bonus: Purple Fluoride Rinse! Pour ten milliliters and swish cheek to cheek for thirty seconds."
+                ? "Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for one minute. Do not swallow."
+                : "Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for thirty seconds. Do not swallow."
         case .spanish:
             return is60
-                ? "Ronda final: Enjuague morado con flúor. Toma diez mililitros y haz buches por un minuto sin tragar."
-                : "Ronda final: Enjuague morado con flúor. Haz buches por treinta segundos sin tragar."
+                ? "Ronda final: enjuague con flúor. Toma diez mililitros y haz buches por un minuto sin tragar."
+                : "Ronda final: enjuague con flúor. Haz buches por treinta segundos sin tragar."
         case .french:
             return is60
-                ? "Bonus final : bain de bouche violet au fluor. Prenez dix millilitres et agitez pendant une minute sans avaler."
-                : "Bonus final : bain de bouche violet au fluor pendant trente secondes, sans avaler."
+                ? "Bonus final : bain de bouche au fluor. Prenez dix millilitres et rincez pendant une minute sans avaler."
+                : "Bonus final : bain de bouche au fluor pendant trente secondes, sans avaler."
         case .japanese:
             return is60
-                ? "最後のボーナス、紫のトータルケア洗口液！10ミリリットルを口に含み、1分間ブクブクゆすぎます。"
-                : "最後のボーナス、紫のフッ素洗口液！30秒間しっかりブクブクゆすぎます。"
+                ? "最後のボーナス、フッ素洗口液！10ミリリットルを口に含み、1分間ブクブクゆすぎます。飲み込まないでください。"
+                : "最後のボーナス、フッ素洗口液！30秒間しっかりブクブクゆすぎます。飲み込まないでください。"
         case .chinese:
             return is60
-                ? "最后一关：紫色全效含氟漱口水！倒十毫升，左右鼓漱一分钟，不要吞咽。"
-                : "最后一关：紫色含氟漱口水！左右鼓漱三十秒，不要吞咽。"
+                ? "最后一关：含氟漱口水！倒十毫升，左右鼓漱一分钟，不要吞咽。"
+                : "最后一关：含氟漱口水！左右鼓漱三十秒，不要吞咽。"
         case .korean:
             return is60
-                ? "마지막 보너스, 퍼플 토탈케어 불소 가글! 10밀리리터를 머금고 1분 동안 양볼로 힘차게 가글하세요."
-                : "마지막 보너스, 퍼플 불소 가글! 30초 동안 힘차게 가글하세요."
+                ? "마지막 보너스, 불소 가글! 10밀리리터를 머금고 1분 동안 양볼로 힘차게 가글하세요. 삼키지 마세요."
+                : "마지막 보너스, 불소 가글! 30초 동안 힘차게 가글하세요. 삼키지 마세요."
         case .portuguese:
             return is60
-                ? "Bônus final: enxágue roxo Total Care com flúor! Bocheche dez mililitros por um minuto, sem engolir."
-                : "Bônus final: enxágue roxo com flúor por trinta segundos, sem engolir."
+                ? "Bônus final: enxaguante com flúor! Bocheche dez mililitros por um minuto, sem engolir."
+                : "Bônus final: enxaguante com flúor por trinta segundos, sem engolir."
         case .german:
             return is60
-                ? "Letzte Bonusrunde: Lila Total Care Fluorid-Spülung! Zehn Milliliter eine Minute kräftig spülen, nicht schlucken."
-                : "Letzte Bonusrunde: Lila Fluorid-Spülung dreißig Sekunden kräftig spülen, nicht schlucken."
+                ? "Letzte Bonusrunde: Fluorid-Mundspülung! Zehn Milliliter eine Minute kräftig spülen, nicht schlucken."
+                : "Letzte Bonusrunde: Fluorid-Mundspülung dreißig Sekunden kräftig spülen, nicht schlucken."
         }
     }
 
@@ -713,21 +713,21 @@ public enum BrushCoachCopy {
         if includedMouthwash {
             switch lang {
             case .english:
-                return "Total Care complete! Spit out completely. Do not rinse with water, eat, or drink for thirty minutes so your fluoride shield locks in."
+                return "Rinse complete! Spit out completely. Do not rinse with water, eat, or drink for thirty minutes so your fluoride shield locks in."
             case .spanish:
-                return "¡Total Care completo! Escupe todo. No enjuagues con agua ni comas o bebas por treinta minutos para fijar el flúor."
+                return "¡Enjuague completo! Escupe todo. No enjuagues con agua ni comas o bebas por treinta minutos para fijar el flúor."
             case .french:
-                return "Soin complet terminé ! Crachez tout. Ne rincez pas à l'eau et ne mangez ni buvez pendant trente minutes."
+                return "Soin complet terminé ! Crachez tout. Ne rincez pas à l'eau et ne mangez ni ne buvez pendant trente minutes."
             case .japanese:
-                return "トータルケア完了！しっかり吐き出して、フッ素が定着するよう30分間は水ゆすぎや飲食を控えてください。"
+                return "洗口完了！しっかり吐き出して、フッ素が定着するよう30分間は水ゆすぎや飲食を控えてください。"
             case .chinese:
-                return "全效护理完成！请完全吐出，三十分钟内不要用水漱口、喝水或进食，让氟保护层牢牢锁住。"
+                return "漱口完成！请完全吐出，三十分钟内不要用水漱口、喝水或进食，让氟保护层牢牢锁住。"
             case .korean:
-                return "토탈케어 완료! 완전히 뱉어내시고, 불소막이 고정되도록 30분 동안 물로 헹구거나 드시지 마세요."
+                return "가글 완료! 완전히 뱉어내시고, 불소막이 고정되도록 30분 동안 물로 헹구거나 드시지 마세요."
             case .portuguese:
-                return "Total Care concluído! Cuspa tudo. Não enxágue com água nem coma ou beba por trinta minutos."
+                return "Enxágue concluído! Cuspa tudo. Não enxágue com água nem coma ou beba por trinta minutos."
             case .german:
-                return "Total Care geschafft! Komplett ausspucken und dreißig Minuten nicht mit Wasser nachspülen, essen oder trinken."
+                return "Spülung geschafft! Komplett ausspucken und dreißig Minuten nicht mit Wasser nachspülen, essen oder trinken."
             }
         }
         switch lang {

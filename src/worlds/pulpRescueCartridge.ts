@@ -7,7 +7,7 @@ import type { WorldCartridge } from '../engine/types';
 export const pulpRescueCartridge: WorldCartridge = {
   id: 'pulp_rescue',
   title: 'Emergency Pulp Rescue!',
-  subtitle: 'Clear the Deep Molar Fissure & Seal Dentin Before the Root Canal!',
+  subtitle: 'Clear the Deep Molar Fissure & Seal Dentin to Protect the Pulp!',
   hostId: 'toronto',
   historyNoteIds: [],
   worldWidth: 32,

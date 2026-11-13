@@ -276,14 +276,19 @@ public final class SaveSystem {
         return false
     }
 
+    /// Upper bound for imported counters (ions, stamps, save revision). Far above anything play can
+    /// reach, and low enough that later `+= reward` or `revision + 1` arithmetic can never overflow
+    /// and trap, which a hand-edited or hostile sync code could otherwise trigger on every launch.
+    private static let maxImportedCounter: Int = 1_000_000_000
+
     private static func clampInt(
         _ val: Any?,
         min minVal: Int,
-        max maxVal: Int = Int.max,
+        max maxVal: Int = maxImportedCounter,
         fallback: Int? = nil
     ) -> Int {
         let fb = fallback ?? minVal
-        guard let d = jsonDouble(val) else { return fb }
+        guard let d = jsonDouble(val), !d.isNaN else { return fb }
         let floored = floor(d)
         if floored <= Double(minVal) { return minVal }
         if floored >= Double(maxVal) { return maxVal }
@@ -296,7 +301,7 @@ public final class SaveSystem {
         max maxVal: Int64 = maxSafeJsInt,
         fallback: Int64
     ) -> Int64 {
-        guard let d = jsonDouble(val) else { return fallback }
+        guard let d = jsonDouble(val), !d.isNaN else { return fallback }
         let floored = floor(d)
         if floored <= Double(minVal) { return minVal }
         if floored >= Double(maxVal) { return maxVal }
@@ -345,7 +350,7 @@ public final class SaveSystem {
             return base
         }
 
-        base.saveRevision = clampInt(obj["saveRevision"], min: 1, max: Int.max, fallback: 1)
+        base.saveRevision = clampInt(obj["saveRevision"], min: 1, max: maxImportedCounter, fallback: 1)
         base.lastSavedEpochMs = clampInt64(
             obj["lastSavedEpochMs"],
             min: 0,

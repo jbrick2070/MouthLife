@@ -29,6 +29,8 @@ import {
 const MASTER_GAIN = 0.85;
 const MUSIC_SCALE = 0.55;
 const SFX_SCALE = 0.95;
+/** About -8.4 dB, the same music duck the native app uses under spoken cues. */
+const VOICE_DUCK_GAIN = 0.38;
 const FLOOR = 0.0001;
 
 export interface ScrubState {
@@ -74,6 +76,8 @@ export class SoundEngine {
   private hubGlobe = false;
   private pulpZero = false;
   private paused = false;
+  /** True while the voice coach is speaking: music sits about 8 dB lower so the words stay clear. */
+  private voiceDucked = false;
   private hidden = false;
   private urgency = false;
   private acidTension = false;
@@ -420,6 +424,13 @@ export class SoundEngine {
     this.applyPlaybackState();
   }
 
+  /** Lower the music under a spoken coaching cue, and bring it back afterwards. */
+  setVoiceDucked(ducked: boolean): void {
+    if (ducked === this.voiceDucked) return;
+    this.voiceDucked = ducked;
+    this.applyPlaybackState();
+  }
+
   /** Bus gains/filter + scheduler on/off for pause + hidden-tab ducking (no backlog on resume). */
   private applyPlaybackState(): void {
     if (!this.ctx || !this.musicBus || !this.musicFilter || !this.seq) return;
@@ -436,9 +447,10 @@ export class SoundEngine {
       this.stopScrub();
       return;
     }
-    const dryTarget = silent ? 0 : Math.max(FLOOR, this.paused ? base * 0.45 : base);
+    const voiceDuck = this.voiceDucked ? VOICE_DUCK_GAIN : 1;
+    const dryTarget = silent ? 0 : Math.max(FLOOR, (this.paused ? base * 0.45 : base) * voiceDuck);
     const wetDuck = this.paused ? 0.3 : this.acidTension && this.seq.theme.id === 'world_3' ? 0.65 : 1;
-    const wetTarget = silent ? 0 : wetBase * wetDuck;
+    const wetTarget = silent ? 0 : wetBase * wetDuck * voiceDuck;
     this.musicBus.gain.setTargetAtTime(dryTarget, now, 0.12);
     this.musicRevSend?.gain.setTargetAtTime(wetTarget, now, 0.12);
     this.musicDelSend?.gain.setTargetAtTime(wetTarget, now, 0.12);
@@ -843,6 +855,27 @@ export class SoundEngine {
       this.noiseSweep(o, t, 900, 2600, 0.35, 0.035, 0.7);
       this.wood(o, t, this.harmonicMidi(3, 48), 0.5);
       this.wood(o, t + 0.1, this.harmonicMidi(1, 48), 0.45);
+    });
+  }
+
+  /** "3… 2… 1…" pickup before each switch: rising steps, a touch higher for the upper teeth. */
+  playPacerAnticipationPip(secondsLeft: number, isUpper: boolean): void {
+    const step = 3 - Math.max(1, Math.min(3, Math.round(secondsLeft)));
+    const octave = isUpper ? 72 : 60;
+    this.run((o, t) => {
+      this.wood(o, t, this.harmonicMidi(step, octave), 0.42 + step * 0.08);
+      if (step === 2) this.bell(o, t + 0.02, this.harmonicMidi(step + 2, octave), 0.34);
+    });
+  }
+
+  /** Soft watery splash panned to the cheek the rinse just reached. */
+  playMouthwashSwish(pan: number, intensity01: number): void {
+    if (!this.throttle('mw-swish', 0.2)) return;
+    const p = Math.max(-1, Math.min(1, pan));
+    const k = Math.max(0, Math.min(1, intensity01));
+    this.run((o, t) => {
+      this.noiseSweep(o, t, 900, 2600, 0.16, 0.02 + 0.03 * k, 1.0);
+      this.bell(o, t + 0.03, this.harmonicMidi(p > 0 ? 4 : 2, 72), 0.22 + 0.2 * k, p, 0.6);
     });
   }
 

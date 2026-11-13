@@ -17,14 +17,14 @@ export const REALISTIC_SKIN_TONES: readonly { label: string; hex: string }[] = [
 export const HISTORICAL_FIELD_NOTES: readonly HistoricalFieldNote[] = [
   {
     id: 'cosmic_hydroxyapatite',
-    yearLabel: '13.8B Yrs Ago → Today',
+    yearLabel: 'Billions of Yrs Ago → Today',
     locationLabel: 'Stellar Nucleosynthesis & Human Ameloblasts',
-    title: 'Stardust Harder Than Steel: Hydroxyapatite (Mohs 5.0)',
+    title: 'Stardust Harder Than Iron: Hydroxyapatite (Mohs 5)',
     scientistOrCulture: 'Astrophysics & Enamel Crystallography',
     summary:
-      'Every calcium (²⁰Ca) and phosphorus (¹⁵P) atom in your teeth was forged in dying stars and supernovae. Ameloblast cells weave them into Ca₁₀(PO₄)₆(OH)₂ nanorods — 96% pure crystal, ranking 5.0 on the Mohs scale (harder than iron and steel at 4.0, halfway toward quartz 7.0 and diamond 10.0).',
+      'Every calcium (⁴⁰Ca) and phosphorus (³¹P) atom in your teeth was forged in dying stars and supernovae. Ameloblast cells weave them into Ca₁₀(PO₄)₆(OH)₂ nanorods — 96% pure crystal, ranking about 5 on the Mohs scratch scale (harder than iron at about 4, though a hardened steel file, quartz at 7 and diamond at 10 can all scratch it).',
     enamelLesson:
-      'Mechanical hardness cannot stop chemical dissolution: below pH 5.5, bacterial acid strips ions out of hydroxyapatite unless fluoride (⁹F) locks in to form fluorapatite (stable down to pH 4.5).',
+      'Mechanical hardness cannot stop chemical dissolution: below pH 5.5, bacterial acid strips ions out of hydroxyapatite unless fluoride (¹⁹F) locks in to form fluorapatite (stable down to pH 4.5).',
   },
   {
     id: '1498_beijing_1683_delft',
@@ -64,22 +64,22 @@ export const HISTORICAL_FIELD_NOTES: readonly HistoricalFieldNote[] = [
     yearLabel: 'Ancient Miswak & 1901–1945 Fluoride Mystery',
     locationLabel: 'Accra / West Africa & Colorado Springs → Grand Rapids',
     title: 'Botanical Minerals & The Fluorapatite Detective Story',
-    scientistOrCulture: 'West African Miswak Tradition & Drs. McKay, Churchill & Dean',
+    scientistOrCulture: 'Miswak Chewing-Stick Tradition & Drs. McKay, Churchill & Dean',
     summary:
-      'For millennia across Africa, the Middle East, and South Asia, chewing sticks from Salvadora persica (Miswak) naturally stimulated protective salivary bicarbonate while releasing silica and mineral ions. In 1901–1945, Frederick McKay, H.V. Churchill, and H. Trendley Dean solved the “Colorado Stain” mystery — proving trace waterborne fluoride (1 ppm) rebuilds enamel into acid-defying fluorapatite.',
+      'For millennia across Africa, the Middle East, and South Asia, chewing sticks from Salvadora persica (Miswak) naturally stimulated protective salivary bicarbonate while releasing silica and mineral ions. In 1901–1945, Frederick McKay, H.V. Churchill, and H. Trendley Dean solved the “Colorado Stain” mystery — finding that too much natural fluoride in drinking water mottled teeth (fluorosis), while a small amount (about 1 ppm then; 0.7 ppm is the U.S. level today) meant far fewer cavities. Later research showed why: fluoride helps enamel rebuild as acid-resistant fluorapatite.',
     enamelLesson:
       'Saliva buffers acid back above pH 5.5 while fluoride ions replace hydroxyl groups in enamel crystal lattices to resist future acid challenges.',
   },
   {
     id: '1973_skylab_orbit',
     yearLabel: '1973 Skylab & 1978 Biofilm Theory',
-    locationLabel: 'Houston Johnson Space Center & Low-Earth Orbit (408 km)',
+    locationLabel: 'Houston Johnson Space Center & Low-Earth Orbit (Skylab, ~435 km)',
     title: 'Zero-Gravity Mouths & Quorum-Sensing Fortresses',
     scientistOrCulture: 'NASA Skylab Oral Microbiology Team & J.W. Costerton',
     summary:
       'During NASA’s 1973 Skylab orbital missions, researchers tracked how microgravity and closed-habitat diets increased anaerobic and cariogenic oral flora when astronauts could not spit into a sink. Five years later (1978), J.W. Costerton coined the modern science of structured “biofilms” — cooperative microbial cities encased in sticky EPS polymers.',
     enamelLesson:
-      'Mature quorum biofilms act like coordinated shields; keeping teeth clean daily in Earth bathrooms — or aboard orbital stations — stops isolated pellicle from maturing into a fortress.',
+      'Mature quorum biofilms act like coordinated shields; keeping teeth clean daily in Earth bathrooms — or aboard orbital stations — stops the first thin film of bacteria from maturing into a fortress.',
   },
 ];
 

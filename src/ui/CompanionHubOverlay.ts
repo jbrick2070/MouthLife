@@ -24,7 +24,7 @@ import {
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import type { SaveSystem } from '../engine/persistence/SaveSystem';
+import { truncateDisplayName, type SaveSystem } from '../engine/persistence/SaveSystem';
 import type { HubCameraFocus } from '../engine/render/SceneManager';
 import type { OverlayView } from '../engine/types';
 import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
@@ -199,7 +199,7 @@ export class CompanionHubOverlay implements OverlayView {
       const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
       if (inp) {
         const save = this.saveSys.getSave();
-        const cleaned = inp.value.trim().slice(0, 24) || save.playerProfile.displayName || 'Explorer';
+        const cleaned = truncateDisplayName(inp.value.trim()) || save.playerProfile.displayName || 'Explorer';
         if (cleaned !== save.playerProfile.displayName) {
           save.playerProfile.displayName = cleaned;
           this.saveSys.save(save);
@@ -533,7 +533,7 @@ export class CompanionHubOverlay implements OverlayView {
 
       <div class="hub-actions-primary hub-dock-row">
         <button type="button" id="btn-start-brush-along" class="btn btn-primary">
-          <span class="mob-hide">🪥 2-Min Sink Brush-Along</span><span class="mob-only">🪥 2m Brush</span>
+          <span class="mob-hide">🪥 2 min Brush • Pick • Rinse</span><span class="mob-only">🪥 2m Brush</span>
         </button>
         ${
           needsPulpRescue
@@ -1497,7 +1497,7 @@ export class CompanionHubOverlay implements OverlayView {
     const syncPendingName = () => {
       const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
       if (inp) {
-        save.playerProfile.displayName = inp.value.trim().slice(0, 24) || save.playerProfile.displayName;
+        save.playerProfile.displayName = truncateDisplayName(inp.value.trim()) || save.playerProfile.displayName;
       }
     };
     this.container.querySelector<HTMLInputElement>('#inp-host-name')?.addEventListener('change', () => {
@@ -1543,7 +1543,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
     this.container.querySelector('#btn-save-profile')?.addEventListener('click', () => {
       const inp = this.container?.querySelector<HTMLInputElement>('#inp-host-name');
-      const cleaned = inp?.value.trim().slice(0, 24) || 'Explorer';
+      const cleaned = truncateDisplayName(inp?.value.trim() ?? '') || 'Explorer';
       save.playerProfile.displayName = cleaned;
       this.saveSys.save(save);
       this.closeActiveModal();

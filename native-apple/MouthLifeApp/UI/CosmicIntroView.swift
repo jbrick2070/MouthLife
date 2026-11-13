@@ -15,21 +15,21 @@ public struct CosmicIntroView: View {
 
     private let beats: [BeatContent] = [
         BeatContent(
-            kicker: "13.8 BILLION YEARS AGO → STELLAR FORGE",
+            kicker: "BILLIONS OF YEARS AGO → STELLAR FORGE",
             title: "Your Smile Is Woven From Supernova Stardust",
-            body: "Every calcium (²⁰Ca) and phosphorus (¹⁵P) atom in your teeth was forged inside dying stars, scattered across our galaxy, and crystallized by your ameloblast cells into living armor.",
+            body: "Every calcium (⁴⁰Ca) and phosphorus (³¹P) atom in your teeth was forged inside dying stars, scattered across our galaxy, and crystallized by your ameloblast cells into the hardest tissue in your body.",
             mohsHighlight: false
         ),
         BeatContent(
             kicker: "CRYSTALLOGRAPHY • MOHS HARDNESS 5.0",
-            title: "Hydroxyapatite: Harder Than Iron & Steel",
-            body: "Human tooth enamel is 96% pure mineral crystal — the hardest substance in the human body, outranking iron and steel (4.0) on the Mohs mineral scale.",
+            title: "Hydroxyapatite: Harder Than Iron",
+            body: "Human tooth enamel is 96% pure mineral crystal — the hardest substance in the human body, outranking iron (about 4) on the Mohs scratch scale.",
             mohsHighlight: true
         ),
         BeatContent(
             kicker: "CRITICAL pH 5.5 • BIOPHYSICS PARADOX",
             title: "Unbeatable by Force — Vulnerable to Acid",
-            body: "Even Mohs 5 crystal dissolves when oral bacteria ferment sugar into lactic acid below pH 5.5 — unless saliva buffers the pH and fluoride (⁹F) locks in Fluorapatite (stable to pH 4.5!).",
+            body: "Even Mohs 5 crystal dissolves when oral bacteria ferment sugar into lactic acid below pH 5.5 — unless saliva buffers the pH and fluoride (¹⁹F) locks in Fluorapatite (stable to pH 4.5!).",
             mohsHighlight: false
         ),
         BeatContent(

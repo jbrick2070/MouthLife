@@ -358,7 +358,7 @@ public enum DentalChart {
             cuspsLower: 0,
             worldUpper: "world_1",
             worldLower: "world_4",
-            anatomyUpper: "Slightly narrower than the central incisor with a rounded distal corner and a subtle palatal pit (cingulum) on the back.",
+            anatomyUpper: "Slightly narrower than the central incisor with a rounded distal corner and a small pit beside the cingulum (the rounded bulge) on the back.",
             anatomyLower: "Slightly wider than the lower central incisor with 1 root, helping slice food cleanly alongside the front teeth.",
             careTip: "Hug the mesial and distal edges in a gentle C-shape with floss where incisors overlap."
         ),
@@ -432,7 +432,7 @@ public enum DentalChart {
             worldLower: "world_3",
             anatomyUpper: "Broad 4-cusp grinding powerhouse (often sporting a bonus 5th mini-cusp called the Cusp of Carabelli!) anchored by 3 tripod roots.",
             anatomyLower: "Largest lower grinder with 5 cusps (3 outer, 2 inner) and 2 strong roots; erupts around age 6 without replacing any baby tooth.",
-            careTip: "First molars do ~50% of heavy chewing and have deep cruciform fissures — scrub chewing pits thoroughly and let fluoride soak in!"
+            careTip: "First molars do much of the heavy chewing and have deep grooves — brush the chewing pits with short, gentle strokes and let fluoride soak in!"
         ),
         PositionAnatomyTemplate(
             pos: 7,
@@ -731,7 +731,7 @@ public enum DentalChart {
             id: "world_4",
             focusTeethBadge: "Lower Incisors #24–#25 (FDI 31–41) & Upper #3, #14",
             headline: "Why Tartar Picks Favorite Tooth Numbers",
-            lesson: "Major salivary ducts open right behind lower front incisors (#24–#25) and beside upper 1st molars (#3 & #14) — bathing them in minerals that buffer acid, or calcify leftover plaque into tartar!"
+            lesson: "Major salivary ducts open right behind lower front incisors (#24–#25) and in the cheeks beside the upper molars (near #2–#3 & #14–#15) — bathing them in minerals that buffer acid, or calcify leftover plaque into tartar!"
         ),
         "world_5": WorldDentalLesson(
             id: "world_5",

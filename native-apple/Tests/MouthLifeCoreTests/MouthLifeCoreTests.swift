@@ -631,6 +631,30 @@ final class MouthLifeCoreTests: XCTestCase {
         }
     }
 
+    func testImportedCountersAreClampedSoLaterRewardsCannotOverflow() {
+        // A hand-edited or hostile sync code can carry absurd numbers. They must be clamped on import,
+        // otherwise the next `+= reward` traps on integer overflow every time the app runs.
+        let hostile: [String: Any] = [
+            "schemaVersion": 2,
+            "saveRevision": 1e19,
+            "fluorideIons": 1e19,
+            "totalBrushStamps": 1e300
+        ]
+        var save = SaveSystem.migrateSave(jsonObject: hostile, nowEpochMs: 1_700_000_000_000)
+        XCTAssertLessThanOrEqual(save.saveRevision, 1_000_000_000)
+        XCTAssertLessThanOrEqual(save.fluorideIons, 1_000_000_000)
+        XCTAssertLessThanOrEqual(save.totalBrushStamps, 1_000_000_000)
+
+        let before = save.fluorideIons
+        HabitBank.completeBrushAlong(
+            save: &save,
+            withFlossBonus: true,
+            withMouthwashBonus: true,
+            date: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertEqual(save.fluorideIons, before + 100)
+    }
+
     // MARK: - 9. 120Hz GyroSloshSim Counter-vs-Handheld Auto-Detection & Liquid Spirit-Level Physics
 
     func testGyroSloshCounterVsHandheldAndLiquidPhysics() {

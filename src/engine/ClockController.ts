@@ -1,11 +1,19 @@
 import {
+  evaluateBrushPhase,
+  pacerStageEndSec,
+  type PacerStage,
+} from '../config/brushCoach';
+import {
   BRUSH_ALONG_FLOSS_BONUS_SEC,
+  BRUSH_ALONG_MOUTHWASH_BONUS_SEC,
   BRUSH_ALONG_TOTAL_SEC,
 } from '../config/gameConfig';
 import type { EventBus } from './EventBus';
 
 export const FIXED_DT = 1 / 60;
 const MAX_FRAME_DELTA_SEC = 0.1;
+/** The brushing pacer follows real time (a slow frame must not stretch 2:00), but never jumps more than this. */
+const MAX_PACER_DELTA_SEC = 0.5;
 
 export class ClockController {
   private rafId: number | null = null;
@@ -14,19 +22,23 @@ export class ClockController {
 
   private pacerActive = false;
   private pacerPausedManual = false;
-  private pacerInFlossBonus = false;
+  /** Paused because the tab was hidden, not by the user: resumes by itself when the tab returns. */
+  private pacerSuspendedBySystem = false;
+  private pacerStage: PacerStage = 'brushing';
+  private pacerMouthwashDurationSec = BRUSH_ALONG_MOUTHWASH_BONUS_SEC;
+  /** Cumulative session clock: 0..120 brushing, 120..165 floss, 165.. rinse. */
   private pacerElapsedSec = 0;
   private lastEmittedDecisecond = -1;
 
   private onSimFixedStep: ((dt: number) => void) | null = null;
-  private onRenderFrame: ((frameDt: number, nowSec: number) => void) | null = null;
+  private onRenderFrame: ((frameDt: number, nowSec: number, simAlpha: number) => void) | null = null;
   private visibilityListenerBound = false;
 
   constructor(private readonly bus: EventBus) {}
 
   setCallbacks(
     onSimFixedStep: (dt: number) => void,
-    onRenderFrame: (frameDt: number, nowSec: number) => void
+    onRenderFrame: (frameDt: number, nowSec: number, simAlpha: number) => void
   ): void {
     this.onSimFixedStep = onSimFixedStep;
     this.onRenderFrame = onRenderFrame;
@@ -40,10 +52,15 @@ export class ClockController {
         if (document.visibilityState === 'hidden') {
           this.accumulatorSec = 0;
           if (this.pacerActive && !this.pacerPausedManual) {
-            this.setPacerPaused(true);
+            this.setPacerPausedInternal(true);
+            this.pacerSuspendedBySystem = true;
           }
         } else {
           this.lastNowMs = performance.now();
+          if (this.pacerActive && this.pacerSuspendedBySystem) {
+            this.pacerSuspendedBySystem = false;
+            this.setPacerPausedInternal(false);
+          }
         }
       });
     }
@@ -65,28 +82,64 @@ export class ClockController {
   startPacer(): void {
     this.pacerActive = true;
     this.pacerPausedManual = false;
-    this.pacerInFlossBonus = false;
+    this.pacerSuspendedBySystem = false;
+    this.pacerStage = 'brushing';
     this.pacerElapsedSec = 0;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
   }
 
-  startFlossBonusPacer(): void {
+  /** Jump (or roll) into the 45s floss stage. */
+  enterFlossBonus(): void {
+    this.enterPacerStage('flossBonus', BRUSH_ALONG_TOTAL_SEC);
+  }
+
+  /** Jump (or roll) into the fluoride rinse stage. */
+  enterMouthwashBonus(): void {
+    this.enterPacerStage('mouthwashBonus', BRUSH_ALONG_TOTAL_SEC + BRUSH_ALONG_FLOSS_BONUS_SEC);
+  }
+
+  private enterPacerStage(stage: PacerStage, startSec: number): void {
     this.pacerActive = true;
     this.pacerPausedManual = false;
-    this.pacerInFlossBonus = true;
-    this.pacerElapsedSec = 0;
+    this.pacerSuspendedBySystem = false;
+    this.pacerStage = stage;
+    this.pacerElapsedSec = startSec;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
+  }
+
+  /** Switching 60s/30s mid-rinse keeps the same fraction of the rinse done. */
+  setPacerMouthwashDurationSec(durationSec: number): void {
+    const newDur = Math.max(6, durationSec);
+    const oldDur = Math.max(6, this.pacerMouthwashDurationSec);
+    if (this.pacerStage === 'mouthwashBonus' && newDur !== oldDur) {
+      const mwStart = BRUSH_ALONG_TOTAL_SEC + BRUSH_ALONG_FLOSS_BONUS_SEC;
+      const frac = Math.min(0.98, Math.max(0, (this.pacerElapsedSec - mwStart) / oldDur));
+      this.pacerElapsedSec = mwStart + frac * newDur;
+      this.lastEmittedDecisecond = -1;
+    }
+    this.pacerMouthwashDurationSec = newDur;
+  }
+
+  getPacerMouthwashDurationSec(): number {
+    return this.pacerMouthwashDurationSec;
   }
 
   stopPacer(): void {
     this.pacerActive = false;
     this.pacerPausedManual = false;
-    this.pacerInFlossBonus = false;
+    this.pacerSuspendedBySystem = false;
+    this.pacerStage = 'brushing';
   }
 
+  /** User-driven pause/resume. */
   setPacerPaused(paused: boolean): void {
+    this.pacerSuspendedBySystem = false;
+    this.setPacerPausedInternal(paused);
+  }
+
+  private setPacerPausedInternal(paused: boolean): void {
     const changed = this.pacerPausedManual !== paused;
     this.pacerPausedManual = paused;
     if (!paused) {
@@ -101,12 +154,25 @@ export class ClockController {
     return this.pacerPausedManual;
   }
 
+  isPacerActive(): boolean {
+    return this.pacerActive;
+  }
+
+  getPacerStage(): PacerStage {
+    return this.pacerStage;
+  }
+
   isPacerInFlossBonus(): boolean {
-    return this.pacerInFlossBonus;
+    return this.pacerStage === 'flossBonus';
   }
 
   getPacerElapsedSec(): number {
     return this.pacerElapsedSec;
+  }
+
+  /** Cumulative session-clock second at which the current stage ends. */
+  getPacerStageEndSec(): number {
+    return pacerStageEndSec(this.pacerStage, this.pacerMouthwashDurationSec);
   }
 
   private requestScreenWakeLock(): void {
@@ -141,27 +207,32 @@ export class ClockController {
       }
     }
 
-    // Real-time unskippable Brush-Along pacer
+    // Real-time Brush-Along pacer (brush, floss, rinse on one cumulative clock)
     if (this.pacerActive && !this.pacerPausedManual) {
-      const targetSec = this.pacerInFlossBonus
-        ? BRUSH_ALONG_FLOSS_BONUS_SEC
-        : BRUSH_ALONG_TOTAL_SEC;
-      this.pacerElapsedSec = Math.min(targetSec, this.pacerElapsedSec + clampedDt);
+      const cap = this.getPacerStageEndSec();
+      const pacerDt = Math.min(rawDeltaSec, MAX_PACER_DELTA_SEC);
+      this.pacerElapsedSec = Math.min(cap, this.pacerElapsedSec + pacerDt);
       const decisecond = Math.floor(this.pacerElapsedSec * 10);
       if (decisecond !== this.lastEmittedDecisecond) {
         this.lastEmittedDecisecond = decisecond;
-        const quadrantIdx = Math.min(3, Math.floor(this.pacerElapsedSec / 30));
-        const withinQuad = this.pacerElapsedSec - quadrantIdx * 30;
-        const surfaceIdx = Math.min(2, Math.floor(withinQuad / 10));
+        const phase = evaluateBrushPhase(
+          this.pacerElapsedSec,
+          this.pacerStage,
+          this.pacerMouthwashDurationSec
+        );
         this.bus.emit('pacer:tick', {
           elapsedSec: this.pacerElapsedSec,
-          quadrantIdx,
-          surfaceIdx,
-          inFlossBonus: this.pacerInFlossBonus,
+          stage: this.pacerStage,
+          quadrantIdx: phase.quadrant,
+          surfaceIdx: phase.surface,
+          inFlossBonus: this.pacerStage === 'flossBonus',
         });
       }
     }
 
-    this.onRenderFrame?.(clampedDt, nowMs / 1000);
+    // simAlpha = how far this frame sits between the last two fixed sim steps (0..1). On displays
+    // faster than 60 Hz most frames fall between steps; drawing the blend removes the judder.
+    const simAlpha = this.onSimFixedStep ? Math.min(1, this.accumulatorSec / FIXED_DT) : 1;
+    this.onRenderFrame?.(clampedDt, nowMs / 1000, simAlpha);
   }
 }

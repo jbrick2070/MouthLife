@@ -727,7 +727,7 @@ public final class AppCoordinator {
             )
         )
         if withMouthwashBonus {
-            showHubToast("💜 Purple Total Care Seal! +\(outcome.ionsAwarded) F⁻ • Spit out, no water 30m!")
+            showHubToast("💜 Fluoride Rinse Seal! +\(outcome.ionsAwarded) F⁻ • Spit out, no water for 30 min!")
         } else {
             showHubToast("🦷 Fresh Mint Smooth Bask! +\(outcome.ionsAwarded) F⁻\(outcome.stampAwarded ? " & +1 Habit Stamp!" : "")")
         }

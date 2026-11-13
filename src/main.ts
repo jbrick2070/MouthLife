@@ -14,6 +14,7 @@ import { HOST_CITIES } from './config/hostsAndHistory';
 import { getUpgradeById } from './config/upgrades';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
+import { VoiceCoach } from './engine/audio/VoiceCoach';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
 import { CosmicIntroOverlay } from './ui/CosmicIntroOverlay';
 import {
@@ -69,6 +70,8 @@ function bootstrapMouthLife(): void {
   // Step 2: Clock, Procedural Audio & Simulation Session
   const clock = new ClockController(bus);
   const sound = new SoundEngine();
+  const voiceCoach = new VoiceCoach();
+  voiceCoach.onSpeakingChanged = (speaking) => sound.setVoiceDucked(speaking);
   sound.onPrefsChanged = (prefs) => bus.emit('audio:changed', prefs);
   sound.bindGlobalUnlockListeners();
   window.addEventListener('keydown', (ev) => {
@@ -424,8 +427,9 @@ function bootstrapMouthLife(): void {
   });
 
   // Brush-Along & winning dives clear Regional Treat sugar splats from the Companion teeth
-  bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, inFlossBonus }) => {
-    sound.setPacerState(quadrantIdx, inFlossBonus);
+  bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, stage }) => {
+    // Floss and rinse both play the calmer closing section of the pacer music.
+    sound.setPacerState(quadrantIdx, stage !== 'brushing');
     const cap = Math.max(0, 1 - elapsedSec / 40);
     for (const sp of touch.splats) sp.amount = Math.min(sp.amount, cap);
   });
@@ -623,11 +627,13 @@ function bootstrapMouthLife(): void {
       activeTelemetryHud = hud;
       activeOverlay = hud;
     } else if (next === 'BRUSH_ALONG') {
-      activeOverlay = new BrushAlongOverlay(bus, clock, saveSys, {
+      activeOverlay = new BrushAlongOverlay(bus, clock, saveSys, voiceCoach, {
         onActiveQuadrantChanged: (q) => {
           activePacerQuadrant = q;
         },
         onPlayCue: (kind) => sound.playPacerCue(kind),
+        onPlayPip: (secondsLeft, isUpper) => sound.playPacerAnticipationPip(secondsLeft, isUpper),
+        onPlaySwish: (pan, intensity) => sound.playMouthwashSwish(pan, intensity),
         onExitToHub: () => switchMode('HUB'),
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
@@ -704,7 +710,7 @@ function bootstrapMouthLife(): void {
         );
       }
     },
-    (frameDt, nowSec) => {
+    (frameDt, nowSec, simAlpha) => {
       lastNowSec = nowSec;
       touch.step(frameDt);
       activeTelemetryHud?.tickHud(frameDt);
@@ -713,6 +719,7 @@ function bootstrapMouthLife(): void {
         !sceneMgr.isTransitioning() &&
         input.isScrubInputActive();
 
+      session.beginRenderInterpolation(simAlpha);
       sceneMgr.renderFrame({
         frameDt,
         nowSec,
@@ -721,6 +728,7 @@ function bootstrapMouthLife(): void {
         scrubbingActive,
         activePacerQuadrant,
       });
+      session.endRenderInterpolation();
     }
   );
 

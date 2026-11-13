@@ -12,6 +12,9 @@ import {
 } from '../../config/gameConfig';
 import type { ActuatorKind, MasteryGrade, ScoreBreakdown } from '../types';
 
+export const GOLD_GRADE_MIN_SCORE = 9000;
+export const GOLD_GRADE_MIN_CLEAN_RATIO = 0.95;
+
 export class ScoringEngine {
   private techniqueRawPts = 0;
   private sitesRestored = 0;
@@ -129,7 +132,7 @@ export class ScoringEngine {
     const allSitesRestored =
       params.sitesTotal === 0 || this.sitesRestored >= params.sitesTotal;
 
-    const grade = ScoringEngine.computeGrade(totalScore, allSitesRestored);
+    const grade = ScoringEngine.computeGrade(totalScore, allSitesRestored, cleanClamped);
     const ionsEarned = Math.max(15, Math.round(totalScore / 100));
 
     return {
@@ -147,8 +150,15 @@ export class ScoringEngine {
     };
   }
 
-  static computeGrade(totalScore: number, allSitesRestored: boolean): MasteryGrade {
-    if (totalScore >= 9400 && allSitesRestored) return 'FLUORAPATITE_GOLD';
+  /** Gold needs a 9,000+ score, at least 95% of the enamel clean, and every site restored. */
+  static computeGrade(totalScore: number, allSitesRestored: boolean, cleanRatio = 1.0): MasteryGrade {
+    if (
+      totalScore >= GOLD_GRADE_MIN_SCORE &&
+      cleanRatio >= GOLD_GRADE_MIN_CLEAN_RATIO &&
+      allSitesRestored
+    ) {
+      return 'FLUORAPATITE_GOLD';
+    }
     if (totalScore >= 8500) return 'S';
     if (totalScore >= 7200) return 'A';
     if (totalScore >= 5500) return 'B';

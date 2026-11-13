@@ -177,7 +177,7 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
     const p = obj.playerProfile as Record<string, unknown>;
     const rawName = typeof p.displayName === 'string' ? p.displayName.trim() : '';
     base.playerProfile = {
-      displayName: rawName.length > 0 ? rawName.slice(0, 24) : 'Explorer',
+      displayName: rawName.length > 0 ? truncateDisplayName(rawName) : 'Explorer',
       skinToneIndex: clampInt(p.skinToneIndex, 0, REALISTIC_SKIN_TONES.length - 1, 3),
       homeCityId:
         typeof p.homeCityId === 'string' && HOST_CITY_IDS.has(p.homeCityId)
@@ -327,6 +327,24 @@ export function encodeSaveToSyncCode(save: MouthLifeSaveV2): string {
   return `${SYNC_CODE_PREFIX}${b64}`;
 }
 
+/**
+ * First 24 visible characters of a name. Cutting by UTF-16 units can split an emoji in half and
+ * leave a broken character that the native app then refuses to import, so cut by whole characters.
+ */
+export function truncateDisplayName(name: string, maxChars = DISPLAY_NAME_MAX_CHARS): string {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    const out: string[] = [];
+    for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name)) {
+      if (out.length >= maxChars) break;
+      out.push(segment);
+    }
+    return out.join('');
+  }
+  return Array.from(name).slice(0, maxChars).join('');
+}
+
+export const DISPLAY_NAME_MAX_CHARS = 24;
+
 export function decodeSaveFromSyncCode(
   code: string,
   nowEpochMs = Date.now()
@@ -335,8 +353,14 @@ export function decodeSaveFromSyncCode(
   if (!trimmed.startsWith(SYNC_CODE_PREFIX)) {
     throw new Error('Invalid Sync Code prefix (expected ML2:).');
   }
-  const body = trimmed.slice(SYNC_CODE_PREFIX.length);
-  if (body.length === 0 || body.length > 65536 || !/^[A-Za-z0-9\-_]+$/.test(body)) {
+  // Codes get line-wrapped by mail and chat apps, and some tools re-pad them: strip whitespace,
+  // allow trailing '=' padding and the standard Base64 '+' '/' alphabet as well as Base64URL.
+  const compact = trimmed.slice(SYNC_CODE_PREFIX.length).replace(/\s+/g, '');
+  if (compact.length === 0 || compact.length > 65536 || !/^[A-Za-z0-9\-_+/]+=*$/.test(compact)) {
+    throw new Error('Malformed Base64URL Sync Code payload.');
+  }
+  const body = compact.replace(/=+$/, '');
+  if (body.length % 4 === 1) {
     throw new Error('Malformed Base64URL Sync Code payload.');
   }
   let stdB64 = body.replace(/-/g, '+').replace(/_/g, '/');

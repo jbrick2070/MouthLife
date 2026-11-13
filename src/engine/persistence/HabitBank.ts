@@ -1,6 +1,7 @@
 import {
   BRUSH_ALONG_FLOSS_IONS,
   BRUSH_ALONG_FULL_IONS,
+  BRUSH_ALONG_MOUTHWASH_IONS,
   BRUSH_ALONG_TIP_IONS,
   DAILY_COURTESY_TIP_CAP,
   DAILY_FULL_REWARD_CAP,
@@ -21,10 +22,12 @@ export class HabitBank {
   /**
    * Records completion of a 2-Minute Sink Brush-Along session.
    * Never penalizes missed days; caps daily full rewards at 2 and courtesy tips at 3.
+   * A full reward is 50 F-, +25 with the floss stage, +25 with the fluoride rinse stage (100 max),
+   * plus one Habit Stamp, one Supply Beacon and one Overdrive run (same as the native app).
    */
   static completeBrushAlong(
     save: MouthLifeSaveV2,
-    options: { withFlossBonus: boolean; date?: Date }
+    options: { withFlossBonus: boolean; withMouthwashBonus?: boolean; date?: Date }
   ): {
     ionsAwarded: number;
     stampAwarded: boolean;
@@ -44,14 +47,16 @@ export class HabitBank {
       stampAwarded = true;
       save.totalBrushStamps += 1;
       ionsAwarded =
-        BRUSH_ALONG_FULL_IONS + (options.withFlossBonus ? BRUSH_ALONG_FLOSS_IONS : 0);
+        BRUSH_ALONG_FULL_IONS +
+        (options.withFlossBonus ? BRUSH_ALONG_FLOSS_IONS : 0) +
+        (options.withMouthwashBonus ? BRUSH_ALONG_MOUTHWASH_IONS : 0);
       save.pendingSupplyBeacons = Math.min(
         MAX_SUPPLY_BEACONS,
-        save.pendingSupplyBeacons + 4
+        Math.max(0, save.pendingSupplyBeacons) + 1
       );
       save.remineralizedOverdriveRuns = Math.min(
         MAX_OVERDRIVE_RUNS,
-        save.remineralizedOverdriveRuns + 2
+        Math.max(0, save.remineralizedOverdriveRuns) + 1
       );
     } else if (slot.tips < DAILY_COURTESY_TIP_CAP) {
       slot.tips += 1;

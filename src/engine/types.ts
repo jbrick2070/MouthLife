@@ -406,7 +406,9 @@ export interface AppEventMap {
     state: CompanionState;
   };
   'pacer:tick': {
+    /** Cumulative session clock: 0..120 brushing, 120..165 floss, 165.. rinse. */
     elapsedSec: number;
+    stage: 'brushing' | 'flossBonus' | 'mouthwashBonus';
     quadrantIdx: number;
     surfaceIdx: number;
     inFlossBonus: boolean;
@@ -416,6 +418,7 @@ export interface AppEventMap {
   };
   'pacer:complete': {
     withFlossBonus: boolean;
+    withMouthwashBonus: boolean;
     ionsAwarded: number;
     stampAwarded: boolean;
   };

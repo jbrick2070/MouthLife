@@ -110,6 +110,13 @@ export class WorldSession {
   probeY = 1.0;
   probeFacingRad = 0;
   probeSpeed = 0;
+  // Pose at the start of the latest sim step, for drawing between steps (see beginRenderInterpolation).
+  private prevProbeX = 8;
+  private prevProbeZ = 16;
+  private prevProbeY = 1.0;
+  private simProbePos: Vec2 | null = null;
+  private simProbeY = 0;
+  private framesSinceStep = 0;
   probeZip: ProbeZipState | null = null;
   private knockbackVel: Vec2 = { x: 0, z: 0 };
   private knockbackTimer = 0;
@@ -188,6 +195,9 @@ export class WorldSession {
     this.probeY = sampleTerrainHeight(cartridge, this.probePos.x, this.probePos.z);
     this.probeFacingRad = 0;
     this.probeSpeed = 0;
+    this.prevProbeX = this.probePos.x;
+    this.prevProbeZ = this.probePos.z;
+    this.prevProbeY = this.probeY;
     this.probeZip = null;
     this.knockbackTimer = 0;
     this.knockbackVel = { x: 0, z: 0 };
@@ -339,7 +349,46 @@ export class WorldSession {
     return this.surgeMeter - prev;
   }
 
+  /**
+   * Temporarily moves the probe to where it is `alpha` of the way from the previous sim step to the
+   * current one, so rendering is smooth on 120/144/240 Hz displays. Always pair with
+   * endRenderInterpolation(); the simulation itself never sees the blended pose.
+   */
+  beginRenderInterpolation(alpha: number): void {
+    if (this.simProbePos !== null) return;
+    // No sim step for several frames means the game is paused or in a menu: hold the true pose
+    // instead of sliding back and forth between two stale ones.
+    this.framesSinceStep += 1;
+    if (this.framesSinceStep > 8) {
+      this.prevProbeX = this.probePos.x;
+      this.prevProbeZ = this.probePos.z;
+      this.prevProbeY = this.probeY;
+      return;
+    }
+    const dx = this.probePos.x - this.prevProbeX;
+    const dz = this.probePos.z - this.prevProbeZ;
+    // A big jump is a spawn or teleport, not motion: draw it where it is.
+    if (alpha >= 1 || dx * dx + dz * dz > 4) return;
+    const a = Math.max(0, alpha);
+    this.simProbePos = this.probePos;
+    this.simProbeY = this.probeY;
+    this.probePos = { x: this.prevProbeX + dx * a, z: this.prevProbeZ + dz * a };
+    this.probeY = this.prevProbeY + (this.probeY - this.prevProbeY) * a;
+  }
+
+  endRenderInterpolation(): void {
+    if (this.simProbePos === null) return;
+    this.probePos = this.simProbePos;
+    this.probeY = this.simProbeY;
+    this.simProbePos = null;
+  }
+
   step(dt: number, input: SessionInputCommand): void {
+    // Recorded even when not running, so a paused or finished probe has no "previous" pose to blend from.
+    this.prevProbeX = this.probePos.x;
+    this.prevProbeZ = this.probePos.z;
+    this.prevProbeY = this.probeY;
+    this.framesSinceStep = 0;
     if (!this.running || this.completed) return;
 
     this.elapsedSec += dt;

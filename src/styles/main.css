@@ -1953,3 +1953,397 @@ textarea:focus-visible {
   padding-top: 7px;
   border-top: 1px solid rgba(94, 234, 212, 0.16);
 }
+
+/* ------------------------------------------------------------------
+   3-stage Brush-Along pacer: mirror compass, countdown, floss and rinse
+   ------------------------------------------------------------------ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pacer-utility-bar {
+  gap: 6px;
+}
+.pacer-utility-bar .btn.is-off {
+  opacity: 0.6;
+}
+.pacer-lang-select {
+  min-height: 32px;
+  max-width: 132px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(56, 189, 248, 0.42);
+  background: rgba(4, 16, 28, 0.82);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.pacer-lang-select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.pacer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+.pacer-card[data-stage="mouthwashBonus"] {
+  border-color: rgba(192, 132, 252, 0.5);
+}
+.pacer-card.paused {
+  border-color: rgba(251, 191, 36, 0.6);
+}
+
+.pacer-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.pacer-compass {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.pacer-side {
+  min-width: 30px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+#pacer-side-left {
+  text-align: right;
+}
+.pacer-side.lit {
+  color: var(--gold);
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-side:not(.lit) {
+  color: #d9b3ff;
+}
+#pacer-compass-svg path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#pacer-compass-svg .face {
+  stroke: rgba(255, 255, 255, 0.27);
+  stroke-width: 1.4;
+}
+#pacer-compass-svg .halo {
+  stroke: transparent;
+  stroke-width: 12;
+}
+#pacer-compass-svg .core {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 5;
+}
+#pacer-compass-svg .rim {
+  stroke: var(--gold);
+  stroke-width: 2.2;
+}
+#pacer-compass-svg [data-state="active"] .halo {
+  stroke: rgba(251, 191, 36, 0.38);
+}
+#pacer-compass-svg [data-state="active"] .core {
+  stroke-width: 6.5;
+}
+#pacer-compass-svg [data-state="done"] .core {
+  stroke: rgba(45, 212, 191, 0.9);
+  stroke-width: 5.5;
+}
+#pacer-compass-svg [data-state="pre"] .core {
+  stroke: var(--gold);
+  stroke-width: 5.8;
+}
+#pacer-compass-svg [data-state="rinse"] .halo {
+  stroke: rgb(168, 77, 250);
+  stroke-opacity: var(--halo-opacity, 0.5);
+  stroke-width: 11;
+}
+#pacer-compass-svg [data-state="rinse"] .core {
+  stroke-width: 6.4;
+}
+
+.pacer-clock-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 132px;
+}
+#pacer-clock {
+  font-size: 2.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+}
+.pacer-card[data-stage="mouthwashBonus"] #pacer-clock {
+  color: #d9b3ff;
+  text-shadow: 0 0 14px rgba(168, 77, 250, 0.55);
+}
+.pacer-card.paused #pacer-clock {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(251, 191, 36, 0.5);
+}
+.pacer-subbar {
+  flex: none;
+  width: 132px;
+  height: 7px;
+}
+.pacer-subbar[hidden],
+.pacer-pips[hidden],
+.pacer-resume[hidden],
+.pacer-swish-count[hidden] {
+  display: none;
+}
+.pacer-card[data-stage="flossBonus"] .pacer-subbar .clean-progress-inner {
+  background: var(--gold);
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-subbar .clean-progress-inner {
+  background: rgb(168, 77, 250);
+}
+.pacer-pips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 12px;
+}
+.pacer-pips i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+.pacer-pips i.lit {
+  background: var(--gold);
+}
+.pacer-pips i.now {
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 0 8px var(--gold);
+}
+.pacer-pips b {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.pacer-resume {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1c1300;
+  font-weight: 800;
+}
+
+.pacer-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.pacer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.pacer-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-main);
+  min-width: 0;
+}
+.pacer-card[data-stage="flossBonus"] .pacer-title {
+  color: var(--gold);
+  font-size: 1.2rem;
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-title {
+  color: #d9b3ff;
+  font-size: 1.15rem;
+}
+.pacer-tag {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: #1c1300;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pacer-tag:empty {
+  display: none;
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-tag {
+  background: #d9b3ff;
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-tag.final {
+  background: var(--gold);
+}
+.pacer-action-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.pacer-action {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+.pacer-chips {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+}
+.pacer-chip {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pacer-chip[aria-pressed="true"] {
+  background: var(--gold);
+  color: #1c1300;
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-chip[aria-pressed="true"] {
+  background: #d9b3ff;
+}
+.pacer-chip:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+.pacer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pacer-actions .btn {
+  flex: 1 1 auto;
+}
+.pacer-actions .btn-primary {
+  flex: 2 1 auto;
+}
+.pacer-card[data-stage="mouthwashBonus"] .pacer-actions .btn-primary,
+.pacer-card[data-stage="flossBonus"] .pacer-actions .btn-primary {
+  background: #d9b3ff;
+  border-color: #d9b3ff;
+  color: #1f0b33;
+}
+
+.pacer-level {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pacer-level-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pacer-cheek {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: #d9b3ff;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+.pacer-cheek.lit {
+  background: var(--gold);
+  color: #1c1300;
+}
+.pacer-cheek.full {
+  background: var(--mint);
+  color: #032019;
+}
+.pacer-level-track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(217, 179, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+.pacer-level.handheld .pacer-level-track {
+  border-color: rgba(45, 212, 191, 0.55);
+}
+.pacer-level-track i {
+  width: 1px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.pacer-level-bubble {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 13px;
+  margin: -6.5px 0 0 -14px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(#d9b3ff, rgb(168, 77, 250));
+  box-shadow: 0 0 8px rgba(168, 77, 250, 0.72);
+  /* --slosh runs from -1 (left cheek) to +1 (right cheek); the bubble travels to each end of the track. */
+  transform: translateX(calc(var(--slosh, 0) * (50cqw - 17px)));
+}
+.pacer-level-foot {
+  justify-content: space-between;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+.pacer-level.handheld .pacer-level-foot {
+  color: var(--mint);
+}
+.pacer-swish-count {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: #1c1300;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 420px) {
+  .pacer-title {
+    font-size: 1.15rem;
+  }
+  .pacer-action {
+    font-size: 0.88rem;
+  }
+  .pacer-head {
+    gap: 8px;
+  }
+}

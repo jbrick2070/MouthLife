@@ -36,6 +36,9 @@ import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 
 export type HubCameraFocus = 'companion' | 'globe';
 
+/** Brush-Along shows both arches (an open mouth), so the camera sits this much further back. */
+const PACER_MOUTH_DOLLY = 1.8;
+
 export interface CompanionRayHit {
   point: THREE.Vector3;
   normal: THREE.Vector3;
@@ -60,6 +63,9 @@ export class SceneManager {
   readonly entityBatch = new EntityBatchRenderer();
 
   private companionArch!: CompanionArchBuild;
+  private readonly mirrorRight = new THREE.Vector3();
+  private readonly mirrorNormal = new THREE.Vector3();
+  private readonly mirrorMatrix = new THREE.Matrix4();
   private cartridgeStage: {
     group: THREE.Group;
     dispose: () => void;
@@ -243,6 +249,7 @@ export class SceneManager {
     this.scene.add(this.earthBackdrop.rootGroup);
     this.companionArch = buildCompanionArchGroup(this.enamelMat.material);
     this.scene.add(this.companionArch.group);
+    this.scene.add(this.companionArch.upperGroup);
     this.scene.add(this.entityBatch.arcadeEntitiesGroup);
     this.scene.add(this.entityBatch.sharedFxGroup);
 
@@ -600,6 +607,7 @@ export class SceneManager {
 
     // The orbital leg of a dive never needs to render the arcade batches.
     this.entityBatch.arcadeEntitiesGroup.visible = isArcade && !!this.cartridgeStage?.group.visible;
+    this.updateUpperArchMirror();
     this.renderer.render(this.scene, this.camera);
     this.lastDrawCalls = this.renderer.info.render.calls;
     if (import.meta.env.DEV && this.lastDrawCalls >= 25 && !this.warnedDrawBudget) {
@@ -721,6 +729,38 @@ export class SceneManager {
     update(this.enamelMat.material);
     update(this.companionArch.gingivaMaterial);
     for (const material of this.cartridgeStage?.gingivaMaterials ?? []) update(material);
+  }
+
+  /**
+   * Shows the upper arch in Brush-Along as a mirror image of the lower arch across a plane that
+   * passes through the camera and the jaw hinge. Because the plane contains the camera, the upper
+   * arch lands exactly above the lower one on screen (an open mouth seen in a mirror) and left/right
+   * stay matched: screen-left is the patient's left on both arches.
+   */
+  private updateUpperArchMirror(): void {
+    const upper = this.companionArch.upperGroup;
+    const show = this.currentMode === 'BRUSH_ALONG' && this.companionArch.group.visible;
+    upper.visible = show;
+    if (!show) return;
+
+    this.camera.updateMatrixWorld();
+    const cam = this.camera.position;
+    const right = this.mirrorRight.setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const n = this.mirrorNormal
+      .copy(this.companionArch.jawHinge)
+      .sub(cam)
+      .cross(right)
+      .normalize();
+    const d = n.dot(cam);
+    // Householder reflection across the plane { p : n·p = d }.
+    this.mirrorMatrix.set(
+      1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.z, 2 * d * n.x,
+      -2 * n.y * n.x, 1 - 2 * n.y * n.y, -2 * n.y * n.z, 2 * d * n.y,
+      -2 * n.z * n.x, -2 * n.z * n.y, 1 - 2 * n.z * n.z, 2 * d * n.z,
+      0, 0, 0, 1
+    );
+    upper.matrix.multiplyMatrices(this.mirrorMatrix, this.companionArch.group.matrixWorld);
+    upper.matrixWorldNeedsUpdate = true;
   }
 
   private updateCameraRig(
@@ -848,13 +888,18 @@ export class SceneManager {
       const radius = (portraitView ? 36.8 : 22.4) * bandDolly * sideDolly;
       const pitch = portraitView ? 0.54 : 0.56;
       const panScale = portraitView ? 1.1 : 2.2;
-      const quadPanX = ((activeQuadrant >= 0 ? activeQuadrant : 1.5) - 1.5) * panScale;
+      // Mirror view: quadrants 0/3 are the patient's right (screen-right), 0/1 the upper arch.
+      const side = activeQuadrant < 0 ? 0 : activeQuadrant === 0 || activeQuadrant === 3 ? 1 : -1;
+      const lift = activeQuadrant < 0 ? 0 : activeQuadrant <= 1 ? 1 : -1;
+      const quadPanX = side * panScale * 0.5;
+      // Pull back so the upper and lower arches both fit, and aim between them (the open mouth).
+      const mouthRadius = radius * PACER_MOUTH_DOLLY;
       desiredPos.set(
         32 + quadPanX,
-        2.1 + Math.sin(pitch) * radius,
-        16 + Math.cos(pitch) * radius
+        2.1 + Math.sin(pitch) * mouthRadius,
+        16 + Math.cos(pitch) * mouthRadius
       );
-      desiredLook.set(32 + quadPanX * 0.42, 1.1, 18.0);
+      desiredLook.set(32 + quadPanX * 0.42, 3.8 + lift * 0.7, 13.2 - lift * 1.2);
     } else if (this.currentMode === 'REPORT') {
       const celebYaw = motionTime * 0.42 + this.orbitYaw;
       this.measureHubBand(dt);

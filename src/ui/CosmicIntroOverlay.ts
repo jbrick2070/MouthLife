@@ -14,7 +14,7 @@ const MOHS_SPECIMENS: readonly MohsEntry[] = [
     hardness: '2.5',
     name: 'Pure Gold',
     formula: 'Au',
-    note: 'Soft noble metal (Mohs 2.5): easily scratched by a copper coin — half the hardness of your tooth enamel!',
+    note: 'Soft noble metal (Mohs 2.5): easily scratched by a copper coin — your tooth enamel scratches it easily!',
   },
   {
     hardness: '4.0',
@@ -53,7 +53,7 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
   {
     tag: 'PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS',
     title: 'Your Smile Was Forged Inside Dying Stars',
-    body: 'Billions of years before Earth existed, massive stars and supernovae fused Calcium (²⁰Ca), Phosphorus (¹⁵P), Oxygen (⁸O), and trace Fluoride (⁹F). Today, specialized ameloblast cells weave those exact cosmic atoms into living crystal.',
+    body: 'Billions of years before Earth existed, massive stars and supernovae forged Calcium (⁴⁰Ca), Phosphorus (³¹P), Oxygen (¹⁶O), and a trace of Fluorine (¹⁹F). Today, specialized ameloblast cells weave those exact cosmic atoms into enamel crystal.',
   },
   {
     tag: 'PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY',
@@ -62,13 +62,13 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
   },
   {
     tag: 'PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX',
-    title: 'Why Can Tiny Microbes Dissolve Crystal Harder Than Steel?',
-    body: 'Mechanical hardness cannot stop acid chemistry! Below pH 5.5, bacterial lactic acid strips calcium & phosphate out of enamel — unless Fluoride (⁹F) locks into the lattice to form Fluorapatite (acid-shielded down to pH 4.5).',
+    title: 'Why Can Tiny Microbes Dissolve Crystal Harder Than Iron?',
+    body: 'Mechanical hardness cannot stop acid chemistry! Below pH 5.5, bacterial lactic acid strips calcium & phosphate out of enamel — unless Fluoride (¹⁹F) locks into the lattice to form Fluorapatite (acid-shielded down to pH 4.5).',
   },
   {
     tag: 'PROLOGUE 4 / 4 • EARTHRISE TO MICRO-UNIVERSE',
     title: 'Welcome to MouthLife: The Plaque Dimension',
-    body: 'Zoom from orbit into real human cities and dental history — bask in the mirror-smooth joy of clean brushed, flossed, and fluoride-sealed teeth daily, and guard against the Dreaded Root Canal!',
+    body: 'Zoom from orbit into real human cities and dental history — bask in the mirror-smooth joy of clean brushed, flossed, and fluoride-sealed teeth daily, and keep the living pulp inside every tooth healthy!',
   },
 ];
 
@@ -197,17 +197,17 @@ export class CosmicIntroOverlay implements OverlayView {
       this.beatIndex === 0
         ? `
       <div class="row-wrap" style="margin-top:6px;">
-        <span class="pill-badge" style="border-color:#fde68a;color:#fef08a;">²⁰Ca Calcium</span>
-        <span class="pill-badge" style="border-color:#c084fc;color:#e9d5ff;">¹⁵P Phosphorus</span>
-        <span class="pill-badge" style="border-color:#38bdf8;color:#bae6fd;">⁸O Oxygen</span>
-        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">⁹F Fluoride</span>
+        <span class="pill-badge" style="border-color:#fde68a;color:#fef08a;">⁴⁰Ca Calcium</span>
+        <span class="pill-badge" style="border-color:#c084fc;color:#e9d5ff;">³¹P Phosphorus</span>
+        <span class="pill-badge" style="border-color:#38bdf8;color:#bae6fd;">¹⁶O Oxygen</span>
+        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">¹⁹F Fluorine</span>
       </div>
     `
         : this.beatIndex === 2
           ? `
       <div class="row-wrap" style="margin-top:6px;">
         <span class="pill-badge" style="border-color:#fb7185;color:#fecdd3;">Hydroxyapatite Critical: pH 5.5</span>
-        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">⁹F Fluorapatite Shield: pH 4.5</span>
+        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">¹⁹F Fluorapatite Shield: pH 4.5</span>
       </div>
     `
           : '';

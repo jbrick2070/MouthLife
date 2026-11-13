@@ -498,6 +498,13 @@ export interface CompanionToothFrame {
 
 export interface CompanionArchBuild {
   group: THREE.Group;
+  /**
+   * Upper arch for the Brush-Along mirror view. It shares the lower arch's shape; the scene sets its
+   * matrix each frame to a reflection of the lower arch (see SceneManager.updateUpperArchMirror).
+   */
+  upperGroup: THREE.Group;
+  /** World-space point the mouth "opens" around: just above and behind the lower molars. */
+  jawHinge: THREE.Vector3;
   teethMesh: THREE.Mesh;
   gingivaMaterial: THREE.ShaderMaterial;
   teeth: CompanionToothFrame[];
@@ -594,7 +601,9 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
     const halfD = spec.d * mmToU * 0.5 * 0.92;
     const halfH = spec.h * mmToU * 0.5 * 1.05;
 
-    const quadIdx = Math.min(3, Math.floor((ti / ordered.length) * 4));
+    // Bathroom-mirror convention: screen-left is the patient's left. The first half of the arch
+    // sits on screen-left, so on this lower arch it is quadrant 2 (lower-left), the rest quadrant 3.
+    const quadIdx = ti < ordered.length / 2 ? 2 : 3;
     const geo = sculptCrownGeometry({
       kind: spec.kind,
       halfW,
@@ -638,13 +647,35 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
   const gumMat = createGingivaMaterial(0xe7858f);
   group.add(new THREE.Mesh(gumGeo, gumMat));
 
+  // Upper arch: same crowns with the quadrant codes swapped to upper-left (1) / upper-right (0).
+  const upperTeethGeo = mergedTeeth.clone();
+  const upperColors = upperTeethGeo.getAttribute('color');
+  for (let i = 0; i < upperColors.count; i++) {
+    const lowerQuad = Math.floor(upperColors.getY(i) * 4.0 + 0.01);
+    if (lowerQuad === 2) upperColors.setY(i, (1 + 0.5) / 4.0);
+    else if (lowerQuad === 3) upperColors.setY(i, (0 + 0.5) / 4.0);
+  }
+  upperColors.needsUpdate = true;
+  const upperGroup = new THREE.Group();
+  upperGroup.matrixAutoUpdate = false;
+  upperGroup.visible = false;
+  upperGroup.add(new THREE.Mesh(upperTeethGeo, enamelMaterial));
+  upperGroup.add(new THREE.Mesh(gumGeo, gumMat));
+
+  mergedTeeth.computeBoundingBox();
+  const bb = mergedTeeth.boundingBox!;
+  const jawHinge = new THREE.Vector3(0, bb.max.y, bb.min.z + 0.7).applyMatrix4(group.matrixWorld);
+
   return {
     group,
+    upperGroup,
+    jawHinge,
     teethMesh,
     gingivaMaterial: gumMat,
     teeth,
     dispose: () => {
       mergedTeeth.dispose();
+      upperTeethGeo.dispose();
       gumGeo.dispose();
       gumMat.dispose();
     },

@@ -12,7 +12,7 @@ A stylized-3D biophysical dental arcade adventure and daily **"Smooth Bask"** or
 ```bash
 cd native-apple
 
-# 1. Run all 15 deterministic MouthLifeCore biophysics, coach & gyro unit tests
+# 1. Run all 16 deterministic MouthLifeCore biophysics, coach & gyro unit tests
 swift test
 
 # 2. Open in Xcode (Simulator, Mac, or Physical 120Hz ProMotion iPhone)
@@ -31,7 +31,7 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 137 Vitest unit tests
+npm test          # Run all 164 Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
@@ -40,11 +40,11 @@ npm run build     # Type-check & build production PWA bundle into dist/
 
 ## 🎮 Playable Modes & Features
 
-- **🪥 3-Stage Hands-Free Bathroom Mirror Ritual (`native-apple/`, `+100 F⁻` Total):**
+- **🪥 3-Stage Hands-Free Bathroom Mirror Ritual (`native-apple/` and web, `+100 F⁻` Total):** *(The web edition has the same timeline, mirror compass, 8-language voice coach via the browser's speech synthesis, upper + lower arches, and rewards. Still native-only: the 3D toothbrush / floss pick / rinse cup props, the bundled music tracks, haptics, and the purple-to-gold enamel shader states.)*
   1. **Stage 1 (`2:00` Brushing, `+50 F⁻`):** Hands-free, eyes-optional progression (`12 × 10s`: `Q1 → Q2 → Q3 → Q4`, `Outer 45° Gumline → Chewing Grooves → Inner Vertical`), body-locked **Mirror Arch Compass** (`Screen-Left = Patient Left`, `Screen-Right = Patient Right`), 3D **45° Bristle Angle Wedge**, **3-State Metal Enamel Awakening**, **8-Language Spoken Voice Coach** (`EN`, `ES`, `FR`, `JA`, `ZH`, `KO`, `PT`, `DE`) with `-8.4 dB` music ducking, and `3… 2… 1…` final 3-second musical anticipation.
   2. **Stage 2 (`0:45` 3D Y-Bow Floss Pick Bonus, `+25 F⁻`):** Animated 3D Y-bow floss pick (`Pick` / `String` toggle) demonstrating gentle wiggle-glide past contact points and two-wall C-hug sweeps across all 26 interdental gaps (Upper → Lower arch).
   3. **Stage 3 (`1:00` Purple Total Care Anticavity Fluoride Rinse, `+25 F⁻`):** ADA / Purple Listerine Total Care protocol (`10 mL`, `[60s | 30s]` toggle, 30-minute post-rinse no-water lock-in reminder) with a 3D `10 mL` pouring cup, swirling Royal Amethyst vortex + `24` `F⁻` bubbles, 28-crown purple-to-24k-gold Fluorapatite Metal shader seal, and **auto-detecting 120Hz `CoreMotion` Gyroscope Liquid Slosh + Cheek-to-Cheek Spirit-Level Bubble Gauge** when picked up during the swish!
-- **✦ Cosmic Stardust & Mohs Hardness Intro** — Interactive 3D journey from stellar nucleosynthesis (`²⁰Ca`, `¹⁵P`) to hydroxyapatite (`Mohs 5.0`, harder than steel) vs. bacterial acid (`pH 5.5` vs. fluorapatite `pH 4.5`).
+- **✦ Cosmic Stardust & Mohs Hardness Intro** — Interactive 3D journey from stellar nucleosynthesis (`⁴⁰Ca`, `³¹P`) to hydroxyapatite (`Mohs 5`, harder than iron) vs. bacterial acid (`pH 5.5` vs. fluorapatite `pH 4.5`).
 - **🦷 Smooth Bask Companion Hub & Live Earth Radio** — Interactive 14-crown 3D dental arch (rub teeth for crystalline glass-harp chimes + handheld wet-enamel specular glint), **10-Track Mastered AAC Suno Soundtrack** (`Sanctuary`, `Toronto`, `New Orleans`, `Tokyo`, `Accra`, `Aurora`, `Brush-Along`, `Cosmic`, `Pulp Rescue`, `Victory`) driving 3-band 120Hz audio-reactive shaders, **Interactive 32-Tooth Clinical Chart** (`ADA Universal #1–#32`, `ISO 3950 FDI 11–48`, `Palmer` + Spot Quiz + 4-layer Cross-Section), non-punitive **Saliva Stasis** (`>= 45%`), and portable `ML2:` sync codes.
 - **🌍 5-World Earth-to-Orbit Arcade Campaign + 90s Pulp Rescue:**
   1. **`world_1` — Plaque City** *(Toronto • 1498 Beijing & 1683 Leeuwenhoek)* — Pellicle shear, interdental Floss Tether-Zips & molar fissures.
@@ -76,7 +76,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 19 Vitest suites (137 deterministic web tests)
+└── tests/                                # 22 Vitest suites (164 deterministic web tests)
 ```
 
 ---

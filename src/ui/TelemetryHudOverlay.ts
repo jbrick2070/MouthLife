@@ -151,6 +151,21 @@ export class TelemetryHudOverlay implements OverlayView {
       this.setPaused(true);
     }
   };
+  /** Alt-tab or clicking another window: pause so timers and hazards never run unattended. */
+  private blurHandler = (): void => {
+    if (!this.paused) this.setPaused(true);
+  };
+  /**
+   * A mouse click leaves keyboard focus on the HUD button, so the next Space press would press that
+   * button again instead of scrubbing. Drop focus after mouse clicks only (keyboard users keep it).
+   */
+  private clickFocusHandler = (e: MouseEvent): void => {
+    if (e.detail === 0) return;
+    const target = e.target instanceof Element ? e.target.closest('button') : null;
+    if (target && !target.closest('[role="dialog"]') && document.activeElement === target) {
+      (target as HTMLElement).blur();
+    }
+  };
   private resizeHandler = (): void => {
     this.syncThumbPadVisibility();
   };
@@ -387,6 +402,8 @@ export class TelemetryHudOverlay implements OverlayView {
     window.addEventListener('keydown', this.keyHandler);
     window.addEventListener('resize', this.resizeHandler);
     document.addEventListener('visibilitychange', this.visibilityHandler);
+    window.addEventListener('blur', this.blurHandler);
+    this.container.addEventListener('click', this.clickFocusHandler);
 
     // Callout layer sits above the canvas but outside the flex HUD flow
     this.calloutLayer = document.createElement('div');
@@ -1412,6 +1429,7 @@ export class TelemetryHudOverlay implements OverlayView {
     window.removeEventListener('keydown', this.keyHandler);
     window.removeEventListener('resize', this.resizeHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);
+    window.removeEventListener('blur', this.blurHandler);
     if (this.paused) this.audio?.setPaused(false);
     this.disposers.disposeAll();
     this.calloutLayer?.remove();

@@ -29,6 +29,11 @@ export function createInitialCompanionState(nowEpochMs = Date.now()): CompanionS
   };
 }
 
+/** A treat never drops surface smoothness below this. */
+export const TREAT_SMOOTHNESS_FLOOR = 10;
+/** A timed-out Pulp Rescue leaves smoothness at least this high. */
+export const PULP_RESCUE_STABILIZE_SMOOTHNESS_FLOOR = 65;
+
 export class CompanionArchSim {
   /**
    * Reconciles offline/elapsed wall-clock time using the deterministic two-slope Smooth Bask curve.
@@ -124,7 +129,10 @@ export class CompanionArchSim {
     activeWindow.push(nowEpochMs);
     state.recentTreatTimestampsMs = activeWindow.slice(-12);
 
-    state.smoothnessIndex = Math.max(0, state.smoothnessIndex - TREAT_SMOOTHNESS_DROP);
+    state.smoothnessIndex = Math.max(
+      TREAT_SMOOTHNESS_FLOOR,
+      state.smoothnessIndex - TREAT_SMOOTHNESS_DROP
+    );
 
     if (state.smoothnessIndex < TREAT_ACID_THRESHOLD_SMOOTHNESS) {
       let remainingAcid = TREAT_ACID_LOAD_POINTS;
@@ -176,9 +184,10 @@ export class CompanionArchSim {
       return { ionsAwarded: PULP_RESCUE_WIN_IONS };
     }
     // Non-punitive Emergency Calcium-Hydroxide Stabilization
-    state.smoothnessIndex = PULP_RESCUE_STABILIZE_VALUE;
-    state.enamelShield = PULP_RESCUE_STABILIZE_VALUE;
-    state.dentinShield = PULP_RESCUE_STABILIZE_VALUE;
+    // Never lowers anything the player still had: only lifts values up to the safe floor.
+    state.smoothnessIndex = Math.max(state.smoothnessIndex, PULP_RESCUE_STABILIZE_SMOOTHNESS_FLOOR);
+    state.enamelShield = Math.max(state.enamelShield, PULP_RESCUE_STABILIZE_VALUE);
+    state.dentinShield = Math.max(state.dentinShield, PULP_RESCUE_STABILIZE_VALUE);
     state.pulpIntegrity = PULP_RESCUE_STABILIZE_VALUE;
     state.lastEvaluatedEpochMs = nowEpochMs;
     return { ionsAwarded: 0 };
