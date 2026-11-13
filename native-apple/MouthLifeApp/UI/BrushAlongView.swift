@@ -5,6 +5,8 @@ public struct BrushAlongView: View {
     public let elapsedSec: Double
     public let isPaused: Bool
     public let inFlossBonus: Bool
+    public let stationLabel: String
+    public let onCycleStation: () -> Void
     public let onTogglePause: () -> Void
     public let onEnterFlossBonusNow: () -> Void
     public let onCompleteSession: (Bool) -> Void
@@ -27,6 +29,8 @@ public struct BrushAlongView: View {
         elapsedSec: Double,
         isPaused: Bool,
         inFlossBonus: Bool,
+        stationLabel: String,
+        onCycleStation: @escaping () -> Void,
         onTogglePause: @escaping () -> Void,
         onEnterFlossBonusNow: @escaping () -> Void,
         onCompleteSession: @escaping (Bool) -> Void,
@@ -35,6 +39,8 @@ public struct BrushAlongView: View {
         self.elapsedSec = elapsedSec
         self.isPaused = isPaused
         self.inFlossBonus = inFlossBonus
+        self.stationLabel = stationLabel
+        self.onCycleStation = onCycleStation
         self.onTogglePause = onTogglePause
         self.onEnterFlossBonusNow = onEnterFlossBonusNow
         self.onCompleteSession = onCompleteSession
@@ -62,17 +68,25 @@ public struct BrushAlongView: View {
 
                 Spacer()
 
-                HStack(spacing: 5) {
-                    Image(systemName: "sun.max.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(MLTheme.mintClean)
-                    Text("Sink Stay-Awake Active")
-                        .font(.system(.caption2, design: .rounded, weight: .bold))
-                        .foregroundStyle(MLTheme.mintClean)
+                Button {
+                    onCycleStation()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: stationLabel == "Sanctuary" ? "moon.stars.fill" : "dot.radiowaves.left.and.right")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(stationLabel)
+                            .font(.system(.caption2, design: .rounded, weight: .bold))
+                        Image(systemName: "sun.max.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(MLTheme.mintClean)
+                            .accessibilityLabel("Sink Stay-Awake Active")
+                    }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(MLTheme.cardBg))
+                .buttonStyle(
+                    MLGlassPillButtonStyle(
+                        tint: stationLabel == "Sanctuary" ? MLTheme.mintClean : MLTheme.cyanAccent
+                    )
+                )
 
                 Spacer()
 

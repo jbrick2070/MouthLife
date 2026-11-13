@@ -17,12 +17,20 @@ public final class AppCoordinator {
     // Observable UI State
     public var mode: AppMode = .hub
     public var save: MouthLifeSaveV2
+    public var earthRadioEnabled: Bool = NativeSoundEngine.shared.isEarthRadioEnabled
+    public var activeRadioWorldId: String = "world_1"
     public var selectedWorldId: String = "world_1" {
         didSet {
             if let host = HostsAndHistory.host(forWorldId: selectedWorldId) {
                 sceneController.cosmicNodes.focusOnCity(host.id)
             }
             NativeSoundEngine.shared.setWorldContext(selectedWorldId)
+            if isWorldUnlocked(selectedWorldId) {
+                activeRadioWorldId = selectedWorldId
+                if earthRadioEnabled {
+                    NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: selectedWorldId)
+                }
+            }
         }
     }
     public var cosmicBeatIndex: Int = 0 {
@@ -96,11 +104,87 @@ public final class AppCoordinator {
         self.save = sys.save(updatedSave)
 
         self.mode = self.save.hasSeenCosmicIntro ? .hub : .cosmicIntro
-        self.selectedWorldId = pickRecommendedDiveWorld(from: self.save)
+        let initialWorld = pickRecommendedDiveWorld(from: self.save)
+        self.selectedWorldId = initialWorld
+        self.activeRadioWorldId = initialWorld
+        self.earthRadioEnabled = NativeSoundEngine.shared.isEarthRadioEnabled
 
         setupSceneAndAudioBridges()
+        NativeSoundEngine.shared.setEarthRadio(
+            enabled: self.earthRadioEnabled,
+            tunedUnlockedWorldId: self.activeRadioWorldId
+        )
         applyLaunchArgumentsIfPresent()
         syncSceneMode()
+    }
+
+    public func isWorldUnlocked(_ worldId: String) -> Bool {
+        if worldId == "world_1" { return true }
+        if save.worlds[worldId]?.unlocked == true { return true }
+        guard let host = HostsAndHistory.host(forWorldId: worldId) else { return false }
+        return save.totalBrushStamps >= host.unlockStampsRequired
+    }
+
+    public var currentRadioStationLabel: String {
+        guard earthRadioEnabled else { return "Sanctuary" }
+        switch activeRadioWorldId {
+        case "world_1": return "Toronto FM"
+        case "world_2": return "New Orleans FM"
+        case "world_3": return "Tokyo FM"
+        case "world_4": return "Accra FM"
+        case "world_5": return "Aurora FM"
+        default:
+            let city = HostsAndHistory.host(forWorldId: activeRadioWorldId)?.city ?? "Toronto"
+            return "\(city) FM"
+        }
+    }
+
+    public func selectHubCity(_ worldId: String) {
+        let unlocked = isWorldUnlocked(worldId)
+        let wasAlreadyBroadcasting = earthRadioEnabled && activeRadioWorldId == worldId
+        selectedWorldId = worldId
+        NativeSoundEngine.shared.playUiTap()
+
+        if unlocked {
+            earthRadioEnabled = true
+            activeRadioWorldId = worldId
+            NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: worldId)
+            if !wasAlreadyBroadcasting, let host = HostsAndHistory.host(forWorldId: worldId) {
+                showHubToast("📻 Earth Radio • \(host.city)")
+            }
+        }
+    }
+
+    public func selectSanctuaryRadio() {
+        guard earthRadioEnabled else {
+            NativeSoundEngine.shared.playUiTap()
+            return
+        }
+        earthRadioEnabled = false
+        NativeSoundEngine.shared.setEarthRadio(enabled: false)
+        NativeSoundEngine.shared.playUiTap()
+        showHubToast("🌙 Sanctuary Ambient Active")
+    }
+
+    public func cycleRadioStation() {
+        let unlockedWorldIds = HostsAndHistory.hostCities
+            .map(\.worldId)
+            .filter { isWorldUnlocked($0) }
+        let stations: [String?] = [nil] + unlockedWorldIds.map { Optional($0) }
+        let currentSlot: String? = earthRadioEnabled ? activeRadioWorldId : nil
+        let curIdx = stations.firstIndex(where: { $0 == currentSlot }) ?? 0
+        let nextSlot = stations[(curIdx + 1) % stations.count]
+
+        NativeSoundEngine.shared.playUiTap()
+        if let wid = nextSlot {
+            earthRadioEnabled = true
+            activeRadioWorldId = wid
+            selectedWorldId = wid
+            NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: wid)
+        } else {
+            earthRadioEnabled = false
+            NativeSoundEngine.shared.setEarthRadio(enabled: false)
+        }
     }
 
     private func pickRecommendedDiveWorld(from save: MouthLifeSaveV2) -> String {
@@ -285,6 +369,8 @@ public final class AppCoordinator {
     public func launchArcadeWorld(_ worldId: String) {
         let cart = WorldRegistry.cartridgeOrDefault(forId: worldId)
         selectedWorldId = cart.id
+        activeRadioWorldId = cart.id
+        NativeSoundEngine.shared.setEarthRadio(enabled: earthRadioEnabled, tunedUnlockedWorldId: cart.id)
         activeCartridge = cart
 
         let currentSave = saveSystem.getSave()
@@ -536,6 +622,13 @@ public final class AppCoordinator {
             let decoded = try SaveSystem.decodeSaveFromSyncCode(code)
             save = saveSystem.save(decoded)
             sceneController.companionSmoothness = save.companion.smoothnessIndex
+            if !isWorldUnlocked(activeRadioWorldId) {
+                activeRadioWorldId = pickRecommendedDiveWorld(from: save)
+                NativeSoundEngine.shared.setEarthRadio(
+                    enabled: earthRadioEnabled,
+                    tunedUnlockedWorldId: activeRadioWorldId
+                )
+            }
             NativeSoundEngine.shared.playSmoothBaskSparkle()
             return .success(())
         } catch {

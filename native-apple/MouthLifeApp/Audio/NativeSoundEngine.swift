@@ -1352,9 +1352,32 @@ private final class SunoStreamDeck {
         if let cached = resolvedURLCache[themeId] {
             return cached
         }
-        var candidates: [String] = [themeId.rawValue]
-        if themeId == .hubGlobe || themeId == .hubReady {
-            candidates.append("hub")
+        var candidates: [String]
+        switch themeId {
+        case .world1:
+            candidates = ["world_1", "toronto"]
+        case .world2:
+            candidates = ["world_2", "new_orleans", "nola"]
+        case .world3:
+            candidates = ["world_3", "tokyo", "tokyo_chicago", "chicago"]
+        case .world4:
+            candidates = ["world_4", "accra", "accra_colorado"]
+        case .world5:
+            candidates = ["world_5", "aurora", "orbit_aurora", "station_aurora", "orbit"]
+        case .hub:
+            candidates = ["hub", "sanctuary"]
+        case .hubGlobe:
+            candidates = ["hub_globe", "hub", "sanctuary"]
+        case .hubReady:
+            candidates = ["hub_ready", "hub", "sanctuary"]
+        case .brushAlong:
+            candidates = ["brush_along", "brush"]
+        case .cosmic:
+            candidates = ["cosmic", "intro"]
+        case .pulp:
+            candidates = ["pulp", "pulp_rescue", "boss"]
+        case .report:
+            candidates = ["report", "victory"]
         }
         candidates.append("background")
 
@@ -1495,10 +1518,13 @@ public final class NativeSoundEngine {
     private static let mutedKey = "mouthlife.nativeAudio.muted"
     private static let musicVolKey = "mouthlife.nativeAudio.musicVolume"
     private static let sfxVolKey = "mouthlife.nativeAudio.sfxVolume"
+    private static let earthRadioKey = "mouthlife.nativeAudio.earthRadio"
 
     public private(set) var isMuted: Bool
     public private(set) var musicVolume: Float
     public private(set) var sfxVolume: Float
+    public private(set) var isEarthRadioEnabled: Bool
+    public private(set) var tunedRadioWorldId: String = "world_1"
     public var onPreferencesChanged: ((Bool, Float, Float) -> Void)?
 
     private let engine = AVAudioEngine()
@@ -1515,6 +1541,8 @@ public final class NativeSoundEngine {
     // Adaptive soundtrack state
     private var currentMode: AppMode = .cosmicIntro
     private var currentWorldId: String = "world_1"
+    private var earthRadioActive: Bool = true
+    private var radioWorldId: String = "world_1"
     private var hubGlobeActive: Bool = false
     private var pulpZeroActive: Bool = false
     private var urgencyActive: Bool = false
@@ -1547,6 +1575,12 @@ public final class NativeSoundEngine {
         } else {
             self.sfxVolume = 0.85
         }
+        if defaults.object(forKey: Self.earthRadioKey) != nil {
+            self.isEarthRadioEnabled = defaults.bool(forKey: Self.earthRadioKey)
+        } else {
+            self.isEarthRadioEnabled = true
+        }
+        self.earthRadioActive = self.isEarthRadioEnabled
 
         configureAudioSessionIfNeeded()
         setupAudioGraph()
@@ -1740,7 +1774,7 @@ public final class NativeSoundEngine {
 
     private func currentTempoScale() -> Double {
         if activeTheme.id == .pulp && urgencyActive { return 1.10 }
-        if activeTheme.id == .brushAlong && pacerInFlossBonus { return 1.12 }
+        if currentMode == .brushAlong && pacerInFlossBonus { return 1.12 }
         return 1.0
     }
 
@@ -1749,7 +1783,8 @@ public final class NativeSoundEngine {
     }
 
     private func pushMixStateToKernel() {
-        let baseMusic = musicVolume <= 0.001 ? Float(0) : (musicVolume * 0.55 * activeTheme.mixGain)
+        let hubRadioAtten: Float = (currentMode == .hub && earthRadioActive && !pulpZeroActive) ? 0.86 : 1.0
+        let baseMusic = musicVolume <= 0.001 ? Float(0) : (musicVolume * 0.55 * activeTheme.mixGain * hubRadioAtten)
         let effectiveMusic = isPaused ? (baseMusic * 0.42) : baseMusic
         let effectiveSfx = sfxVolume <= 0.001 ? Float(0) : (sfxVolume * 0.95)
         let cutoff: Float
@@ -1769,7 +1804,7 @@ public final class NativeSoundEngine {
             delaySec: dotted8th
         )
 
-        let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72)
+        let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72 * hubRadioAtten)
         let effectiveSuno: Float
         if isPaused {
             effectiveSuno = baseSuno * 0.38
@@ -1787,6 +1822,22 @@ public final class NativeSoundEngine {
     }
 
     // MARK: Adaptive Music Director API
+
+    public func setEarthRadio(enabled: Bool, tunedUnlockedWorldId: String? = nil) {
+        isEarthRadioEnabled = enabled
+        if let wid = tunedUnlockedWorldId {
+            tunedRadioWorldId = wid
+        }
+        UserDefaults.standard.set(enabled, forKey: Self.earthRadioKey)
+        sequencerQueue.async { [weak self] in
+            guard let self else { return }
+            self.earthRadioActive = enabled
+            if let wid = tunedUnlockedWorldId {
+                self.radioWorldId = wid
+            }
+            self.refreshActiveTheme()
+        }
+    }
 
     public func setAmbientMode(_ mode: AppMode) {
         sequencerQueue.async { [weak self] in
@@ -1863,25 +1914,30 @@ public final class NativeSoundEngine {
         }
     }
 
+    private func themeForWorld(_ worldId: String) -> MusicThemeId {
+        let w = worldId.lowercased()
+        if w.contains("2") || w.contains("orleans") || w.contains("nola") || w.contains("lagos_2") { return .world2 }
+        if w.contains("3") || w.contains("tokyo") || w.contains("chicago") { return .world3 }
+        if w.contains("4") || w.contains("accra") || w.contains("lagos") { return .world4 }
+        if w.contains("5") || w.contains("aurora") || w.contains("orbit") || w.contains("reykjavik") { return .world5 }
+        return .world1
+    }
+
     private func resolveThemeId() -> MusicThemeId {
         switch currentMode {
         case .cosmicIntro:
             return .cosmic
         case .brushAlong:
-            return .brushAlong
+            return earthRadioActive ? themeForWorld(radioWorldId) : .brushAlong
         case .report:
             return .report
         case .pulpRescue:
             return .pulp
         case .arcade:
-            let w = currentWorldId.lowercased()
-            if w.contains("2") || w.contains("orleans") || w.contains("lagos_2") { return .world2 }
-            if w.contains("3") || w.contains("tokyo") { return .world3 }
-            if w.contains("4") || w.contains("accra") || w.contains("lagos") { return .world4 }
-            if w.contains("5") || w.contains("aurora") || w.contains("orbit") || w.contains("reykjavik") { return .world5 }
-            return .world1
+            return themeForWorld(currentWorldId)
         case .hub:
             if pulpZeroActive { return .hubReady }
+            if earthRadioActive { return themeForWorld(radioWorldId) }
             return hubGlobeActive ? .hubGlobe : .hub
         }
     }
@@ -1958,7 +2014,7 @@ public final class NativeSoundEngine {
         let section = barInLoop < 8 ? 0 : 1
         let phraseBar = barInLoop % 4
 
-        let tr = (theme.id == .brushAlong) ? MusicCatalog.pacerTranspose[pacerQuadrant] : 0
+        let tr = (currentMode == .brushAlong) ? MusicCatalog.pacerTranspose[pacerQuadrant] : 0
         let intensity: Float = (acidTensionActive && theme.id == .world3) ? 0.85 : 1.0
         let stepSec = currentStepDurationSec()
         let swingSec = (step % 2 == 1) ? (theme.swing * stepSec) : 0.0

@@ -14,12 +14,16 @@ public enum HubSheetKind: String, Identifiable {
 
 public struct CompanionHubView: View {
     public let save: MouthLifeSaveV2
-    public var selectedWorldId: Binding<String>
+    public let selectedWorldId: String
+    public let earthRadioEnabled: Bool
+    public let activeRadioWorldId: String
     public let tappedCrownSummary: CompanionCrownSummary?
     public let statusToast: String?
     public let liveFps: Int
     public let showProMotionBadge: Bool
 
+    public let onSelectCity: (String) -> Void
+    public let onSelectSanctuary: () -> Void
     public let onClaimIdleIons: () -> Void
     public let onFeedTreat: () -> Void
     public let onStartBrushAlong: () -> Void
@@ -29,11 +33,15 @@ public struct CompanionHubView: View {
 
     public init(
         save: MouthLifeSaveV2,
-        selectedWorldId: Binding<String>,
+        selectedWorldId: String,
+        earthRadioEnabled: Bool,
+        activeRadioWorldId: String,
         tappedCrownSummary: CompanionCrownSummary?,
         statusToast: String?,
         liveFps: Int,
         showProMotionBadge: Bool,
+        onSelectCity: @escaping (String) -> Void,
+        onSelectSanctuary: @escaping () -> Void,
         onClaimIdleIons: @escaping () -> Void,
         onFeedTreat: @escaping () -> Void,
         onStartBrushAlong: @escaping () -> Void,
@@ -43,10 +51,14 @@ public struct CompanionHubView: View {
     ) {
         self.save = save
         self.selectedWorldId = selectedWorldId
+        self.earthRadioEnabled = earthRadioEnabled
+        self.activeRadioWorldId = activeRadioWorldId
         self.tappedCrownSummary = tappedCrownSummary
         self.statusToast = statusToast
         self.liveFps = liveFps
         self.showProMotionBadge = showProMotionBadge
+        self.onSelectCity = onSelectCity
+        self.onSelectSanctuary = onSelectSanctuary
         self.onClaimIdleIons = onClaimIdleIons
         self.onFeedTreat = onFeedTreat
         self.onStartBrushAlong = onStartBrushAlong
@@ -193,19 +205,44 @@ public struct CompanionHubView: View {
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(MLTheme.coralGum.opacity(0.16)))
                 }
 
-                // World Selector Pills
+                // Live Earth Radio & World Selector Pills
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        Button {
+                            onSelectSanctuary()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: !earthRadioEnabled ? "waveform" : "moon.stars.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(!earthRadioEnabled ? MLTheme.deepOcean : MLTheme.mintClean)
+                                Text("Sanctuary")
+                                    .font(.system(.caption, design: .rounded, weight: .bold))
+                                    .foregroundStyle(!earthRadioEnabled ? MLTheme.deepOcean : MLTheme.textPrimary)
+                            }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(!earthRadioEnabled ? MLTheme.mintClean : Color.white.opacity(0.09))
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         ForEach(HostsAndHistory.hostCities) { host in
                             let unlocked = isWorldUnlocked(host)
-                            let selected = selectedWorldId.wrappedValue == host.worldId
+                            let selected = selectedWorldId == host.worldId
+                            let isTuning = earthRadioEnabled && activeRadioWorldId == host.worldId && unlocked
                             let rec = save.worlds[host.worldId]
+                            let iconName: String = {
+                                if !unlocked { return "lock.fill" }
+                                if isTuning { return "waveform" }
+                                return rec?.completed == true ? "checkmark.circle.fill" : "globe.americas.fill"
+                            }()
 
                             Button {
-                                selectedWorldId.wrappedValue = host.worldId
+                                onSelectCity(host.worldId)
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: unlocked ? (rec?.completed == true ? "checkmark.circle.fill" : "globe.americas.fill") : "lock.fill")
+                                    Image(systemName: iconName)
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(selected ? MLTheme.deepOcean : (unlocked ? MLTheme.cyanAccent : MLTheme.textMuted))
                                     Text(host.city)
@@ -224,6 +261,12 @@ public struct CompanionHubView: View {
                                         selected ? MLTheme.cyanAccent : Color.white.opacity(unlocked ? 0.09 : 0.04)
                                     )
                                 )
+                                .overlay(
+                                    Capsule().strokeBorder(
+                                        isTuning && !selected ? MLTheme.cyanAccent.opacity(0.65) : Color.clear,
+                                        lineWidth: 1
+                                    )
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -231,7 +274,7 @@ public struct CompanionHubView: View {
                 }
 
                 // Selected World Summary + Primary Actions
-                let activeHost = HostsAndHistory.hostCities.first { $0.worldId == selectedWorldId.wrappedValue } ?? HostsAndHistory.hostCities[0]
+                let activeHost = HostsAndHistory.hostCities.first { $0.worldId == selectedWorldId } ?? HostsAndHistory.hostCities[0]
                 let activeUnlocked = isWorldUnlocked(activeHost)
                 let activeCart = WorldRegistry.cartridgeOrDefault(forId: activeHost.worldId)
 
