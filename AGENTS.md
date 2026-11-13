@@ -13,7 +13,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
 ## 2. Key Architectural Invariants (`native-apple/`)
 
 1. **Hands-Free Bathroom Mirror Priority (`BrushAlongView` & `BrushCoachSystem`):**
-   - Once **2-Min Brush** starts, the entire 3-stage ritual (`2:00` Brushing `+50 F⁻` → `0:45` 3D Y-Bow Floss Pick `+25 F⁻` → `1:00` Purple Total Care Fluoride Rinse `+25 F⁻` = `+100 F⁻`) must run **100% hands-free and eyes-optional** when the phone sits untouched on the bathroom counter.
+   - Once **2-Min Brush** starts, the entire 3-stage ritual (`2:00` Brushing `+50 F⁻` → `0:45` 3D Y-Bow Floss Pick `+25 F⁻` → `1:00` Fluoride Rinse `+25 F⁻` = `+100 F⁻`) must run **100% hands-free and eyes-optional** when the phone sits untouched on the bathroom counter.
    - Gyroscope interactions (`MotionTiltMonitor` + `GyroSloshSim`) auto-detect counter (`isHandheld == false`) vs. picked-up handheld tilt (`isHandheld == true`) and must always remain additive enhancements that honor `UIAccessibility.isReduceMotionEnabled`.
 2. **Bathroom Mirror Spatial Alignment (Never Flip Left/Right!):**
    - Both the 2D `MirrorArchCompassView` and the 3D pacer camera match looking into a bathroom mirror: **Screen-Left = Patient Left (`Q2` Upper-Left, `Q3` Lower-Left)** and **Screen-Right = Patient Right (`Q1` Upper-Right, `Q4` Lower-Right)**.
@@ -26,7 +26,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
 ## 3. Verification Checklist Before Committing
 
 ```bash
-# 1. Pure Swift engine, 8-language coach, 3-stage timeline & 120Hz gyro slosh tests (15/15)
+# 1. Pure Swift engine, 8-language coach, 3-stage timeline & 120Hz gyro slosh tests (16/16)
 cd native-apple && swift test
 
 # 2. iOS Release compile & Metal shader verification (0 warnings, 0 errors)

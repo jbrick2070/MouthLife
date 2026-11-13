@@ -2,7 +2,7 @@
 
 This document is the authoritative handoff guide for building **MouthLife: The Plaque Dimension** on **macOS (Xcode)** for **iPhone, iPad, and Mac** — either as a **fast Capacitor native wrapper** or as a **ground-up native Swift (`SwiftUI` + `SceneKit`/`Metal` + `AVAudioEngine` + `CoreHaptics`)** application.
 
-- **Canonical Source of Truth:** The TypeScript codebase in `src/` and its `137` unit tests in `tests/` (`npm test`) represent the **v1.0 Golden Master** simulation, chemistry, progression, dental reference chart, and UI rules.
+- **Canonical Source of Truth:** The TypeScript codebase in `src/` and its `170` unit tests in `tests/` (`npm test`) represent the **v1.0 Golden Master** simulation, chemistry, progression, dental reference chart, and UI rules.
 - **Design & Biophysics Spec:** [`docs/GDD_AND_ARCHITECTURE.md`](./GDD_AND_ARCHITECTURE.md)
 
 ---
@@ -63,7 +63,7 @@ Create a multiplatform SwiftUI Xcode project (`MouthLife.xcodeproj`, iOS + macOS
 | `src/engine/surface/OralChemistrySim.ts` | `Core/Surface/OralChemistrySim.swift` | Per-cell `localPh`, `gumIrritation`, 1940 Stephan Curve `20s` recovery clock, and salivary `HCO₃⁻` buffering. |
 | `src/engine/physics/CollisionSystem.ts` | `Core/Physics/CollisionSystem.swift` | `sampleTerrainHeight`, single-source `buildAlleyWalls` from `interdentalAlleys`, circle-vs-AABB slide, `tryStartCapillaryZip`, and `findNearestZipMouth`. |
 | `src/engine/sim/WorldSession.ts` | `Core/Sim/WorldSession.swift` | Fixed `60 Hz` (`dt = 1/60`) simulation step, 3 actuators + disclosing scan, `S. mutans` cocci & sucrose spawners, commensal site restoration, soft-lock-proof district sealing (`>= 90%` clean + all district sites restored). |
-| `src/engine/scoring/ScoringEngine.ts` | `Core/Scoring/ScoringEngine.swift` | `10,000`-pt 4-pillar breakdown (`5,000` Restoration + `2,500` Technique + `1,500` Ecology + `250..1,000` Par Time), `1.0x..3.0x` actuator-alternation Synergy, `Fluorapatite Gold` grade (`>= 9,400` + all sites). |
+| `src/engine/scoring/ScoringEngine.ts` | `Core/Scoring/ScoringEngine.swift` | `10,000`-pt 4-pillar breakdown (`5,000` Restoration + `2,500` Technique + `1,500` Ecology + `250..1,000` Par Time), `1.0x..3.0x` actuator-alternation Synergy, `Fluorapatite Gold` grade (`>= 9,000` + `>= 95%` clean + all sites). |
 | `src/engine/companion/CompanionArchSim.ts` | `Core/Companion/CompanionArchSim.swift` | Two-slope offline Smooth Bask cooling (`-1.25/hr` above `85`, `-6.67/hr` to `45` Saliva Stasis floor, **zero offline shield loss**), `+6 Ions/hr` up to `72`, treat acid cascade, `90s` Pulp Rescue win/timeout (`50%` Ca(OH)₂ stabilization). |
 | `src/engine/persistence/SaveSystem.ts` & `HabitBank.ts` | `Core/Persistence/SaveSystem.swift` | `Codable` `MouthLifeSaveV2` stored in `UserDefaults` (+ optional `NSUbiquitousKeyValueStore` iCloud sync) **plus full `ML2:` Base64URL Sync Code import/export compatibility**! |
 | `src/worlds/*.ts` (6 cartridges) | `Worlds/*.swift` | Port all 6 declarative `WorldCartridge` definitions verbatim (`world_1`..`world_5` + `pulp_rescue`). |
@@ -82,17 +82,17 @@ Create a multiplatform SwiftUI Xcode project (`MouthLife.xcodeproj`, iOS + macOS
      - **`G` (`0..255`):** `fluorapatiteSeal` (`CellFlag.FLUORIDE_SEALED` -> `255`), adding turquoise crystalline sheen and lowering critical demineralization pH from `5.5` to `4.5`.
      - **`B` (`0..255`):** Context-sensitive biophysical channel selected by `cartridge.bChannelMode`:
        - `0` (`marginDensity` — World 1 & Pulp Rescue): cervical/fissure thickness cue
-       - `1` (`gumIrritation` — World 2 *Crescent Sulcus*): tender coral gingival blush (`0..1`)
-       - `2` (`localPh` — World 3 *Neon Acid Clock* & World 4 *Fluorapatite Coast*): acidic amber-violet demineralization warning when `pH < 5.5`
-       - `3` (`epsArmor` — World 5 *Quorum Dome*): iridescent quorum-sensing polymer shield that deflects Sonic Bristles until cracked by Floss (`E`) or Fluoride Surge (`Q`)
+       - `1` (`gumIrritation` — World 2 *Gumline Crescent*): tender coral gingival blush (`0..1`)
+       - `2` (`localPh` — World 3 *Neon Acid Clock* & World 4 *Fluoride Coast*): acidic amber-violet demineralization warning when `pH < 5.5`
+       - `3` (`epsArmor` — World 5 *Slime Dome*): iridescent quorum-sensing polymer shield that deflects Sonic Bristles until cracked by Floss (`E`) or Fluoride Surge (`Q`)
      - **`A` (`0..255`):** `paintableMask` (`255` inside `PAINTABLE` enamel, `0` on gingiva).
 
 2. **All 5 Campaign Worlds + Pulp Rescue Progression Rules (`SaveSystem.ts`):**
    - `world_1` (*Plaque City* — Toronto, Maya Lin-Okafor): Always unlocked. Unlocks `angled_bass_array` (`3` Stamps or W1 clear).
-   - `world_2` (*Crescent Sulcus* — New Orleans, Marcus & Celine Beaumont): Unlocks on **W1 clear OR `4` Habit Stamps**. Signature mechanic: `sulcusBands` (`gumIrritation` on heavy stationary scrubbing; gentle moving sweeps stay calm). Unlocks `hydro_sonic_pulse` (`6` Stamps or W2 clear — grants `+16%` brush reach, `115°` arc, `+30%` fissure shear globally + `-50%` sulcus pressure).
+   - `world_2` (*Gumline Crescent* — New Orleans, Marcus & Celine Beaumont): Unlocks on **W1 clear OR `4` Habit Stamps**. Signature mechanic: `sulcusBands` (`gumIrritation` on heavy stationary scrubbing; gentle moving sweeps stay calm). Unlocks `hydro_sonic_pulse` (`6` Stamps or W2 clear — grants `+16%` brush reach, `115°` arc, `+30%` fissure shear globally + `-50%` sulcus pressure).
    - `world_3` (*Neon Acid Clock* — Tokyo & Chicago, Kenji Sato): Unlocks on **W2 clear OR `8` Habit Stamps**. Signature mechanic: 1940 Stephan Curve `stephanSipIntervalSec` plunging pH below `5.5` until sucrose crystals are shattered or buffered via Salivary Springs. Unlocks `ptfe_ribbon_filament` (`10` Stamps or W3 clear).
-   - `world_4` (*Fluorapatite Coast* — Accra & Colorado Springs, Dr. Amara Mensah): Unlocks on **W3 clear OR `14` Habit Stamps**. Signature mechanic: tart hibiscus `erosionZones` (`pH ~4.95`) + Miswak/Fluoride springs that infuse bristles to convert hydroxyapatite (`pH 5.5` critical) into acid-defying **fluorapatite** (`pH 4.5` critical). Unlocks `bicarb_buffer_jet` (`15` Stamps or W4 clear).
-   - `world_5` (*Quorum Dome* — Station Aurora 408 km LEO, Specialist Tariq Al-Mansoor): Unlocks on **W4 clear OR `20` Habit Stamps**. Signature mechanic: zero-G `epsDomes` requiring Floss shear or Fluoride Surge to fracture before Sonic Bristles can clean beneath.
+   - `world_4` (*Fluoride Coast* — Accra & Colorado Springs, Dr. Amara Mensah): Unlocks on **W3 clear OR `14` Habit Stamps**. Signature mechanic: tart hibiscus `erosionZones` (`pH ~4.95`) + Miswak/Fluoride springs that infuse bristles to convert hydroxyapatite (`pH 5.5` critical) into acid-defying **fluorapatite** (`pH 4.5` critical). Unlocks `bicarb_buffer_jet` (`15` Stamps or W4 clear).
+   - `world_5` (*Slime Dome* — Station Aurora 408 km LEO, Specialist Tariq Al-Mansoor): Unlocks on **W4 clear OR `20` Habit Stamps**. Signature mechanic: zero-G `epsDomes` requiring Floss shear or Fluoride Surge to fracture before Sonic Bristles can clean beneath.
    - `pulp_rescue` (*Emergency Molar Scramble*): `32u x 32u`, `90s` timer triggered when repeated uncleaned treats drain `enamelShield -> dentinShield -> pulpIntegrity == 0`. Never punitive: timeout stabilizes all shields & smoothness at `50%` via Calcium-Hydroxide dressing.
 
 3. **Cross-Platform `ML2:` Save Sync Compatibility:**
@@ -127,7 +127,7 @@ Once you clone `https://github.com/jbrick2070/MouthLife.git` on your Mac, paste 
 
 ```text
 Read README.md, docs/MAC_AND_IOS_PORTING_SPEC.md, and docs/GDD_AND_ARCHITECTURE.md first, then inspect src/ and tests/.
-Run `npm install && npm test` to see all 137 passing unit tests that define the exact Golden Master behavior of MouthLife: The Plaque Dimension.
+Run `npm install && npm test` to see all 170 passing unit tests that define the exact Golden Master behavior of MouthLife: The Plaque Dimension.
 
 I want to build a ground-up native Swift universal app (iPhone + iPad + Mac, iOS 17+ / macOS 14+) in a `native-apple/` folder using SwiftUI, SceneKit/Metal, AVAudioEngine, and CoreHaptics:
 1. Phase 1: Port the pure deterministic engine (`GameConfig`, `UpgradeCatalog`, `HostsAndHistory`, `DentalChart`, `OralSurfaceGrid`, `OralChemistrySim`, `CollisionSystem`, `ScoringEngine`, `CompanionArchSim`, `SaveSystem` with `ML2:` sync-code compatibility, and all 6 `WorldCartridge` definitions) into a Swift package with Swift Testing / XCTest parity against `tests/`.

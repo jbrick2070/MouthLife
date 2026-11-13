@@ -9,7 +9,7 @@
 ```bash
 cd native-apple
 
-# Run all 15 deterministic MouthLifeCore XCTest suites (~0.7s)
+# Run all 16 deterministic MouthLifeCore XCTest suites (~0.7s)
 swift test
 
 # Build iOS Release (headless, no signing needed for CI check)

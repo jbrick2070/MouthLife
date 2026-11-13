@@ -1,5 +1,17 @@
 # MouthLife: The Plaque Dimension — Master Game Design & Engine Architecture Spec
 
+> **Current rules (updated 2026-11-13; these override older numbers further down this document).**
+> Both editions (`src/` and `native-apple/`) share them.
+> - **Brush-Along:** `2:00` brush, then `0:45` floss, then `1:00` or `0:30` fluoride rinse (optional, age 6+).
+> - **Fluoride Ions:** brushing is the main source. Base `50`; `x1.5` with floss or rinse; `x2` with both (`50 / 75 / 100`).
+>   Each full reward also gives `+1` Habit Stamp, `+1` Supply Beacon and `+1` Overdrive run. Two full rewards a day, then three `5`-ion tips.
+> - **Smaller sources:** treat `+5` (3 an hour), dive `5–25` by score (`score / 400`), Pulp Rescue win `+20`, Smooth Bask `6` an hour up to `72`.
+> - **Gold grade:** score `>= 9,000`, at least `95%` clean, and every site restored.
+> - **Treat floor:** smoothness never drops below `10`. A timed-out Pulp Rescue lifts smoothness to at least `65` and shields to at least `50`.
+> - **World names:** Plaque City, Gumline Crescent, Neon Acid Clock, Fluoride Coast, Slime Dome.
+> - **Wording:** on-screen text is written for a 4th-grade reader. `tests/rewardEconomy.test.ts` guards the reward balance and bans jargon in content tables.
+
+
 ## §1. Vision, Tone & Non-Negotiable Invariants
 
 **MouthLife: The Plaque Dimension** is an engine-first, **mobile-portrait-first (and desktop-widescreen-compatible) 3D Progressive Web App (`TypeScript` + `Vite` + `Three.js`)** uniting three experiences into one cohesive biophysical dental adventure:
@@ -14,7 +26,7 @@
 4. **IP Cleanliness:** Commercial games such as *Brush Up* (*Budd*, by *GamesThatWork*) are proprietary despite NIH grant funding; zero copyrighted names, designs, or assets from third-party titles are permitted.
 
 ### §1.2 Build Status (v1.0 Golden Master — Complete)
-- **Core Engine (`src/engine/` + `19` Vitest Suites / `137` Tests):** `OralSurfaceGrid`, `OralChemistrySim`, `CompanionArchSim`, `CompanionTouchSystem`, `CollisionSystem` + `CapillaryTetherZip`, `ScoringEngine`, synchronous `SaveSystem` (`localStorage` + `ML2:` Sync Code + `.mouthlife.json` export/import), `EnamelBiophysicsMaterial` + `OrbitalEarthBackdrop` + 3-tier `QualityGovernor`, procedural `SoundEngine` + `musicTheory`, `hostsAndHistory`, `dentalChart` (all 32 adult teeth in Universal/FDI/Palmer + Spot Quiz + 4-layer cross-section), `charityInfo` (`SmileOnU` 501(c)(3)), and `upgrades`.
+- **Core Engine (`src/engine/` + `23` Vitest Suites / `170` Tests):** `OralSurfaceGrid`, `OralChemistrySim`, `CompanionArchSim`, `CompanionTouchSystem`, `CollisionSystem` + `CapillaryTetherZip`, `ScoringEngine`, synchronous `SaveSystem` (`localStorage` + `ML2:` Sync Code + `.mouthlife.json` export/import), `EnamelBiophysicsMaterial` + `OrbitalEarthBackdrop` + 3-tier `QualityGovernor`, procedural `SoundEngine` + `musicTheory`, `hostsAndHistory`, `dentalChart` (all 32 adult teeth in Universal/FDI/Palmer + Spot Quiz + 4-layer cross-section), `charityInfo` (`SmileOnU` 501(c)(3)), and `upgrades`.
 - **All 5 Earth-to-Orbit Campaign Worlds + 90s Pulp Rescue + 2-Min Sink Brush-Along + Cosmic Intro:** Fully playable across mobile portrait, mobile landscape, tablet, and desktop widescreen with offline PWA Service Worker (`public/sw.js`) and complete Mac/iOS porting handoff (`docs/MAC_AND_IOS_PORTING_SPEC.md`).
 
 ---
@@ -34,7 +46,7 @@
   - Tapping **"Enjoy Regional Treat"** feeds the active Host a signature item (e.g., *Toronto Maple Espresso*, *New Orleans Beignet*, *Tokyo Melon Soda*, *Accra Hibiscus Sobolo*, *Orbital Berry Pack*), granting `+20` Fluoride Ions (up to `3` rewarded treats per rolling hour; `0` Ions on rapid spam) and unlocking regional lore.
   - **Deterministic Treat Acid Step:** Each treat sets `prevSmooth = state.smoothnessIndex`, updates `smoothnessIndex = Math.max(0, prevSmooth - 35)`, and if `smoothnessIndex < 50`, applies `45` **Acid Load Points** cascading sequentially: drains `enamelShield` first, spills any remainder into `dentinShield`, and spills any remaining remainder into `pulpIntegrity` (so ~6 uncleaned treats in a row predictably breach Enamel -> Dentin -> `pulpIntegrity === 0`).
   - **Non-Punitive `90s Pulp Rescue Scramble` (`AppMode = 'PULP_RESCUE'`):** Triggered immediately when `pulpIntegrity === 0`. Loads the compact `32u x 32u` single-molar `pulpRescueCartridge` with a `90s` countdown:
-    - **Win (`>= 85%` clean within `90s`):** Saves the tooth from a Root Canal! Restores `smoothnessIndex = 100`, all three shields to `100`, and awards `+40` Rescue Fluoride Ions.
+    - **Win (`>= 85%` clean within `90s`):** Saves the tooth from a Root Canal! Restores `smoothnessIndex = 100`, all three shields to `100`, and awards `+20` Rescue Fluoride Ions.
     - **Timeout (`< 85%` at `90s`):** Zero permadeath or lost progress — advisor `DR-7 PERI` applies an **Emergency Calcium-Hydroxide Dressing**, stabilizing `enamelShield = 50`, `dentinShield = 50`, `pulpIntegrity = 50`, `smoothnessIndex = 50` (`0` bonus Ions) and returning cleanly to Hub.
 
 ### §2.2 Loop B — 2-Minute "Brush-Along" Sink Ritual
@@ -89,7 +101,7 @@ Players pilot **Micro-Probe `HYDRA-1`** across vibrant 3D tooth landscapes (`55�
 | **`world_2`** *(Built & Playable)* | **Marcus & Celine Beaumont** — Luthiers, **New Orleans** (`29.95°N, 90.07°W`) | **1819 & 1948 New Orleans:** **Levi Spear Parmly** pioneering waxed silk floss (1819) + **Dr. Charles C. Bass** (Tulane Univ., 1948) developing the **45° Sulcus Brushing & Unwaxed Floss Method**! | `'gumIrritation'`. `SULCUS` flag + `gumIrritation` (`0..1` coral blush); sweeping 45° strokes & C-curved floss keep tissue calm. |
 | **`world_3`** *(Built & Playable)* | **Kenji Sato** — Synth Designer, **Chicago / Tokyo** (`41.88°N, 87.63°W` / `35.66°N, 139.70°E`) | **1940 Chicago:** **Dr. Robert M. Stephan** (Univ. of Illinois) plotting the **Stephan pH Curve**, proving frequent sugar hits trap enamel below `pH 5.5` for 20–40 min per hit! | `'localPh'`. `stephanTimerSec` (`20.0s` acid window) + `oralPh` (`7.0 -> 4.8`); intercepting sugar waves & `FLUORIDE_SEALED` (`criticalPh = 4.5`) prevent demineralization. |
 | **`world_4`** *(Built & Playable)* | **Dr. Amara Mensah** — Runner, **Colorado Springs / Accra** (`38.83°N, 104.82°W` / `5.60°N, 0.19°W`) | **1901–1945 Fluoride Discovery & Ancient *Miswak*:** **McKay, Churchill & Dean** uncovering natural spring **fluorapatite** remineralization + African/Middle Eastern ***Salvadora persica* (Miswak)** mineral & saliva care! | `'localPh'`. Spatial acid zones (`pH 4.2..7.4`); scrubbing softened cells (`pH < criticalPh`) deals `0` removal and triggers abrasion warnings until **Salivary `HCO₃⁻` Springs** buffer `pH >= 6.5`! |
-| **`world_5`** *(Built & Playable)* | **Specialist Tariq Al-Mansoor** — **Houston / Station *Aurora* Orbit** (`29.55°N, 95.09°W` -> `408 km` LEO) | **1973 NASA *Skylab* & 1978 Costerton Biofilms:** NASA Johnson Space Center *Skylab* microgravity oral ecology studies + **J.W. Costerton** defining quorum-sensing **EPS polymer biofilms**! | `'epsArmor'`. 3-phase *Quorum Dome* boss: sever 4 Floss tethers -> shatter Sucrose Conduits & fire Bicarb Springs -> shear core `< 0.35` -> **Mint-Fluoride Ion Surge**! |
+| **`world_5`** *(Built & Playable)* | **Specialist Tariq Al-Mansoor** — **Houston / Station *Aurora* Orbit** (`29.55°N, 95.09°W` -> `408 km` LEO) | **1973 NASA *Skylab* & 1978 Costerton Biofilms:** NASA Johnson Space Center *Skylab* microgravity oral ecology studies + **J.W. Costerton** defining quorum-sensing **EPS polymer biofilms**! | `'epsArmor'`. 3-phase *Slime Dome* boss: sever 4 Floss tethers -> shatter Sucrose Conduits & fire Bicarb Springs -> shear core `< 0.35` -> **Mint-Fluoride Ion Surge**! |
 
 ---
 
@@ -101,7 +113,7 @@ Evaluated out of `10,000` baseline (`80%` thoroughness & technique, `20%` par-ti
 3. **Commensal & Ecology Recovery (`0..1,500`):** `+120` per Commensal Site restored + `+50` per Sucrose hazard cleared (capped at `1,500`).
 4. **Par-Time Flow (`250..1,000`):** `1,000` when `elapsedSec <= parTimeSec` (`270s` in World 1), tapering linearly to a hard floor of `250` for all `elapsedSec >= 2 * parTimeSec`.
 5. **Synergy Multiplier (`1.0x..3.0x`):** Increments `+0.25x` whenever a qualifying actuator action uses a *different* actuator type (`'brush' | 'floss' | 'rinse'`) than the previous qualifying action; decays `-0.15x/s` after `4.0s` idle without subtracting banked points.
-- **Grades:** `C` (`< 5,500`), `B` (`5,500–7,199`), `A` (`7,200–8,499`), `S` (`8,500–9,399`), **`Fluorapatite Gold`** (`>= 9,400` + `100%` Sites Restored).
+- **Grades:** `C` (`< 5,500`), `B` (`5,500–7,199`), `A` (`7,200–8,499`), `S` (`8,500+`), **`Fluorapatite Gold`** (`>= 9,000` + `>= 95%` clean + `100%` Sites Restored).
 
 ---
 
@@ -359,7 +371,7 @@ export interface MouthLifeSaveV2 {
 ### §7.1 Automated Engine Unit Suite (`npx vitest run` — Phase 1A Gate)
 - `oralSurfaceGrid.test.ts`: Bounds-guard safety, `O(1)` clean counters, sweeping vs stationary shear, single-source `INTERDENTAL` brush block, Floss clearing, Ion Rinse `<= 0.35` slurry flush + `FLUORIDE_SEALED`, per-cell spatial `pH` check (`5.5` vs `4.5`), and `angled_bass_array` `0.65 * 1.45` margin formula.
 - `oralChemistrySim.test.ts`: Stephan `20s` pH drop/reset, `HCO₃⁻` spring buffering, and `gumIrritation` dynamics.
-- `companionArch.test.ts`: Two-slope offline curve banking full `72 Ions` over `12h` rest from `smoothnessIndex = 100`, zero offline shield loss across 90-day `Saliva Stasis`, `3-treat/hr` reward cap, deterministic `45`-point treat shield cascade into `pulpIntegrity === 0`, and both `PULP_RESCUE` win (`+40` Ions, `100%` shields) and `90s` timeout (`50%` Calcium-Hydroxide stabilization, zero lost progress).
+- `companionArch.test.ts`: Two-slope offline curve banking full `72 Ions` over `12h` rest from `smoothnessIndex = 100`, zero offline shield loss across 90-day `Saliva Stasis`, `3-treat/hr` reward cap, deterministic `45`-point treat shield cascade into `pulpIntegrity === 0`, and both `PULP_RESCUE` win (`+20` Ions, `100%` shields) and `90s` timeout (`50%` Calcium-Hydroxide stabilization, zero lost progress).
 - `collisionSystem.test.ts`: `buildAlleyWalls()` + `PROBE_RADIUS (0.65u)` blocking `< 1.20u` alleys and `0.22s` `Capillary Tether-Zip` endpoint traversal.
 - `scoringEngine.test.ts`: 4-pillar math, `250`-pt par-time floor beyond `2 * parTimeSec`, actuator-alternation Synergy multiplier (`3.0x` cap), and `Fluorapatite Gold` grade.
 - `saveAndHabit.test.ts`: Synthetic `MouthLifeSaveV1 -> V2` migration, unknown-ID stripping across all ID arrays, `saveRevision` monotonicity, 90-day missed-habit zero loss, per-pickup beacon vs completion-only Overdrive decrement, and `ML2:` UTF-8 Base64URL roundtrip + corrupt-payload rejection.
