@@ -75,8 +75,13 @@ export class CatalogMatcher {
     if (cached !== undefined) return cached;
     let result: string | null = null;
     for (const p of this.patterns) {
-      if (p.re.test(k)) {
-        result = k.replace(p.re, p.out.replace(/\$(?!\d)/g, '$$$$'));
+      const m = p.re.exec(k);
+      if (m) {
+        // Fill the slots; a slot that is itself known text (a world or city name) is translated too.
+        result = p.out.replace(/\$(\d+)/g, (_, n) => {
+          const part = m[Number(n)] ?? '';
+          return this.exact.get(part) ?? part;
+        });
         break;
       }
     }

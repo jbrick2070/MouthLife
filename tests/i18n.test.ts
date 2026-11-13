@@ -20,6 +20,8 @@ describe('screen translator matching', () => {
     'Sites 0/{0}': 'Sitios 0/{0}',
     '{0}%': 'nunca',
     'Price: {0}': 'Precio: {0}',
+    'Dive (W1): {0}': 'Inmersión (W1): {0}',
+    'Plaque City': 'Ciudad Placa',
   });
 
   it('translates exact text and keeps surrounding spaces', () => {
@@ -30,6 +32,11 @@ describe('screen translator matching', () => {
   it('fills numbers and names into slots, in any order', () => {
     expect(matcher.translate('Restore 10 colonies — scrub glowing rings!')).toBe('¡Recupera 10 colonias: frota los anillos!');
     expect(matcher.translate('☕ Treat: Maple Oat Cortado (+5 Ions)')).toBe('☕ Golosina: Maple Oat Cortado (+5 iones)');
+  });
+
+  it('translates a known name inside a slot', () => {
+    expect(matcher.translate('Dive (W1): Plaque City')).toBe('Inmersión (W1): Ciudad Placa');
+    expect(matcher.translate('Dive (W1): Unknown Place')).toBe('Inmersión (W1): Unknown Place');
   });
 
   it('prefers the more specific pattern', () => {

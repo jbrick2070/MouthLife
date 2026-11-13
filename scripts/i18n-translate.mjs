@@ -39,6 +39,7 @@ const GLOSSARY_TERMS = [
 
 const BATCH_CHARS = 6500;
 const lang = process.argv[2];
+const fixOnly = process.argv.includes('--fix-only');
 const redo = process.argv.includes('--redo');
 if (!LANGS[lang]) {
   console.error(`Usage: node scripts/i18n-translate.mjs <${Object.keys(LANGS).join('|')}> [--redo]`);
@@ -95,6 +96,21 @@ function parseJsonObject(text) {
 
 const slots = (s) => (s.match(/\{\d+\}/g) ?? []).sort().join(',');
 
+/**
+ * Emoji and symbols that start the English (icons such as "🧑🏽‍🚀 " or "✦ ") must come through
+ * exactly. Translators sometimes drop the invisible joiners inside combined emoji, which splits
+ * one picture into two, so copy the English lead-in over the translation's.
+ */
+function repairLeadingSymbols(en, tr) {
+  const lead = (str) => /^[^\p{L}\p{N}{]*/u.exec(str)?.[0] ?? '';
+  const enLead = lead(en);
+  const trLead = lead(tr);
+  if (!/\p{Extended_Pictographic}|[✦★✓✕✨•↻←→▴▾]/u.test(enLead)) return tr;
+  const strip = (x) => x.replace(/[‍️\s]/g, '');
+  if (enLead === trLead || strip(enLead) !== strip(trLead)) return tr;
+  return enLead + tr.slice(trLead.length);
+}
+
 function rules(glossary) {
   const g = glossary
     ? Object.entries(glossary).map(([en, tr]) => `  ${en} = ${tr}`).join('\n')
@@ -131,6 +147,20 @@ function translateBatch(items, glossary) {
     if (typeof tr === 'string' && tr.trim() && slots(tr) === slots(en)) out[en] = tr;
   });
   return out;
+}
+
+function saveOrdered(result) {
+  const ordered = Object.fromEntries(
+    source.filter((s) => s in result).map((s) => [s, repairLeadingSymbols(s, result[s])])
+  );
+  writeFileSync(outPath, JSON.stringify(ordered, null, 1) + '\n');
+  return ordered;
+}
+
+if (fixOnly) {
+  const fixed = saveOrdered(existing);
+  log(`repaired and re-saved ${Object.keys(fixed).length} strings`);
+  process.exit(0);
 }
 
 // 1. Glossary first, so every batch uses the same words for game terms.
@@ -175,8 +205,7 @@ for (let round = 1; round <= 3; round++) {
       log(`batch ${bi + 1} failed: ${err.message}`);
     }
     // Save after every batch so a crash never loses finished work.
-    const ordered = Object.fromEntries(source.filter((s) => s in result).map((s) => [s, result[s]]));
-    writeFileSync(outPath, JSON.stringify(ordered, null, 1) + '\n');
+    const ordered = saveOrdered(result);
     log(`batch ${bi + 1}/${batches.length} done (${Object.keys(ordered).length}/${source.length})`);
   }
 }
