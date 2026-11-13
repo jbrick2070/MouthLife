@@ -693,6 +693,48 @@ public final class HapticsEngine: @unchecked Sendable {
         #endif
     }
 
+    /// Tactile liquid-wave whoosh + effervescent micro-bubble pops when the user holds the iPhone
+    /// and tilts left/right during the 60-second Purple Total Care Fluoride Rinse bonus round.
+    public func playMouthwashTiltSplash(intensity: Float = 0.72) {
+        guard canPlayHaptics() else { return }
+        let gain = max(0.18, min(0.88, intensity))
+        #if canImport(CoreHaptics)
+        hapticQueue.async { [weak self] in
+            guard let self else { return }
+            let events: [CHHapticEvent] = [
+                CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: gain * 0.56),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.16),
+                        CHHapticEventParameter(parameterID: .attackTime, value: 0.04),
+                        CHHapticEventParameter(parameterID: .releaseTime, value: 0.10)
+                    ],
+                    relativeTime: 0.0,
+                    duration: 0.14
+                ),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: gain * 0.48),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.62)
+                    ],
+                    relativeTime: 0.03
+                ),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: gain * 0.36),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.74)
+                    ],
+                    relativeTime: 0.095
+                )
+            ]
+            self.playEventsOnQueue(events: events)
+        }
+        #endif
+    }
+
     // MARK: - Direct EventBus Integration
 
     /// Convenience dispatcher matching `MouthLifeCore.GameEvent` so `AppCoordinator` can bind haptics directly.

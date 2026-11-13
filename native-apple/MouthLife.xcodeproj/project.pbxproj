@@ -10,6 +10,7 @@
 		04C1B02BBE00EAA1A6EF11ED /* CompanionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87DE4132E4982A9110761AA /* CompanionHubView.swift */; };
 		06C97DB9354A31AB771A4B6F /* SyncSaveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */; };
 		1142B09836D2B7D1D1B90140 /* HapticsEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B233D855B398BD62F8D4023 /* HapticsEngine.swift */; };
+		2A8F4E6193B24D108C7E5501 /* MotionTiltMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */; };
 		30D871BD9D66AB593D75DAF8 /* EnamelShaders.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF01B776316DF155BF702FA /* EnamelShaders.swift */; };
 		33A73CC66232DBF41B238274 /* ProceduralMeshBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */; };
 		6D12B96E6CBF818058026AA4 /* RootContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBE3F13FC1E0ACFAEB2C84E /* RootContentView.swift */; };
@@ -54,6 +55,7 @@
 		8FCB3D2C8E1B5ABFA1741026 /* ProfileAndSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfileAndSettingsSheet.swift; path = MouthLifeApp/UI/Sheets/ProfileAndSettingsSheet.swift; sourceTree = "<group>"; };
 		9396B3C7425C92956AD99A31 /* BrushAlongView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrushAlongView.swift; path = MouthLifeApp/UI/BrushAlongView.swift; sourceTree = "<group>"; };
 		9B233D855B398BD62F8D4023 /* HapticsEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticsEngine.swift; path = MouthLifeApp/Audio/HapticsEngine.swift; sourceTree = "<group>"; };
+		5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MotionTiltMonitor.swift; path = MouthLifeApp/Audio/MotionTiltMonitor.swift; sourceTree = "<group>"; };
 		A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SyncSaveSheet.swift; path = MouthLifeApp/UI/Sheets/SyncSaveSheet.swift; sourceTree = "<group>"; };
 		B87DE4132E4982A9110761AA /* CompanionHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CompanionHubView.swift; path = MouthLifeApp/UI/CompanionHubView.swift; sourceTree = "<group>"; };
 		BDF01B776316DF155BF702FA /* EnamelShaders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EnamelShaders.swift; path = MouthLifeApp/Render/EnamelShaders.swift; sourceTree = "<group>"; };
@@ -90,6 +92,7 @@
 				645A9F1D82F3A2C3C2D24EB2 /* AppCoordinator.swift */,
 				7D5A2245810530D69820F600 /* NativeSoundEngine.swift */,
 				9B233D855B398BD62F8D4023 /* HapticsEngine.swift */,
+				5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */,
 				BDF01B776316DF155BF702FA /* EnamelShaders.swift */,
 				D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */,
 				D112FCD387C76EDFFE8955B0 /* MouthLifeSceneController.swift */,
@@ -204,6 +207,7 @@
 				C7B3DE9A04EE7CFE33FAA7AF /* AppCoordinator.swift in Sources */,
 				F31AC7583D7185570DBCBAB2 /* NativeSoundEngine.swift in Sources */,
 				1142B09836D2B7D1D1B90140 /* HapticsEngine.swift in Sources */,
+				2A8F4E6193B24D108C7E5501 /* MotionTiltMonitor.swift in Sources */,
 				30D871BD9D66AB593D75DAF8 /* EnamelShaders.swift in Sources */,
 				33A73CC66232DBF41B238274 /* ProceduralMeshBuilder.swift in Sources */,
 				DDD149B2013498F5D0C4E544 /* MouthLifeSceneController.swift in Sources */,

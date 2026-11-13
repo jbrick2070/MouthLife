@@ -64,6 +64,7 @@ public final class AppCoordinator {
     public var pacerCompletedFlossStage: Bool = false
     public var flossToolStyle: FlossToolStyle = .flossPick
     public var mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s
+    public var mouthwashGyro: GyroSloshSnapshot = .idle
     public var voiceCoachEnabled: Bool = NativeSoundEngine.shared.isVoiceCoachEnabled
     public var coachLanguage: CoachLanguage = NativeSoundEngine.shared.coachLanguage
     private var pacerPausedByUser: Bool = false
@@ -318,6 +319,19 @@ public final class AppCoordinator {
         sceneController.onCosmicMohsSelected = { idx in
             NativeSoundEngine.shared.playCrownRub(crownIndex: idx * 3, smoothnessIndex: 96.0)
             HapticsEngine.shared.playEnamelRub(smoothnessIndex: 96.0, intensity: 0.75)
+        }
+
+        sceneController.onMouthwashGyroUpdated = { [weak self] gyro in
+            guard let self else { return }
+            guard self.mode == .brushAlong, self.pacerStage == .mouthwashBonus, !self.pacerIsPaused else { return }
+            self.mouthwashGyro = gyro
+            if gyro.didTriggerSplash {
+                NativeSoundEngine.shared.playMouthwashTiltSwish(
+                    pan: gyro.splashPan,
+                    intensity: gyro.splashIntensity01
+                )
+                HapticsEngine.shared.playMouthwashTiltSplash(intensity: gyro.splashIntensity01)
+            }
         }
 
         unsubscribeToken = eventBus.subscribe { [weak self] event in
@@ -670,6 +684,8 @@ public final class AppCoordinator {
         pacerSuspendedBySystem = false
         lastAnnouncedMouthwashStep = 0
         lastCountdownPipKey = ""
+        mouthwashGyro = .idle
+        sceneController.resetMouthwashGyroSession()
         pacerElapsedSec = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = false

@@ -630,4 +630,106 @@ final class MouthLifeCoreTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - 9. 120Hz GyroSloshSim Counter-vs-Handheld Auto-Detection & Liquid Spirit-Level Physics
+
+    func testGyroSloshCounterVsHandheldAndLiquidPhysics() {
+        var sim = GyroSloshSim()
+
+        // 1. Phone resting dead-still on the bathroom counter (hands-free mode): stays in auto mode with 0 splashes
+        var snap = GyroSloshSnapshot.idle
+        for _ in 0..<120 {
+            snap = sim.step(
+                dt: 1.0 / 120.0,
+                gravityX: 0.0,
+                gravityY: -0.70,
+                rotationRateMag: 0.004,
+                userAccelX: 0.0,
+                userAccelY: 0.0,
+                sensorAvailable: true,
+                reducedMotion: false
+            )
+            XCTAssertFalse(snap.didTriggerSplash)
+        }
+        XCTAssertFalse(snap.isHandheld)
+        XCTAssertEqual(snap.handheldBlend01, 0.0, accuracy: 1e-4)
+        XCTAssertEqual(snap.swishCount, 0)
+
+        // 2. Pick up phone and tilt toward Right Cheek (+X): wakes handheld slosh, charges Right Cheek & pans splash right
+        var sawRightSplash = false
+        for _ in 0..<90 {
+            snap = sim.step(
+                dt: 1.0 / 120.0,
+                gravityX: 0.46,
+                gravityY: -0.62,
+                rotationRateMag: 0.65,
+                userAccelX: 0.12,
+                userAccelY: 0.04,
+                sensorAvailable: true,
+                reducedMotion: false
+            )
+            if snap.didTriggerSplash && snap.splashPan > 0.25 {
+                sawRightSplash = true
+            }
+        }
+        XCTAssertTrue(snap.isHandheld)
+        XCTAssertGreaterThan(snap.sloshPosition, 0.55)
+        XCTAssertGreaterThan(snap.rightCheekCharge01, 0.15)
+        XCTAssertTrue(sawRightSplash)
+        XCTAssertNotEqual(snap.parallaxX, 0.0)
+
+        // 3. Tilt briskly across center into Left Cheek (-X): sloshes left, charges Left Cheek & pans splash left
+        var sawLeftSplash = false
+        for _ in 0..<90 {
+            snap = sim.step(
+                dt: 1.0 / 120.0,
+                gravityX: -0.48,
+                gravityY: -0.68,
+                rotationRateMag: 0.70,
+                userAccelX: -0.14,
+                userAccelY: 0.05,
+                sensorAvailable: true,
+                reducedMotion: false
+            )
+            if snap.didTriggerSplash && snap.splashPan < -0.25 {
+                sawLeftSplash = true
+            }
+        }
+        XCTAssertTrue(snap.isHandheld)
+        XCTAssertLessThan(snap.sloshPosition, -0.55)
+        XCTAssertGreaterThan(snap.leftCheekCharge01, 0.15)
+        XCTAssertTrue(sawLeftSplash)
+        XCTAssertGreaterThanOrEqual(snap.swishCount, 2)
+
+        // 4. Reduce Motion immediately zeroes handheld slosh & parallax while preserving banked cheek progress
+        let reduced = sim.step(
+            dt: 1.0 / 120.0,
+            gravityX: -0.48,
+            gravityY: -0.68,
+            rotationRateMag: 0.80,
+            userAccelX: -0.20,
+            userAccelY: 0.10,
+            sensorAvailable: true,
+            reducedMotion: true
+        )
+        XCTAssertFalse(reduced.isHandheld)
+        XCTAssertEqual(reduced.sloshPosition, 0.0)
+        XCTAssertEqual(reduced.parallaxX, 0.0)
+        XCTAssertEqual(reduced.parallaxY, 0.0)
+        XCTAssertGreaterThanOrEqual(reduced.swishCount, 2)
+
+        // 5. Reset clears mouthwash session counters cleanly + 8-language status badges are non-empty
+        sim.resetMouthwashSession()
+        XCTAssertEqual(sim.swishCount, 0)
+        XCTAssertEqual(sim.leftCheekCharge01, 0.0)
+        XCTAssertEqual(sim.rightCheekCharge01, 0.0)
+
+        for lang in CoachLanguage.allCases {
+            let live = BrushCoachCopy.gyroSwishStatusLabel(isHandheld: true, lang: lang)
+            let auto = BrushCoachCopy.gyroSwishStatusLabel(isHandheld: false, lang: lang)
+            XCTAssertFalse(live.isEmpty)
+            XCTAssertFalse(auto.isEmpty)
+            XCTAssertNotEqual(live, auto)
+        }
+    }
 }

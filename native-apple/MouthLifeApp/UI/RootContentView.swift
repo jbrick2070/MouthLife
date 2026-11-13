@@ -58,6 +58,7 @@ public struct RootContentView: View {
                     didCompleteFloss: coordinator.pacerCompletedFlossStage,
                     flossToolStyle: coordinator.flossToolStyle,
                     mouthwashDurationStyle: coordinator.mouthwashDurationStyle,
+                    mouthwashGyro: coordinator.mouthwashGyro,
                     voiceCoachEnabled: coordinator.voiceCoachEnabled,
                     coachLanguage: coordinator.coachLanguage,
                     stationLabel: coordinator.currentRadioStationLabel,

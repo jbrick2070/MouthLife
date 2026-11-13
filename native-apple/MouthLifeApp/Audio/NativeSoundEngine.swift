@@ -3061,6 +3061,39 @@ public final class NativeSoundEngine {
         }
     }
 
+    /// Stereo-panned aqua-violet liquid wave + sparkling `.glassHarp` bubble harmonic when tilting the iPhone
+    /// cheek-to-cheek during the Purple Total Care Fluoride Rinse bonus round.
+    public func playMouthwashTiltSwish(pan: Float, intensity: Float) {
+        guard throttle("mw-tilt-swish", minGapSec: 0.24), canPlaySfx() else { return }
+        let p = max(-0.75, min(0.75, pan))
+        let gain = max(0.25, min(1.0, intensity))
+        emitNoiseSweep(
+            f0: p >= 0 ? 1100 : 980,
+            f1: 2450 + gain * 650,
+            durSec: 0.24,
+            peak: 0.042 * gain,
+            q: 0.90
+        )
+        emitBlip(
+            f0: p >= 0 ? 740 : 660,
+            f1: 1220,
+            offsetSec: 0.025,
+            durSec: 0.04,
+            peak: 0.034 * gain
+        )
+        let deg = p >= 0 ? 4 : 2
+        emitSfxVoice(
+            .glassHarp,
+            midi: harmonicMidi(degree: deg, octaveShift: 60),
+            offsetSec: 0.03,
+            durationSec: 0.32,
+            vel: 0.36 * gain,
+            pan: p,
+            reverb: 0.66,
+            delay: 0.08
+        )
+    }
+
     public func playOrbitalDive() {
         guard canPlaySfx() else { return }
         for i in 0..<7 {

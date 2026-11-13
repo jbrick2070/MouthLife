@@ -1005,19 +1005,26 @@ public enum EnamelShaders {
             baseColor = mix(baseColor, mix(baseColor, quadCyan, (0.24 + 0.28 * quadRim) * surfFocus), 0.82);
             emissionGlow += quadCyan * surfFocus * (0.20 + 0.18 * coachPulse + 0.20 * grooveLift + 0.28 * quadRim);
         } else if (activeSurfaceIdx <= -2) {
-            // Purple Total Care Fluoride Rinse Bonus: sloshing Royal Amethyst liquid wave + progressive Fluorapatite 24k Gold/Mint crown seal!
+            // Purple Total Care Fluoride Rinse Bonus: sloshing Royal Amethyst liquid wave + live Gyro tilt meniscus + Fluorapatite seal!
             float sealProg = clamp(preEchoStrength, 0.0, 1.0);
-            float swishWave = 0.5 + 0.5 * sin(worldPos.x * 0.44 + motionTime * 4.1 + sin(worldPos.z * 0.6) * 0.7);
-            float meniscus = smoothstep(0.92, 0.18, hFrac - (swishWave - 0.5) * 0.28);
+            float gyroTilt = clamp(rinseWave.x, -1.0, 1.0);
+            float gyroActive = clamp(rinseWave.y, 0.0, 1.0);
+            float archXNorm = clamp((worldPos.x - 32.0) / 5.4, -1.0, 1.0);
+            float autoWave = 0.5 + 0.5 * sin(worldPos.x * 0.44 + motionTime * 4.1 + sin(worldPos.z * 0.6) * 0.7);
+            float tiltShift = mix(0.0, archXNorm * gyroTilt * 0.62, gyroActive);
+            float swishWave = mix(autoWave, clamp(0.55 + tiltShift + 0.18 * sin(worldPos.x * 0.8 + motionTime * 6.5), 0.0, 1.0), gyroActive * 0.82);
+            float meniscusLevel = 0.54 + tiltShift + (autoWave - 0.5) * mix(0.28, 0.14, gyroActive);
+            float meniscus = smoothstep(meniscusLevel + 0.34, meniscusLevel - 0.24, hFrac);
+            float foamCrest = smoothstep(0.20, 0.02, abs(hFrac - meniscusLevel)) * (0.35 + 0.65 * gyroActive);
             float crystalRim = pow(max(1.0 - NdotV, 0.0), 1.65);
             float3 royalPurple = float3(0.66, 0.26, 0.98);
-            float3 lavenderMist = float3(0.84, 0.64, 1.0);
+            float3 lavenderMist = float3(0.86, 0.68, 1.0);
             float3 fluorGold = mix(float3(0.32, 0.94, 0.86), float3(1.0, 0.84, 0.32), sealProg * 0.72);
-            float3 rinseTint = mix(royalPurple, lavenderMist, crystalRim * 0.55);
+            float3 rinseTint = mix(royalPurple, lavenderMist, clamp(crystalRim * 0.55 + foamCrest * 0.45, 0.0, 1.0));
 
             baseColor = mix(baseColor * 0.94, float3(0.94, 0.96, 1.0), 0.24);
-            baseColor = mix(baseColor, rinseTint, meniscus * (0.34 - 0.12 * sealProg));
-            emissionGlow += rinseTint * (0.14 + 0.22 * meniscus * swishWave + 0.20 * crystalRim + audioBass * 0.14);
+            baseColor = mix(baseColor, rinseTint, meniscus * (0.38 - 0.12 * sealProg));
+            emissionGlow += rinseTint * (0.14 + 0.24 * meniscus * swishWave + 0.22 * foamCrest + 0.20 * crystalRim + audioBass * 0.14);
             emissionGlow += fluorGold * sealProg * (0.10 + 0.24 * crystalRim + audioHigh * 0.10);
             goldMetalBoost = max(goldMetalBoost, sealProg * 0.32 * crystalRim);
         } else if (quadCompleted) {

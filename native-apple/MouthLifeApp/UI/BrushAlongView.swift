@@ -10,16 +10,19 @@ private let totalCareLavender = Color(red: 0.85, green: 0.70, blue: 1.0)
 private struct MirrorArchCompassView: View {
     let phase: BrushPhaseState
     let language: CoachLanguage
+    let gyro: GyroSloshSnapshot
 
     var body: some View {
         let sides = BrushCoachCopy.mirrorSideLabels(for: language)
+        let tiltLeft = phase.inMouthwashBonus && gyro.isHandheld && gyro.sloshPosition < -0.18
+        let tiltRight = phase.inMouthwashBonus && gyro.isHandheld && gyro.sloshPosition > 0.18
 
         HStack(spacing: 5) {
             Text(sides.left)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
                     phase.inMouthwashBonus
-                        ? totalCareLavender
+                        ? (tiltLeft ? MLTheme.fluorapatiteGold : totalCareLavender)
                         : (!phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
                 .frame(width: 28, alignment: .trailing)
@@ -60,20 +63,25 @@ private struct MirrorArchCompassView: View {
 
                     if phase.inMouthwashBonus {
                         let seal = Double(phase.mouthwashProgress01)
+                        let sideBoost: Double = {
+                            guard gyro.isHandheld else { return 0.35 }
+                            let raw = q.isPatientRight ? Double(gyro.sloshPosition) : Double(-gyro.sloshPosition)
+                            return min(1.0, max(0.0, raw))
+                        }()
                         ctx.stroke(
                             arcPath,
-                            with: .color(totalCarePurple.opacity(0.45)),
-                            style: StrokeStyle(lineWidth: 12.5, lineCap: .round)
+                            with: .color(totalCarePurple.opacity(0.32 + 0.52 * sideBoost)),
+                            style: StrokeStyle(lineWidth: 10.5 + 4.5 * sideBoost, lineCap: .round)
                         )
                         ctx.stroke(
                             arcPath,
-                            with: .color(totalCareLavender),
-                            style: StrokeStyle(lineWidth: 6.5, lineCap: .round)
+                            with: .color(sideBoost > 0.45 ? MLTheme.fluorapatiteGold : totalCareLavender),
+                            style: StrokeStyle(lineWidth: 6.2 + 1.2 * sideBoost, lineCap: .round)
                         )
                         let rimPath = quadrantArcPath(q: q, cx: cx, cy: cy, rx: rx * 1.18, ry: ry * 1.18)
                         ctx.stroke(
                             rimPath,
-                            with: .color(MLTheme.fluorapatiteGold.opacity(0.32 + 0.62 * seal)),
+                            with: .color(MLTheme.fluorapatiteGold.opacity(0.30 + 0.64 * max(seal, sideBoost * 0.85))),
                             style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: phase.mouthwashStepIndex == 1 ? [3, 2.5] : [])
                         )
                     } else if isActive {
@@ -136,7 +144,7 @@ private struct MirrorArchCompassView: View {
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .foregroundStyle(
                     phase.inMouthwashBonus
-                        ? totalCareLavender
+                        ? (tiltRight ? MLTheme.fluorapatiteGold : totalCareLavender)
                         : (phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
                 .frame(width: 28, alignment: .leading)
@@ -176,6 +184,140 @@ private struct MirrorArchCompassView: View {
     }
 }
 
+/// Cheek-to-cheek Royal Amethyst Spirit-Level Bubble Gauge.
+/// Auto-swishes hands-free while sitting on the bathroom counter, and switches immediately into
+/// live 120Hz gyroscope liquid slosh physics the moment the user picks up their phone during the 60s rinse.
+private struct MouthwashGyroLevelBar: View {
+    let gyro: GyroSloshSnapshot
+    let elapsedSec: Double
+    let language: CoachLanguage
+
+    var body: some View {
+        let sides = BrushCoachCopy.mirrorSideLabels(for: language)
+        let displaySlosh: Double = gyro.isHandheld
+            ? Double(max(-1.0, min(1.0, gyro.sloshPosition)))
+            : sin(elapsedSec * 3.2) * 0.68
+        let leftCharge = Double(gyro.leftCheekCharge01)
+        let rightCharge = Double(gyro.rightCheekCharge01)
+        let leftLit = displaySlosh < -0.22
+        let rightLit = displaySlosh > 0.22
+
+        VStack(spacing: 5) {
+            HStack(spacing: 8) {
+                cheekPill(label: sides.left, charge: leftCharge, isLit: leftLit)
+
+                GeometryReader { geo in
+                    let trackW = max(44.0, geo.size.width)
+                    let bubbleW: CGFloat = 28.0
+                    let travel = max(0.0, (trackW - bubbleW - 6.0) * 0.5)
+                    let bubbleOffset = CGFloat(displaySlosh) * travel
+
+                    ZStack {
+                        Capsule()
+                            .fill(Color.white.opacity(0.09))
+
+                        // Left & right cheek fluoride soak fill
+                        HStack(spacing: 0) {
+                            Capsule()
+                                .fill(totalCarePurple.opacity(0.18 + 0.36 * leftCharge))
+                                .frame(width: trackW * 0.42 * CGFloat(max(0.12, leftCharge)))
+                            Spacer(minLength: 0)
+                            Capsule()
+                                .fill(totalCarePurple.opacity(0.18 + 0.36 * rightCharge))
+                                .frame(width: trackW * 0.42 * CGFloat(max(0.12, rightCharge)))
+                        }
+                        .clipShape(Capsule())
+
+                        // Spirit-level center calibration hairlines
+                        HStack(spacing: 28) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.28))
+                                .frame(width: 1.2, height: 11)
+                            Rectangle()
+                                .fill(Color.white.opacity(0.28))
+                                .frame(width: 1.2, height: 11)
+                        }
+
+                        // Glowing Royal Amethyst liquid spirit bubble
+                        ZStack(alignment: .top) {
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [totalCareLavender, totalCarePurple],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                            Capsule()
+                                .fill(Color.white.opacity(0.55))
+                                .frame(width: 14, height: 3.5)
+                                .padding(.top, 2.2)
+                        }
+                        .frame(width: bubbleW, height: 13)
+                        .shadow(
+                            color: (gyro.isHandheld ? MLTheme.fluorapatiteGold : totalCarePurple).opacity(0.72),
+                            radius: 6
+                        )
+                        .offset(x: bubbleOffset)
+                    }
+                    .overlay(
+                        Capsule().strokeBorder(
+                            (gyro.isHandheld ? MLTheme.mintClean : totalCareLavender).opacity(0.52),
+                            lineWidth: 1.1
+                        )
+                    )
+                }
+                .frame(height: 18)
+
+                cheekPill(label: sides.right, charge: rightCharge, isLit: rightLit)
+            }
+
+            HStack(spacing: 5) {
+                Image(systemName: "gyroscope")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundStyle(gyro.isHandheld ? MLTheme.mintClean : totalCareLavender)
+                Text(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language))
+                    .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+                    .foregroundStyle(gyro.isHandheld ? MLTheme.mintClean : MLTheme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Spacer(minLength: 4)
+
+                if gyro.swishCount > 0 {
+                    Text("×\(gyro.swishCount)")
+                        .font(.system(size: 10, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(MLTheme.fluorapatiteGold))
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(BrushCoachCopy.gyroSwishStatusLabel(isHandheld: gyro.isHandheld, lang: language))
+    }
+
+    private func cheekPill(label: String, charge: Double, isLit: Bool) -> some View {
+        let complete = charge >= 0.95
+        let fg: Color = complete
+            ? Color.black
+            : (isLit ? Color.black : totalCareLavender)
+        let bg: Color = complete
+            ? MLTheme.mintClean
+            : (isLit ? MLTheme.fluorapatiteGold : Color.white.opacity(0.08))
+        return Text(label)
+            .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+            .foregroundStyle(fg)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(bg))
+    }
+}
+
 public struct BrushAlongView: View {
     public let elapsedSec: Double
     public let isPaused: Bool
@@ -183,6 +325,7 @@ public struct BrushAlongView: View {
     public let didCompleteFloss: Bool
     public let flossToolStyle: FlossToolStyle
     public let mouthwashDurationStyle: MouthwashDurationStyle
+    public let mouthwashGyro: GyroSloshSnapshot
     public let voiceCoachEnabled: Bool
     public let coachLanguage: CoachLanguage
     public let stationLabel: String
@@ -204,6 +347,7 @@ public struct BrushAlongView: View {
         didCompleteFloss: Bool = false,
         flossToolStyle: FlossToolStyle = .flossPick,
         mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s,
+        mouthwashGyro: GyroSloshSnapshot = .idle,
         voiceCoachEnabled: Bool = true,
         coachLanguage: CoachLanguage = .english,
         stationLabel: String,
@@ -224,6 +368,7 @@ public struct BrushAlongView: View {
         self.didCompleteFloss = didCompleteFloss
         self.flossToolStyle = flossToolStyle
         self.mouthwashDurationStyle = mouthwashDurationStyle
+        self.mouthwashGyro = mouthwashGyro
         self.voiceCoachEnabled = voiceCoachEnabled
         self.coachLanguage = coachLanguage
         self.stationLabel = stationLabel
@@ -344,7 +489,7 @@ public struct BrushAlongView: View {
 
             // Permanent Body-Locked Mirror Arch Compass + 3-Foot Countdown & 3-2-1 Musical Anticipation
             HStack(spacing: 14) {
-                MirrorArchCompassView(phase: phase, language: coachLanguage)
+                MirrorArchCompassView(phase: phase, language: coachLanguage, gyro: mouthwashGyro)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formatClock(ceil(remaining), pad: true))
@@ -445,6 +590,12 @@ public struct BrushAlongView: View {
                             .padding(.vertical, 3.5)
                             .background(Capsule().fill(phase.mouthwashStepIndex == 2 ? MLTheme.fluorapatiteGold : totalCareLavender))
                     }
+
+                    MouthwashGyroLevelBar(
+                        gyro: mouthwashGyro,
+                        elapsedSec: elapsedSec,
+                        language: coachLanguage
+                    )
 
                     HStack(spacing: 10) {
                         Button {

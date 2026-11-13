@@ -48,7 +48,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             cosmicNodes.setCosmicIntroState(visible: appMode == .cosmicIntro, beatIndex: cosmicBeatIndex)
         }
     }
-    public var reducedMotion: Bool = false
+    public var reducedMotion: Bool = false {
+        didSet {
+            syncMotionMonitorPolicy()
+        }
+    }
     public var qualityTier: QualityTier = .ultra {
         didSet {
             companionEnamelController.setQualityTier(qualityTier)
@@ -108,17 +112,34 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private var camCurrentLookAt = SIMD3<Float>(32.0, 1.2, 16.0)
     private var viewportAspect: Float = 0.50 // Portrait default on iPhone
 
-    // Rolling ProMotion Frame Rate Counter & 120Hz Smoothed Audio-Reactive Envelope
+    // Rolling ProMotion Frame Rate Counter, 120Hz Audio Envelope & Gyro Slosh Physics
     private var fpsFrameCount: Int = 0
     private var fpsWindowStart: TimeInterval = 0
     public private(set) var measuredFps: Int = 120
     private var smoothedAudioBands = SIMD4<Float>.zero
+    private var gyroSim = GyroSloshSim()
+    private var latestGyroSnapshot: GyroSloshSnapshot = .idle
+    private var lastGyroUiPublishSec: Float = -10
+    private var lastPublishedHandheld: Bool = false
 
     // Callbacks to Coordinator (invoked on MainActor)
     public var onSessionStepped: ((SessionSnapshot) -> Void)?
     public var onCompanionCrownRubbed: ((Int?, TouchFeedback) -> Void)?
     public var onCosmicMohsSelected: ((Int) -> Void)?
     public var onFpsUpdated: ((Int) -> Void)?
+    public var onMouthwashGyroUpdated: ((GyroSloshSnapshot) -> Void)?
+
+    public func resetMouthwashGyroSession() {
+        gyroSim.resetMouthwashSession()
+        latestGyroSnapshot = .idle
+        lastGyroUiPublishSec = -10
+        lastPublishedHandheld = false
+    }
+
+    private func syncMotionMonitorPolicy() {
+        let wantsGyro = !reducedMotion && (appMode == .hub || appMode == .cosmicIntro || appMode == .brushAlong)
+        MotionTiltMonitor.shared.setActive(wantsGyro)
+    }
 
     public override init() {
         let device = MTLCreateSystemDefaultDevice()
@@ -224,6 +245,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             acidStress01: 0.0,
             activeQuadrant: -1
         )
+        syncMotionMonitorPolicy()
     }
 
     // MARK: - Mode & Stage Management
@@ -231,6 +253,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public func setMode(_ mode: AppMode, selectedCityId: String = "toronto") {
         let prevMode = appMode
         appMode = mode
+        syncMotionMonitorPolicy()
         let inStage = (mode == .arcade || mode == .pulpRescue || mode == .report)
         let inCompanion = (mode == .hub || mode == .brushAlong)
 
@@ -530,6 +553,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             }
         }
 
+        // Step 120Hz CoreMotion gyro/gravity slosh & handheld wet-enamel parallax (0-cost no-op when inactive)
+        let rawMotion = MotionTiltMonitor.shared.latestSample()
+        latestGyroSnapshot = gyroSim.step(
+            dt: dtFloat,
+            gravityX: rawMotion.screenGravityX,
+            gravityY: rawMotion.screenGravityY,
+            rotationRateMag: rawMotion.rotationRateMag,
+            userAccelX: rawMotion.screenUserAccelX,
+            userAccelY: rawMotion.screenUserAccelY,
+            sensorAvailable: rawMotion.available,
+            reducedMotion: reducedMotion
+        )
+
         // Update Cosmic Orbital Earth + Mohs Showcase only when visible
         if !cosmicNodes.rootNode.isHidden {
             cosmicNodes.update(
@@ -553,6 +589,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private func updateCompanionFrame(dt: Float, motionTime: Float) {
         touchSystem.step(dt: Double(dt), nowSec: Double(sceneNowSec))
 
+        // Subtle 120Hz wet-enamel specular glint as the user naturally tilts the iPhone in hand
+        let gyro = latestGyroSnapshot
+        companionEnamelController.setHeadlamp(
+            worldPos: SIMD3<Float>(
+                32.0 + gyro.parallaxX * 12.5,
+                14.0 + gyro.parallaxY * 7.0,
+                44.0
+            ),
+            weight: 0.16,
+            depthStart: 54.0,
+            depthDensity: 0.018
+        )
+
         let activeQuad: Int
         var completedQuadMask: Int = 0
         var activeSurfaceIdx: Int = -1
@@ -560,6 +609,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         var upcomingQuad: Int = -1
         var pacerFoamOrigin: Vec2 = .zero
         var pacerFoamStrength: Float = 0
+        var rinseGyroEncoding: Vec2 = .zero
 
         if appMode == .brushAlong {
             touchSystem.fadeSplatsForPacer(elapsedSec: pacerElapsedSec)
@@ -574,6 +624,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 pacerStage: pacerStage,
                 flossToolStyle: pacerFlossToolStyle,
                 mouthwashDurationSec: pacerMouthwashDurationSec,
+                gyroSloshX: gyro.sloshPosition,
+                gyroPump01: gyro.pumpPulse01,
+                gyroHandheld01: gyro.handheldBlend01,
                 nowSec: sceneNowSec,
                 reducedMotion: reducedMotion
             )
@@ -594,7 +647,16 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             case .flossBonus:
                 pacerFoamStrength = 0.42
             case .mouthwashBonus:
-                pacerFoamStrength = 0.64
+                pacerFoamStrength = 0.64 + gyro.pumpPulse01 * gyro.handheldBlend01 * 0.30
+                rinseGyroEncoding = Vec2(x: Double(gyro.sloshPosition), z: Double(gyro.handheldBlend01))
+                let handheldChanged = (gyro.isHandheld != lastPublishedHandheld)
+                if gyro.didTriggerSplash || handheldChanged || (sceneNowSec - lastGyroUiPublishSec >= 0.045) {
+                    lastGyroUiPublishSec = sceneNowSec
+                    lastPublishedHandheld = gyro.isHandheld
+                    if let cb = onMouthwashGyroUpdated {
+                        DispatchQueue.main.async { cb(gyro) }
+                    }
+                }
             }
         } else {
             activeQuad = -1
@@ -623,6 +685,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             EnamelFrameUniforms(
                 nowSec: sceneNowSec,
                 motionTimeSec: motionTime,
+                rinseOrigin: rinseGyroEncoding,
                 probePosition: pacerFoamOrigin,
                 probeFoamRadius: 1.55,
                 probeFoamStrength: pacerFoamStrength,
@@ -957,35 +1020,37 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 Float(GameConfig.earthBackdropPos.z)
             )
             let showcaseCenter = earthCenter + SIMD3<Float>(0, 38.0, 0)
-            let sinYaw = sin(cosmicOrbitYaw)
-            let cosYaw = cos(cosmicOrbitYaw)
+            let gyroYaw = latestGyroSnapshot.parallaxX * 0.085
+            let gyroLift = latestGyroSnapshot.parallaxY * 0.85
+            let sinYaw = sin(cosmicOrbitYaw + gyroYaw)
+            let cosYaw = cos(cosmicOrbitYaw + gyroYaw)
             switch cosmicBeatIndex {
             case 0:
                 // Beat 0: Stellar Forge & Hydroxyapatite Lattice centered at ~25% from top (top 1/3 hero!)
                 let dist: Float = isPortrait ? 20.0 : 15.5
                 return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -4.2 : 0.4, cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -4.2 : 0.4) + gyroLift, cosYaw * dist),
                     showcaseCenter + SIMD3<Float>(0, isPortrait ? -6.2 : -1.8, 0)
                 )
             case 1:
                 // Beat 1: Lattice + 5 Mohs Specimens spanning ~13%..36% from top above the story card
                 let dist: Float = isPortrait ? 21.5 : 15.0
                 return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist * 0.45, isPortrait ? -6.4 : -2.6, 2.2 + cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist * 0.45, (isPortrait ? -6.4 : -2.6) + gyroLift, 2.2 + cosYaw * dist),
                     showcaseCenter + SIMD3<Float>(0, isPortrait ? -8.4 : -4.8, 2.2)
                 )
             case 2:
                 // Beat 2: Fluorapatite 9F Crystal Lock closeup in upper hero third (~14%..37% from top)
                 let dist: Float = isPortrait ? 17.5 : 13.5
                 return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -3.6 : 0.2, cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -3.6 : 0.2) + gyroLift, cosYaw * dist),
                     showcaseCenter + SIMD3<Float>(0, isPortrait ? -5.4 : -1.5, 0)
                 )
             default:
                 // Beat 3: Full 3D Orbital Earth, Polar Aurora & LEO Station Aurora filling ~10%..51% from top
                 let dist: Float = isPortrait ? 74.0 : 48.0
                 return (
-                    earthCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -11.5 : -1.0, cosYaw * dist),
+                    earthCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -11.5 : -1.0) + gyroLift * 2.0, cosYaw * dist),
                     earthCenter + SIMD3<Float>(0, isPortrait ? -18.5 : -6.5, 0)
                 )
             }
@@ -993,9 +1058,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         case .hub:
             let archCenter = SIMD3<Float>(32.0, 1.4, 15.6)
             let dist: Float = isPortrait ? 36.5 : 22.0
-            let x = archCenter.x + sin(hubOrbitYaw) * cos(hubOrbitPitch) * dist
-            let y = archCenter.y + sin(hubOrbitPitch) * dist
-            let z = archCenter.z + cos(hubOrbitYaw) * cos(hubOrbitPitch) * dist
+            let effYaw = hubOrbitYaw + latestGyroSnapshot.parallaxX * 0.085
+            let effPitch = max(0.08, min(0.88, hubOrbitPitch - latestGyroSnapshot.parallaxY * 0.048))
+            let x = archCenter.x + sin(effYaw) * cos(effPitch) * dist
+            let y = archCenter.y + sin(effPitch) * dist
+            let z = archCenter.z + cos(effYaw) * cos(effPitch) * dist
             return (
                 SIMD3<Float>(x, y, z),
                 archCenter + SIMD3<Float>(0, isPortrait ? 1.8 : 0.9, -1.0)

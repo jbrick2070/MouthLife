@@ -117,6 +117,9 @@ public final class CompanionArchNodes {
         pacerStage: PacerStage? = nil,
         flossToolStyle: FlossToolStyle = .flossPick,
         mouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec,
+        gyroSloshX: Float = 0,
+        gyroPump01: Float = 0,
+        gyroHandheld01: Float = 0,
         nowSec: Float,
         reducedMotion: Bool
     ) -> PacerCoachVisualState {
@@ -187,44 +190,60 @@ public final class CompanionArchNodes {
                 }
             }
 
-            // 2) 3-Step Swirling Amethyst Liquid Vortex + Effervescent F⁻ Bubbles
+            // 2) 3-Step Swirling Amethyst Liquid Vortex + Live Gyro Tilt Slosh Blend + Effervescent F⁻ Bubbles
             var sloshContactLocal = SIMD3<Float>(0, 1.85, 2.2)
+            let gBlend = min(1.0, max(0.0, gyroHandheld01))
             if let swirlNode = coachMouthwashNode.childNode(withName: "mouthwash_swirl", recursively: false) {
+                let autoPos: SIMD3<Float>
+                let autoEuler: SIMD3<Float>
+                let autoScale: SIMD3<Float>
+                let autoContact: SIMD3<Float>
+
                 switch phase.mouthwashStepIndex {
                 case 0:
-                    // Step 0: Vigorous Cheek-to-Cheek Swish (Right <-> Left lateral wave)
                     let lateral = sin(animT * 3.6)
                     let roll = -cos(animT * 3.6) * 0.14
-                    swirlNode.simdPosition = SIMD3<Float>(lateral * 1.15, 1.85 + sin(animT * 7.2) * 0.08, 0)
-                    swirlNode.simdEulerAngles = SIMD3<Float>(0, lateral * 0.14, roll)
-                    swirlNode.simdScale = SIMD3<Float>(1.04, 1.0, 1.0)
-                    sloshContactLocal = SIMD3<Float>(lateral * 3.8, 1.85, 1.2)
+                    autoPos = SIMD3<Float>(lateral * 1.15, 1.85 + sin(animT * 7.2) * 0.08, 0)
+                    autoEuler = SIMD3<Float>(0, lateral * 0.14, roll)
+                    autoScale = SIMD3<Float>(1.04, 1.0, 1.0)
+                    autoContact = SIMD3<Float>(lateral * 3.8, 1.85, 1.2)
                 case 1:
-                    // Step 1: Pump Vigorously In-and-Out Between All 26 Interdental Gaps
                     let pump = sin(animT * 6.2)
                     let scaleXZ = 1.0 + 0.15 * pump
-                    swirlNode.simdPosition = SIMD3<Float>(sin(animT * 2.1) * 0.35, 1.85 + cos(animT * 6.2) * 0.16, pump * 0.32)
-                    swirlNode.simdEulerAngles = SIMD3<Float>(pump * 0.06, sin(animT * 2.1) * 0.08, 0)
-                    swirlNode.simdScale = SIMD3<Float>(scaleXZ, 1.0 + 0.10 * abs(pump), scaleXZ)
-                    sloshContactLocal = SIMD3<Float>(sin(animT * 3.1) * 2.6, 1.85, 2.0 + pump * 1.2)
+                    autoPos = SIMD3<Float>(sin(animT * 2.1) * 0.35, 1.85 + cos(animT * 6.2) * 0.16, pump * 0.32)
+                    autoEuler = SIMD3<Float>(pump * 0.06, sin(animT * 2.1) * 0.08, 0)
+                    autoScale = SIMD3<Float>(scaleXZ, 1.0 + 0.10 * abs(pump), scaleXZ)
+                    autoContact = SIMD3<Float>(sin(animT * 3.1) * 2.6, 1.85, 2.0 + pump * 1.2)
                 default:
-                    // Step 2: Final Fluorapatite Crystal Lock Swish (Smooth full-arch spiral)
                     let swirlX = sin(animT * 3.0) * 0.65
                     let swirlZ = cos(animT * 3.0) * 0.38
                     let breath = 1.02 + 0.06 * sin(animT * 4.8)
-                    swirlNode.simdPosition = SIMD3<Float>(swirlX, 1.85 + sin(animT * 5.4) * 0.10, swirlZ)
-                    swirlNode.simdEulerAngles = SIMD3<Float>(0.04 * cos(animT * 3.0), sin(animT * 1.8) * 0.10, -0.08 * sin(animT * 3.0))
-                    swirlNode.simdScale = SIMD3<Float>(repeating: breath)
-                    sloshContactLocal = SIMD3<Float>(swirlX * 3.2, 1.85, 1.8 + swirlZ)
+                    autoPos = SIMD3<Float>(swirlX, 1.85 + sin(animT * 5.4) * 0.10, swirlZ)
+                    autoEuler = SIMD3<Float>(0.04 * cos(animT * 3.0), sin(animT * 1.8) * 0.10, -0.08 * sin(animT * 3.0))
+                    autoScale = SIMD3<Float>(repeating: breath)
+                    autoContact = SIMD3<Float>(swirlX * 3.2, 1.85, 1.8 + swirlZ)
                 }
+
+                let livePos = SIMD3<Float>(gyroSloshX * 1.68, 1.85 + gyroPump01 * 0.18, gyroPump01 * 0.36)
+                let liveEuler = SIMD3<Float>(gyroPump01 * 0.08, gyroSloshX * 0.22, -gyroSloshX * 0.24)
+                let liveScale = SIMD3<Float>(1.05 + gyroPump01 * 0.16, 1.0 + gyroPump01 * 0.12, 1.02 + gyroPump01 * 0.16)
+                let liveContact = SIMD3<Float>(gyroSloshX * 4.4, 1.85, 1.5 + gyroPump01 * 1.1)
+
+                swirlNode.simdPosition = simd_mix(autoPos, livePos, SIMD3<Float>(repeating: gBlend))
+                swirlNode.simdEulerAngles = simd_mix(autoEuler, liveEuler, SIMD3<Float>(repeating: gBlend))
+                swirlNode.simdScale = simd_mix(autoScale, liveScale, SIMD3<Float>(repeating: gBlend))
+                sloshContactLocal = simd_mix(autoContact, liveContact, SIMD3<Float>(repeating: gBlend))
             }
 
             if let bubblesNode = coachMouthwashNode.childNode(withName: "mouthwash_bubbles", recursively: true) {
-                bubblesNode.simdPosition = SIMD3<Float>(0, sin(animT * 5.0) * 0.14, 0)
-                bubblesNode.simdEulerAngles = SIMD3<Float>(0, sin(animT * 1.7) * 0.22, 0)
+                let fizzY = sin(animT * 5.0) * 0.14 + gyroPump01 * gBlend * 0.12
+                let fizzYaw = sin(animT * 1.7) * 0.22 + gyroSloshX * gBlend * 0.28
+                bubblesNode.simdPosition = SIMD3<Float>(gyroSloshX * gBlend * 0.35, fizzY, 0)
+                bubblesNode.simdEulerAngles = SIMD3<Float>(0, fizzYaw, -gyroSloshX * gBlend * 0.12)
             }
 
-            let camYaw: Float = reducedMotion ? 0 : sin(nowSec * 0.52) * 0.16
+            let autoCamYaw: Float = reducedMotion ? 0 : sin(nowSec * 0.52) * 0.16
+            let camYaw = autoCamYaw * (1.0 - gBlend * 0.65) + gyroSloshX * gBlend * 0.10
             let contactWorld = rootOrigin + sloshContactLocal
             let focusWorld = rootOrigin + SIMD3<Float>(0, 1.85, 1.1)
             return PacerCoachVisualState(

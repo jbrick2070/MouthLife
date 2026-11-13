@@ -741,4 +741,250 @@ public enum BrushCoachCopy {
         case .german: return "Alles blitzblank! Schaum ausspucken, noch nicht direkt nachspülen."
         }
     }
+
+    public static func gyroSwishStatusLabel(isHandheld: Bool, lang: CoachLanguage) -> String {
+        if isHandheld {
+            switch lang {
+            case .english: return "LIVE TILT SLOSH"
+            case .spanish: return "INCLINA PARA ENJUAGAR"
+            case .french: return "INCLINEZ POUR RINCER"
+            case .japanese: return "傾けてブクブク連動"
+            case .chinese: return "倾斜手机实时鼓漱"
+            case .korean: return "기울여서 라이브 가글"
+            case .portuguese: return "INCLINE PARA BOCHECHAR"
+            case .german: return "NEIGEN ZUM SPÜLEN"
+            }
+        } else {
+            switch lang {
+            case .english: return "AUTO • PICK UP TO TILT"
+            case .spanish: return "AUTO • TOMA PARA INCLINAR"
+            case .french: return "AUTO • PRENEZ POUR INCLINER"
+            case .japanese: return "自動 • 手に持つと傾き連動"
+            case .chinese: return "自动 • 拿起手机可倾斜鼓漱"
+            case .korean: return "자동 • 폰을 들면 기울기 연동"
+            case .portuguese: return "AUTO • PEGUE PARA INCLINAR"
+            case .german: return "AUTO • AUFNEHMEN ZUM NEIGEN"
+            }
+        }
+    }
+}
+
+// MARK: - 120Hz Gyroscope Counter-vs-Handheld Auto-Detector & Liquid Slosh Physics
+
+public struct GyroSloshSnapshot: Equatable, Sendable {
+    public var isHandheld: Bool
+    public var handheldBlend01: Float
+    /// `-1.0` = Left Cheek, `+1.0` = Right Cheek.
+    public var sloshPosition: Float
+    public var sloshVelocity: Float
+    /// `0...1` forward/back or shake interdental pump intensity.
+    public var pumpPulse01: Float
+    public var leftCheekCharge01: Float
+    public var rightCheekCharge01: Float
+    public var swishCount: Int
+    /// Drift-compensated `-1...+1` relative handheld tilt for subtle 120Hz wet-enamel specular glint & parallax.
+    public var parallaxX: Float
+    public var parallaxY: Float
+    /// Discrete splash trigger when purple rinse sloshes briskly across the center line.
+    public var didTriggerSplash: Bool
+    public var splashPan: Float
+    public var splashIntensity01: Float
+
+    public static let idle = GyroSloshSnapshot(
+        isHandheld: false,
+        handheldBlend01: 0,
+        sloshPosition: 0,
+        sloshVelocity: 0,
+        pumpPulse01: 0,
+        leftCheekCharge01: 0,
+        rightCheekCharge01: 0,
+        swishCount: 0,
+        parallaxX: 0,
+        parallaxY: 0,
+        didTriggerSplash: false,
+        splashPan: 0,
+        splashIntensity01: 0
+    )
+}
+
+/// Pure deterministic spring-damper liquid slosh & counter-vs-handheld motion classifier.
+/// Rests silently at `isHandheld = false` when the phone sits on the bathroom counter, and wakes instantly
+/// into 120Hz shallow-water slosh physics + spirit-level feedback the moment the user picks up the phone.
+public struct GyroSloshSim: Sendable {
+    public private(set) var isHandheld: Bool = false
+    public private(set) var handheldBlend01: Float = 0
+    public private(set) var sloshPosition: Float = 0
+    public private(set) var sloshVelocity: Float = 0
+    public private(set) var pumpPulse01: Float = 0
+    public private(set) var leftCheekCharge01: Float = 0
+    public private(set) var rightCheekCharge01: Float = 0
+    public private(set) var swishCount: Int = 0
+    public private(set) var parallaxX: Float = 0
+    public private(set) var parallaxY: Float = 0
+
+    private var hasSeededReference: Bool = false
+    private var refGravityX: Float = 0
+    private var refGravityY: Float = -0.7
+    private var prevGravityX: Float = 0
+    private var prevGravityY: Float = -0.7
+    private var lastSplashSide: Int = 0
+    private var splashCooldownSec: Float = 0
+
+    public init() {}
+
+    public mutating func resetMouthwashSession() {
+        sloshPosition = 0
+        sloshVelocity = 0
+        pumpPulse01 = 0
+        leftCheekCharge01 = 0
+        rightCheekCharge01 = 0
+        swishCount = 0
+        lastSplashSide = 0
+        splashCooldownSec = 0
+    }
+
+    public mutating func step(
+        dt rawDt: Float,
+        gravityX: Float,
+        gravityY: Float,
+        rotationRateMag: Float,
+        userAccelX: Float,
+        userAccelY: Float,
+        sensorAvailable: Bool,
+        reducedMotion: Bool
+    ) -> GyroSloshSnapshot {
+        if !sensorAvailable || reducedMotion {
+            isHandheld = false
+            handheldBlend01 = 0
+            sloshPosition = 0
+            sloshVelocity = 0
+            pumpPulse01 = 0
+            parallaxX = 0
+            parallaxY = 0
+            return GyroSloshSnapshot(
+                isHandheld: false,
+                handheldBlend01: 0,
+                sloshPosition: 0,
+                sloshVelocity: 0,
+                pumpPulse01: 0,
+                leftCheekCharge01: leftCheekCharge01,
+                rightCheekCharge01: rightCheekCharge01,
+                swishCount: swishCount,
+                parallaxX: 0,
+                parallaxY: 0,
+                didTriggerSplash: false,
+                splashPan: 0,
+                splashIntensity01: 0
+            )
+        }
+
+        let dt = min(0.05, max(0.001, rawDt))
+        splashCooldownSec = max(0, splashCooldownSec - dt)
+
+        if !hasSeededReference {
+            hasSeededReference = true
+            refGravityX = gravityX
+            refGravityY = gravityY
+            prevGravityX = gravityX
+            prevGravityY = gravityY
+        }
+
+        // 1. Detect Bathroom Counter (dead-still) vs. Picked Up in Hand (live gyro/gravity variance)
+        let gravDelta = hypot(gravityX - prevGravityX, gravityY - prevGravityY) / dt
+        prevGravityX = gravityX
+        prevGravityY = gravityY
+
+        let activeSignal = rotationRateMag + gravDelta * 0.75 + hypot(userAccelX, userAccelY) * 2.2
+        // Natural human hand micro-tremor + tilt is >= 0.09 rad/s; a phone on a counter is < 0.015 rad/s.
+        let instantActivity: Float = activeSignal > 0.11 ? min(1.0, (activeSignal - 0.04) * 2.4) : 0.0
+        if instantActivity > handheldBlend01 {
+            let rise = 1.0 - exp(-9.5 * dt)
+            handheldBlend01 += (instantActivity - handheldBlend01) * rise
+        } else {
+            // Hold handheld mode through brief pauses (~2.2s decay) so holding steady tilted still counts!
+            let holdBias: Float = abs(gravityX) > 0.16 ? 0.45 : 0.0
+            let target = max(instantActivity, isHandheld ? holdBias : 0.0)
+            let decay = 1.0 - exp(-0.75 * dt)
+            handheldBlend01 += (target - handheldBlend01) * decay
+        }
+
+        if !isHandheld && handheldBlend01 >= 0.36 {
+            isHandheld = true
+        } else if isHandheld && handheldBlend01 <= 0.15 {
+            isHandheld = false
+        }
+
+        // 2. Drift-free relative handheld parallax around the user's natural grip angle (for Hub/Cosmic enamel glint)
+        let refFollow = 1.0 - exp(-0.42 * dt)
+        refGravityX += (gravityX - refGravityX) * refFollow
+        refGravityY += (gravityY - refGravityY) * refFollow
+        let rawPx = max(-1.0, min(1.0, (gravityX - refGravityX) * 3.8))
+        let rawPy = max(-1.0, min(1.0, (gravityY - refGravityY) * 3.8))
+        let smoothP = 1.0 - exp(-14.0 * dt)
+        parallaxX += (rawPx * handheldBlend01 - parallaxX) * smoothP
+        parallaxY += (rawPy * handheldBlend01 - parallaxY) * smoothP
+
+        // 3. Spring-damper shallow-water purple mouthwash slosh (-1 Left Cheek ... +1 Right Cheek)
+        let prevPos = sloshPosition
+        let targetSlosh = max(-1.0, min(1.0, gravityX * 2.25 + userAccelX * 0.90))
+        let accel = (targetSlosh - sloshPosition) * 28.0 - sloshVelocity * 4.4
+        sloshVelocity += accel * dt
+        sloshPosition = max(-1.0, min(1.0, sloshPosition + sloshVelocity * dt))
+
+        // Forward/back pitch + gentle shake drives interdental pumping pulse
+        let pumpDrive = min(1.0, abs(rawPy) * 0.85 + hypot(userAccelX, userAccelY) * 1.45)
+        let pumpRate: Float = pumpDrive > pumpPulse01 ? 12.0 : 3.6
+        pumpPulse01 += (pumpDrive * handheldBlend01 - pumpPulse01) * (1.0 - exp(-pumpRate * dt))
+
+        var didSplash = false
+        var splashPan: Float = 0
+        var splashIntensity: Float = 0
+
+        if isHandheld {
+            if sloshPosition <= -0.34 {
+                leftCheekCharge01 = min(1.0, leftCheekCharge01 + dt * 0.42)
+                if lastSplashSide != -1 && splashCooldownSec <= 0 && abs(sloshVelocity) > 0.32 {
+                    lastSplashSide = -1
+                    swishCount += 1
+                    splashCooldownSec = 0.28
+                    didSplash = true
+                    splashPan = -0.62
+                    splashIntensity = min(1.0, 0.42 + abs(sloshVelocity) * 0.25)
+                }
+            } else if sloshPosition >= 0.34 {
+                rightCheekCharge01 = min(1.0, rightCheekCharge01 + dt * 0.42)
+                if lastSplashSide != 1 && splashCooldownSec <= 0 && abs(sloshVelocity) > 0.32 {
+                    lastSplashSide = 1
+                    swishCount += 1
+                    splashCooldownSec = 0.28
+                    didSplash = true
+                    splashPan = 0.62
+                    splashIntensity = min(1.0, 0.42 + abs(sloshVelocity) * 0.25)
+                }
+            } else if (prevPos < 0 && sloshPosition >= 0) || (prevPos > 0 && sloshPosition <= 0) {
+                if splashCooldownSec <= 0 && abs(sloshVelocity) > 0.85 {
+                    splashCooldownSec = 0.26
+                    didSplash = true
+                    splashPan = sloshVelocity > 0 ? 0.30 : -0.30
+                    splashIntensity = min(1.0, 0.35 + abs(sloshVelocity) * 0.22)
+                }
+            }
+        }
+
+        return GyroSloshSnapshot(
+            isHandheld: isHandheld,
+            handheldBlend01: handheldBlend01,
+            sloshPosition: sloshPosition,
+            sloshVelocity: sloshVelocity,
+            pumpPulse01: pumpPulse01,
+            leftCheekCharge01: leftCheekCharge01,
+            rightCheekCharge01: rightCheekCharge01,
+            swishCount: swishCount,
+            parallaxX: parallaxX,
+            parallaxY: parallaxY,
+            didTriggerSplash: didSplash,
+            splashPan: splashPan,
+            splashIntensity01: splashIntensity
+        )
+    }
 }
