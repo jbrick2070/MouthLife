@@ -83,7 +83,8 @@ public final class AppCoordinator {
     public var hubToast: String?
     public var arcadeToast: String?
     public var liveFps: Int = 120
-    public var showProMotionBadge: Bool = true
+    /// The frame-rate pill is a developer readout; it is off and no longer offered in Settings.
+    public var showProMotionBadge: Bool = false
     public var reducedMotion: Bool = false {
         didSet {
             sceneController.reducedMotion = reducedMotion

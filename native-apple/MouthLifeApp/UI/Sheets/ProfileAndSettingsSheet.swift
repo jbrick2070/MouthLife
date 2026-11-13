@@ -135,17 +135,11 @@ public struct ProfileAndSettingsSheet: View {
                     }
                     .mlGlassCard()
 
-                    // 120Hz ProMotion & GPU Quality Card
+                    // Graphics quality card
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text(L10n.t("120Hz PROMOTION & METAL GPU"))
-                                .font(.system(.caption, design: .rounded, weight: .bold))
-                                .foregroundStyle(MLTheme.cyanAccent)
-                            Spacer()
-                            Text(L10n.t("NATIVE METAL"))
-                                .font(.system(size: 10, weight: .heavy, design: .rounded))
-                                .foregroundStyle(MLTheme.mintClean)
-                        }
+                        Text(L10n.t("Change Graphics Quality").uppercased())
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(MLTheme.cyanAccent)
 
                         Picker(L10n.t("GPU Tier"), selection: $qualityPref) {
                             Text(L10n.t("Auto")).tag(QualityPreference.auto)
@@ -157,13 +151,6 @@ public struct ProfileAndSettingsSheet: View {
                         .onChange(of: qualityPref) { _, next in
                             onChangeQuality(next)
                         }
-
-                        Toggle(L10n.t("Show Live Hz / Frame Telemetry Pill"), isOn: $showProMotionTelemetry)
-                            .font(.system(.subheadline, design: .rounded, weight: .medium))
-                            .tint(MLTheme.cyanAccent)
-                            .onChange(of: showProMotionTelemetry) { _, next in
-                                onToggleProMotionTelemetry(next)
-                            }
 
                         Toggle(L10n.t("Less Camera Motion"), isOn: $reducedMotion)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
