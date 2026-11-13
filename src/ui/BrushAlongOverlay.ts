@@ -22,7 +22,7 @@ import { BRUSH_ALONG_FLOSS_BONUS_SEC, BRUSH_ALONG_TOTAL_SEC } from '../config/ga
 import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import { HabitBank } from '../engine/persistence/HabitBank';
+import { HabitBank, brushAlongMultiplier } from '../engine/persistence/HabitBank';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
 
@@ -115,6 +115,7 @@ export class BrushAlongOverlay implements OverlayView {
     stampAwarded: boolean;
     slotType: 'full' | 'tip' | 'capped';
     withMouthwashBonus: boolean;
+    multiplier: number;
   } | null = null;
 
   private readonly keyHandler = (e: KeyboardEvent): void => {
@@ -384,7 +385,7 @@ export class BrushAlongOverlay implements OverlayView {
     const save = this.saveSys.getSave();
     const outcome = HabitBank.completeBrushAlong(save, { withFlossBonus, withMouthwashBonus });
     this.saveSys.save(save);
-    this.rewardResult = { ...outcome, withMouthwashBonus };
+    this.rewardResult = { ...outcome, withMouthwashBonus, multiplier: brushAlongMultiplier(withFlossBonus, withMouthwashBonus) };
     this.bus.emit('pacer:complete', {
       withFlossBonus,
       withMouthwashBonus,
@@ -843,7 +844,7 @@ export class BrushAlongOverlay implements OverlayView {
       </div>
       <div></div>
       <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
-        <h2 style="margin:0 0 6px 0;font-size:1.18rem;">Fresh-Mint Fluorapatite Glow Active!</h2>
+        <h2 style="margin:0 0 6px 0;font-size:1.18rem;">Fresh, Smooth, Fluoride-Strong Teeth!</h2>
         <p style="margin:0 0 10px 0;font-size:0.82rem;color:#cbd5e1;">
           ${
             rinse
@@ -853,6 +854,7 @@ export class BrushAlongOverlay implements OverlayView {
         </p>
         <div class="row-wrap" style="justify-content:center;margin-bottom:12px;">
           <span class="pill-badge">✦ +${r?.ionsAwarded ?? 0} Fluoride Ions</span>
+          ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${r.multiplier >= 2 ? 'Floss + Rinse' : 'Bonus Step'}</span>` : ''}
           ${r?.stampAwarded ? '<span class="pill-badge">🦷 +1 Permanent Habit Stamp</span>' : ''}
           ${r?.slotType === 'full' ? '<span class="pill-badge">📡 +1 Supply Beacon</span><span class="pill-badge">⚡ +1 Overdrive Run</span>' : ''}
           ${r?.slotType === 'capped' ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}

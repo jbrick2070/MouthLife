@@ -33,7 +33,7 @@ public struct SyncSaveSheet: View {
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
-                        Text("100% compatible between iPhone, iPad, Mac, and the MouthLife web edition — zero accounts or cloud trackers needed.")
+                        Text("Works on iPhone, iPad, Mac and the MouthLife web game. No account needed.")
                             .font(.system(.footnote, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
 
@@ -81,7 +81,7 @@ public struct SyncSaveSheet: View {
                                 switch onImportCode(importInput) {
                                 case .success:
                                     statusIsError = false
-                                    statusMessage = "Save imported cleanly! Habit Stamps & world records updated."
+                                    statusMessage = "Save imported! Habit Stamps and records are updated."
                                     importInput = ""
                                 case .failure(let err):
                                     statusIsError = true

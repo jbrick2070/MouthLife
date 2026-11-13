@@ -47,7 +47,7 @@ public struct MissionReportView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text(mode == .pulpRescue
-                             ? (won ? "PULP RESCUED!" : "CA(OH)₂ LINER STABILIZED")
+                             ? (won ? "PULP RESCUED!" : "SAFE PATCH APPLIED")
                              : (won ? "ARCH RESTORED • \(cartridge.title.uppercased())" : "MISSION REPORT"))
                             .font(.system(.caption, design: .rounded, weight: .heavy))
                             .foregroundStyle(won ? MLTheme.mintClean : MLTheme.amberWarn)
@@ -84,8 +84,8 @@ public struct MissionReportView: View {
                     // 4-Pillar Score Bars
                     VStack(spacing: 8) {
                         pillarRow("Surface Restoration", pts: breakdown.restorationPts, maxPts: 5000, tint: MLTheme.cyanAccent)
-                        pillarRow("Gentle Technique & Synergy", pts: breakdown.techniquePts, maxPts: 2500, tint: MLTheme.mintClean)
-                        pillarRow("Commensal Ecology (\(breakdown.sitesRestored)/\(breakdown.sitesTotal))", pts: breakdown.ecologyPts, maxPts: 1500, tint: MLTheme.fluorapatiteGold)
+                        pillarRow("Gentle Brushing & Combos", pts: breakdown.techniquePts, maxPts: 2500, tint: MLTheme.mintClean)
+                        pillarRow("Helper Germs (\(breakdown.sitesRestored)/\(breakdown.sitesTotal))", pts: breakdown.ecologyPts, maxPts: 1500, tint: MLTheme.fluorapatiteGold)
                         pillarRow("Par Time (\(formatClock(breakdown.elapsedSec)))", pts: breakdown.parTimePts, maxPts: 1000, tint: MLTheme.sucroseViolet)
                     }
                 }

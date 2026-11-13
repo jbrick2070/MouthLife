@@ -9,7 +9,7 @@ import type { WorldCartridge } from '../engine/types';
  */
 export const crescentSulcusCartridge: WorldCartridge = {
   id: 'world_2',
-  title: 'Crescent Sulcus',
+  title: 'Gumline Crescent',
   subtitle: 'New Orleans Evening Arch • Honoring 1819 Parmly & 1948 Bass',
   hostId: 'new_orleans',
   historyNoteIds: ['1819_1948_new_orleans'],
@@ -21,24 +21,24 @@ export const crescentSulcusCartridge: WorldCartridge = {
   baselinePh: 7.0,
   probeSpawn: { x: 7.5, z: 16.0 },
   challengeBlurb:
-    'Gentle moving sweeps along the coral sulcus — heavy stationary scrubbing inflames tender gums. Silk-zip the staggered contacts!',
+    'Sweep gently along the pink gumline. Scrubbing hard in one spot makes gums sore. Floss-zip the tight gaps!',
   districts: [
     {
       id: 'canine_sulcus_levee',
-      name: 'Canine Sulcus Levee',
+      name: 'Canine Gumline Bank',
       subtitle: 'Gentle 45° Bass Sweeps Along the Gumline',
       bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'parmly_silk_row',
       name: 'Parmly Silk Contact Row',
-      subtitle: 'Staggered Interproximal Contacts & Capillary Zips',
+      subtitle: 'Zig-Zag Gaps & Floss Zips',
       bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'premolar_sulcus_bayou',
-      name: 'Premolar Sulcus Bayou',
-      subtitle: 'Fissure Disruption & Tender Cervical Margins',
+      name: 'Premolar Gumline Bayou',
+      subtitle: 'Groove Cleaning & Sore Gum Edges',
       bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],

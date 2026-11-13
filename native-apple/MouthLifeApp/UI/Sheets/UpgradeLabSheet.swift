@@ -48,7 +48,7 @@ public struct UpgradeLabSheet: View {
                         Spacer()
                     }
 
-                    Text("Every upgrade unlocks automatically through real-life Brush-Along Habit Stamps or campaign clears — or immediately using Fluoride Ions.")
+                    Text("Upgrades unlock when you earn Brush-Along Habit Stamps or clear worlds. You can also buy them with Fluoride Ions.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
 

@@ -27,7 +27,7 @@ describe('Mission report keyboard start & score celebration', () => {
 
   it('shows emergency stabilization banner on Pulp Rescue timeout instead of glassy-enamel win copy', () => {
     expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: false })).toContain('50%');
-    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: true })).toContain('Glassy Enamel');
-    expect(buildReportArchBanner({ mode: 'ARCADE', won: true })).toContain('Glassy Enamel');
+    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: true })).toContain('see them shine');
+    expect(buildReportArchBanner({ mode: 'ARCADE', won: true })).toContain('see them shine');
   });
 });

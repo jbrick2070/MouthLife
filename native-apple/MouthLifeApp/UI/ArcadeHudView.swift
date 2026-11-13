@@ -158,7 +158,7 @@ public struct ArcadeHudView: View {
                         Button {
                             onFireFlossSmart()
                         } label: {
-                            Label("Capillary Zip Ready • Tap Floss!", systemImage: "bolt.horizontal.fill")
+                            Label("Floss Zip Ready • Tap Floss!", systemImage: "bolt.horizontal.fill")
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                                 .foregroundStyle(MLTheme.deepOcean)
                                 .padding(.horizontal, 11)
@@ -214,7 +214,7 @@ public struct ArcadeHudView: View {
                                 onVirtualStickMove(0, 0, false)
                             }
                     )
-                    .accessibilityLabel("Sonic Brush Thumbstick")
+                    .accessibilityLabel("Brush Thumbstick")
 
                     Spacer()
 
@@ -312,7 +312,7 @@ public struct ArcadeHudView: View {
                                     }
                                 }
                         )
-                        .accessibilityLabel("Polymer Floss & Capillary Zip")
+                        .accessibilityLabel("Floss & Floss Zip")
                     }
                 }
                 .padding(.horizontal, 16)
@@ -328,7 +328,7 @@ public struct ArcadeHudView: View {
                     Text(cartridge.title)
                         .font(.system(.title3, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.textPrimary)
-                    Text("Touch directly on any tooth crown to steer & scrub at 120Hz, double-tap to Floss, or drag the Floss ring to aim.")
+                    Text("Touch any tooth to steer and scrub. Double-tap to Floss, or drag the Floss ring to aim.")
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -361,19 +361,19 @@ public struct ArcadeHudView: View {
             if cartridge.id == "world_4" {
                 let faPct = Int((snapshot.fluorapatiteRatio * 100.0).rounded())
                 let inf = snapshot.fluorapatiteInfusionSec > 0 ? String(format: " • Miswak %.0fs", snapshot.fluorapatiteInfusionSec) : ""
-                return ("Fluorapatite \(faPct)%\(inf)", false)
+                return ("Fluoride armor \(faPct)%\(inf)", false)
             } else {
                 if snapshot.stephanTimerSec > 0.1 {
-                    return (String(format: "Stephan Acid %.0fs • Hit Saliva Spring!", snapshot.stephanTimerSec), true)
+                    return (String(format: "Acid %.0fs • Hit Saliva Spring!", snapshot.stephanTimerSec), true)
                 }
                 return ("Plaque pH Safe (≥ 5.5)", false)
             }
         case .epsArmor:
             let rem = Int((snapshot.epsArmorRemainingRatio * 100.0).rounded())
-            return ("EPS Quorum Armor \(rem)% • Crack w/ Floss or Surge", rem > 25)
+            return ("Slime dome \(rem)% • Crack it with Floss or Surge", rem > 25)
         case .marginDensity:
             let restored = snapshot.sites.filter(\.restored).count
-            return ("Commensal Sites \(restored)/\(snapshot.sites.count)", false)
+            return ("Helper Germs \(restored)/\(snapshot.sites.count)", false)
         }
     }
 }

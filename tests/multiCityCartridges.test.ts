@@ -223,7 +223,7 @@ describe('World 2 — Crescent Sulcus (1819 Parmly & 1948 Bass gumIrritation)', 
     expect(gentle.chemistry.getMaxGumIrritation()).toBeLessThan(stationaryPeak * 0.5);
   });
 
-  it('Hydro-Sonic Acoustic Streaming halves sulcus pressure buildup and Saliva springs soothe gums', () => {
+  it('Hydro-Sonic Bubbles halves sulcus pressure buildup and Saliva springs soothe gums', () => {
     const base = makeSession(crescentSulcusCartridge).session;
     const hydro = makeSession(crescentSulcusCartridge, (s) => {
       s.unlockedUpgrades.push('hydro_sonic_pulse');

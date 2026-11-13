@@ -18,20 +18,20 @@ public let world1AnteriorIncisors = WorldCartridge(
     districts: [
         DistrictDef(
             id: "incisor_terrace",
-            name: "Incisor Labial Terrace",
-            subtitle: "Broad Sweeping Shear & Cervical Margin",
+            name: "Front Teeth Terrace",
+            subtitle: "Wide Sweeps & the Gumline",
             bounds: AABB2D(minX: 2.5, minZ: 4.5, maxX: 22.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "premolar_contacts",
-            name: "Premolar Contact Alleys",
-            subtitle: "Interproximal Floss Shear & Capillary Zip",
+            name: "Premolar Gap Alleys",
+            subtitle: "Floss & Floss Zip",
             bounds: AABB2D(minX: 22.0, minZ: 4.5, maxX: 42.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "first_molar_basin",
-            name: "First Molar Occlusal Basin",
-            subtitle: "Fissure Disruption, Sucrose Cut-Off & F⁻ Surge",
+            name: "First Molar Bowl",
+            subtitle: "Clean Grooves, Stop Sugar & Fire Surge",
             bounds: AABB2D(minX: 42.0, minZ: 4.5, maxX: 61.5, maxZ: 27.5)
         )
     ],
@@ -130,14 +130,14 @@ public let world1AnteriorIncisors = WorldCartridge(
         skyTopHex: 0x051624,
         skyHorizonHex: 0x0f3b52
     ),
-    challengeBlurb: "Sweep morning pellicle off all 3 districts, Floss-zip narrow premolar alleys, and unleash Fluoride Surge to seal molar fissures!"
+    challengeBlurb: "Sweep the morning film off all 3 zones, Floss-zip the narrow gaps, and fire Surge to seal the molar grooves!"
 )
 
 /// World 2 — New Orleans Evening Arch ("Crescent Sulcus").
 /// Honors Levi Spear Parmly's 1819 waxed-silk floss and Dr. Charles C. Bass's 1948 Tulane 45° sulcus method.
 public let world2PremolarAlley = WorldCartridge(
     id: "world_2",
-    title: "Crescent Sulcus",
+    title: "Gumline Crescent",
     subtitle: "New Orleans Evening Arch • Honoring 1819 Parmly & 1948 Bass",
     hostId: "new_orleans",
     historyNoteIds: ["1819_1948_new_orleans"],
@@ -151,20 +151,20 @@ public let world2PremolarAlley = WorldCartridge(
     districts: [
         DistrictDef(
             id: "canine_sulcus_levee",
-            name: "Canine Sulcus Levee",
+            name: "Canine Gumline Bank",
             subtitle: "Gentle 45° Bass Sweeps Along the Gumline",
             bounds: AABB2D(minX: 2.5, minZ: 4.5, maxX: 22.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "parmly_silk_row",
             name: "Parmly Silk Contact Row",
-            subtitle: "Staggered Interproximal Contacts & Capillary Zips",
+            subtitle: "Zig-Zag Gaps & Floss Zips",
             bounds: AABB2D(minX: 22.0, minZ: 4.5, maxX: 42.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "premolar_sulcus_bayou",
-            name: "Premolar Sulcus Bayou",
-            subtitle: "Fissure Disruption & Tender Cervical Margins",
+            name: "Premolar Gumline Bayou",
+            subtitle: "Groove Cleaning & Sore Gum Edges",
             bounds: AABB2D(minX: 42.0, minZ: 4.5, maxX: 61.5, maxZ: 27.5)
         )
     ],
@@ -270,7 +270,7 @@ public let world2PremolarAlley = WorldCartridge(
         Capsule2D(a: Vec2(x: 43.0, z: 26.2), b: Vec2(x: 60.0, z: 26.2), radius: 1.3, initialDensity: 0.82),
         Capsule2D(a: Vec2(x: 43.0, z: 5.8), b: Vec2(x: 60.0, z: 5.8), radius: 1.2, initialDensity: 0.8)
     ],
-    challengeBlurb: "Gentle moving sweeps along the coral sulcus — heavy stationary scrubbing inflames tender gums. Silk-zip the staggered contacts!"
+    challengeBlurb: "Sweep gently along the pink gumline. Scrubbing hard in one spot makes gums sore. Floss-zip the tight gaps!"
 )
 
 /// World 3 — Tokyo Studio Arch & 1940 Chicago pH Lab ("Neon Acid Clock").
@@ -278,7 +278,7 @@ public let world2PremolarAlley = WorldCartridge(
 public let world3FirstMolarCitadel = WorldCartridge(
     id: "world_3",
     title: "Neon Acid Clock",
-    subtitle: "Tokyo Studio Arch • Honoring 1940 Chicago Stephan Curve",
+    subtitle: "Tokyo Studio Arch • Honoring the 1940 Chicago Acid Clock",
     hostId: "tokyo",
     historyNoteIds: ["1940_chicago_stephan"],
     worldWidth: 64.0,
@@ -291,20 +291,20 @@ public let world3FirstMolarCitadel = WorldCartridge(
     districts: [
         DistrictDef(
             id: "shibuya_incisor_stage",
-            name: "Shibuya Incisor Stage",
+            name: "Shibuya Front-Tooth Stage",
             subtitle: "Broad Sweeps Between Sweet Sips",
             bounds: AABB2D(minX: 2.5, minZ: 4.5, maxX: 22.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "studio_mixing_contacts",
-            name: "Studio Mixing-Desk Contacts",
-            subtitle: "Interproximal Zips & Soda-Sip Spawners",
+            name: "Studio Desk Gaps",
+            subtitle: "Gap Zips & Soda Sips",
             bounds: AABB2D(minX: 22.0, minZ: 4.5, maxX: 42.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "chicago_molar_lab",
-            name: "Chicago Molar pH Lab",
-            subtitle: "Stephan Electrode Fissures & Bicarbonate Buffering",
+            name: "Chicago Molar Acid Lab",
+            subtitle: "Acid Grooves & Saliva Buffer",
             bounds: AABB2D(minX: 42.0, minZ: 4.5, maxX: 61.5, maxZ: 27.5)
         )
     ],
@@ -404,14 +404,14 @@ public let world3FirstMolarCitadel = WorldCartridge(
         skyHorizonHex: 0x2a0f4f
     ),
     stephanSipIntervalSec: 22.0,
-    challengeBlurb: "Every soda sip restarts the Stephan acid clock (pH < 5.5). Shatter the Sucrose sips, hit Saliva springs & Surge Fluoride to brush safely!"
+    challengeBlurb: "Every soda sip restarts the acid clock. Smash the sugar, hit Saliva springs, and fire Surge so it is safe to brush!"
 )
 
 /// World 4 — Accra Coastal Marathon Arch & 1901–1945 Colorado Springs / Grand Rapids Fluoride Trail ("Fluorapatite Coast").
 public let world4FluorideFjord = WorldCartridge(
     id: "world_4",
-    title: "Fluorapatite Coast",
-    subtitle: "Accra & Colorado Springs Arch • Honoring Miswak & 1901–1945 F⁻ Discovery",
+    title: "Fluoride Coast",
+    subtitle: "Accra & Colorado Springs Arch • Honoring Miswak & the Fluoride Discovery",
     hostId: "accra",
     historyNoteIds: ["1901_colorado_accra_miswak"],
     worldWidth: 64.0,
@@ -424,20 +424,20 @@ public let world4FluorideFjord = WorldCartridge(
     districts: [
         DistrictDef(
             id: "accra_coastal_incisors",
-            name: "Labadi Coastal Incisors",
-            subtitle: "Tart Sobolo Washes & Miswak Saliva Springs",
+            name: "Labadi Beach Front Teeth",
+            subtitle: "Tart Splashes & Miswak Springs",
             bounds: AABB2D(minX: 2.5, minZ: 4.5, maxX: 22.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "miswak_fiber_contacts",
-            name: "Miswak Fiber Contacts",
-            subtitle: "Central Contact Zip & Fluorapatite Lattice Conversion",
+            name: "Miswak Gaps",
+            subtitle: "Middle Gap Zip & Fluoride Armor",
             bounds: AABB2D(minX: 22.0, minZ: 4.5, maxX: 42.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "colorado_granite_molars",
             name: "Pikes Peak Fluoride Molars",
-            subtitle: "1 ppm Fluorapatite Shield Against Acid Erosion",
+            subtitle: "Fluoride Shield Against Acid",
             bounds: AABB2D(minX: 42.0, minZ: 4.5, maxX: 61.5, maxZ: 27.5)
         )
     ],
@@ -544,15 +544,15 @@ public let world4FluorideFjord = WorldCartridge(
         ErosionZoneDef(id: "hibiscus_basin_d2_s", cx: 52.0, cz: 21.0, radius: 4.6, targetPh: GameConfig.hibiscusErosionPh)
     ],
     erosionPulseIntervalSec: 14.0,
-    challengeBlurb: "Tart hibiscus washes drop basins to pH 4.95! Touch Miswak-Saliva springs or Surge F⁻ to convert enamel into Fluorapatite (safe down to pH 4.5)."
+    challengeBlurb: "Tart hibiscus splashes turn the pools acid! Touch a Miswak spring or fire Surge to add fluoride. Fluoride enamel stands up to acid."
 )
 
 /// World 5 — Station Aurora 408 km LEO ("Quorum Dome").
 /// Honors NASA's 1973 Skylab oral microbiology studies & J.W. Costerton's 1978 EPS biofilm theory.
 public let world5WisdomFrontier = WorldCartridge(
     id: "world_5",
-    title: "Quorum Dome",
-    subtitle: "Station Aurora 408 km LEO • Honoring 1973 Skylab & 1978 Biofilm Theory",
+    title: "Slime Dome",
+    subtitle: "Station Aurora in Orbit • Honoring 1973 Skylab & 1978 Germ-Slime Science",
     hostId: "orbit_aurora",
     historyNoteIds: ["1973_skylab_orbit"],
     worldWidth: 64.0,
@@ -565,20 +565,20 @@ public let world5WisdomFrontier = WorldCartridge(
     districts: [
         DistrictDef(
             id: "cupola_incisor_deck",
-            name: "Cupola Incisor Deck",
-            subtitle: "First Quorum Dome & Polymer Floss Fracture",
+            name: "Cupola Front-Tooth Deck",
+            subtitle: "First Slime Dome & Floss Cut",
             bounds: AABB2D(minX: 2.5, minZ: 4.5, maxX: 22.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "airlock_premolar_truss",
-            name: "Airlock Premolar Truss",
-            subtitle: "Zero-G Tether-Zips & Twin EPS Biofilm Domes",
+            name: "Airlock Premolar Bridge",
+            subtitle: "Space Floss Zips & Twin Slime Domes",
             bounds: AABB2D(minX: 22.0, minZ: 4.5, maxX: 42.0, maxZ: 27.5)
         ),
         DistrictDef(
             id: "skylab_molar_bioreactor",
-            name: "Skylab Molar Bioreactor",
-            subtitle: "Fortress Quorum Dome & Fluoride Surge Breach",
+            name: "Skylab Molar Lab",
+            subtitle: "Big Slime Dome & Surge Blast",
             bounds: AABB2D(minX: 42.0, minZ: 4.5, maxX: 61.5, maxZ: 27.5)
         )
     ],
@@ -684,14 +684,14 @@ public let world5WisdomFrontier = WorldCartridge(
         EpsDomeDef(id: "dome_truss_d1_s", cx: 32.5, cz: 21.5, radius: 2.9, initialDensity: 0.86),
         EpsDomeDef(id: "dome_reactor_d2", cx: 55.0, cz: 16.0, radius: 3.6, initialDensity: 0.9)
     ],
-    challengeBlurb: "Zero-G quorum-sensing EPS domes deflect bristles! Slice domes open with Polymer Floss or blast them with Fluoride Surge, then sweep clean."
+    challengeBlurb: "In space, slime domes block the brush! Cut them open with Floss or blast them with Surge, then sweep clean."
 )
 
 /// Compact 32u x 32u single-molar emergency cartridge for the 90s Pulp Rescue Scramble ("Avoid the Dreaded Root Canal!" — zero permadeath on timeout).
 public let pulpRescueStage = WorldCartridge(
     id: "pulp_rescue",
     title: "Emergency Pulp Rescue!",
-    subtitle: "Clear the Deep Molar Fissure & Seal Dentin to Protect the Pulp!",
+    subtitle: "Clean the Deep Groove & Seal It to Protect the Pulp!",
     hostId: "toronto",
     historyNoteIds: [],
     worldWidth: 32.0,
@@ -704,8 +704,8 @@ public let pulpRescueStage = WorldCartridge(
     districts: [
         DistrictDef(
             id: "deep_pulp_crown",
-            name: "Deep Dentin-Enamel Basin",
-            subtitle: "Shatter Sucrose Crystals, Buffer Acid & Seal 85%+!",
+            name: "Deep Tooth Bowl",
+            subtitle: "Smash Sugar, Stop Acid & Seal 85%!",
             bounds: AABB2D(minX: 3.5, minZ: 3.5, maxX: 28.5, maxZ: 28.5)
         )
     ],
@@ -760,7 +760,7 @@ public let pulpRescueStage = WorldCartridge(
         skyTopHex: 0x1f0812,
         skyHorizonHex: 0x4a1228
     ),
-    challengeBlurb: "90s Scramble: hit Saliva Springs to buffer acid, shatter Sucrose Crystals, and clean 85%+ before time runs out — zero permadeath!"
+    challengeBlurb: "90 seconds: hit Saliva Springs, smash Sugar Crystals, and clean 85% before time runs out. You can’t lose the tooth!"
 )
 
 // TypeScript Golden Master cartridge aliases

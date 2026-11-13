@@ -32,56 +32,56 @@ public enum HostsAndHistory {
         HistoricalFieldNote(
             id: "cosmic_hydroxyapatite",
             yearLabel: "Billions of Yrs Ago → Today",
-            locationLabel: "Stellar Nucleosynthesis & Human Ameloblasts",
-            title: "Stardust Harder Than Iron: Hydroxyapatite (Mohs 5)",
-            scientistOrCulture: "Astrophysics & Enamel Crystallography",
-            summary: "Every calcium (⁴⁰Ca) and phosphorus (³¹P) atom in your teeth was forged in dying stars and supernovae. Ameloblast cells weave them into Ca₁₀(PO₄)₆(OH)₂ nanorods — 96% pure crystal, ranking about 5 on the Mohs scratch scale (harder than iron at about 4, though a hardened steel file, quartz at 7 and diamond at 10 can all scratch it).",
-            enamelLesson: "Mechanical hardness cannot stop chemical dissolution: below pH 5.5, bacterial acid strips ions out of hydroxyapatite unless fluoride (¹⁹F) locks in to form fluorapatite (stable down to pH 4.5)."
+            locationLabel: "Exploding Stars & Enamel-Building Cells",
+            title: "Stardust Harder Than Iron: Tooth Enamel",
+            scientistOrCulture: "Star Science & Enamel Crystals",
+            summary: "The calcium in your teeth was made inside dying stars long ago. Special cells packed it into tiny crystal rods. Enamel is harder than iron, but quartz and diamond can still scratch it.",
+            enamelLesson: "Being hard does not stop acid. Germ acid pulls minerals out of enamel. Fluoride locks in and makes enamel much harder for acid to melt."
         ),
         HistoricalFieldNote(
             id: "1498_beijing_1683_delft",
             yearLabel: "1498 Beijing & 1683 Delft",
             locationLabel: "Ming Dynasty China & Delft, Netherlands",
-            title: "The First Bristle Brush & Leeuwenhoek’s Living “Animalcules”",
+            title: "The First Bristle Brush & the First Germs Ever Seen",
             scientistOrCulture: "Ming Innovators & Antonie van Leeuwenhoek",
-            summary: "In 1498 in China, craftsmen set coarse hog bristles perpendicular to a bone handle — creating the ancestor of the modern toothbrush. In 1683 in Delft, Antonie van Leeuwenhoek scraped plaque from between his own teeth under a handcrafted single-lens microscope, marveling at millions of swimming “animalcules” — and noticed rinsing with vinegar could not kill microbes sheltered inside thick plaque!",
-            enamelLesson: "Leeuwenhoek observed the fundamental law of oral biofilms in 1683: liquid rinses alone cannot penetrate intact plaque — mechanical shear must disrupt it first."
+            summary: "In 1498 in China, people set stiff hog hairs into a bone handle. It was the first bristle toothbrush. In 1683 in Delft, Antonie van Leeuwenhoek looked at plaque from his own teeth with a microscope he made. He saw millions of tiny swimming germs. Vinegar could not kill the germs hiding deep in thick plaque!",
+            enamelLesson: "Leeuwenhoek found a rule that is still true: a rinse alone can’t get through thick plaque. You have to brush it off first."
         ),
         HistoricalFieldNote(
             id: "1819_1948_new_orleans",
             yearLabel: "1819 & 1948 New Orleans",
             locationLabel: "New Orleans, Louisiana, USA",
-            title: "Silk Filament & The 45° Tulane Sulcus Revolution",
+            title: "Silk Floss & the 45° Gumline Brush",
             scientistOrCulture: "Levi Spear Parmly & Dr. Charles C. Bass",
-            summary: "Practicing in New Orleans in 1819, dentist Levi Spear Parmly championed waxed silk floss to clean proximal tooth contacts where no brush could fit. Over a century later in the same city, Dr. Charles Cassidy Bass at Tulane University studied microscopic gum crevices and formulated the gentle 45° soft-bristle sulcus method still taught worldwide.",
-            enamelLesson: "Rough scrubbing injures delicate gingiva while missing interdental contacts; gentle angled bristle strokes plus C-curved filament passes protect both tooth and gum."
+            summary: "In 1819 in New Orleans, dentist Levi Spear Parmly told people to use waxed silk floss to clean between teeth, where no brush fits. More than 100 years later in the same city, Dr. Charles Bass studied the tiny gap where gums meet teeth. He taught the gentle 45° soft-brush method used all over the world today.",
+            enamelLesson: "Hard scrubbing hurts gums and still misses the gaps between teeth. Gentle tilted brushing plus C-shape flossing protects both teeth and gums."
         ),
         HistoricalFieldNote(
             id: "1940_chicago_stephan",
             yearLabel: "1940 Chicago",
             locationLabel: "University of Illinois, Chicago & Global Cities",
-            title: "Plotting the Invisible Acid Clock: The Stephan Curve",
+            title: "Timing the Hidden Acid Clock",
             scientistOrCulture: "Dr. Robert M. Stephan",
-            summary: "In 1940 in Chicago, Dr. Robert Stephan touched micro-antimony pH electrodes directly onto human dental plaque. Within 3 minutes of a sugar rinse, plaque pH plunged from ~7.0 below the critical 5.5 demineralization line and took 20–40 minutes of salivary flow to recover.",
-            enamelLesson: "Five small sugary sips spaced across an afternoon bathe enamel in acid far longer than enjoying one dessert with dinner."
+            summary: "In 1940 in Chicago, Dr. Robert Stephan put tiny sensors right on people’s plaque. Within 3 minutes of a sugar rinse, the plaque turned acid enough to harm enamel. It took 20 to 40 minutes for spit to wash the acid away.",
+            enamelLesson: "Five small sugary sips across an afternoon keep acid on your teeth far longer than one dessert with dinner."
         ),
         HistoricalFieldNote(
             id: "1901_colorado_accra_miswak",
-            yearLabel: "Ancient Miswak & 1901–1945 Fluoride Mystery",
+            yearLabel: "Chewing Sticks & the Fluoride Mystery (1901–1945)",
             locationLabel: "Accra / West Africa & Colorado Springs → Grand Rapids",
-            title: "Botanical Minerals & The Fluorapatite Detective Story",
+            title: "Plant Minerals & the Fluoride Detective Story",
             scientistOrCulture: "Miswak Chewing-Stick Tradition & Drs. McKay, Churchill & Dean",
-            summary: "For millennia across Africa, the Middle East, and South Asia, chewing sticks from Salvadora persica (Miswak) naturally stimulated protective salivary bicarbonate while releasing silica and mineral ions. In 1901–1945, Frederick McKay, H.V. Churchill, and H. Trendley Dean solved the “Colorado Stain” mystery — finding that too much natural fluoride in drinking water mottled teeth (fluorosis), while a small amount (about 1 ppm then; 0.7 ppm is the U.S. level today) meant far fewer cavities. Later research showed why: fluoride helps enamel rebuild as acid-resistant fluorapatite.",
-            enamelLesson: "Saliva buffers acid back above pH 5.5 while fluoride ions replace hydroxyl groups in enamel crystal lattices to resist future acid challenges."
+            summary: "For thousands of years, people in Africa, the Middle East and South Asia have cleaned their teeth with chewing sticks called miswak. Chewing makes more spit, which protects teeth. From 1901 to 1945, three scientists solved the “Colorado Stain” mystery. Too much fluoride in drinking water stained teeth. But a tiny amount meant far fewer cavities. Later, scientists learned why: fluoride helps enamel rebuild stronger.",
+            enamelLesson: "Spit washes acid away. Fluoride slips into the enamel crystals and helps them stand up to the next acid attack."
         ),
         HistoricalFieldNote(
             id: "1973_skylab_orbit",
-            yearLabel: "1973 Skylab & 1978 Biofilm Theory",
+            yearLabel: "1973 Skylab & 1978 Germ-Slime Science",
             locationLabel: "Houston Johnson Space Center & Low-Earth Orbit (Skylab, ~435 km)",
-            title: "Zero-Gravity Mouths & Quorum-Sensing Fortresses",
-            scientistOrCulture: "NASA Skylab Oral Microbiology Team & J.W. Costerton",
-            summary: "During NASA’s 1973 Skylab orbital missions, researchers tracked how microgravity and closed-habitat diets increased anaerobic and cariogenic oral flora when astronauts could not spit into a sink. Five years later (1978), J.W. Costerton coined the modern science of structured “biofilms” — cooperative microbial cities encased in sticky EPS polymers.",
-            enamelLesson: "Mature quorum biofilms act like coordinated shields; keeping teeth clean daily in Earth bathrooms — or aboard orbital stations — stops the first thin film of bacteria from maturing into a fortress."
+            title: "Teeth in Space & Germ Slime Forts",
+            scientistOrCulture: "NASA Skylab Mouth Germ Team & J.W. Costerton",
+            summary: "On NASA’s 1973 Skylab flights, scientists saw that cavity germs grew faster in space, where astronauts had no sink to spit in. In 1978, J.W. Costerton named these sticky germ cities “biofilms”. The germs work together inside a slimy shield.",
+            enamelLesson: "Old plaque works like a team shield. Cleaning your teeth every day, on Earth or in space, stops a thin film of germs from growing into a fort."
         )
     ]
 
@@ -95,19 +95,19 @@ public enum HostsAndHistory {
             lon: -79.38,
             isOrbital: false,
             hostName: "Maya Lin-Okafor",
-            hostRole: "Civic Wood & Glass Architect",
+            hostRole: "City Architect",
             hostSkinToneHex: "#844D2E",
             hostAccentHex: "#38bdf8",
             unlockStampsRequired: 0,
             playableInSlice: true,
-            scenarioSummary: "Overnight reduced salivary flow lets morning pellicle, premolar interdental bridges, and first-molar fissure colonies settle in before Maya’s morning commute.",
+            scenarioSummary: "At night your mouth makes less spit. So a thin film, sticky bits between teeth and germs in the molar grooves settle in before Maya’s morning trip to work.",
             historyNoteId: "1498_beijing_1683_delft",
             signatureTreat: RegionalTreatDef(
                 id: "treat_toronto_espresso",
                 name: "Maple Oat Cortado & Croissant",
                 city: "Toronto",
                 emoji: "☕",
-                phDropNote: "Warm sticky pastry starches lodge in molar fissures while maple sucrose feeds S. mutans."
+                phDropNote: "Sticky pastry bits get stuck in molar grooves, and maple sugar feeds cavity germs."
             )
         ),
         HostCityDef(
@@ -119,19 +119,19 @@ public enum HostsAndHistory {
             lon: -90.07,
             isOrbital: false,
             hostName: "Marcus & Celine Beaumont",
-            hostRole: "Brass & Acoustic Luthiers",
+            hostRole: "Brass Instrument Makers",
             hostSkinToneHex: "#5D331E",
             hostAccentHex: "#fb7185",
             unlockStampsRequired: 4,
             playableInSlice: true,
-            scenarioSummary: "Late brass-shop rehearsals and rushed heavy-handed brushing leave delicate gingival sulcus pockets tender while missing tight interdental contacts.",
+            scenarioSummary: "Late band practice and fast, hard brushing leave the gumline sore and miss the tight gaps between teeth.",
             historyNoteId: "1819_1948_new_orleans",
             signatureTreat: RegionalTreatDef(
                 id: "treat_nola_beignet",
                 name: "Powdered Café Beignet",
                 city: "New Orleans",
                 emoji: "🍩",
-                phDropNote: "Fine powdered sucrose dissolves rapidly into narrow gingival margins and interproximal valleys."
+                phDropNote: "Fine powdered sugar melts fast into the gumline and the gaps between teeth."
             )
         ),
         HostCityDef(
@@ -143,19 +143,19 @@ public enum HostsAndHistory {
             lon: 139.70,
             isOrbital: false,
             hostName: "Kenji Sato",
-            hostRole: "Acoustic Synth Engineer",
+            hostRole: "Sound Engineer",
             hostSkinToneHex: "#DFA982",
             hostAccentHex: "#c084fc",
             unlockStampsRequired: 8,
             playableInSlice: true,
-            scenarioSummary: "Sipping sweet craft soda every 20 minutes during late-night studio mixing repeatedly restarts the 1940 Stephan Curve acid clock.",
+            scenarioSummary: "Sipping sweet soda every 20 minutes during late-night music mixing starts the acid clock again and again.",
             historyNoteId: "1940_chicago_stephan",
             signatureTreat: RegionalTreatDef(
                 id: "treat_tokyo_melon",
                 name: "Craft Yuzu-Melon Fizz",
                 city: "Tokyo",
                 emoji: "🍈",
-                phDropNote: "Repeated sweet carbonated sips hold plaque pH below 5.5 across back-to-back 20-minute windows."
+                phDropNote: "Sweet fizzy sips, one after another, keep acid on the teeth for 20 minutes each time."
             )
         ),
         HostCityDef(
@@ -167,19 +167,19 @@ public enum HostsAndHistory {
             lon: -0.19,
             isOrbital: false,
             hostName: "Dr. Amara Mensah",
-            hostRole: "Coastal Marathon Physiologist",
+            hostRole: "Marathon Scientist",
             hostSkinToneHex: "#3B1F14",
             hostAccentHex: "#fbbf24",
             unlockStampsRequired: 14,
             playableInSlice: true,
-            scenarioSummary: "Tart hibiscus-citrus hydration on long humid runs lowers surface pH while dehydration slows salivary bicarbonate buffering.",
+            scenarioSummary: "Tart hibiscus drinks on long, hot runs make teeth acid. Being thirsty means less spit to wash the acid away.",
             historyNoteId: "1901_colorado_accra_miswak",
             signatureTreat: RegionalTreatDef(
                 id: "treat_accra_sobolo",
                 name: "Chilled Spiced Hibiscus Sobolo",
                 city: "Accra",
                 emoji: "🌺",
-                phDropNote: "Tangy organic hibiscus acids temporarily soften outer enamel prisms until saliva buffers pH back up."
+                phDropNote: "Tangy hibiscus acid softens the outer enamel for a while, until spit washes it away."
             )
         ),
         HostCityDef(
@@ -191,19 +191,19 @@ public enum HostsAndHistory {
             lon: -95.09,
             isOrbital: true,
             hostName: "Specialist Tariq Al-Mansoor",
-            hostRole: "Orbital Micro-Ecology Mission Specialist",
+            hostRole: "Space Station Scientist",
             hostSkinToneHex: "#C98E63",
             hostAccentHex: "#34d399",
             unlockStampsRequired: 20,
             playableInSlice: true,
-            scenarioSummary: "In zero gravity with no bathroom sink to spit into, a cooperative quorum-sensing EPS biofilm dome attempts to colonize a molar arch.",
+            scenarioSummary: "In space there is no sink to spit in. A sticky germ slime dome is trying to take over the molars.",
             historyNoteId: "1973_skylab_orbit",
             signatureTreat: RegionalTreatDef(
                 id: "treat_orbit_berry",
                 name: "Zero-G Freeze-Dried Berry Bar",
                 city: "Station Aurora",
                 emoji: "🚀",
-                phDropNote: "Dehydrated fruit sugars cling tenaciously to occlusal cusps in low-shear microgravity saliva."
+                phDropNote: "Dried fruit sugar sticks hard to the chewing tops of teeth in space."
             )
         )
     ]

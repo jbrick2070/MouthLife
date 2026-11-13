@@ -55,7 +55,7 @@ public enum CharityInfo {
     public static let tagline = "Sm:)e Forward • Universal Dental Relief Organization"
     public static let legalStatus = "U.S. 501(c)(3) Public Charity • Founded 2012 by BB Maboby"
     public static let einNote = "Recognized IRS 501(c)(3) tax-exempt public charity; 100% of external contributions go directly to SmileOnU on SmileOnU.org with zero in-app fees."
-    public static let missionSummary = "SmileOnU expands access to free, life-changing dental care, pain relief, oral health education, and reconstructive treatment for underserved children, adults, and communities across the United States and around the world — improving lives one smile at a time."
+    public static let missionSummary = "SmileOnU gives free dental care to children, adults and communities who cannot get it. They work in the United States and around the world, one smile at a time."
 
     public static let websiteUrl: URL = {
         guard let url = URL(string: "https://smileonu.org/") else {
@@ -80,22 +80,22 @@ public enum CharityInfo {
         return url
     }()
 
-    public static let independenceNote = "MouthLife is a free, independent dental arcade & brushing companion. If you enjoyed the game, please consider supporting real-world charitable dental relief directly at SmileOnU.org."
+    public static let independenceNote = "MouthLife is a free game and brushing timer. If you liked it, you can help real people get dental care at SmileOnU.org."
     public static let transparencyNote = independenceNote
-    public static let clinicalDisclaimer = "MouthLife is an educational oral-science game and brushing timer, not a medical device or clinical diagnostic service. Always consult a licensed dentist or dental hygienist for personal oral healthcare."
+    public static let clinicalDisclaimer = "MouthLife is a learning game and brushing timer. It is not a medical tool. Always ask a dentist or dental hygienist about your own teeth."
 
     public static let needHighlights: [CharityNeedStat] = [
         CharityNeedStat(
             stat: "#1 Worldwide",
-            detail: "Tooth decay remains the #1 noncontagious disease globally"
+            detail: "Tooth decay is the world’s most common disease you can’t catch"
         ),
         CharityNeedStat(
             stat: "1 in 5 Kids",
-            detail: "Children suffering from untreated cavities and dental pain"
+            detail: "Children living with cavities and tooth pain"
         ),
         CharityNeedStat(
             stat: "46% of Adults",
-            detail: "Adults showing clinical signs of gum disease"
+            detail: "Adults who show signs of gum disease"
         )
     ]
 
@@ -105,7 +105,7 @@ public enum CharityInfo {
             emoji: "✨",
             title: "New Smile Program",
             regionLabel: "U.S. Hardship Care",
-            summary: "Provides free, comprehensive dental treatment to individuals whose oral health has been affected by hardship as they pursue education, employment, and a confident new chapter.",
+            summary: "Gives free, full dental care to people going through hard times, so they can go to school, find work and smile again.",
             url: URL(string: "https://smileonu.org/new-smile-program/")!
         ),
         CharityProgramInfo(
@@ -113,15 +113,15 @@ public enum CharityInfo {
             emoji: "🚐",
             title: "Mobile Dental Outreach",
             regionLabel: "Los Angeles • Orange County • San Diego",
-            summary: "Mobilizes volunteer dental providers to deliver oral health education, cleanings, fillings, and pain-relieving extractions in communities with little or no access to care.",
+            summary: "Volunteer dentists bring lessons, cleanings, fillings and pain relief to places with little or no dental care.",
             url: URL(string: "https://smileonu.org/mobile-dental-outreach/")!
         ),
         CharityProgramInfo(
             id: "international_clinics",
             emoji: "🌎",
             title: "International Dental Clinics",
-            regionLabel: "Global Relief & Baja, Mexico Orphanage Camps",
-            summary: "Travels to underserved communities and children’s orphanages to provide screenings, preventive education, cleanings, restorative fillings, extractions, and surgical care.",
+            regionLabel: "World Relief & Baja, Mexico Children’s Homes",
+            summary: "Teams travel to children’s homes and places with little care. They give check-ups, lessons, cleanings, fillings and surgery.",
             url: URL(string: "https://smileonu.org/international-dental-clinics/")!
         )
     ]

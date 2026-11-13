@@ -351,7 +351,7 @@ export function decodeSaveFromSyncCode(
 ): MouthLifeSaveV2 {
   const trimmed = code.trim();
   if (!trimmed.startsWith(SYNC_CODE_PREFIX)) {
-    throw new Error('Invalid Sync Code prefix (expected ML2:).');
+    throw new Error('This is not a MouthLife code. It should start with ML2:');
   }
   // Codes get line-wrapped by mail and chat apps, and some tools re-pad them: strip whitespace,
   // allow trailing '=' padding and the standard Base64 '+' '/' alphabet as well as Base64URL.
@@ -375,11 +375,11 @@ export function decodeSaveFromSyncCode(
   const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   const parsed: unknown = JSON.parse(jsonText);
   if (!parsed || typeof parsed !== 'object' || !('schemaVersion' in parsed)) {
-    throw new Error('Sync Code JSON is missing schemaVersion.');
+    throw new Error('This code is missing its version number.');
   }
   const v = (parsed as { schemaVersion?: unknown }).schemaVersion;
   if (v !== 1 && v !== 2) {
-    throw new Error('Unsupported Sync Code schemaVersion.');
+    throw new Error('This code is from a version this app can’t read.');
   }
   return migrateSave(parsed, nowEpochMs);
 }

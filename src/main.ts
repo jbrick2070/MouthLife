@@ -88,9 +88,9 @@ function bootstrapMouthLife(): void {
     uiRoot.innerHTML = `
       <div class="modal-backdrop">
         <div class="modal-sheet" style="text-align:center;">
-          <h2>WebGL 3D Hardware Acceleration Required</h2>
+          <h2>3D Graphics Are Turned Off</h2>
           <p style="color:#cbd5e1;font-size:0.88rem;">
-            MouthLife uses a lightweight single-pass 3D enamel shader. Please enable hardware acceleration in your browser settings and reload.
+            MouthLife needs 3D graphics. Turn on hardware acceleration in your browser settings, then reload.
           </p>
         </div>
       </div>
@@ -210,7 +210,7 @@ function bootstrapMouthLife(): void {
       bus.emit('companion:updated', { state: save.companion });
       sound.playSmoothBaskSparkle();
       if (touch.activeSplatCount === 0) {
-        activeHub?.setStatusBanner('✨ Sugar splats polished away! Mirror-wet enamel restored a little.');
+        activeHub?.setStatusBanner('✨ Sugar spots polished away! Your enamel is a bit smoother.');
       }
     }
     return true;

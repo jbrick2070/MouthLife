@@ -11,8 +11,8 @@ import type { WorldCartridge } from '../engine/types';
  */
 export const orbitalBiofilmDomeCartridge: WorldCartridge = {
   id: 'world_5',
-  title: 'Quorum Dome',
-  subtitle: 'Station Aurora 408 km LEO • Honoring 1973 Skylab & 1978 Biofilm Theory',
+  title: 'Slime Dome',
+  subtitle: 'Station Aurora in Orbit • Honoring 1973 Skylab & 1978 Germ-Slime Science',
   hostId: 'orbit_aurora',
   historyNoteIds: ['1973_skylab_orbit'],
   worldWidth: 64,
@@ -23,24 +23,24 @@ export const orbitalBiofilmDomeCartridge: WorldCartridge = {
   baselinePh: 6.85,
   probeSpawn: { x: 7.5, z: 16.0 },
   challengeBlurb:
-    'Zero-G quorum-sensing EPS domes deflect bristles! Slice domes open with Polymer Floss or blast them with Fluoride Surge, then sweep clean.',
+    'In space, slime domes block the brush! Cut them open with Floss or blast them with Surge, then sweep clean.',
   districts: [
     {
       id: 'cupola_incisor_deck',
-      name: 'Cupola Incisor Deck',
-      subtitle: 'First Quorum Dome & Polymer Floss Fracture',
+      name: 'Cupola Front-Tooth Deck',
+      subtitle: 'First Slime Dome & Floss Cut',
       bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'airlock_premolar_truss',
-      name: 'Airlock Premolar Truss',
-      subtitle: 'Zero-G Tether-Zips & Twin EPS Biofilm Domes',
+      name: 'Airlock Premolar Bridge',
+      subtitle: 'Space Floss Zips & Twin Slime Domes',
       bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'skylab_molar_bioreactor',
-      name: 'Skylab Molar Bioreactor',
-      subtitle: 'Fortress Quorum Dome & Fluoride Surge Breach',
+      name: 'Skylab Molar Lab',
+      subtitle: 'Big Slime Dome & Surge Blast',
       bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],

@@ -108,7 +108,7 @@ public struct ProfileAndSettingsSheet: View {
                             }
                         }
 
-                        Text("Home City Beacon")
+                        Text("Home City")
                             .font(.system(.caption, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textSecondary)
 
@@ -165,7 +165,7 @@ public struct ProfileAndSettingsSheet: View {
                                 onToggleProMotionTelemetry(next)
                             }
 
-                        Toggle("Reduced Camera Motion", isOn: $reducedMotion)
+                        Toggle("Less Camera Motion", isOn: $reducedMotion)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.cyanAccent)
                             .onChange(of: reducedMotion) { _, next in
@@ -186,7 +186,7 @@ public struct ProfileAndSettingsSheet: View {
                                 .foregroundStyle(MLTheme.mintClean)
                         }
 
-                        Toggle("Spoken Brush-Along Voice Coach", isOn: $voiceCoachEnabled)
+                        Toggle("Spoken Brushing Coach", isOn: $voiceCoachEnabled)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.mintClean)
                             .onChange(of: voiceCoachEnabled) { _, next in
@@ -271,12 +271,12 @@ public struct ProfileAndSettingsSheet: View {
                             dismiss()
                             onReplayCosmicIntro()
                         } label: {
-                            Label("Replay Cosmic Stardust Prologue", systemImage: "sparkles.tv.fill")
+                            Label("Replay the Star Story Intro", systemImage: "sparkles.tv.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
 
-                        Text("100% On-Device Privacy • Zero Analytics • Zero Ads")
+                        Text("Stays on your device • No tracking • No ads")
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.mintClean)
 

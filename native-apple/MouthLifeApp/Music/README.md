@@ -54,3 +54,30 @@ Converting Suno `.mp3` downloads to `.m4a` halves app bundle size and uses Apple
 ```bash
 afconvert -f m4af -d aac -b 192000 ~/Downloads/suno_toronto.mp3 MouthLifeApp/Music/toronto.m4a
 ```
+
+## Rights & Licence Record (fill in before App Store submission)
+
+All 10 bundled tracks were generated with Suno by the project owner.
+
+- **Suno plan:** Premier (monthly), a paid plan. Confirmed by the owner on 2026-11-13.
+- **What that should cover:** Suno's terms give commercial-use rights for songs made while on a
+  paid plan. Songs made on the free plan are not covered, and subscribing later does not change
+  that. This summary is from memory, not legal advice: read Suno's current Terms of Service
+  before release and keep a dated copy with the project.
+- **Still to record:** the date each track was generated, to show it was made while the paid
+  plan was active. Suno's library shows this per song.
+- **Keep as proof:** a subscription receipt or invoice covering those dates, stored outside this
+  public repository.
+
+| File | Generated on (YYYY-MM-DD) | Made on the paid plan? |
+| :--- | :--- | :--- |
+| `sanctuary.m4a` | | |
+| `toronto.m4a` | | |
+| `new_orleans.m4a` | | |
+| `tokyo.m4a` | | |
+| `accra.m4a` | | |
+| `aurora.m4a` | | |
+| `brush_along.m4a` | | |
+| `cosmic.m4a` | | |
+| `pulp.m4a` | | |
+| `report.m4a` | | |

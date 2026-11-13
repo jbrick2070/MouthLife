@@ -14,24 +14,24 @@ export const plaqueCityCartridge: WorldCartridge = {
   baselinePh: 7.0,
   probeSpawn: { x: 7.5, z: 16.0 },
   challengeBlurb:
-    'Sweep morning pellicle off all 3 districts, Floss-zip narrow premolar alleys, and unleash Fluoride Surge to seal molar fissures!',
+    'Sweep the morning film off all 3 zones, Floss-zip the narrow gaps, and fire Surge to seal the molar grooves!',
   districts: [
     {
       id: 'incisor_terrace',
-      name: 'Incisor Labial Terrace',
-      subtitle: 'Broad Sweeping Shear & Cervical Margin',
+      name: 'Front Teeth Terrace',
+      subtitle: 'Wide Sweeps & the Gumline',
       bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'premolar_contacts',
-      name: 'Premolar Contact Alleys',
-      subtitle: 'Interproximal Floss Shear & Capillary Zip',
+      name: 'Premolar Gap Alleys',
+      subtitle: 'Floss & Floss Zip',
       bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'first_molar_basin',
-      name: 'First Molar Occlusal Basin',
-      subtitle: 'Fissure Disruption, Sucrose Cut-Off & F⁻ Surge',
+      name: 'First Molar Bowl',
+      subtitle: 'Clean Grooves, Stop Sugar & Fire Surge',
       bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],

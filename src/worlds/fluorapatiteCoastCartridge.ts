@@ -13,8 +13,8 @@ import type { WorldCartridge } from '../engine/types';
  */
 export const fluorapatiteCoastCartridge: WorldCartridge = {
   id: 'world_4',
-  title: 'Fluorapatite Coast',
-  subtitle: 'Accra & Colorado Springs Arch • Honoring Miswak & 1901–1945 F⁻ Discovery',
+  title: 'Fluoride Coast',
+  subtitle: 'Accra & Colorado Springs Arch • Honoring Miswak & the Fluoride Discovery',
   hostId: 'accra',
   historyNoteIds: ['1901_colorado_accra_miswak'],
   worldWidth: 64,
@@ -26,24 +26,24 @@ export const fluorapatiteCoastCartridge: WorldCartridge = {
   probeSpawn: { x: 7.5, z: 16.0 },
   erosionPulseIntervalSec: 14,
   challengeBlurb:
-    'Tart hibiscus washes drop basins to pH 4.95! Touch Miswak-Saliva springs or Surge F⁻ to convert enamel into Fluorapatite (safe down to pH 4.5).',
+    'Tart hibiscus splashes turn the pools acid! Touch a Miswak spring or fire Surge to add fluoride. Fluoride enamel stands up to acid.',
   districts: [
     {
       id: 'accra_coastal_incisors',
-      name: 'Labadi Coastal Incisors',
-      subtitle: 'Tart Sobolo Washes & Miswak Saliva Springs',
+      name: 'Labadi Beach Front Teeth',
+      subtitle: 'Tart Splashes & Miswak Springs',
       bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'miswak_fiber_contacts',
-      name: 'Miswak Fiber Contacts',
-      subtitle: 'Central Contact Zip & Fluorapatite Lattice Conversion',
+      name: 'Miswak Gaps',
+      subtitle: 'Middle Gap Zip & Fluoride Armor',
       bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'colorado_granite_molars',
       name: 'Pikes Peak Fluoride Molars',
-      subtitle: '1 ppm Fluorapatite Shield Against Acid Erosion',
+      subtitle: 'Fluoride Shield Against Acid',
       bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],

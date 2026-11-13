@@ -1,7 +1,7 @@
 import {
-  BRUSH_ALONG_FLOSS_IONS,
+  BRUSH_ALONG_BOTH_EXTRAS_MULT,
   BRUSH_ALONG_FULL_IONS,
-  BRUSH_ALONG_MOUTHWASH_IONS,
+  BRUSH_ALONG_ONE_EXTRA_MULT,
   BRUSH_ALONG_TIP_IONS,
   DAILY_COURTESY_TIP_CAP,
   DAILY_FULL_REWARD_CAP,
@@ -16,6 +16,20 @@ export function formatLocalDateKey(date = new Date()): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+/**
+ * Fluoride Ions for one full brushing session. Brushing is the base reward; flossing and the
+ * fluoride rinse multiply it: one of them x1.5, both x2 (50 / 75 / 100).
+ */
+export function brushAlongIons(withFloss: boolean, withMouthwash: boolean): number {
+  const extras = (withFloss ? 1 : 0) + (withMouthwash ? 1 : 0);
+  const mult = extras === 2 ? BRUSH_ALONG_BOTH_EXTRAS_MULT : extras === 1 ? BRUSH_ALONG_ONE_EXTRA_MULT : 1;
+  return Math.round(BRUSH_ALONG_FULL_IONS * mult);
+}
+
+export function brushAlongMultiplier(withFloss: boolean, withMouthwash: boolean): number {
+  return brushAlongIons(withFloss, withMouthwash) / BRUSH_ALONG_FULL_IONS;
 }
 
 export class HabitBank {
@@ -46,10 +60,7 @@ export class HabitBank {
       slotType = 'full';
       stampAwarded = true;
       save.totalBrushStamps += 1;
-      ionsAwarded =
-        BRUSH_ALONG_FULL_IONS +
-        (options.withFlossBonus ? BRUSH_ALONG_FLOSS_IONS : 0) +
-        (options.withMouthwashBonus ? BRUSH_ALONG_MOUTHWASH_IONS : 0);
+      ionsAwarded = brushAlongIons(options.withFlossBonus, options.withMouthwashBonus ?? false);
       save.pendingSupplyBeacons = Math.min(
         MAX_SUPPLY_BEACONS,
         Math.max(0, save.pendingSupplyBeacons) + 1

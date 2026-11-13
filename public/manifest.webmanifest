@@ -1,7 +1,7 @@
 {
   "name": "MouthLife: The Plaque Dimension",
   "short_name": "MouthLife",
-  "description": "Progressive 3D biophysical dental arcade & daily Smooth Bask companion.",
+  "description": "A 3D tooth-cleaning game and daily brushing timer.",
   "start_url": "./",
   "display": "standalone",
   "orientation": "any",

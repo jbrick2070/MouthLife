@@ -176,7 +176,7 @@ public struct CompanionHubView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                Text("Rub teeth to play glass-harp notes & polish • Drag sky to orbit")
+                Text("Rub teeth to play notes & polish • Drag sky to turn")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary.opacity(0.85))
                     .padding(.horizontal, 12)
@@ -203,7 +203,7 @@ public struct CompanionHubView: View {
                             Text("PULP RESCUE SCRAMBLE READY")
                                 .font(.system(.caption, design: .rounded, weight: .heavy))
                                 .foregroundStyle(MLTheme.coralGum)
-                            Text("90s endodontic rescue (+40 F⁻ win, zero permadeath!)")
+                            Text("90s tooth rescue (+\(GameConfig.pulpRescueWinIons) F⁻ if you win, and you can’t lose the tooth!)")
                                 .font(.system(.caption2, design: .rounded))
                                 .foregroundStyle(MLTheme.textSecondary)
                         }
@@ -317,7 +317,7 @@ public struct CompanionHubView: View {
                             .font(.system(.subheadline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
-                        Text(activeUnlocked ? activeCart.subtitle : "Requires \(activeHost.unlockStampsRequired) Brush Stamps or prior world clear")
+                        Text(activeUnlocked ? activeCart.subtitle : "Needs \(activeHost.unlockStampsRequired) Brush Stamps, or clear the world before it")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(activeUnlocked ? MLTheme.textSecondary : MLTheme.amberWarn)
                             .lineLimit(1)

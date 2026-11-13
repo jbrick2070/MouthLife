@@ -308,7 +308,7 @@ final class MouthLifeCoreTests: XCTestCase {
         var rescueTriggered = false
         var totalTreatIons = 0
 
-        // Feed 8 treats within 1 hour: only first 3 grant +20 Ions (= 60 total), cascade triggers Pulp Rescue
+        // Feed 8 treats within 1 hour: only first 3 grant +5 Ions (= 15 total), cascade triggers Pulp Rescue
         for i in 0..<8 {
             let outcome = CompanionArchSim.feedRegionalTreat(&state, nowEpochMs: 10_000 + Int64(i * 1000))
             totalTreatIons += outcome.ionsGranted
@@ -316,7 +316,7 @@ final class MouthLifeCoreTests: XCTestCase {
                 rescueTriggered = true
             }
         }
-        XCTAssertEqual(totalTreatIons, 60)
+        XCTAssertEqual(totalTreatIons, 15)
         XCTAssertTrue(rescueTriggered)
         XCTAssertEqual(state.pulpIntegrity, 0.0)
 

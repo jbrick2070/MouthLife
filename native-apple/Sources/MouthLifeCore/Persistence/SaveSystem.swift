@@ -98,17 +98,17 @@ public enum SyncCodeError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingPrefix:
-            return "Invalid Sync Code prefix (expected ML2:)."
+            return "This is not a MouthLife code. It should start with ML2:"
         case .malformedPayload:
             return "Malformed Base64URL Sync Code payload."
         case .invalidUtf8:
             return "Sync Code payload is not valid UTF-8."
         case .invalidJson:
-            return "Sync Code payload is not a valid JSON object."
+            return "This code is damaged and can’t be read."
         case .missingSchemaVersion:
-            return "Sync Code JSON is missing schemaVersion."
+            return "This code is missing its version number."
         case .unsupportedSchemaVersion(let version):
-            return "Unsupported Sync Code schemaVersion (\(version))."
+            return "This code is from a version this app can’t read (\(version))."
         }
     }
 }

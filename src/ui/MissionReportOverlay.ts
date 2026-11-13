@@ -33,22 +33,22 @@ const REPORT_FOCUSABLE_SEL =
 export function buildReportHeadline(r: MissionReportData): string {
   if (r.mode === 'PULP_RESCUE') {
     return r.won
-      ? '🎉 Pulp Rescued! Dreaded Root Canal Avoided!'
-      : '🛡️ Calcium-Hydroxide Emergency Stabilization Applied';
+      ? '🎉 Tooth Saved! The pulp is safe!'
+      : '🛡️ Safe Patch Applied';
   }
-  if (!r.won) return '🌱 Dive Complete — Keep Remineralizing!';
+  if (!r.won) return '🌱 Dive Done — Keep Healing!';
   const place = r.hostCityLabel ? ` • ${r.hostCityLabel}` : '';
-  return `✨ ${r.worldTitle ?? 'Plaque City'} Remineralized${place}! Smooth Bask Restored!`;
+  return `✨ ${r.worldTitle ?? 'Plaque City'} is clean${place}! Smooth Bask is back!`;
 }
 
 /** Floating 3D arch status pill above the Mission Report card (pure, unit-testable). */
 export function buildReportArchBanner(r: Pick<MissionReportData, 'mode' | 'won'>): string {
   if (!r.won) {
     return r.mode === 'PULP_RESCUE'
-      ? '🛡️ Pulp Stabilized at 50% — Replay or Brush-Along for Glassy Shine!'
-      : '🌱 Enamel Stabilized — Replay or Brush-Along for Glassy Shine!';
+      ? '🛡️ Pulp held at 50% — Replay or Brush-Along to shine!'
+      : '🌱 Enamel is steady — Replay or Brush-Along to shine!';
   }
-  return 'Drag 3D Arch to Admire Fresh-Mint Glassy Enamel!';
+  return 'Drag the teeth to see them shine!';
 }
 
 /** Which report button should receive keyboard focus first (pure, unit-testable). */
@@ -155,7 +155,7 @@ export class MissionReportOverlay implements OverlayView {
         : '';
 
     const gradeLabel =
-      breakdown.grade === 'FLUORAPATITE_GOLD' ? '★ FLUORAPATITE GOLD' : `GRADE ${breakdown.grade}`;
+      breakdown.grade === 'FLUORAPATITE_GOLD' ? '★ FLUORIDE GOLD' : `GRADE ${breakdown.grade}`;
     const muted = this.callbacks.isMuted?.() ?? false;
     const reduced = this.isReducedMotionActive();
     const revealCls = reduced ? '' : ' report-grade-reveal';
@@ -192,12 +192,12 @@ export class MissionReportOverlay implements OverlayView {
           }
           ${
             this.report.campaignMastered
-              ? '<div id="badge-campaign-mastery" class="pill-badge" style="border-color:#5eead4;color:#99f6e4;margin-bottom:6px;display:inline-block;">🛰️ EARTH-TO-ORBIT CAMPAIGN MASTERY — All 5 Worlds Remineralized!</div>'
+              ? '<div id="badge-campaign-mastery" class="pill-badge" style="border-color:#5eead4;color:#99f6e4;margin-bottom:6px;display:inline-block;">🛰️ ALL 5 WORLDS CLEAN — You did it!</div>'
               : ''
           }
           ${
             upgrades.length
-              ? `<div id="report-upgrades" style="background:rgba(4,16,28,0.78);border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:0.76rem;color:#fde68a;">🔧 Lab Upgrade Unlocked: <strong>${upgrades.map(esc).join(', ')}</strong> — ready in the Bio-Actuator Lab!</div>`
+              ? `<div id="report-upgrades" style="background:rgba(4,16,28,0.78);border:1px solid rgba(251,191,36,0.4);border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:0.76rem;color:#fde68a;">🔧 New Lab Upgrade: <strong>${upgrades.map(esc).join(', ')}</strong> — ready in the Bio-Actuator Lab!</div>`
               : ''
           }
 

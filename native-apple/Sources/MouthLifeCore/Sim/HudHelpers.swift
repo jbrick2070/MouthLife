@@ -121,7 +121,7 @@ public func selectWayfinderTargets(_ inp: WayfinderInput, maxSlots: Int) -> [Way
         }
         if inp.domesRemaining {
             for d in inp.domes {
-                out.append(WayfinderTarget(x: d.cx, z: d.cz, kind: .dome, label: "EPS Dome"))
+                out.append(WayfinderTarget(x: d.cx, z: d.cz, kind: .dome, label: "Slime Dome"))
             }
         }
     }
@@ -484,7 +484,7 @@ public func formatWorldMechanicPill(
         if epsPct > 0 {
             return WorldMechanicPill(
                 kind: .epsDomes,
-                text: "🛡️ EPS Armor \(epsPct)%",
+                text: "🛡️ Slime dome \(epsPct)%",
                 warn: false,
                 borderHex: 0xC084FC,
                 textHex: 0xE9D5FF
@@ -571,21 +571,21 @@ public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput) -> String {
             }
             return "Pulp: \(left)% more\(secSuffix) — scrub!"
         }
-        return "Stabilizing… the pulp is safe!"
+        return "Patching… the pulp is safe!"
     }
 
     let openIdx = inp.sealed.enumerated().compactMap { !$0.element ? $0.offset : nil }
     if !inp.sealed.isEmpty && openIdx.isEmpty {
-        return "✨ All districts sealed — mission complete!"
+        return "✨ All zones sealed — you did it!"
     }
     if inp.acidLockSec > 0 {
         return "Acid clock \(Int(ceil(inp.acidLockSec)))s — use Saliva Spring!"
     }
     if inp.domesRemaining {
-        return "🛡️ Crack EPS dome with Floss [E] or Surge [Q]!"
+        return "🛡️ Crack the dome: Floss [E] or Surge [Q]!"
     }
     if inp.sitesLeftOpen == 1 {
-        return "1 Commensal Colony left — follow ➤ Colony!"
+        return "1 helper colony left — follow ➤ Colony!"
     }
     if inp.sitesLeftOpen > 1 {
         return "Restore \(inp.sitesLeftOpen) colonies — scrub glowing rings!"
@@ -612,7 +612,7 @@ public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput) -> String {
     }
     return inp.surgeReady
         ? "Scrub enamel → fire Surge [Q] to seal!"
-        : "Scrub enamel → restore colonies → Surge [Q]!"
+        : "Scrub enamel → bring back colonies → Surge [Q]!"
 }
 
 public func computeObjectiveBreadcrumb(for session: WorldSession) -> String {

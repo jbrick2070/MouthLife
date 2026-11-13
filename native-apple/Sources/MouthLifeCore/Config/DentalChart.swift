@@ -330,8 +330,8 @@ public enum DentalChart {
             pos: 1,
             category: .incisor,
             shortRole: "Central Incisor",
-            nicknameUpper: "Front Smile Incisor",
-            nicknameLower: "Lower Front Incisor (Smallest Tooth)",
+            nicknameUpper: "Front Smile Tooth",
+            nicknameLower: "Lower Front Tooth (Smallest Tooth)",
             eruptionUpper: "7–8 yrs",
             eruptionLower: "6–7 yrs",
             rootsUpper: 1,
@@ -342,14 +342,14 @@ public enum DentalChart {
             worldLower: "world_4",
             anatomyUpper: "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.",
             anatomyLower: "Narrowest, most symmetrical crown in the human mouth with 1 slender root; sits right beside salivary ducts under the tongue.",
-            careTip: "Tilt your toothbrush vertically on the inner (lingual) surface — lower front incisors collect mineralized tartar fastest!"
+            careTip: "Hold your brush up and down behind these teeth. Hard tartar builds up here fastest!"
         ),
         PositionAnatomyTemplate(
             pos: 2,
             category: .incisor,
             shortRole: "Lateral Incisor",
-            nicknameUpper: "Side Smile Incisor",
-            nicknameLower: "Lower Lateral Incisor",
+            nicknameUpper: "Side Smile Tooth",
+            nicknameLower: "Lower Side Front Tooth",
             eruptionUpper: "8–9 yrs",
             eruptionLower: "7–8 yrs",
             rootsUpper: 1,
@@ -358,9 +358,9 @@ public enum DentalChart {
             cuspsLower: 0,
             worldUpper: "world_1",
             worldLower: "world_4",
-            anatomyUpper: "Slightly narrower than the central incisor with a rounded distal corner and a small pit beside the cingulum (the rounded bulge) on the back.",
-            anatomyLower: "Slightly wider than the lower central incisor with 1 root, helping slice food cleanly alongside the front teeth.",
-            careTip: "Hug the mesial and distal edges in a gentle C-shape with floss where incisors overlap."
+            anatomyUpper: "A little thinner than the front tooth, with one rounded corner and a small dent on the back.",
+            anatomyLower: "A little wider than the lower front tooth, with 1 root. It helps the front teeth cut food.",
+            careTip: "Where these teeth overlap, hug each side with floss in a gentle C-shape."
         ),
         PositionAnatomyTemplate(
             pos: 3,
@@ -376,9 +376,9 @@ public enum DentalChart {
             cuspsLower: 1,
             worldUpper: "world_2",
             worldLower: "world_2",
-            anatomyUpper: "Single pointed cusp and the longest root in the human dentition — anchors the corner of the dental arch and guides side-to-side jaw motion.",
-            anatomyLower: "Pointed piercing cusp with a long sturdy root that partners with the upper canine to protect back molars from lateral grinding.",
-            careTip: "Because canines sit at the curved corner of your arch, pause here as you pivot your brush from front teeth to back premolars."
+            anatomyUpper: "One sharp point and the longest root of any tooth. It holds the corner of your smile and guides your jaw side to side.",
+            anatomyLower: "A sharp point with a long, strong root. It works with the upper canine to protect the back teeth.",
+            careTip: "Canines sit at the corner of your smile. Slow down here as your brush turns from the front teeth to the back."
         ),
         PositionAnatomyTemplate(
             pos: 4,
@@ -394,9 +394,9 @@ public enum DentalChart {
             cuspsLower: 2,
             worldUpper: "world_1",
             worldLower: "world_2",
-            anatomyUpper: "Transitional \"bicuspid\" with 2 sharp cusps (buccal & palatal) and typically 2 roots — bridges tearing canines and grinding molars.",
-            anatomyLower: "Compact bicuspid with a prominent outer cusp, a smaller inner tongue-side cusp, and 1 root.",
-            careTip: "Sweep a gentle 45° Bass angle into the gumline collar and briskly brush the central groove between its two cusps."
+            anatomyUpper: "Has 2 sharp points and often 2 roots. It sits between the tearing canines and the grinding molars.",
+            anatomyLower: "A small tooth with a big outer point, a small inner point and 1 root.",
+            careTip: "Tilt your brush toward the gumline and brush the groove between the two points."
         ),
         PositionAnatomyTemplate(
             pos: 5,
@@ -413,8 +413,8 @@ public enum DentalChart {
             worldUpper: "world_1",
             worldLower: "world_2",
             anatomyUpper: "Two nearly equal-height cusps and usually 1 root; shares heavy chewing forces right in front of the 1st molar.",
-            anatomyLower: "Rounded crown that often has 2 lingual cusps (3 cusps total!) and 1 root — great at crushing fibrous foods.",
-            careTip: "The tight contact between the 2nd premolar and 1st molar is a classic hidden cavity spot — never skip flossing this seam!"
+            anatomyLower: "A rounded tooth with 1 root. It often has 3 points and is great at crushing tough food.",
+            careTip: "The tight gap between this tooth and the first molar is a common hiding spot for cavities. Always floss here!"
         ),
         PositionAnatomyTemplate(
             pos: 6,
@@ -430,9 +430,9 @@ public enum DentalChart {
             cuspsLower: 5,
             worldUpper: "world_3",
             worldLower: "world_3",
-            anatomyUpper: "Broad 4-cusp grinding powerhouse (often sporting a bonus 5th mini-cusp called the Cusp of Carabelli!) anchored by 3 tripod roots.",
+            anatomyUpper: "A wide grinding tooth with 4 points (sometimes a tiny 5th one!) and 3 roots.",
             anatomyLower: "Largest lower grinder with 5 cusps (3 outer, 2 inner) and 2 strong roots; erupts around age 6 without replacing any baby tooth.",
-            careTip: "First molars do much of the heavy chewing and have deep grooves — brush the chewing pits with short, gentle strokes and let fluoride soak in!"
+            careTip: "First molars do a lot of chewing and have deep grooves. Brush the grooves with short, gentle strokes."
         ),
         PositionAnatomyTemplate(
             pos: 7,
@@ -449,8 +449,8 @@ public enum DentalChart {
             worldUpper: "world_3",
             worldLower: "world_3",
             anatomyUpper: "4-cusp maxillary grinder with 3 roots nestled high near the cheek bone; erupts around age 12 behind the 1st molar.",
-            anatomyLower: "Symmetrical 4-cusp hot-cross-bun occlusal groove pattern with 2 roots; backs up the 1st molar for heavy mastication.",
-            careTip: "Slightly close your jaw half-way when brushing upper 2nd molars — opening too wide pulls your cheek muscle tight against the brush!"
+            anatomyLower: "Has 4 points, 2 roots and a cross-shaped groove on top. It helps the first molar with heavy chewing.",
+            careTip: "Close your mouth halfway when you brush the upper back molars. Opening too wide pulls your cheek tight against the brush!"
         ),
         PositionAnatomyTemplate(
             pos: 8,
@@ -468,7 +468,7 @@ public enum DentalChart {
             worldLower: "world_5",
             anatomyUpper: "Variable 3–4 cusp crown with fused or multi-curved roots; erupts around ages 17–25 (or stays congenitally absent / impacted).",
             anatomyLower: "Farthest back mandibular tooth at the curve of the jawbone; often partially covered by a gum flap (operculum) if space is tight.",
-            careTip: "Angle the very tip (toe) of your brush behind the back-most molar so plaque cannot hide along the distal gumline."
+            careTip: "Reach the tip of your brush behind your very last tooth so plaque can’t hide there."
         )
     ]
 
@@ -628,32 +628,32 @@ public enum DentalChart {
         ToothSurfaceInfo(
             code: "B / F",
             name: "Buccal / Facial",
-            whereItFaces: "Outer surface facing your cheeks (back teeth) or lips (front teeth).",
+            whereItFaces: "The outside, facing your cheeks (back teeth) or lips (front teeth).",
             howToClean: "45° Bass sweep along the gumline collar."
         ),
         ToothSurfaceInfo(
             code: "L / P",
             name: "Lingual / Palatal",
-            whereItFaces: "Inner surface facing your tongue (lower) or roof of the mouth / palate (upper).",
-            howToClean: "Sweep inner molars & tilt brush vertically behind front incisors."
+            whereItFaces: "The inside, facing your tongue (lower teeth) or the roof of your mouth (upper teeth).",
+            howToClean: "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth."
         ),
         ToothSurfaceInfo(
             code: "O / I",
             name: "Occlusal / Incisal",
-            whereItFaces: "Chewing cusps & grooves of back teeth (O) or biting edges of front teeth (I).",
-            howToClean: "Short brisk strokes into molar pits & fissures."
+            whereItFaces: "The chewing tops of back teeth (O) or the biting edges of front teeth (I).",
+            howToClean: "Short, quick strokes into the grooves of the back teeth."
         ),
         ToothSurfaceInfo(
             code: "M",
             name: "Mesial",
-            whereItFaces: "Tight side contact facing TOWARD the front midline of your dental arch.",
-            howToClean: "Slide floss gently under the papilla and hug the tooth in a C-curve."
+            whereItFaces: "The tight side that faces the FRONT middle of your mouth.",
+            howToClean: "Slide floss gently under the gum and hug the tooth in a C-shape."
         ),
         ToothSurfaceInfo(
             code: "D",
             name: "Distal",
-            whereItFaces: "Tight side contact facing AWAY from the midline toward the back of your jaw.",
-            howToClean: "C-curve floss hug + wrap brush bristles behind your last molar."
+            whereItFaces: "The tight side that faces the BACK of your mouth.",
+            howToClean: "Hug with floss in a C-shape, and wrap the brush behind your last molar."
         )
     ]
 
@@ -663,9 +663,9 @@ public enum DentalChart {
             name: "Enamel",
             emoji: "💎",
             mineralPercent: 96,
-            tagline: "Mohs 5 • the hardest tissue in your body",
-            detail: "About 96% hydroxyapatite mineral packed in tiny prisms. It has no living cells, so it cannot regrow — but saliva and fluoride can re-mineralize early soft spots into tougher fluorapatite.",
-            careTip: "Fluoride toothpaste + a calm 2-minute brush keeps this shield glassy.",
+            tagline: "The hardest part of your body",
+            detail: "Enamel is almost all mineral, packed in tiny rods. It has no living cells, so it can’t grow back. But spit and fluoride can harden early soft spots.",
+            careTip: "Fluoride toothpaste and a calm 2-minute brush keep this shield smooth.",
             colorHex: "#e0f2fe"
         ),
         ToothLayerInfo(
@@ -673,9 +673,9 @@ public enum DentalChart {
             name: "Dentin",
             emoji: "🟡",
             mineralPercent: 70,
-            tagline: "Microscopic tubules • the flexible core",
-            detail: "About 70% mineral, laced with millions of microscopic tubules that lead toward the nerve. When enamel wears thin or gums recede, fluid moving in those tubules is why cold air can zing.",
-            careTip: "Soft bristles and gentle angles protect exposed dentin near the gumline.",
+            tagline: "Tiny tubes • the bendy core",
+            detail: "Dentin has millions of tiny tubes that lead toward the nerve. When enamel wears thin, cold air can reach them. That is the zing you feel.",
+            careTip: "Soft bristles and a gentle touch protect dentin near the gumline.",
             colorHex: "#fde68a"
         ),
         ToothLayerInfo(
@@ -684,18 +684,18 @@ public enum DentalChart {
             emoji: "❤️",
             mineralPercent: nil,
             tagline: "Nerves & blood vessels • the tooth’s heart",
-            detail: "A soft chamber of nerves, vessels and connective tissue that feeds the tooth and senses temperature and pressure. Healthy pulp keeps a tooth alive and able to build repair dentin.",
-            careTip: "Catching cavities while they are small keeps bacteria far from the pulp.",
+            detail: "A soft space with nerves and blood vessels. It feeds the tooth and feels hot, cold and pressure. Healthy pulp keeps a tooth alive.",
+            careTip: "Catching cavities while they are small keeps germs far from the pulp.",
             colorHex: "#fb7185"
         ),
         ToothLayerInfo(
             layerKind: .ligament,
-            name: "Cementum & Periodontal Ligament",
+            name: "Root Cover & Tooth Cushion",
             emoji: "🪢",
             mineralPercent: 45,
-            tagline: "The shock-absorbing sling around the root",
-            detail: "Cementum (about 45% mineral) coats the root, and thousands of ligament fibers hang the tooth in its bony socket like a hammock — cushioning every bite and sensing how hard you chew.",
-            careTip: "Daily flossing keeps the gums that guard this sling calm and healthy.",
+            tagline: "The cushion around the root",
+            detail: "A thin layer covers the root. Thousands of tiny fibers hold the tooth in its socket like a hammock. They cushion every bite.",
+            careTip: "Flossing every day keeps the gums around this cushion calm and healthy.",
             colorHex: "#c4b5fd"
         )
     ]
@@ -712,38 +712,38 @@ public enum DentalChart {
         "world_1": WorldDentalLesson(
             id: "world_1",
             focusTeethBadge: "Teeth #8–#9, #4–#5 & #3 (FDI 11–21, 15–14 & 16)",
-            headline: "Hidden Contacts & Six-Year Molars",
-            lesson: "Bristles reach 3 of 5 crown faces (Buccal, Occlusal, Lingual), leaving ~35% of enamel hidden in tight Mesial/Distal contacts between premolars (#4–#5) and 1st molars (#3 / FDI 16) until flossed."
+            headline: "Hidden Gaps & Six-Year Molars",
+            lesson: "A brush reaches 3 of a tooth’s 5 sides. About a third of each tooth hides in the tight gaps until you floss."
         ),
         "world_2": WorldDentalLesson(
             id: "world_2",
-            focusTeethBadge: "Cervical Sulcus • Teeth #21–#28 (FDI 34–44)",
-            headline: "1–3 mm Healthy Gum Pockets & 45° Bass Angle",
-            lesson: "Dentists measure 6 pocket depths around every tooth (#1–#32): 1–3 mm is healthy! Sweeping bristles gently at 45° clears sulcus plaque without irritating tender gingival collars."
+            focusTeethBadge: "Gumline • Teeth #21–#28 (FDI 34–44)",
+            headline: "Healthy Gums & the 45° Brush Tilt",
+            lesson: "Dentists measure the tiny pocket around each tooth. 1–3 mm is healthy! Tilting the brush toward the gumline cleans it gently."
         ),
         "world_3": WorldDentalLesson(
             id: "world_3",
             focusTeethBadge: "Posterior Molars #2–#3 & #14–#15 (FDI 17–16 & 26–27)",
-            headline: "Critical pH 5.5 & The Stephan Acid Clock",
-            lesson: "Every sugary sip drops plaque pH below 5.5 for ~20 minutes, pulling calcium out of hydroxyapatite. Saliva buffers acid while fluoride rebuilds tougher fluorapatite (critical pH ~4.5)."
+            headline: "The 20-Minute Acid Clock",
+            lesson: "Every sugary sip makes acid for about 20 minutes. Acid pulls minerals out of enamel. Spit washes acid away, and fluoride helps rebuild stronger enamel."
         ),
         "world_4": WorldDentalLesson(
             id: "world_4",
             focusTeethBadge: "Lower Incisors #24–#25 (FDI 31–41) & Upper #3, #14",
-            headline: "Why Tartar Picks Favorite Tooth Numbers",
-            lesson: "Major salivary ducts open right behind lower front incisors (#24–#25) and in the cheeks beside the upper molars (near #2–#3 & #14–#15) — bathing them in minerals that buffer acid, or calcify leftover plaque into tartar!"
+            headline: "Why Tartar Has Favorite Teeth",
+            lesson: "Spit flows in behind the lower front teeth and beside the upper back teeth. Its minerals fight acid, but they can also turn old plaque into hard tartar!"
         ),
         "world_5": WorldDentalLesson(
             id: "world_5",
             focusTeethBadge: "Full Arch #1–#32 (FDI 11–48) & Wisdom Teeth #1, #16, #17, #32",
-            headline: "Quorum-Sensing EPS Armor & Spaceflight Dentistry",
-            lesson: "Within 24–48 hours, undisturbed bacteria weave sticky EPS domes that block rinses until mechanically cracked by brushing & flossing — vital in orbit where a #1 or #32 flare-up has no clinic nearby!"
+            headline: "Germ Slime Domes & Space Dentistry",
+            lesson: "In 1–2 days, germs left alone build sticky slime domes that rinses can’t wash off. Brushing and flossing break them. That matters in space, where there is no dentist nearby!"
         ),
         "pulp_rescue": WorldDentalLesson(
             id: "pulp_rescue",
-            focusTeethBadge: "Crown Cross-Section: Enamel → Dentin → Living Pulp",
-            headline: "How Endodontists Rescue Stressed Teeth",
-            lesson: "Hard outer enamel (Mohs 5) has zero nerves, while underlying dentin has microscopic fluid tubules leading to the living pulp. Gentle Ca(OH)₂ / MTA liners calm inflammation and spark reparative dentin!"
+            focusTeethBadge: "Inside a Tooth: Enamel → Dentin → Living Pulp",
+            headline: "How Dentists Save a Hurt Tooth",
+            lesson: "Hard outer enamel has no nerves. The dentin under it has tiny tubes that lead to the living pulp. A gentle dental liner calms the pulp and helps it heal."
         )
     ]
 

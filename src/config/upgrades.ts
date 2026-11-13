@@ -4,10 +4,10 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
   {
     id: 'angled_bass_array',
     slot: 'brush',
-    name: '45° Angled Bass Bristle Array',
-    tagline: 'Widens sweep arc (95° → 130°) & boosts gumline/fissure shear +45%.',
+    name: '45° Angled Bristles',
+    tagline: 'Wider brush sweep. Cleans the gumline and grooves much better.',
     scientificNote:
-      'Pioneered by Dr. Charles C. Bass at Tulane University (1948): angling soft filaments 45° into the gingival margin disrupts stubborn cervical plaque.',
+      'Dr. Charles Bass showed in 1948 that tilting soft bristles 45° toward the gumline lifts off stubborn plaque.',
     stampUnlockThreshold: 3,
     worldClearUnlockId: 'world_1',
     ionCost: 100,
@@ -15,10 +15,10 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
   {
     id: 'hydro_sonic_pulse',
     slot: 'brush',
-    name: 'Hydro-Sonic Acoustic Streaming',
-    tagline: 'Extends brush reach +16% (115° arc, +30% fissure shear) & halves sulcus gum pressure.',
+    name: 'Hydro-Sonic Bubbles',
+    tagline: 'Longer brush reach, better groove cleaning, and half the gum pressure.',
     scientificNote:
-      'High-frequency bristle oscillation creates micro-bubbles and fluid shear forces slightly beyond physical filament tips without abrading soft tissue.',
+      'Fast bristle shaking makes tiny bubbles. They clean a little past the bristle tips without hurting gums.',
     stampUnlockThreshold: 6,
     worldClearUnlockId: 'world_2',
     ionCost: 250,
@@ -26,10 +26,10 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
   {
     id: 'ptfe_ribbon_filament',
     slot: 'floss',
-    name: 'Woven C-Contour Ribbon Filament',
-    tagline: 'Widens interproximal shear swath +50% & boosts Surge charge +25%.',
+    name: 'Wide C-Shape Ribbon Floss',
+    tagline: 'Floss cleans a wider path and charges Surge faster.',
     scientificNote:
-      'Wrapping broad filament in a C-shape around each proximal tooth contour clears the full convex contact area rather than snapping straight into the papilla.',
+      'Wrapping wide floss in a C-shape around each tooth cleans the whole side, and it doesn’t snap into the gum.',
     stampUnlockThreshold: 10,
     worldClearUnlockId: 'world_3',
     ionCost: 400,
@@ -37,10 +37,10 @@ export const UPGRADE_CATALOG: readonly UpgradeDef[] = [
   {
     id: 'bicarb_buffer_jet',
     slot: 'rinse',
-    name: 'Salivary Bicarbonate + F⁻ Infusion',
-    tagline: 'Ion Rinse buffers nearby enamel to pH 7.2.',
+    name: 'Spit Buffer + Fluoride Boost',
+    tagline: 'Rinse washes acid off nearby enamel.',
     scientificNote:
-      'Salivary bicarbonate (HCO₃⁻) neutralizes bacterial lactic acid so calcium, phosphate, and fluoride ions can re-precipitate into fluorapatite.',
+      'A buffer from your spit cancels germ acid. Then minerals and fluoride can rebuild the enamel.',
     stampUnlockThreshold: 15,
     worldClearUnlockId: 'world_4',
     ionCost: 600,

@@ -10,7 +10,7 @@ import type { WorldCartridge } from '../engine/types';
 export const neonAcidClockCartridge: WorldCartridge = {
   id: 'world_3',
   title: 'Neon Acid Clock',
-  subtitle: 'Tokyo Studio Arch • Honoring 1940 Chicago Stephan Curve',
+  subtitle: 'Tokyo Studio Arch • Honoring the 1940 Chicago Acid Clock',
   hostId: 'tokyo',
   historyNoteIds: ['1940_chicago_stephan'],
   worldWidth: 64,
@@ -22,24 +22,24 @@ export const neonAcidClockCartridge: WorldCartridge = {
   probeSpawn: { x: 7.5, z: 16.0 },
   stephanSipIntervalSec: 22,
   challengeBlurb:
-    'Every soda sip restarts the Stephan acid clock (pH < 5.5). Shatter the Sucrose sips, hit Saliva springs & Surge Fluoride to brush safely!',
+    'Every soda sip restarts the acid clock. Smash the sugar, hit Saliva springs, and fire Surge so it is safe to brush!',
   districts: [
     {
       id: 'shibuya_incisor_stage',
-      name: 'Shibuya Incisor Stage',
+      name: 'Shibuya Front-Tooth Stage',
       subtitle: 'Broad Sweeps Between Sweet Sips',
       bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'studio_mixing_contacts',
-      name: 'Studio Mixing-Desk Contacts',
-      subtitle: 'Interproximal Zips & Soda-Sip Spawners',
+      name: 'Studio Desk Gaps',
+      subtitle: 'Gap Zips & Soda Sips',
       bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'chicago_molar_lab',
-      name: 'Chicago Molar pH Lab',
-      subtitle: 'Stephan Electrode Fissures & Bicarbonate Buffering',
+      name: 'Chicago Molar Acid Lab',
+      subtitle: 'Acid Grooves & Saliva Buffer',
       bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],

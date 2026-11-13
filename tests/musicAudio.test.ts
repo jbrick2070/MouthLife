@@ -298,13 +298,13 @@ describe('Mission report headline', () => {
     bonusRescueIons: 0,
   };
   it('celebrates the actual cleared world instead of a hardcoded city', () => {
-    const h = buildReportHeadline({ ...base, worldTitle: 'Crescent Sulcus', hostCityLabel: 'New Orleans' });
-    expect(h).toContain('Crescent Sulcus');
+    const h = buildReportHeadline({ ...base, worldTitle: 'Gumline Crescent', hostCityLabel: 'New Orleans' });
+    expect(h).toContain('Gumline Crescent');
     expect(h).toContain('New Orleans');
     expect(h).not.toContain('Plaque City');
   });
   it('keeps the Pulp Rescue wording', () => {
-    expect(buildReportHeadline({ ...base, mode: 'PULP_RESCUE', won: false })).toContain('Stabilization');
+    expect(buildReportHeadline({ ...base, mode: 'PULP_RESCUE', won: false })).toContain('Safe Patch');
   });
 });
 

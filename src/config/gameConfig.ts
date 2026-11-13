@@ -112,9 +112,10 @@ export const IDLE_ION_RESERVOIR_CAP = 72; // 12h * 6 Ions/hr
 export const TREAT_SMOOTHNESS_DROP = 35;
 export const TREAT_ACID_THRESHOLD_SMOOTHNESS = 50;
 export const TREAT_ACID_LOAD_POINTS = 45;
-export const TREAT_ION_REWARD = 20;
+// Brushing is the main way to earn Fluoride Ions. Everything else pays a small fraction of one brush.
+export const TREAT_ION_REWARD = 5;
 export const TREAT_MAX_REWARDED_PER_HOUR = 3;
-export const PULP_RESCUE_WIN_IONS = 40;
+export const PULP_RESCUE_WIN_IONS = 20;
 export const PULP_RESCUE_STABILIZE_VALUE = 50;
 
 // Habit Bank & Pacer Constants
@@ -125,6 +126,12 @@ export const BRUSH_ALONG_MOUTHWASH_QUICK_SEC = 30;
 export const DAILY_FULL_REWARD_CAP = 2;
 export const DAILY_COURTESY_TIP_CAP = 3;
 export const BRUSH_ALONG_FULL_IONS = 50;
+/** Brushing alone pays the base. One extra step (floss or rinse) pays x1.5, both pay x2. */
+export const BRUSH_ALONG_ONE_EXTRA_MULT = 1.5;
+export const BRUSH_ALONG_BOTH_EXTRAS_MULT = 2;
+/** A dive pays between these, scaled by score: at most half of a plain brush. */
+export const DIVE_MIN_IONS = 5;
+export const DIVE_MAX_IONS = 25;
 export const BRUSH_ALONG_FLOSS_IONS = 25;
 export const BRUSH_ALONG_MOUTHWASH_IONS = 25;
 export const BRUSH_ALONG_TIP_IONS = 5;

@@ -291,7 +291,7 @@ export class TelemetryHudOverlay implements OverlayView {
           </div>
           <div class="row-wrap hud-action-pills">
             <span id="hud-score" class="pill-badge">1.0x • 0</span>
-            <button type="button" id="btn-hud-quality" class="btn btn-sm" aria-label="Cycle Graphics Quality Tier" title="Cycle Modest-GPU Quality Tier">
+            <button type="button" id="btn-hud-quality" class="btn btn-sm" aria-label="Change Graphics Quality" title="Change Graphics Quality (slower devices)">
               ${this.formatQualityLabel()}
             </button>
             <button
@@ -299,7 +299,7 @@ export class TelemetryHudOverlay implements OverlayView {
               id="btn-hud-steer"
               class="btn btn-sm"
               aria-pressed="${this.input.isPointerSteerEnabled() ? 'true' : 'false'}"
-              title="Toggle drag/click-to-steer on the 3D tooth surface"
+              title="Turn drag-to-steer on or off"
             >
               ${this.input.isPointerSteerEnabled() ? '🎯 Steer: ON' : '🎯 Steer: OFF'}
             </button>
@@ -365,8 +365,8 @@ export class TelemetryHudOverlay implements OverlayView {
               type="button"
               id="ring-floss"
               class="floss-ring"
-              aria-label="Polymer Floss and Capillary Zip"
-              title="Tap or Drag Vector to Slice & Capillary Zip"
+              aria-label="Floss and Floss Zip"
+              title="Tap or drag to aim Floss"
             >
               <span>🧵 FLOSS</span>
               <span class="floss-sub" style="font-size:0.62rem;opacity:0.8;">TAP / AIM</span>
@@ -421,7 +421,7 @@ export class TelemetryHudOverlay implements OverlayView {
     this.zipPromptEl.textContent = ZIP_PROMPT_TEXT;
     this.zipPromptEl.style.opacity = '0';
     this.zipPromptEl.setAttribute('role', 'button');
-    this.zipPromptEl.setAttribute('aria-label', 'Zip floss through the interdental alley');
+    this.zipPromptEl.setAttribute('aria-label', 'Zip floss through the gap between teeth');
     this.zipPromptEl.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -654,8 +654,8 @@ export class TelemetryHudOverlay implements OverlayView {
       }
       this.showToast(
         next
-          ? '🎯 Touch Steer ON — drag on the tooth to scrub & sweep'
-          : '🕹️ Thumb Pad ON — use the bottom-left pad to steer'
+          ? '🎯 Touch Steer ON — drag on the tooth to scrub'
+          : '🕹️ Thumb Pad ON — steer with the bottom-left pad'
       );
     });
 
@@ -815,7 +815,7 @@ export class TelemetryHudOverlay implements OverlayView {
       this.bus.on('mutans:popped', ({ pos, via }) => {
         if (via !== 'seal' && this.mutansPopCalloutCooldown <= 0) {
           this.mutansPopCalloutCooldown = 0.6;
-          this.spawnCallout('🦠 Mutans Popped!', pos, 'mint', 1.05, 1.5);
+          this.spawnCallout('🦠 Cavity germ popped!', pos, 'mint', 1.05, 1.5);
         }
       })
     );
@@ -831,13 +831,13 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('gum:tender', () =>
-        this.maybeHint('sulcus', '🩷 Tender gums! Sweep gently side-to-side instead of pressing in one spot.')
+        this.maybeHint('sulcus', '🩷 Sore gums! Sweep gently. Don’t press in one spot.')
       )
     );
     this.disposers.add(
       this.bus.on('eps:deflected', () => {
         if (!this.usedFloss && !this.usedSurge) {
-          this.maybeHint('eps', '🛡️ EPS dome armor deflects bristles — crack it with Floss (E) or a Fluoride Surge (Q)!');
+          this.maybeHint('eps', '🛡️ Slime dome blocks the brush! Crack it with Floss (E) or Surge (Q).');
         }
       })
     );
@@ -846,9 +846,9 @@ export class TelemetryHudOverlay implements OverlayView {
         if (!this.seenHints.has('first_colony')) {
           this.seenHints.add('first_colony');
           saveSeenHints(this.seenHints);
-          this.showToast('✨ Colony Restored! Clean glowing rings to charge 🌊 Fluoride Surge (+30%)', 3.4);
+          this.showToast('✨ Helper germs are back! Clean glowing rings to charge 🌊 Surge (+30%)', 3.4);
         } else {
-          this.showToast('✨ Commensal S. sanguinis Colony Restored! (+30% Surge)', 2.2);
+          this.showToast('✨ Helper germs are back! (+30% Surge)', 2.2);
         }
         this.spawnCallout(`Colony Restored! +${Math.round(surgeDelta)} Surge`, pos, 'mint', 1.5);
       })
@@ -864,16 +864,16 @@ export class TelemetryHudOverlay implements OverlayView {
           this.maybeHint(
             this.session.hasErosionChallenge() ? 'acid_erosion' : 'acid',
             this.session.hasErosionChallenge()
-              ? '🌺 pH 4.95 Hibiscus basin — touch a Miswak Spring or fire Surge [Q] to infuse Fluorapatite!'
-              : '⚠️ pH < 5.5 shields enamel — wait out the acid dip or hit a Saliva Spring to buffer it!'
+              ? '🌺 Acid pool! Touch a Miswak Spring or fire Surge [Q] to add fluoride.'
+              : '⚠️ Acid attack! Wait it out, or hit a Saliva Spring.'
           );
         }
         if (acidWarn && this.acidCalloutCooldown <= 0) {
           this.acidCalloutCooldown = 1.8;
           this.spawnCallout(
             this.session.hasErosionChallenge()
-              ? '🌺 pH 4.95! Touch Miswak Spring'
-              : 'pH < 5.5! Touch Saliva Spring',
+              ? '🌺 Acid! Touch Miswak Spring'
+              : 'Acid! Touch Saliva Spring',
             this.session.probePos,
             'rose',
             1.35
@@ -893,7 +893,7 @@ export class TelemetryHudOverlay implements OverlayView {
       this.bus.on('eps:deflected', ({ pos }) => {
         if (this.epsCalloutCooldown <= 0) {
           this.epsCalloutCooldown = 1.6;
-          this.spawnCallout('🛡️ EPS Armor! Slice w/ Floss!', pos, 'violet', 1.35);
+          this.spawnCallout('🛡️ Slime dome! Cut it with Floss!', pos, 'violet', 1.35);
         }
       })
     );
@@ -901,19 +901,19 @@ export class TelemetryHudOverlay implements OverlayView {
       this.bus.on('eps:cracked', ({ pos, via }) => {
         this.showToast(
           via === 'rinse'
-            ? '💥 Surge shattered EPS Dome — scrub clean!'
-            : '💥 Floss cracked EPS Dome — scrub clean!',
+            ? '💥 Surge broke the dome — scrub clean!'
+            : '💥 Floss cracked the dome — scrub clean!',
           2.8
         );
         if (via === 'rinse') {
-          this.spawnCallout('💥 EPS Cracked!', pos, 'mint', 1.35);
+          this.spawnCallout('💥 Dome cracked!', pos, 'mint', 1.35);
         }
       })
     );
     this.disposers.add(
       this.bus.on('fluorapatite:infused', ({ pos, durationSec }) => {
         this.showToast(
-          `💎 Miswak + F⁻ Infused (${Math.round(durationSec)}s)! Bristles convert enamel into Fluorapatite (safe to pH 4.5)!`,
+          `💎 Miswak + fluoride boost (${Math.round(durationSec)}s)! Your brush now adds fluoride armor!`,
           3.0
         );
         this.spawnCallout('💎 F⁻ Infused! pH 4.5 Safe', pos, 'cyan', 1.45);
@@ -921,19 +921,19 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('erosion:wash', () => {
-        this.showToast('🌺 Hibiscus Sobolo Wash! Unsealed basins dropped to pH 4.95', 2.8);
-        this.spawnCallout('🌺 Hibiscus Wash pH 4.95', this.session.probePos, 'gold', 1.35, 2.1);
+        this.showToast('🌺 Hibiscus splash! Open pools turned acid.', 2.8);
+        this.spawnCallout('🌺 Hibiscus acid', this.session.probePos, 'gold', 1.35, 2.1);
       })
     );
     this.disposers.add(
       this.bus.on('stephan:sip', () => {
-        this.showToast('🥤 Sweet Sip! Stephan Acid Clock restarted — pH < 5.5 for ~6s. Hit Saliva springs!', 3.2);
+        this.showToast('🥤 Sweet sip! The acid clock restarted. Hit a Saliva Spring!', 3.2);
         this.spawnCallout('Sweet Sip! pH ↓ 4.8', this.session.probePos, 'gold', 1.5, 2.2);
       })
     );
     this.disposers.add(
       this.bus.on('stephan:buffered', ({ pos }) => {
-        this.spawnCallout('Saliva Buffer! −7s Acid', pos, 'cyan', 1.3);
+        this.spawnCallout('Saliva helps! −7s acid', pos, 'cyan', 1.3);
       })
     );
     this.disposers.add(
@@ -943,12 +943,12 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('district:sealed', ({ districtName }) => {
-        this.showToast(`🌊 ${districtName} Sealed in Fluorapatite!`);
+        this.showToast(`🌊 ${districtName} sealed with fluoride!`);
       })
     );
     this.disposers.add(
       this.bus.on('beacon:collected', () => {
-        this.showToast('⚡ Habit Supply Beacon Collected! (+50% Surge)');
+        this.showToast('⚡ Habit Beacon! (+50% Surge)');
       })
     );
     this.disposers.add(
@@ -957,20 +957,20 @@ export class TelemetryHudOverlay implements OverlayView {
         if (zipped) {
           this.showToast(
             epsCellsCracked > 0
-              ? '💥 Tether-Zip Cracked EPS Dome Across Contact!'
-              : '🧵 Capillary Tether-Zip Across Interdental Contact!'
+              ? '💥 Floss Zip cracked the slime dome!'
+              : '🧵 Floss Zip between the teeth!'
           );
           this.spawnCallout(surge > 0 ? `Zipped! +${surge} Surge` : 'Zipped! Surge Full', to, 'cyan', 1.35);
         } else if (epsCellsCracked > 0) {
           const extra = targetsHit > 0 ? ` +×${targetsHit}` : '';
           this.spawnCallout(
-            `💥 EPS Cracked!${extra}${surge > 0 ? ` +${surge} Surge` : ''}`,
+            `💥 Dome cracked!${extra}${surge > 0 ? ` +${surge} Surge` : ''}`,
             to,
             'mint',
             1.35
           );
         } else if (targetsHit > 0) {
-          this.showToast(`🧵 Floss Severed ${targetsHit} Biofilm Target${targetsHit > 1 ? 's' : ''}!`);
+          this.showToast(`🧵 Floss cut ${targetsHit} plaque bridge${targetsHit > 1 ? 's' : ''}!`);
           this.spawnCallout(`Severed ×${targetsHit}${surge > 0 ? ` +${surge} Surge` : ''}`, to, 'mint', 1.2);
         } else if (shouldHintFlossMiss(zipped, targetsHit, epsCellsCracked, this.zipScreenBox.active)) {
           this.spawnCallout('No hit — aim at gem or alley', this.session.probePos, 'cyan', 1.35);
@@ -1012,7 +1012,7 @@ export class TelemetryHudOverlay implements OverlayView {
         if (this.session.grid.getWorldCleanRatio() < 0.05) {
           this.maybeHint(
             'first_dive',
-            '🕹️ Drag on the tooth (or WASD + Space) to Sonic Scrub • E / 🧵 Floss slices narrow alleys!'
+            '🕹️ Drag on the tooth (or WASD + Space) to scrub • E / 🧵 Floss cleans the narrow gaps!'
           );
         } else {
           this.seenHints.add('first_dive');
@@ -1137,7 +1137,7 @@ export class TelemetryHudOverlay implements OverlayView {
         const epsPct = Math.round(this.session.grid.getEpsArmorRemainingRatio() * 100);
         this.mechanicBadgeEl.style.display = '';
         if (epsPct > 0) {
-          this.mechanicBadgeEl.textContent = `🛡️ EPS Armor ${epsPct}%`;
+          this.mechanicBadgeEl.textContent = `🛡️ Slime dome ${epsPct}%`;
           this.mechanicBadgeEl.style.borderColor = '#c084fc';
           this.mechanicBadgeEl.style.color = '#e9d5ff';
         } else {
@@ -1198,11 +1198,11 @@ export class TelemetryHudOverlay implements OverlayView {
     if (scanOn) {
       this.maybeHint(
         'two_tone_dye',
-        '🔍 Two-tone dye, like a dentist’s disclosing tablet: pink = fresh, thin plaque • violet = older, thick biofilm. Scrub violet first!'
+        '🔍 Dye shows plaque: pink = new and thin • purple = old and thick. Scrub purple first!'
       );
     }
     if (surgeReady && !this.lastSurgeReady && !this.usedSurge) {
-      this.maybeHint('surge', '🌊 Fluoride Surge 100%! Press Q / tap Surge to blast a wave of fluorapatite.');
+      this.maybeHint('surge', '🌊 Surge is full! Press Q or tap Surge to blast a fluoride wave.');
     }
     this.lastSurgeReady = surgeReady;
     if (this.surgeBtnEl) {
@@ -1254,9 +1254,9 @@ export class TelemetryHudOverlay implements OverlayView {
     const a = this.audio;
     const tip =
       this.mode === 'PULP_RESCUE'
-        ? 'Scramble: clean the pulp chamber to 85% before the clock hits zero — time-out only applies a gentle Calcium-Hydroxide stabilization, never permadeath.'
+        ? 'Clean the pulp room to 85% before time runs out. If time runs out, the tooth gets a safe patch. You never lose it.'
         : this.session.cartridge.challengeBlurb ??
-          'Scrub enamel to 100%, restore every Commensal Site, and seal each district in fluorapatite.';
+          'Scrub the enamel to 100%, bring back all the helper germs, and seal each zone with fluoride.';
     const dentalLesson = getWorldDentalLesson(this.session.cartridge.id, this.mode);
     const escTxt = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const muted = a.isMuted();
@@ -1294,7 +1294,7 @@ export class TelemetryHudOverlay implements OverlayView {
         </div>
         <div class="row-wrap" style="margin:0 0 6px 0;gap:6px;">
           <button type="button" id="btn-pause-shake" aria-pressed="${reduced ? 'true' : 'false'}" class="btn btn-sm ${reduced ? 'btn-primary' : ''}">${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}</button>
-          <button type="button" id="btn-pause-quality" class="btn btn-sm" aria-label="Cycle Graphics Quality Tier">${this.formatQualityLabel()}</button>
+          <button type="button" id="btn-pause-quality" class="btn btn-sm" aria-label="Change Graphics Quality">${this.formatQualityLabel()}</button>
         </div>
         <details id="pause-dental-lesson" class="report-lesson"${openLessonAttr}>
           <summary>🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</summary>

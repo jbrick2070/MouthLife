@@ -171,6 +171,7 @@ public final class ScoringEngine {
     }
 
     public static func computeIonsEarned(totalScore: Int) -> Int {
-        max(15, Int((Double(totalScore) / 100.0).rounded()))
+        // Dives pay a little (5 to 25): brushing your real teeth is the main way to earn.
+        min(25, max(5, Int((Double(totalScore) / 400.0).rounded())))
     }
 }

@@ -7,7 +7,7 @@ import type { WorldCartridge } from '../engine/types';
 export const pulpRescueCartridge: WorldCartridge = {
   id: 'pulp_rescue',
   title: 'Emergency Pulp Rescue!',
-  subtitle: 'Clear the Deep Molar Fissure & Seal Dentin to Protect the Pulp!',
+  subtitle: 'Clean the Deep Groove & Seal It to Protect the Pulp!',
   hostId: 'toronto',
   historyNoteIds: [],
   worldWidth: 32,
@@ -18,12 +18,12 @@ export const pulpRescueCartridge: WorldCartridge = {
   baselinePh: 6.4,
   probeSpawn: { x: 8.0, z: 16.0 },
   challengeBlurb:
-    '90s Scramble: hit Saliva Springs to buffer acid, shatter Sucrose Crystals, and clean 85%+ before time runs out — zero permadeath!',
+    '90 seconds: hit Saliva Springs, smash Sugar Crystals, and clean 85% before time runs out. You can’t lose the tooth!',
   districts: [
     {
       id: 'deep_pulp_crown',
-      name: 'Deep Dentin-Enamel Basin',
-      subtitle: 'Shatter Sucrose Crystals, Buffer Acid & Seal 85%+!',
+      name: 'Deep Tooth Bowl',
+      subtitle: 'Smash Sugar, Stop Acid & Seal 85%!',
       bounds: { minX: 3.5, maxX: 28.5, minZ: 3.5, maxZ: 28.5 },
     },
   ],

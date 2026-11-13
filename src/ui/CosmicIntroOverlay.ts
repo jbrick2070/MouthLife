@@ -14,32 +14,32 @@ const MOHS_SPECIMENS: readonly MohsEntry[] = [
     hardness: '2.5',
     name: 'Pure Gold',
     formula: 'Au',
-    note: 'Soft noble metal (Mohs 2.5): easily scratched by a copper coin — your tooth enamel scratches it easily!',
+    note: 'Gold is a soft metal. Your tooth enamel can scratch it easily!',
   },
   {
     hardness: '4.0',
     name: 'Iron / Mild Steel',
     formula: 'Fe',
-    note: 'Structural iron & nails rank ~4.0–4.5 on the Mohs scale — human tooth enamel (5.0) is literally harder than iron!',
+    note: 'Iron and nails are softer than tooth enamel. Yes, your teeth are harder than iron!',
   },
   {
     hardness: '5.0',
     name: 'Tooth Enamel',
     formula: 'Ca₁₀(PO₄)₆(OH)₂',
-    note: '96% pure crystalline Hydroxyapatite nanorods woven by ameloblasts — the hardest substance in the human body!',
+    note: 'Enamel is almost all crystal. It is the hardest thing in your whole body!',
     isEnamel: true,
   },
   {
     hardness: '7.0',
     name: 'Crystalline Quartz',
     formula: 'SiO₂',
-    note: 'Silicate mineral (Mohs 7.0): harder than enamel, which is why abrasive silica pastes must be finely rounded.',
+    note: 'Quartz is harder than enamel. That is why toothpaste grit must be very fine and round.',
   },
   {
     hardness: '10.0',
     name: 'Diamond',
     formula: 'C (sp³)',
-    note: 'Covalent carbon lattice (Mohs 10.0): nature’s hardest crystal — yet enamel reaches halfway up the Mohs scale!',
+    note: 'Diamond is the hardest crystal of all. Enamel sits about halfway up the scale!',
   },
 ];
 
@@ -53,22 +53,22 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
   {
     tag: 'PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS',
     title: 'Your Smile Was Forged Inside Dying Stars',
-    body: 'Billions of years before Earth existed, massive stars and supernovae forged Calcium (⁴⁰Ca), Phosphorus (³¹P), Oxygen (¹⁶O), and a trace of Fluorine (¹⁹F). Today, specialized ameloblast cells weave those exact cosmic atoms into enamel crystal.',
+    body: 'Long before Earth, giant stars made calcium, phosphorus, oxygen and a little fluorine. Today, special cells in your body build those same star atoms into tooth enamel.',
   },
   {
     tag: 'PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY',
     title: 'How Hard Is Tooth Enamel?',
-    body: 'Enamel ranks 5. Compare the specimens.',
+    body: 'Enamel ranks 5. Compare the samples.',
   },
   {
     tag: 'PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX',
-    title: 'Why Can Tiny Microbes Dissolve Crystal Harder Than Iron?',
-    body: 'Mechanical hardness cannot stop acid chemistry! Below pH 5.5, bacterial lactic acid strips calcium & phosphate out of enamel — unless Fluoride (¹⁹F) locks into the lattice to form Fluorapatite (acid-shielded down to pH 4.5).',
+    title: 'How Can Tiny Germs Melt Something Harder Than Iron?',
+    body: 'Being hard does not stop acid! Germs turn sugar into acid that pulls minerals out of enamel. Fluoride locks in and makes enamel much harder to melt.',
   },
   {
     tag: 'PROLOGUE 4 / 4 • EARTHRISE TO MICRO-UNIVERSE',
     title: 'Welcome to MouthLife: The Plaque Dimension',
-    body: 'Zoom from orbit into real human cities and dental history — bask in the mirror-smooth joy of clean brushed, flossed, and fluoride-sealed teeth daily, and keep the living pulp inside every tooth healthy!',
+    body: 'Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!',
   },
 ];
 
@@ -206,8 +206,8 @@ export class CosmicIntroOverlay implements OverlayView {
         : this.beatIndex === 2
           ? `
       <div class="row-wrap" style="margin-top:6px;">
-        <span class="pill-badge" style="border-color:#fb7185;color:#fecdd3;">Hydroxyapatite Critical: pH 5.5</span>
-        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">¹⁹F Fluorapatite Shield: pH 4.5</span>
+        <span class="pill-badge" style="border-color:#fb7185;color:#fecdd3;">Plain enamel: acid wins at pH 5.5</span>
+        <span class="pill-badge" style="border-color:#2dd4bf;color:#99f6e4;">With fluoride: safe down to pH 4.5</span>
       </div>
     `
           : '';

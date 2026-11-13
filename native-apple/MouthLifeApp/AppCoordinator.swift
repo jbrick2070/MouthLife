@@ -312,7 +312,7 @@ public final class AppCoordinator {
                 CompanionArchSim.applyMiniPolish(&next.companion, splatsCleared: feedback.splatsCleared)
                 self.save = self.saveSystem.save(next)
                 self.sceneController.companionSmoothness = self.save.companion.smoothnessIndex
-                self.showHubToast("✨ Polished sugar plaque! Smoothness \(Int(self.save.companion.smoothnessIndex.rounded()))%")
+                self.showHubToast("✨ Sugar spots polished! Smoothness \(Int(self.save.companion.smoothnessIndex.rounded()))%")
             }
         }
 
@@ -394,13 +394,13 @@ public final class AppCoordinator {
             showArcadeToast("🏅 24k Gold Seal: \(name)!")
 
         case .siteRestored:
-            showArcadeToast("🌿 Commensal Colony Restored (+30% Surge)!")
+            showArcadeToast("🌿 Helper germs are back (+30% Surge)!")
 
         case .gumTender:
-            showArcadeToast("💗 Gentle along sulcus! Keep sweeping smoothly at 45°.")
+            showArcadeToast("💗 Gentle on the gumline! Keep sweeping smoothly.")
 
         case .epsDeflected:
-            showArcadeToast("🛡️ EPS Quorum Armor! Crack dome with Floss or Surge first.")
+            showArcadeToast("🛡️ Slime dome! Crack it with Floss or Surge first.")
 
         case let .missionComplete(playMode, worldId, won, breakdown, _):
             let outcome = saveSystem.recordMissionCompletion(
@@ -457,7 +457,7 @@ public final class AppCoordinator {
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .arcade)
-        showArcadeToast("\(cart.title) • Scrub to 90%+ & restore colonies!")
+        showArcadeToast("\(cart.title) • Scrub to 90% & bring back helper germs!")
     }
 
     public func launchPulpRescue() {
@@ -477,7 +477,7 @@ public final class AppCoordinator {
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .pulpRescue)
-        showArcadeToast("🚨 90s Pulp Rescue Scramble • Clean 85%+ (Zero Permadeath)!")
+        showArcadeToast("🚨 90s Pulp Rescue • Clean 85% (you can’t lose the tooth)!")
     }
 
     public func returnToHub() {
@@ -516,7 +516,7 @@ public final class AppCoordinator {
         if claimed > 0 {
             NativeSoundEngine.shared.playSmoothBaskSparkle()
             HapticsEngine.shared.playFluorideSurge()
-            showHubToast("✨ Claimed +\(claimed) F⁻ Smooth Bask Reservoir!")
+            showHubToast("✨ Claimed +\(claimed) F⁻ from Smooth Bask!")
         }
     }
 
@@ -530,12 +530,12 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.playSugarSplat()
 
         if outcome.triggeredPulpRescue {
-            showHubToast("\(host.signatureTreat.emoji) Acid load reached pulp! Launching Pulp Rescue...")
+            showHubToast("\(host.signatureTreat.emoji) Acid reached the pulp! Starting Pulp Rescue...")
             launchPulpRescue()
         } else if outcome.ionsGranted > 0 {
-            showHubToast("\(host.signatureTreat.emoji) Enjoyed \(host.signatureTreat.name)! +\(outcome.ionsGranted) F⁻ • Rub crowns to polish!")
+            showHubToast("\(host.signatureTreat.emoji) Enjoyed \(host.signatureTreat.name)! +\(outcome.ionsGranted) F⁻ • Rub the teeth to polish!")
         } else {
-            showHubToast("\(host.signatureTreat.emoji) \(host.signatureTreat.name) (3/hr Ion cap reached) • Rub crowns to polish!")
+            showHubToast("\(host.signatureTreat.emoji) \(host.signatureTreat.name) (no more Ions this hour) • Rub the teeth to polish!")
         }
     }
 

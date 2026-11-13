@@ -283,17 +283,17 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
     const left = Math.max(0, Math.ceil((target - inp.worldCleanRatio) * 100));
     return left > 0
       ? `Pulp: ${left}% more${inp.rescueRemainingSec !== undefined ? ` • ${Math.max(0, Math.ceil(inp.rescueRemainingSec))}s left` : ""} — scrub!`
-      : 'Stabilizing… the pulp is safe!';
+      : 'Patching… the pulp is safe!';
   }
   const seal = inp.sealRatio ?? 0.9;
   const openIdx: number[] = [];
   inp.sealed.forEach((s, i) => {
     if (!s) openIdx.push(i);
   });
-  if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ All districts sealed — mission complete!';
+  if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ All zones sealed — you did it!';
   if ((inp.acidLockSec ?? 0) > 0) return `Acid clock ${Math.ceil(inp.acidLockSec!)}s — use Saliva Spring!`;
-  if (inp.domesRemaining) return '🛡️ Crack EPS dome with Floss [E] or Surge [Q]!';
-  if (inp.sitesLeftOpen === 1) return '1 Commensal Colony left — follow ➤ Colony!';
+  if (inp.domesRemaining) return '🛡️ Crack the dome: Floss [E] or Surge [Q]!';
+  if (inp.sitesLeftOpen === 1) return '1 helper colony left — follow ➤ Colony!';
   if (inp.sitesLeftOpen > 1) return `Restore ${inp.sitesLeftOpen} colonies — scrub glowing rings!`;
   const worst = openIdx.reduce(
     (best, i) => (inp.districtClean[i] < inp.districtClean[best] ? i : best),
@@ -309,7 +309,7 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
   if (nearly) return `Sweep D${worst + 1} (${worstPct}% → ${Math.round(seal * 100)}%) to seal it!`;
   return inp.surgeReady
     ? 'Scrub enamel → fire Surge [Q] to seal!'
-    : 'Scrub enamel → restore colonies → Surge [Q]!';
+    : 'Scrub enamel → bring back colonies → Surge [Q]!';
 }
 
 /** A cast that cracks armor or fires while the alley Zip prompt is already visible needs no extra miss callout. */

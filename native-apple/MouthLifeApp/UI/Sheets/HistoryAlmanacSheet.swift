@@ -18,7 +18,7 @@ public struct HistoryAlmanacSheet: View {
                             Text("ORAL SCIENCE & HISTORY ALMANAC")
                                 .font(.system(.caption, design: .rounded, weight: .bold))
                                 .foregroundStyle(MLTheme.cyanAccent)
-                            Text("From 13.8B-year-old stellar calcium to 1973 Skylab microgravity biofilms.")
+                            Text("From ancient stardust to germs on the Skylab space station.")
                                 .font(.system(.footnote, design: .rounded))
                                 .foregroundStyle(MLTheme.textSecondary)
                         }
@@ -49,7 +49,7 @@ public struct HistoryAlmanacSheet: View {
                                 .foregroundStyle(isUnlocked ? MLTheme.mintClean : MLTheme.textMuted)
                             }
 
-                            Text(isUnlocked ? note.title : "Uncharted Oral Science Field Note")
+                            Text(isUnlocked ? note.title : "Locked Tooth Science Note")
                                 .font(.system(.headline, design: .rounded, weight: .bold))
                                 .foregroundStyle(isUnlocked ? MLTheme.textPrimary : MLTheme.textSecondary)
 
@@ -78,7 +78,7 @@ public struct HistoryAlmanacSheet: View {
                                         .fill(MLTheme.mintClean.opacity(0.10))
                                 )
                             } else {
-                                Text("Complete global Plaque City missions or collect Brush-Along Habit Stamps to unlock this historical discovery.")
+                                Text("Finish missions or earn Brush-Along Habit Stamps to unlock this discovery.")
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(MLTheme.textMuted)
                             }

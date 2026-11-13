@@ -31,7 +31,7 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 164 Vitest unit tests
+npm test          # Run all 170 Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
@@ -48,10 +48,10 @@ npm run build     # Type-check & build production PWA bundle into dist/
 - **🦷 Smooth Bask Companion Hub & Live Earth Radio** — Interactive 14-crown 3D dental arch (rub teeth for crystalline glass-harp chimes + handheld wet-enamel specular glint), **10-Track Mastered AAC Suno Soundtrack** (`Sanctuary`, `Toronto`, `New Orleans`, `Tokyo`, `Accra`, `Aurora`, `Brush-Along`, `Cosmic`, `Pulp Rescue`, `Victory`) driving 3-band 120Hz audio-reactive shaders, **Interactive 32-Tooth Clinical Chart** (`ADA Universal #1–#32`, `ISO 3950 FDI 11–48`, `Palmer` + Spot Quiz + 4-layer Cross-Section), non-punitive **Saliva Stasis** (`>= 45%`), and portable `ML2:` sync codes.
 - **🌍 5-World Earth-to-Orbit Arcade Campaign + 90s Pulp Rescue:**
   1. **`world_1` — Plaque City** *(Toronto • 1498 Beijing & 1683 Leeuwenhoek)* — Pellicle shear, interdental Floss Tether-Zips & molar fissures.
-  2. **`world_2` — Crescent Sulcus** *(New Orleans • 1819 Parmly & 1948 Dr. Charles Bass)* — Gentle moving 45° sulcus care vs. heavy stationary gum irritation.
+  2. **`world_2` — Gumline Crescent** *(New Orleans • 1819 Parmly & 1948 Dr. Charles Bass)* — Gentle moving 45° sulcus care vs. heavy stationary gum irritation.
   3. **`world_3` — Neon Acid Clock** *(Tokyo & Chicago • 1940 Dr. Robert Stephan)* — Repeating sweet-sip pH plunges below `5.5` & salivary bicarbonate buffering.
-  4. **`world_4` — Fluorapatite Coast** *(Accra & Colorado Springs • Ancient Miswak & 1901–1945 Fluoride Discovery)* — Tart organic-acid basins & live enamel conversion into acid-defying fluorapatite (`pH 4.5` critical).
-  5. **`world_5` — Quorum Dome** *(Station Aurora, 408 km LEO • 1973 NASA Skylab & 1978 Costerton Biofilms)* — Zero-G quorum-sensing EPS polymer shields cracked via Floss shear & Fluoride-Bicarb Surge waves.
+  4. **`world_4` — Fluoride Coast** *(Accra & Colorado Springs • Ancient Miswak & 1901–1945 Fluoride Discovery)* — Tart organic-acid basins & live enamel conversion into acid-defying fluorapatite (`pH 4.5` critical).
+  5. **`world_5` — Slime Dome** *(Station Aurora, 408 km LEO • 1973 NASA Skylab & 1978 Costerton Biofilms)* — Zero-G quorum-sensing EPS polymer shields cracked via Floss shear & Fluoride-Bicarb Surge waves.
   6. **`pulp_rescue` — 90s Emergency Molar Scramble** — Fast non-punitive rescue when repeated treats breach Enamel → Dentin → Pulp (with a safe `50%` Calcium-Hydroxide stabilization floor on timeout).
 
 ---
@@ -76,7 +76,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 22 Vitest suites (164 deterministic web tests)
+└── tests/                                # 23 Vitest suites (170 deterministic web tests)
 ```
 
 ---

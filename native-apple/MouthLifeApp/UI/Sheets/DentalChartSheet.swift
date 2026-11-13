@@ -64,7 +64,7 @@ public struct DentalChartSheet: View {
                 .padding(16)
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
-            .navigationTitle("Clinical Dental Atlas")
+            .navigationTitle("Tooth Atlas")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -241,7 +241,7 @@ public struct DentalChartSheet: View {
                         .foregroundStyle(MLTheme.textMuted)
 
                     ZStack {
-                        // Outer Cementum & Periodontal Ligament Sling
+                        // Outer Root Cover & Tooth Cushion Sling
                         RoundedRectangle(cornerRadius: 44, style: .continuous)
                             .fill(MLTheme.color(hexString: "#c4b5fd").opacity(selectedLayer == .ligament ? 0.48 : 0.22))
                             .overlay(
@@ -344,7 +344,7 @@ public struct DentalChartSheet: View {
     // MARK: - 5 Clinical Crown Surfaces
     private var surfacesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Every tooth crown has 5 clinical surfaces. Brushing reaches 3; interdental floss reaches the hidden Mesial & Distal contacts (~35% of crown area)!")
+            Text("Every tooth has 5 sides. A brush reaches 3. Floss reaches the 2 hidden sides between teeth, about a third of the tooth!")
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(MLTheme.textSecondary)
                 .mlGlassCard()

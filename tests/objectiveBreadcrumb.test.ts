@@ -29,7 +29,7 @@ const base: ObjectiveInput = {
 
 describe('computeObjectiveBreadcrumb', () => {
   it('names the single remaining colony', () => {
-    expect(computeObjectiveBreadcrumb({ ...base, sitesLeftOpen: 1 })).toContain('1 Commensal Colony left');
+    expect(computeObjectiveBreadcrumb({ ...base, sitesLeftOpen: 1 })).toContain('1 helper colony left');
   });
   it('counts multiple colonies', () => {
     expect(computeObjectiveBreadcrumb(base)).toContain('Restore 3');
@@ -50,8 +50,8 @@ describe('computeObjectiveBreadcrumb', () => {
     expect(msg).toContain('D1');
   });
   it('prioritizes EPS domes and handles completion', () => {
-    expect(computeObjectiveBreadcrumb({ ...base, domesRemaining: true })).toContain('EPS dome');
-    expect(computeObjectiveBreadcrumb({ ...base, sealed: [true, true] })).toContain('complete');
+    expect(computeObjectiveBreadcrumb({ ...base, domesRemaining: true })).toContain('Crack the dome');
+    expect(computeObjectiveBreadcrumb({ ...base, sealed: [true, true] })).toContain('you did it');
   });
   it('gives a default scrub path and a Pulp Rescue percentage', () => {
     expect(computeObjectiveBreadcrumb({ ...base, sitesLeftOpen: 0 })).toContain('Scrub enamel');
@@ -60,7 +60,7 @@ describe('computeObjectiveBreadcrumb', () => {
 
   it('surfaces the active acid clock and rescue urgency without hiding EPS guidance', () => {
     expect(computeObjectiveBreadcrumb({ ...base, acidLockSec: 5.1 })).toContain('Acid clock 6s');
-    expect(computeObjectiveBreadcrumb({ ...base, acidLockSec: 0, domesRemaining: true })).toContain('EPS');
+    expect(computeObjectiveBreadcrumb({ ...base, acidLockSec: 0, domesRemaining: true })).toContain('Crack the dome');
     expect(computeObjectiveBreadcrumb({ ...base, mode: 'PULP_RESCUE', worldCleanRatio: 0.5, rescueRemainingSec: 12.2 })).toContain('13s left');
   });
 

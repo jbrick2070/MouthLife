@@ -1,4 +1,6 @@
 import {
+  DIVE_MAX_IONS,
+  DIVE_MIN_IONS,
   SCORE_MAX_ECOLOGY,
   SCORE_MAX_PARTIME,
   SCORE_MAX_RESTORATION,
@@ -133,7 +135,7 @@ export class ScoringEngine {
       params.sitesTotal === 0 || this.sitesRestored >= params.sitesTotal;
 
     const grade = ScoringEngine.computeGrade(totalScore, allSitesRestored, cleanClamped);
-    const ionsEarned = Math.max(15, Math.round(totalScore / 100));
+    const ionsEarned = ScoringEngine.computeIonsEarned(totalScore);
 
     return {
       restorationPts,
@@ -148,6 +150,11 @@ export class ScoringEngine {
       elapsedSec: Math.round(params.elapsedSec * 10) / 10,
       ionsEarned,
     };
+  }
+
+  /** Dives pay a little (5 to 25): brushing your real teeth is the main way to earn. */
+  static computeIonsEarned(totalScore: number): number {
+    return Math.max(DIVE_MIN_IONS, Math.min(DIVE_MAX_IONS, Math.round(totalScore / 400)));
   }
 
   /** Gold needs a 9,000+ score, at least 95% of the enamel clean, and every site restored. */

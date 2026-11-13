@@ -16,26 +16,26 @@ public struct CosmicIntroView: View {
     private let beats: [BeatContent] = [
         BeatContent(
             kicker: "BILLIONS OF YEARS AGO → STELLAR FORGE",
-            title: "Your Smile Is Woven From Supernova Stardust",
-            body: "Every calcium (⁴⁰Ca) and phosphorus (³¹P) atom in your teeth was forged inside dying stars, scattered across our galaxy, and crystallized by your ameloblast cells into the hardest tissue in your body.",
+            title: "Your Smile Is Made of Stardust",
+            body: "The calcium in your teeth was made inside dying stars and spread across space. Special cells in your body built it into enamel, the hardest part of you.",
             mohsHighlight: false
         ),
         BeatContent(
             kicker: "CRYSTALLOGRAPHY • MOHS HARDNESS 5.0",
-            title: "Hydroxyapatite: Harder Than Iron",
-            body: "Human tooth enamel is 96% pure mineral crystal — the hardest substance in the human body, outranking iron (about 4) on the Mohs scratch scale.",
+            title: "Enamel: Harder Than Iron",
+            body: "Tooth enamel is almost all crystal. It is the hardest thing in your body, even harder than iron.",
             mohsHighlight: true
         ),
         BeatContent(
             kicker: "CRITICAL pH 5.5 • BIOPHYSICS PARADOX",
-            title: "Unbeatable by Force — Vulnerable to Acid",
-            body: "Even Mohs 5 crystal dissolves when oral bacteria ferment sugar into lactic acid below pH 5.5 — unless saliva buffers the pH and fluoride (¹⁹F) locks in Fluorapatite (stable to pH 4.5!).",
+            title: "Strong Against Force — Weak Against Acid",
+            body: "Even hard enamel melts when germs turn sugar into acid. Spit washes the acid away, and fluoride makes enamel much harder to melt.",
             mohsHighlight: false
         ),
         BeatContent(
             kicker: "5 GLOBAL CITIES + LOW-EARTH ORBIT",
-            title: "Pilot HYDRA-1 Across Living Dental Arches",
-            body: "Sweep Sonic Bristles at 45°, zip through tight interdental contacts on Polymer Floss, and unleash Fluoride-Bicarb Surges — then pace your real-life 2-minute brush at the bathroom sink.",
+            title: "Steer HYDRA-1 Across Living Teeth",
+            body: "Sweep the brush at 45°, zip floss through tight gaps, and fire Fluoride Surges. Then time your real 2-minute brush at the sink.",
             mohsHighlight: false
         )
     ]

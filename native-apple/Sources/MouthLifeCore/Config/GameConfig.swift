@@ -135,9 +135,9 @@ public enum GameConfig {
     public static let treatSmoothnessDrop: Double = 35.0
     public static let treatAcidThresholdSmoothness: Double = 50.0
     public static let treatAcidLoadPoints: Double = 45.0
-    public static let treatIonReward: Int = 20
+    public static let treatIonReward: Int = 5
     public static let treatMaxRewardedPerHour: Int = 3
-    public static let pulpRescueWinIons: Int = 40
+    public static let pulpRescueWinIons: Int = 20
     public static let pulpRescueStabilizeValue: Double = 50.0
 
     // Habit Bank & Pacer Constants
