@@ -1,0 +1,117 @@
+name: Native Apple build, tests and screenshots
+
+# Runs the Swift engine tests, builds the app for iPhone and Mac, then opens the main screens in the
+# iPhone simulator and saves screenshots. Lets the native app be checked without owning a Mac.
+# Free for public repositories (GitHub-hosted macOS runners).
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'native-apple/**'
+      - '.github/workflows/native-apple.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-apple
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: native-apple
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show tool versions
+        run: |
+          xcodebuild -version
+          swift --version
+          mkdir -p ../native-out
+
+      - name: Swift engine tests
+        run: swift test 2>&1 | tee ../native-out/swift-test.log
+
+      - name: Build for iPhone simulator
+        run: |
+          xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ../native-out/build-ios.log | grep -E "error:|warning: .*MouthLife|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" ../native-out/build-ios.log
+
+      - name: Build for Mac
+        if: always()
+        run: |
+          xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Debug \
+            -destination 'generic/platform=macOS' -derivedDataPath build-mac \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ../native-out/build-mac.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" ../native-out/build-mac.log
+
+      - name: Screenshots in the iPhone simulator
+        run: |
+          set -euo pipefail
+          APP=$(find build/Build/Products -path '*iphonesimulator*' -name 'MouthLife.app' -maxdepth 3 | head -1)
+          echo "App: $APP"
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = json.load(sys.stdin)["devices"]
+          phones = [d for rt, ds in devs.items() if "iOS" in rt for d in ds if d["name"].startswith("iPhone")]
+          pro = [d for d in phones if "Pro" in d["name"] and "Max" not in d["name"]]
+          print((pro or phones)[-1]["udid"])')
+          echo "Simulator: $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP"
+          BUNDLE=org.mouthlife.plaque
+          shot () {
+            local name=$1; local wait=$2; shift 2
+            xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$BUNDLE" "$@" > /dev/null
+            sleep "$wait"
+            xcrun simctl io "$UDID" screenshot "../native-out/$name.png"
+            echo "saved $name.png"
+          }
+          # First launch is slow (shader compile); give it extra time.
+          shot 00-cosmic-intro 25 --mode=cosmicIntro
+          shot 01-hub 15 --mode=hub
+          shot 02-arcade-world1 22 --mode=arcade --world=world_1
+          shot 03-arcade-world5 22 --mode=arcade --world=world_5
+          shot 04-brush-along 15 --mode=brushAlong
+          shot 05-pulp-rescue 22 --mode=pulpRescue
+          shot 06-dental-chart 12 --mode=hub --sheet=dentalChart
+          shot 07-settings 12 --mode=hub --sheet=settings
+          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "MouthLife"' --style compact > ../native-out/app-log.txt 2>/dev/null || true
+
+      - name: Summary
+        if: always()
+        working-directory: native-out
+        run: |
+          {
+            echo "## Native Apple"
+            echo ""
+            echo "- Swift tests: $(grep -Eo 'Executed [0-9]+ tests?, with [0-9]+ failures?' swift-test.log | tail -1 || echo 'see log')"
+            echo "- iPhone build: $(grep -Eo 'BUILD (SUCCEEDED|FAILED)' build-ios.log | tail -1 || echo 'did not run')"
+            echo "- Mac build: $(grep -Eo 'BUILD (SUCCEEDED|FAILED)' build-mac.log 2>/dev/null | tail -1 || echo 'did not run')"
+            echo "- Screenshots: $(ls *.png 2>/dev/null | wc -l | tr -d ' ')"
+            echo ""
+            echo '```'
+            grep -h "error:" build-ios.log build-mac.log 2>/dev/null | sort -u | head -40 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-apple-results
+          path: native-out
+          retention-days: 14
