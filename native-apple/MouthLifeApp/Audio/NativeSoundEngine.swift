@@ -462,6 +462,8 @@ private final class RealtimeSynthKernel {
     private var targetScrubActive: Float = 0
     private var targetScrubSpeed01: Float = 0
     private var targetScrubClean01: Float = 0
+    private var targetScrubPlaqueBite01: Float = 0
+    private var targetScrubHarmonicHz: Float = 523.25
     private var targetScrubBrushProfile: Int32 = 0
 
     // Audio-thread exclusive DSP state
@@ -479,11 +481,15 @@ private final class RealtimeSynthKernel {
     private var pk0: Float = 0, pk1: Float = 0, pk2: Float = 0
     private var pk3: Float = 0, pk4: Float = 0, pk5: Float = 0, pk6: Float = 0
 
-    // Continuous ASMR Sonic Scrub DSP state
+    // Continuous Nuanced ASMR Bristle, Warm Foam & Singing-Enamel DSP state
     private var smoothScrubGain: Float = 0
+    private var smoothScrubSpeed: Float = 0
+    private var smoothPlaqueBite: Float = 0
     private var scrubLfoPhase: Float = 0
+    private var scrubBreathPhase: Float = 0
     private var scrubSvfLow: Float = 0, scrubSvfBand: Float = 0
     private var scrubShimLow: Float = 0, scrubShimBand: Float = 0
+    private var scrubCrystalLow: Float = 0, scrubCrystalBand: Float = 0
 
     // Ping-pong stereo tape delay buffers (1.5s max)
     private let delayCapacity: Int
@@ -625,11 +631,20 @@ private final class RealtimeSynthKernel {
         os_unfair_lock_unlock(lockPtr)
     }
 
-    func setScrubTargets(active: Bool, speed01: Float, clean01: Float, profile: BrushSonicProfile) {
+    func setScrubTargets(
+        active: Bool,
+        speed01: Float,
+        clean01: Float,
+        plaqueBite01: Float,
+        harmonicHz: Float,
+        profile: BrushSonicProfile
+    ) {
         os_unfair_lock_lock(lockPtr)
         targetScrubActive = active ? 1.0 : 0.0
         targetScrubSpeed01 = speed01
         targetScrubClean01 = clean01
+        targetScrubPlaqueBite01 = plaqueBite01
+        targetScrubHarmonicHz = min(1760.0, max(260.0, harmonicHz))
         targetScrubBrushProfile = profile.rawValue
         os_unfair_lock_unlock(lockPtr)
     }
@@ -739,6 +754,8 @@ private final class RealtimeSynthKernel {
         var locScrubAct = targetScrubActive
         var locScrubSpd = targetScrubSpeed01
         var locScrubCln = targetScrubClean01
+        var locPlaqueBite = targetScrubPlaqueBite01
+        var locHarmonicHz = targetScrubHarmonicHz
         var locScrubProf = targetScrubBrushProfile
 
         if os_unfair_lock_trylock(lockPtr) {
@@ -755,6 +772,8 @@ private final class RealtimeSynthKernel {
             locScrubAct = targetScrubActive
             locScrubSpd = targetScrubSpeed01
             locScrubCln = targetScrubClean01
+            locPlaqueBite = targetScrubPlaqueBite01
+            locHarmonicHz = targetScrubHarmonicHz
             locScrubProf = targetScrubBrushProfile
             os_unfair_lock_unlock(lockPtr)
         }
@@ -765,8 +784,11 @@ private final class RealtimeSynthKernel {
         let twoPi = Float.pi * 2.0
         let nyquistSafe = sampleRate * 0.45
 
+        // Whisper-soft movement-gated gain: near-silent when resting, warmer on plaque, delicate silk on clean crystal
+        let speedShaped = pow(min(1.0, max(0.0, locScrubSpd)), 0.78)
+        let surfaceWeight: Float = 0.024 + 0.048 * locPlaqueBite
         let scrubGoalGain: Float = (locMuted < 0.5 && locScrubAct > 0.5 && locSfxGain > 0.002)
-            ? (0.18 + locScrubSpd * 0.24)
+            ? (0.003 + surfaceWeight * speedShaped)
             : 0.0
 
         // Fast O(1) idle DSP bypass when muted or when Suno hardware AAC is playing with zero active SFX/scrub
@@ -798,9 +820,11 @@ private final class RealtimeSynthKernel {
         }
         tailFramesRemaining = max(0, tailFramesRemaining - frameCount)
 
-        let baseScrubTone: Float = (locScrubProf == 1) ? 740.0 : ((locScrubProf == 2) ? 1550.0 : 1020.0)
-        let scrubCenterHz = baseScrubTone + locScrubSpd * 780.0 + locScrubCln * 480.0
-        let scrubLfoHz: Float = ((locScrubProf == 2) ? 4.2 : 1.7) + locScrubSpd * 5.2
+        let baseScrubTone: Float = (locScrubProf == 1) ? 460.0 : ((locScrubProf == 2) ? 720.0 : 560.0)
+        let scrubCenterHz = baseScrubTone + locScrubSpd * 340.0 + locScrubCln * 190.0
+        let scrubLfoHz: Float = ((locScrubProf == 2) ? 2.4 : 1.35) + locScrubSpd * 2.8
+        let scrubBreathHz: Float = 0.43 + locScrubSpd * 1.15
+        let crystalFc = min(0.24, 2.0 * sin(.pi * min(locHarmonicHz, nyquistSafe) * invSampleRate))
         var sumBassSq: Float = 0
         var sumMidSq: Float = 0
         var sumHighSq: Float = 0
@@ -1047,26 +1071,48 @@ private final class RealtimeSynthKernel {
                 }
             }
 
-            // 2. Continuous Velocity & Cleanliness Modulated ASMR Sonic Foam Scrub
-            if smoothScrubGain > 0.0002 {
+            // 2. Nuanced Multi-Texture Brushing: Warm Plaque Foam + Bristle Tuft Breath + In-Key Crystal Polish
+            if smoothScrubGain > 0.00015 {
+                let prevSpd = smoothScrubSpeed
+                smoothScrubSpeed += (locScrubSpd - smoothScrubSpeed) * 0.0012
+                smoothPlaqueBite += (locPlaqueBite - smoothPlaqueBite) * 0.0010
+                let bristleFlex = min(1.0, abs(locScrubSpd - prevSpd) * 3.2)
+
                 scrubLfoPhase = wrapPhase(scrubLfoPhase + scrubLfoHz * invSampleRate)
-                let lfo = sin(scrubLfoPhase * twoPi)
-                let modCenter = min(nyquistSafe, max(280.0, scrubCenterHz + lfo * 380.0))
-                let fcMain = min(0.80, 2.0 * sin(.pi * modCenter * invSampleRate))
+                scrubBreathPhase = wrapPhase(scrubBreathPhase + scrubBreathHz * invSampleRate)
+                let lfoA = sin(scrubLfoPhase * twoPi)
+                let lfoB = sin(scrubBreathPhase * twoPi)
+                let strokeContour = 0.62 + 0.24 * lfoA + 0.14 * lfoB + bristleFlex * 0.35
+
+                // Layer A: Warm velvety micro-foam (dominant when biting into soft plaque)
+                let modCenter = min(nyquistSafe, max(240.0, scrubCenterHz + lfoA * 140.0 + lfoB * 75.0))
+                let fcMain = min(0.55, 2.0 * sin(.pi * modCenter * invSampleRate))
                 scrubSvfLow += fcMain * scrubSvfBand
-                let highMain = pink - scrubSvfLow - 1.05 * scrubSvfBand
+                let highMain = pink - scrubSvfLow - 1.25 * scrubSvfBand
                 scrubSvfBand += fcMain * highMain
 
-                let fcShim = min(0.85, 2.0 * sin(.pi * min(5200.0, nyquistSafe) * invSampleRate))
+                // Layer B: Soft silky bristle tuft air on stroke flex (never harsh)
+                let silkHz = min(nyquistSafe, 1550.0 + smoothScrubSpeed * 950.0 + bristleFlex * 500.0)
+                let fcShim = min(0.68, 2.0 * sin(.pi * silkHz * invSampleRate))
                 scrubShimLow += fcShim * scrubShimBand
-                let highShim = pink - scrubShimLow - 1.15 * scrubShimBand
+                let highShim = pink - scrubShimLow - 1.35 * scrubShimBand
                 scrubShimBand += fcShim * highShim
 
-                let foamSig = (scrubSvfBand * 0.85 + scrubShimBand * (0.14 + locScrubSpd * 0.28)) * smoothScrubGain
-                let stereoSwish = 0.18 * lfo
-                sfxL += foamSig * (1.0 - stereoSwish)
-                sfxR += foamSig * (1.0 + stereoSwish)
-                revSendMono += foamSig * smoothSfxGain * 0.16
+                // Layer C: Singing hydroxyapatite crystal overtone (blooms gently as clean enamel shines, in key!)
+                scrubCrystalLow += crystalFc * scrubCrystalBand
+                let highCrystal = (pink * 0.09) - scrubCrystalLow - 0.15 * scrubCrystalBand
+                scrubCrystalBand += crystalFc * highCrystal
+
+                let foamWeight: Float = 0.45 + 0.55 * smoothPlaqueBite
+                let silkWeight: Float = (0.10 + 0.22 * bristleFlex) * (0.5 + 0.5 * smoothScrubSpeed)
+                let crystalPolish: Float = max(0.0, locScrubCln - 0.25) * (1.0 - 0.65 * smoothPlaqueBite) * 0.55
+
+                let rawBrush = scrubSvfBand * foamWeight + scrubShimBand * silkWeight + scrubCrystalBand * crystalPolish
+                let brushSig = rawBrush * smoothScrubGain * strokeContour
+                let stereoSwish = 0.24 * lfoA
+                sfxL += brushSig * (1.0 - stereoSwish)
+                sfxR += brushSig * (1.0 + stereoSwish)
+                revSendMono += (brushSig * 0.14 + scrubCrystalBand * crystalPolish * smoothScrubGain * 0.38) * smoothSfxGain
             }
 
             // 3. Music Bus Warm Filter (Pause Ducking / World 3 Stephan Acid Tension)
@@ -1567,6 +1613,9 @@ public final class NativeSoundEngine {
 
     private var throttles: [String: Double] = [:]
     private let throttleLock = NSLock()
+    private var scrubPlaqueHold: Float = 0
+    private var scrubMelodyStep: Int = 0
+    private var scrubSparkleCellsAccum: Int = 0
 
     public init(defaults: UserDefaults = .standard) {
         if defaults.object(forKey: Self.mutedKey) != nil {
@@ -2326,7 +2375,7 @@ public final class NativeSoundEngine {
         )
     }
 
-    // MARK: - Continuous ASMR Sonic Foam Scrubbing
+    // MARK: - Continuous Nuanced ASMR Brushing & Singing-Enamel Polish
 
     public func updateScrub(_ state: ScrubAudioState) {
         let live = state.active && !isMuted && !isPaused && !isInterrupted && sfxVolume > 0.001
@@ -2334,19 +2383,57 @@ public final class NativeSoundEngine {
 
         let speed01 = Float(min(1.0, max(0.0, state.probeSpeed / 7.0)))
         let clean01 = Float(min(1.0, max(0.0, state.cleanRatio)))
-        kernel?.setScrubTargets(active: live, speed01: speed01, clean01: clean01, profile: state.brushProfile)
+
+        if live && state.newlyCleaned > 0 {
+            let fresh = min(1.0, Float(state.newlyCleaned) / 6.0)
+            scrubPlaqueHold = max(scrubPlaqueHold * 0.88, fresh)
+            scrubSparkleCellsAccum += state.newlyCleaned
+        } else {
+            scrubPlaqueHold *= 0.88
+            if !live { scrubSparkleCellsAccum = 0 }
+        }
+
+        // Tune the subtle crystal-enamel polish overtone to the active song's harmonic fifth
+        let singMidi = harmonicMidi(degree: 4, octaveShift: 48)
+        let singHz = MusicCatalog.midiToFreq(singMidi)
+
+        kernel?.setScrubTargets(
+            active: live,
+            speed01: speed01,
+            clean01: clean01,
+            plaqueBite01: scrubPlaqueHold,
+            harmonicHz: singHz,
+            profile: state.brushProfile
+        )
 
         guard live else { return }
 
-        // Soft micro-bubble pops + in-key crystal chimes when plaque cells newly clear!
-        let popProb = Double(3.0 + speed01 * 9.0) / 60.0
-        if Double.random(in: 0..<1) < popProb, throttle("scrub-bubble", minGapSec: 0.045) {
-            let f = Float.random(in: 520...1420)
-            emitBlip(f0: f, f1: f * 1.68, durSec: 0.038, peak: Float.random(in: 0.025...0.042))
+        // Delicate water-droplet micro-pearls only when moving briskly into soft plaque
+        if speed01 > 0.14 && scrubPlaqueHold > 0.16 {
+            let popProb = Double(0.9 + speed01 * 3.8 * scrubPlaqueHold) / 60.0
+            if Double.random(in: 0..<1) < popProb, throttle("scrub-bubble", minGapSec: 0.095) {
+                let f = Float.random(in: 390...860)
+                emitBlip(f0: f, f1: f * 1.42, durSec: 0.042, peak: Float.random(in: 0.007...0.016))
+            }
         }
-        if state.newlyCleaned > 0, throttle("scrub-chime", minGapSec: 0.22) {
-            let deg = Int.random(in: 0..<10)
-            emitSfxVoice(.bell, midi: harmonicMidi(degree: deg, octaveShift: 60), vel: 0.32, pan: Float.random(in: -0.35...0.35), reverb: 0.68)
+
+        // Gentle ascending kalimba / glass-harp grace note only as meaningful patches of plaque dissolve
+        if scrubSparkleCellsAccum >= 7, throttle("scrub-chime", minGapSec: 0.42) {
+            scrubSparkleCellsAccum = 0
+            let scaleSteps = [0, 2, 4, 5, 7, 9, 7, 4]
+            let deg = scaleSteps[scrubMelodyStep % scaleSteps.count]
+            scrubMelodyStep += 1
+            let voice: SynthVoiceKind = (clean01 > 0.65) ? .glassHarp : .kalimba
+            let vel = Float.random(in: 0.13...0.19)
+            let pan = sin(Float(scrubMelodyStep) * 0.85) * 0.28
+            emitSfxVoice(
+                voice,
+                midi: harmonicMidi(degree: deg, octaveShift: 60),
+                durationSec: 0.34,
+                vel: vel,
+                pan: pan,
+                reverb: 0.62
+            )
         }
     }
 
@@ -2369,7 +2456,16 @@ public final class NativeSoundEngine {
     }
 
     public func stopScrub() {
-        kernel?.setScrubTargets(active: false, speed01: 0, clean01: 0, profile: .standard)
+        scrubPlaqueHold = 0
+        scrubSparkleCellsAccum = 0
+        kernel?.setScrubTargets(
+            active: false,
+            speed01: 0,
+            clean01: 0,
+            plaqueBite01: 0,
+            harmonicHz: 523.25,
+            profile: .standard
+        )
     }
 
     // MARK: - Complete Procedural Gameplay & UI SFX Suite
@@ -2636,15 +2732,15 @@ public final class NativeSoundEngine {
     }
 
     public func playGlassHarpNote(step: Int) {
-        guard throttle("glass-harp-\(step)", minGapSec: 0.055), canPlaySfx() else { return }
+        guard throttle("glass-harp-\(step)", minGapSec: 0.085), canPlaySfx() else { return }
         let deg = min(13, max(0, step))
-        let pan = (Float(deg) / 13.0 - 0.5) * 0.65
-        emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: deg, octaveShift: 60), durationSec: 0.45, vel: 0.72, pan: pan, reverb: 0.72)
+        let pan = (Float(deg) / 13.0 - 0.5) * 0.60
+        emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: deg, octaveShift: 60), durationSec: 0.42, vel: 0.38, pan: pan, reverb: 0.72)
     }
 
     public func playSquishThud() {
-        guard throttle("squish-thud", minGapSec: 0.08), canPlaySfx() else { return }
-        emitBlip(f0: 152, f1: 68, durSec: 0.15, peak: 0.22)
+        guard throttle("squish-thud", minGapSec: 0.11), canPlaySfx() else { return }
+        emitBlip(f0: 142, f1: 72, durSec: 0.13, peak: 0.085)
     }
 
     public func playTreatSnack() {

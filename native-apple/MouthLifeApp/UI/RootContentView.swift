@@ -19,6 +19,7 @@ public struct RootContentView: View {
             case .cosmicIntro:
                 CosmicIntroView(
                     beatIndex: $coordinator.cosmicBeatIndex,
+                    hasSeenBefore: coordinator.save.hasSeenCosmicIntro,
                     onComplete: { coordinator.completeCosmicIntro() }
                 )
                 .transition(.opacity)
@@ -40,6 +41,7 @@ public struct RootContentView: View {
                     onStartBrushAlong: { coordinator.startBrushAlong() },
                     onLaunchWorld: { wid in coordinator.launchArcadeWorld(wid) },
                     onLaunchPulpRescue: { coordinator.launchPulpRescue() },
+                    onReplayIntro: { coordinator.replayCosmicIntro() },
                     onOpenSheet: { kind in
                         NativeSoundEngine.shared.playUiTap()
                         coordinator.activeSheet = kind

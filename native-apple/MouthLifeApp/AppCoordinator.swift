@@ -80,6 +80,7 @@ public final class AppCoordinator {
     private var toastClearTask: Task<Void, Never>?
     private var unsubscribeToken: (() -> Void)?
     private var lastHudPublishUptime: TimeInterval = 0
+    private var lastSessionCleanRatio: Double = 0
 
     private func shouldPublishHudSnapshot(_ next: SessionSnapshot, now: TimeInterval) -> Bool {
         guard let prev = latestSnapshot else { return true }
@@ -106,7 +107,8 @@ public final class AppCoordinator {
         _ = CompanionArchSim.reconcileOfflineElapsed(&updatedSave.companion, nowEpochMs: CompanionArchSim.currentEpochMs())
         self.save = sys.save(updatedSave)
 
-        self.mode = self.save.hasSeenCosmicIntro ? .hub : .cosmicIntro
+        // Always greet cold launches on the Cosmic Intro arrival (returning players get 1-tap Enter Arch)
+        self.mode = .cosmicIntro
         let initialWorld = pickRecommendedDiveWorld(from: self.save)
         self.selectedWorldId = initialWorld
         self.activeRadioWorldId = initialWorld
@@ -243,14 +245,17 @@ public final class AppCoordinator {
                 self.lastHudPublishUptime = now
                 self.latestSnapshot = snap
             }
+            let deltaClean = max(0.0, snap.worldCleanRatio - self.lastSessionCleanRatio)
+            self.lastSessionCleanRatio = snap.worldCleanRatio
+            let newlyCleanedCells = snap.scrubActive ? Int((deltaClean * 1400.0).rounded()) : 0
             NativeSoundEngine.shared.updateScrub(
                 active: snap.scrubActive,
                 probeSpeed: snap.probeSpeed,
-                newlyCleaned: snap.scrubActive ? 1 : 0,
+                newlyCleaned: newlyCleanedCells,
                 cleanRatio: snap.worldCleanRatio,
                 brushUpgradeId: self.save.equippedUpgrades.brush
             )
-            if snap.scrubActive {
+            if snap.scrubActive && snap.probeSpeed > 0.25 {
                 HapticsEngine.shared.playSonicScrubTick(
                     cleanRatio: snap.worldCleanRatio,
                     speedNormalized: Float(min(1.0, snap.probeSpeed / GameConfig.probeMoveSpeed))
@@ -260,19 +265,19 @@ public final class AppCoordinator {
 
         sceneController.onCompanionCrownRubbed = { [weak self] crownIdx, feedback in
             guard let self else { return }
-            if let crownIdx {
-                if self.tappedCrownSummary?.toothIndex != crownIdx {
-                    self.tappedCrownSummary = DentalChart.companionCrownSummary(forToothIndex: crownIdx)
-                }
-                NativeSoundEngine.shared.playCrownRub(
-                    crownIndex: crownIdx,
-                    smoothnessIndex: self.save.companion.smoothnessIndex
-                )
+            let changedCrown = (crownIdx != nil && self.tappedCrownSummary?.toothIndex != crownIdx)
+            if let crownIdx, changedCrown {
+                self.tappedCrownSummary = DentalChart.companionCrownSummary(forToothIndex: crownIdx)
             }
             if feedback.sound == .glass {
                 NativeSoundEngine.shared.playGlassHarpNote(step: feedback.noteStep)
             } else if feedback.sound == .thud {
                 NativeSoundEngine.shared.playSquishThud()
+            } else if let crownIdx, changedCrown {
+                NativeSoundEngine.shared.playCrownRub(
+                    crownIndex: crownIdx,
+                    smoothnessIndex: self.save.companion.smoothnessIndex
+                )
             }
             HapticsEngine.shared.playEnamelRub(
                 smoothnessIndex: self.save.companion.smoothnessIndex,
@@ -404,7 +409,9 @@ public final class AppCoordinator {
             events: eventBus
         )
         self.activeSession = session
-        self.latestSnapshot = session.makeSnapshot()
+        let initialSnap = session.makeSnapshot()
+        self.latestSnapshot = initialSnap
+        self.lastSessionCleanRatio = initialSnap.worldCleanRatio
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .arcade)
@@ -422,7 +429,9 @@ public final class AppCoordinator {
             events: eventBus
         )
         self.activeSession = session
-        self.latestSnapshot = session.makeSnapshot()
+        let initialSnap = session.makeSnapshot()
+        self.latestSnapshot = initialSnap
+        self.lastSessionCleanRatio = initialSnap.worldCleanRatio
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .pulpRescue)

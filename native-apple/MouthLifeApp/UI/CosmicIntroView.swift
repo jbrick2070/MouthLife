@@ -3,6 +3,7 @@ import MouthLifeCore
 
 public struct CosmicIntroView: View {
     @Binding public var beatIndex: Int
+    public let hasSeenBefore: Bool
     public let onComplete: () -> Void
 
     private struct BeatContent {
@@ -39,8 +40,9 @@ public struct CosmicIntroView: View {
         )
     ]
 
-    public init(beatIndex: Binding<Int>, onComplete: @escaping () -> Void) {
+    public init(beatIndex: Binding<Int>, hasSeenBefore: Bool = false, onComplete: @escaping () -> Void) {
         self._beatIndex = beatIndex
+        self.hasSeenBefore = hasSeenBefore
         self.onComplete = onComplete
     }
 
@@ -49,7 +51,7 @@ public struct CosmicIntroView: View {
         let beat = beats[idx]
 
         VStack {
-            // Top Skip Bar
+            // Top Skip / Enter Bar
             HStack {
                 HStack(spacing: 6) {
                     ForEach(0..<beats.count, id: \.self) { step in
@@ -60,10 +62,15 @@ public struct CosmicIntroView: View {
                     }
                 }
                 Spacer()
-                Button("Skip Intro") {
+                Button {
                     onComplete()
+                } label: {
+                    Label(
+                        hasSeenBefore ? "Enter Arch" : "Skip Intro",
+                        systemImage: hasSeenBefore ? "arrow.right.circle.fill" : "forward.fill"
+                    )
                 }
-                .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
+                .buttonStyle(MLGlassPillButtonStyle(tint: hasSeenBefore ? MLTheme.mintClean : MLTheme.cyanAccent))
             }
             .padding(.horizontal, 18)
             .padding(.top, 10)

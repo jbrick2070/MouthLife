@@ -29,6 +29,7 @@ public struct CompanionHubView: View {
     public let onStartBrushAlong: () -> Void
     public let onLaunchWorld: (String) -> Void
     public let onLaunchPulpRescue: () -> Void
+    public let onReplayIntro: () -> Void
     public let onOpenSheet: (HubSheetKind) -> Void
 
     public init(
@@ -47,6 +48,7 @@ public struct CompanionHubView: View {
         onStartBrushAlong: @escaping () -> Void,
         onLaunchWorld: @escaping (String) -> Void,
         onLaunchPulpRescue: @escaping () -> Void,
+        onReplayIntro: @escaping () -> Void,
         onOpenSheet: @escaping (HubSheetKind) -> Void
     ) {
         self.save = save
@@ -64,6 +66,7 @@ public struct CompanionHubView: View {
         self.onStartBrushAlong = onStartBrushAlong
         self.onLaunchWorld = onLaunchWorld
         self.onLaunchPulpRescue = onLaunchPulpRescue
+        self.onReplayIntro = onReplayIntro
         self.onOpenSheet = onOpenSheet
     }
 
@@ -120,6 +123,12 @@ public struct CompanionHubView: View {
                         }
 
                         sheetPill("32-Tooth Atlas", icon: "mouth.fill", sheet: .dentalChart, tint: MLTheme.cyanAccent)
+                        Button {
+                            onReplayIntro()
+                        } label: {
+                            Label("Cosmic Intro", systemImage: "sparkles")
+                        }
+                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
                         sheetPill(
                             "Upgrades",
                             icon: "wrench.and.screwdriver.fill",
