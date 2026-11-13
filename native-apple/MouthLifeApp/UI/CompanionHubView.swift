@@ -16,6 +16,7 @@ public struct CompanionHubView: View {
     public let save: MouthLifeSaveV2
     public let selectedWorldId: String
     public let hubRadioStation: RadioStation
+    public let coachLanguage: CoachLanguage
     public let tappedCrownSummary: CompanionCrownSummary?
     public let statusToast: String?
     public let liveFps: Int
@@ -36,6 +37,7 @@ public struct CompanionHubView: View {
         save: MouthLifeSaveV2,
         selectedWorldId: String,
         hubRadioStation: RadioStation,
+        coachLanguage: CoachLanguage = .english,
         tappedCrownSummary: CompanionCrownSummary?,
         statusToast: String?,
         liveFps: Int,
@@ -54,6 +56,7 @@ public struct CompanionHubView: View {
         self.save = save
         self.selectedWorldId = selectedWorldId
         self.hubRadioStation = hubRadioStation
+        self.coachLanguage = coachLanguage
         self.tappedCrownSummary = tappedCrownSummary
         self.statusToast = statusToast
         self.liveFps = liveFps
@@ -333,7 +336,7 @@ public struct CompanionHubView: View {
                     Button {
                         onStartBrushAlong()
                     } label: {
-                        Label("2m Brush + Pick", systemImage: "timer")
+                        Label(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage), systemImage: "timer")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))

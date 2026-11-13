@@ -1,62 +1,181 @@
 import SwiftUI
 import MouthLifeCore
 
+/// Permanent Body-Locked 2D Mirror Arch Compass.
+/// Screen-Left = Patient Left (`Q2` Top-Left, `Q3` Bottom-Left) and Screen-Right = Patient Right (`Q1` Top-Right, `Q4` Bottom-Right),
+/// matching your reflection in the bathroom mirror and NEVER flipping when the 3D cutaway camera moves.
+private struct MirrorArchCompassView: View {
+    let phase: BrushPhaseState
+    let language: CoachLanguage
+
+    var body: some View {
+        let sides = BrushCoachCopy.mirrorSideLabels(for: language)
+
+        HStack(spacing: 5) {
+            Text(sides.left)
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .foregroundStyle(
+                    !phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted
+                )
+                .frame(width: 28, alignment: .trailing)
+
+            Canvas { ctx, size in
+                let cx = size.width * 0.5
+                let cy = size.height * 0.5
+                let rx = size.width * 0.38
+                let ry = size.height * 0.39
+
+                // Subtle center nose/smile mirror landmark
+                var nose = Path()
+                nose.move(to: CGPoint(x: cx - 4, y: cy - 2))
+                nose.addLine(to: CGPoint(x: cx, y: cy - 6))
+                nose.addLine(to: CGPoint(x: cx + 4, y: cy - 2))
+                ctx.stroke(nose, with: .color(Color.white.opacity(0.28)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+                var smile = Path()
+                smile.move(to: CGPoint(x: cx - 5, y: cy + 3))
+                smile.addQuadCurve(to: CGPoint(x: cx + 5, y: cy + 3), control: CGPoint(x: cx, y: cy + 6.5))
+                ctx.stroke(smile, with: .color(Color.white.opacity(0.26)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+
+                for q in BrushQuadrant.allCases {
+                    let qBit = (1 << q.rawValue)
+                    let isCompleted = (phase.completedQuadrantsMask & qBit) != 0
+                    let isActive: Bool = {
+                        if phase.inFlossBonus {
+                            return phase.flossIsUpper ? q.isUpper : !q.isUpper
+                        }
+                        return phase.quadrant == q
+                    }()
+                    let isPreEcho = (!phase.inFlossBonus && phase.upcomingQuadrantIndex == q.rawValue && phase.preEcho01 > 0.02)
+
+                    let arcPath = quadrantArcPath(q: q, cx: cx, cy: cy, rx: rx, ry: ry)
+
+                    if isActive {
+                        // Outer warm gold halo + vivid surface core
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(MLTheme.fluorapatiteGold.opacity(0.38)),
+                            style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                        )
+                        let coreColor: Color = {
+                            if phase.inFlossBonus { return MLTheme.fluorapatiteGold }
+                            switch phase.surface {
+                            case .outerCheek: return MLTheme.cyanAccent
+                            case .chewingGrooves: return MLTheme.fluorapatiteGold
+                            case .innerTongue: return MLTheme.mintClean
+                            }
+                        }()
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(coreColor),
+                            style: StrokeStyle(lineWidth: 6.5, lineCap: .round)
+                        )
+
+                        // Surface rim indicator (Outer = outer halo arc, Inner = inner portal arc)
+                        if !phase.inFlossBonus && phase.surface != .chewingGrooves {
+                            let offsetScale: CGFloat = (phase.surface == .outerCheek) ? 1.18 : 0.78
+                            let rimPath = quadrantArcPath(q: q, cx: cx, cy: cy, rx: rx * offsetScale, ry: ry * offsetScale)
+                            ctx.stroke(
+                                rimPath,
+                                with: .color(MLTheme.fluorapatiteGold.opacity(0.92)),
+                                style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: phase.surface == .innerTongue ? [3, 2.5] : [])
+                            )
+                        }
+                    } else if isCompleted {
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(MLTheme.mintClean.opacity(0.90)),
+                            style: StrokeStyle(lineWidth: 5.5, lineCap: .round)
+                        )
+                    } else if isPreEcho {
+                        let pulse = Double(phase.preEcho01)
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(MLTheme.fluorapatiteGold.opacity(0.30 + 0.55 * pulse)),
+                            style: StrokeStyle(lineWidth: 5.8, lineCap: .round)
+                        )
+                    } else {
+                        // Frosted porcelain upcoming state
+                        ctx.stroke(
+                            arcPath,
+                            with: .color(Color.white.opacity(0.20)),
+                            style: StrokeStyle(lineWidth: 5.0, lineCap: .round)
+                        )
+                    }
+                }
+            }
+            .frame(width: 78, height: 74)
+
+            Text(sides.right)
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .foregroundStyle(
+                    phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted
+                )
+                .frame(width: 28, alignment: .leading)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Mirror Mouth Compass")
+    }
+
+    private func quadrantArcPath(q: BrushQuadrant, cx: CGFloat, cy: CGFloat, rx: CGFloat, ry: CGFloat) -> Path {
+        var path = Path()
+        let steps = 14
+        // Angles in screen coords (0 = right, -pi/2 = top, pi = left, +pi/2 = bottom):
+        // Upper-Left (Q2): pi*1.04 -> pi*1.46
+        // Upper-Right (Q1): pi*1.54 -> pi*1.96
+        // Lower-Left (Q3): pi*0.96 -> pi*0.54
+        // Lower-Right (Q4): pi*0.46 -> pi*0.04
+        let (a0, a1): (CGFloat, CGFloat) = {
+            switch q {
+            case .upperLeft: return (.pi * 1.05, .pi * 1.45)
+            case .upperRight: return (.pi * 1.55, .pi * 1.95)
+            case .lowerLeft: return (.pi * 0.95, .pi * 0.55)
+            case .lowerRight: return (.pi * 0.45, .pi * 0.05)
+            }
+        }()
+        let yShift: CGFloat = q.isUpper ? -3.0 : 3.0
+        for i in 0...steps {
+            let t = CGFloat(i) / CGFloat(steps)
+            let ang = a0 + (a1 - a0) * t
+            let pt = CGPoint(x: cx + cos(ang) * rx, y: cy + yShift + sin(ang) * ry)
+            if i == 0 {
+                path.move(to: pt)
+            } else {
+                path.addLine(to: pt)
+            }
+        }
+        return path
+    }
+}
+
 public struct BrushAlongView: View {
     public let elapsedSec: Double
     public let isPaused: Bool
     public let inFlossBonus: Bool
     public let flossToolStyle: FlossToolStyle
+    public let voiceCoachEnabled: Bool
+    public let coachLanguage: CoachLanguage
     public let stationLabel: String
     public let onCycleStation: () -> Void
+    public let onToggleVoiceCoach: () -> Void
+    public let onSelectLanguage: (CoachLanguage) -> Void
     public let onTogglePause: () -> Void
     public let onSelectFlossToolStyle: (FlossToolStyle) -> Void
     public let onEnterFlossBonusNow: () -> Void
     public let onCompleteSession: (Bool) -> Void
     public let onCancelToHub: () -> Void
 
-    private let quadrantTitles = [
-        "Q1 • Upper Right Arch (#2–#8)",
-        "Q2 • Upper Left Arch (#9–#15)",
-        "Q3 • Lower Left Arch (#18–#24)",
-        "Q4 • Lower Right Arch (#25–#31)"
-    ]
-
-    private let crownTypeNames = [
-        "2nd Molar",
-        "1st Molar",
-        "2nd Premolar",
-        "1st Premolar",
-        "Canine",
-        "Lateral Incisor",
-        "Central Incisor",
-        "Central Incisor",
-        "Lateral Incisor",
-        "Canine",
-        "1st Premolar",
-        "2nd Premolar",
-        "1st Molar",
-        "2nd Molar"
-    ]
-
-    private let surfaceShortLabels = [
-        "Outer Cheek 45°",
-        "Chewing Grooves",
-        "Inner Tongue / Palate"
-    ]
-
-    private let surfaceCoaching = [
-        ("OUTER CHEEK / LIP SURFACE", "Angle soft bristles 45° gently into the gumline collar (Bass method) with short, calm sweeps."),
-        ("CHEWING / BITING SURFACE", "Glide briskly across molar pits, cusps, and grooves where sticky sucrose hides."),
-        ("INNER TONGUE / PALATE SURFACE", "Sweep inside collars; tilt brush vertically behind front incisors (#7–#10 & #23–#26)!")
-    ]
-
     public init(
         elapsedSec: Double,
         isPaused: Bool,
         inFlossBonus: Bool,
         flossToolStyle: FlossToolStyle = .flossPick,
+        voiceCoachEnabled: Bool = true,
+        coachLanguage: CoachLanguage = .english,
         stationLabel: String,
         onCycleStation: @escaping () -> Void,
+        onToggleVoiceCoach: @escaping () -> Void = {},
+        onSelectLanguage: @escaping (CoachLanguage) -> Void = { _ in },
         onTogglePause: @escaping () -> Void,
         onSelectFlossToolStyle: @escaping (FlossToolStyle) -> Void = { _ in },
         onEnterFlossBonusNow: @escaping () -> Void,
@@ -67,8 +186,12 @@ public struct BrushAlongView: View {
         self.isPaused = isPaused
         self.inFlossBonus = inFlossBonus
         self.flossToolStyle = flossToolStyle
+        self.voiceCoachEnabled = voiceCoachEnabled
+        self.coachLanguage = coachLanguage
         self.stationLabel = stationLabel
         self.onCycleStation = onCycleStation
+        self.onToggleVoiceCoach = onToggleVoiceCoach
+        self.onSelectLanguage = onSelectLanguage
         self.onTogglePause = onTogglePause
         self.onSelectFlossToolStyle = onSelectFlossToolStyle
         self.onEnterFlossBonusNow = onEnterFlossBonusNow
@@ -81,34 +204,31 @@ public struct BrushAlongView: View {
             ? (GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec)
             : GameConfig.brushAlongTotalSec
         let remaining = max(0, totalTarget - elapsedSec)
-        let qIdx = min(3, max(0, Int(elapsedSec / 30.0)))
-        let qElapsed = elapsedSec - Double(qIdx) * 30.0
-        let sIdx = min(2, max(0, Int(qElapsed / 10.0)))
+        let phase = BrushPhaseState.evaluate(elapsedSec: elapsedSec, inFlossBonus: inFlossBonus)
+        let buttons = BrushCoachCopy.actionButtonLabels(for: coachLanguage)
 
-        VStack {
-            // Top Header
-            HStack {
+        VStack(spacing: 8) {
+            // Top Utility Bar: Hub | Radio | Voice Coach | Language | Pause
+            HStack(spacing: 6) {
                 Button {
                     onCancelToHub()
                 } label: {
                     Label("Hub", systemImage: "chevron.left")
+                        .font(.system(.caption, design: .rounded, weight: .bold))
                 }
                 .buttonStyle(MLGlassPillButtonStyle())
 
-                Spacer()
+                Spacer(minLength: 2)
 
                 Button {
                     onCycleStation()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Image(systemName: stationLabel == "Sanctuary" ? "moon.stars.fill" : "dot.radiowaves.left.and.right")
                             .font(.system(size: 11, weight: .bold))
                         Text(stationLabel)
                             .font(.system(.caption2, design: .rounded, weight: .bold))
-                        Image(systemName: "sun.max.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(MLTheme.mintClean)
-                            .accessibilityLabel("Sink Stay-Awake Active")
+                            .lineLimit(1)
                     }
                 }
                 .buttonStyle(
@@ -117,154 +237,193 @@ public struct BrushAlongView: View {
                     )
                 )
 
-                Spacer()
+                Button {
+                    onToggleVoiceCoach()
+                } label: {
+                    Image(systemName: voiceCoachEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .buttonStyle(
+                    MLGlassPillButtonStyle(tint: voiceCoachEnabled ? MLTheme.mintClean : MLTheme.textMuted)
+                )
+                .accessibilityLabel(voiceCoachEnabled ? "Voice Coach On" : "Voice Coach Off")
+
+                Menu {
+                    ForEach(CoachLanguage.allCases) { lang in
+                        Button {
+                            onSelectLanguage(lang)
+                        } label: {
+                            HStack {
+                                Text("\(lang.flagEmoji) \(lang.nativeName)")
+                                if lang == coachLanguage {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(coachLanguage.flagEmoji)
+                            .font(.system(size: 12))
+                        Text(coachLanguage.shortCode)
+                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    }
+                    .foregroundStyle(MLTheme.textPrimary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(MLTheme.cardBg))
+                    .overlay(Capsule().strokeBorder(MLTheme.cyanAccent.opacity(0.42), lineWidth: 1))
+                }
 
                 Button {
                     onTogglePause()
                 } label: {
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 12, weight: .bold))
                 }
                 .buttonStyle(MLGlassPillButtonStyle(tint: isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
 
-            // Large High-Visibility Sink Countdown Ring + Live Active Tooth Spotlight Badge
-            VStack(spacing: 5) {
-                Text(
-                    inFlossBonus
-                        ? (flossToolStyle == .flossPick ? "FLOSS PICK BONUS (+25 F⁻)" : "STRING FLOSS BONUS (+25 F⁻)")
-                        : quadrantTitles[qIdx]
-                )
-                    .font(.system(.subheadline, design: .rounded, weight: .heavy))
-                    .foregroundStyle(inFlossBonus ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent)
+            // Permanent Body-Locked Mirror Arch Compass + 3-Foot Countdown & 3-2-1 Musical Anticipation
+            HStack(spacing: 14) {
+                MirrorArchCompassView(phase: phase, language: coachLanguage)
 
-                Text(formatClock(ceil(remaining), pad: true))
-                    .font(.system(size: 46, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(isPaused ? MLTheme.fluorapatiteGold : MLTheme.textPrimary)
-                    .shadow(color: (isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent).opacity(0.45), radius: 14)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatClock(ceil(remaining), pad: true))
+                        .font(.system(size: 44, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(isPaused ? MLTheme.fluorapatiteGold : MLTheme.textPrimary)
+                        .shadow(color: (isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent).opacity(0.45), radius: 12)
 
-                if isPaused {
-                    Button {
-                        onTogglePause()
-                    } label: {
-                        Label("PAUSED • TAP TO RESUME", systemImage: "play.circle.fill")
-                            .font(.system(.caption, design: .rounded, weight: .heavy))
-                    }
-                    .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
-                    .padding(.vertical, 2)
-                } else {
-                    Text(liveTargetToothCaption(qIdx: qIdx, qElapsed: qElapsed, sIdx: sIdx))
-                        .font(.system(.caption, design: .rounded, weight: .bold))
-                        .foregroundStyle(MLTheme.fluorapatiteGold)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-
-                // Progress Pips: 2-Arch Floss Progress during Bonus, 4-Quadrant Progress during Brushing
-                if inFlossBonus {
-                    let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
-                    let halfDur = max(0.5, GameConfig.brushAlongFlossBonusSec * 0.5)
-                    HStack(spacing: 10) {
-                        ForEach(0..<2, id: \.self) { archIdx in
-                            let fill = min(1.0, max(0.0, (flossElapsed - Double(archIdx) * halfDur) / halfDur))
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.14))
-                                    Capsule()
-                                        .fill(fill < 1.0 && fill > 0 ? MLTheme.fluorapatiteGold : MLTheme.mintClean)
-                                        .frame(width: geo.size.width * CGFloat(fill))
-                                }
-                            }
-                            .frame(height: 7)
+                    if isPaused {
+                        Button {
+                            onTogglePause()
+                        } label: {
+                            Label("TAP TO RESUME", systemImage: "play.circle.fill")
+                                .font(.system(.caption2, design: .rounded, weight: .heavy))
                         }
-                    }
-                    .frame(maxWidth: 280)
-                    .padding(.top, 2)
-                } else {
-                    HStack(spacing: 8) {
-                        ForEach(0..<4, id: \.self) { i in
-                            let fill = min(1.0, max(0.0, (elapsedSec - Double(i) * 30.0) / 30.0))
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.14))
-                                    Capsule()
-                                        .fill(i == qIdx ? MLTheme.cyanAccent : MLTheme.mintClean)
-                                        .frame(width: geo.size.width * CGFloat(fill))
-                                }
+                        .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
+                    } else if let pip = phase.countdownPip {
+                        // Final 3-second musical anticipation indicator ("3 • 2 • 1")
+                        HStack(spacing: 6) {
+                            ForEach([3, 2, 1], id: \.self) { step in
+                                Circle()
+                                    .fill(step >= pip ? MLTheme.fluorapatiteGold : Color.white.opacity(0.18))
+                                    .frame(width: step == pip ? 10 : 7, height: step == pip ? 10 : 7)
+                                    .shadow(color: step == pip ? MLTheme.fluorapatiteGold : .clear, radius: 6)
                             }
-                            .frame(height: 7)
+                            Text("\(pip)…")
+                                .font(.system(.caption, design: .rounded, weight: .heavy))
+                                .monospacedDigit()
+                                .foregroundStyle(MLTheme.fluorapatiteGold)
                         }
+                    } else {
+                        // Clean surface / arch progress bar
+                        let subFill = min(1.0, max(0.0, phase.phaseElapsedSec / max(0.5, phase.phaseDurationSec)))
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.white.opacity(0.15))
+                                Capsule()
+                                    .fill(inFlossBonus ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent)
+                                    .frame(width: geo.size.width * CGFloat(subFill))
+                            }
+                        }
+                        .frame(height: 7)
+                        .frame(maxWidth: 132)
                     }
-                    .frame(maxWidth: 280)
-                    .padding(.top, 2)
                 }
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 18)
-            .mlGlassCard(cornerRadius: 24)
+            .padding(.vertical, 9)
             .padding(.horizontal, 16)
+            .mlGlassCard(cornerRadius: 24)
+            .padding(.horizontal, 14)
 
-            // Leave center open so 3D Companion Arch shines & highlights active quadrant / gap!
-            Spacer()
+            // Wide-open center viewport for the 3D Enamel Awakening Arch, 45° Angle Plane & Floss Pick!
+            Spacer(minLength: 0)
 
-            // Bottom Coaching Card
+            // Glanceable 3-Foot Bottom Action Banner (Zero Instructional Paragraphs!)
             VStack(alignment: .leading, spacing: 9) {
                 if inFlossBonus {
-                    HStack(spacing: 8) {
-                        Text(flossToolStyle == .flossPick ? "FLOSS PICK • SAW & LEAN" : "STRING SILK • C-HUG")
-                            .font(.system(.caption, design: .rounded, weight: .heavy))
+                    let hl = BrushCoachCopy.flossHeadline(
+                        isUpper: phase.flossIsUpper,
+                        style: flossToolStyle,
+                        stepIndex: phase.flossStepIndex,
+                        lang: coachLanguage
+                    )
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(hl.archTitle)
+                            .font(.system(size: 20, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.fluorapatiteGold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
                         Spacer(minLength: 4)
                         flossToolPicker
                     }
-                    Text(
-                        flossToolStyle == .flossPick
-                            ? "Saw-wiggle gently past the tight contact (never snap!), then lean the pick left & right to hug both tooth walls!"
-                            : "Curve floss silk gently into a C-shape around both walls under the papilla — reaching the 35% bristles miss!"
-                    )
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(MLTheme.textPrimary)
-                } else {
-                    let coach = surfaceCoaching[sIdx]
-                    HStack {
-                        Text(coach.0)
-                            .font(.system(.caption, design: .rounded, weight: .heavy))
-                            .foregroundStyle(MLTheme.mintClean)
-                        Spacer()
-                        Text("Surface \(sIdx + 1)/3")
-                            .font(.system(.caption2, design: .rounded, weight: .bold))
-                            .foregroundStyle(MLTheme.textMuted)
-                    }
-                    Text(coach.1)
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(MLTheme.textPrimary)
-                }
 
-                HStack(spacing: 10) {
-                    if inFlossBonus {
+                    HStack(spacing: 7) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 13, weight: .heavy))
+                            .foregroundStyle(MLTheme.mintClean)
+                        Text(hl.actionBadge)
+                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+
+                    HStack(spacing: 10) {
                         Button {
                             onCompleteSession(true)
                         } label: {
-                            Label("Finish + Floss (+75 F⁻)", systemImage: "checkmark.seal.fill")
+                            Label(buttons.doneFloss, systemImage: "checkmark.seal.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
 
-                        Button("Skip (+50 F⁻)") {
+                        Button(buttons.skipFloss) {
                             onCompleteSession(false)
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
-                    } else {
-                        Text("Auto-rolls into 45s Floss Pick Bonus at 0:00 • Spit, don't rinse right away!")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(MLTheme.textMuted)
+                    }
+                } else {
+                    let qHeadline = BrushCoachCopy.quadrantLabel(phase.quadrant, lang: coachLanguage)
+                    let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: coachLanguage)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(qHeadline)
+                            .font(.system(size: 23, weight: .heavy, design: .rounded))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+
                         Spacer(minLength: 4)
+
+                        Text(badge.angleTag)
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.black)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(MLTheme.fluorapatiteGold))
+                    }
+
+                    HStack(spacing: 8) {
+                        Image(systemName: surfaceIconName(phase.surface))
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundStyle(surfaceAccentColor(phase.surface))
+                        Text(badge.headline)
+                            .font(.system(size: 16, weight: .heavy, design: .rounded))
+                            .foregroundStyle(surfaceAccentColor(phase.surface))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+
+                        Spacer(minLength: 4)
+
                         Button {
                             onEnterFlossBonusNow()
                         } label: {
-                            Label("Floss Pick", systemImage: "sparkles")
+                            Label(buttons.flossJump, systemImage: "sparkles")
                                 .font(.system(.caption2, design: .rounded, weight: .bold))
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
@@ -277,9 +436,25 @@ public struct BrushAlongView: View {
         }
     }
 
+    private func surfaceIconName(_ surface: BrushSurface) -> String {
+        switch surface {
+        case .outerCheek: return "wave.3.right"
+        case .chewingGrooves: return "circle.grid.2x2.fill"
+        case .innerTongue: return "arrow.up.and.down.circle.fill"
+        }
+    }
+
+    private func surfaceAccentColor(_ surface: BrushSurface) -> Color {
+        switch surface {
+        case .outerCheek: return MLTheme.cyanAccent
+        case .chewingGrooves: return MLTheme.fluorapatiteGold
+        case .innerTongue: return MLTheme.mintClean
+        }
+    }
+
     private var flossToolPicker: some View {
         HStack(spacing: 4) {
-            flossStyleChip(title: "Floss Pick", style: .flossPick)
+            flossStyleChip(title: "Pick", style: .flossPick)
             flossStyleChip(title: "String", style: .stringFloss)
         }
         .padding(3)
@@ -294,57 +469,12 @@ public struct BrushAlongView: View {
             Text(title)
                 .font(.system(.caption2, design: .rounded, weight: .heavy))
                 .foregroundStyle(selected ? Color.black : MLTheme.textMuted)
-                .padding(.horizontal, 9)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
                     Capsule().fill(selected ? MLTheme.fluorapatiteGold : Color.clear)
                 )
         }
         .buttonStyle(.plain)
-    }
-
-    private func liveTargetToothCaption(qIdx: Int, qElapsed: Double, sIdx: Int) -> String {
-        if inFlossBonus {
-            let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
-            let bonusTotal = max(1.0, GameConfig.brushAlongFlossBonusSec)
-            let norm = min(0.999, max(0.0, flossElapsed / bonusTotal))
-            let isUpper = norm < 0.5
-            let halfNorm = isUpper ? (norm * 2.0) : ((norm - 0.5) * 2.0)
-            let contactProg = min(12.999, max(0.0, halfNorm * 13.0))
-            let cIdx = min(12, max(0, Int(floor(contactProg))))
-            let gapFrac = contactProg - Double(cIdx)
-            let numA = isUpper ? (2 + cIdx) : (31 - cIdx)
-            let numB = isUpper ? (3 + cIdx) : (30 - cIdx)
-            if flossToolStyle == .flossPick {
-                let phaseLabel: String
-                if gapFrac < 0.30 {
-                    phaseLabel = "Saw-Glide Past Contact"
-                } else if gapFrac < 0.65 {
-                    phaseLabel = "Lean Pick onto #\(numA) Wall"
-                } else {
-                    phaseLabel = "Lean Pick onto #\(numB) & Lift"
-                }
-                return "✨ Gap #\(numA)–#\(numB) (\(isUpper ? "Top" : "Bottom")) • \(phaseLabel)"
-            } else {
-                return "✨ C-Curve Contact #\(numA)–#\(numB) • \(isUpper ? "Upper Arch" : "Lower Arch")"
-            }
-        }
-
-        let isUpper = (qIdx < 2)
-        let isRightSide = (qIdx == 0 || qIdx == 3)
-        let sFrac = min(0.999, max(0.0, (qElapsed - Double(sIdx) * 10.0) / 10.0))
-        let u = (sIdx == 1) ? (1.0 - sFrac) : sFrac
-        let crownProg = isRightSide ? (u * 6.0) : (13.0 - u * 6.0)
-        let ti = min(13, max(0, Int(crownProg.rounded())))
-        let adaNum = isUpper ? (2 + ti) : (31 - ti)
-        let sideWord = isRightSide ? "Right" : "Left"
-        let jawWord = isUpper ? "Upper" : "Lower"
-        let surfWord: String
-        if sIdx == 2 && (4...9).contains(ti) {
-            surfWord = "Vertical Heel-to-Toe"
-        } else {
-            surfWord = surfaceShortLabels[min(2, max(0, sIdx))]
-        }
-        return "🦷 #\(adaNum) \(jawWord) \(sideWord) \(crownTypeNames[ti]) • \(surfWord)"
     }
 }

@@ -11,12 +11,16 @@ public struct ProfileAndSettingsSheet: View {
     @State private var isMuted: Bool
     @State private var musicVolume: Double
     @State private var sfxVolume: Double
+    @State private var voiceCoachEnabled: Bool
+    @State private var coachLanguage: CoachLanguage
     @State private var reducedMotion: Bool
     @State private var showProMotionTelemetry: Bool
 
     public let onSaveProfile: (String, Int, String) -> Void
     public let onChangeQuality: (QualityPreference) -> Void
     public let onChangeAudio: (Bool, Float, Float) -> Void
+    public let onChangeVoiceCoach: (Bool) -> Void
+    public let onChangeLanguage: (CoachLanguage) -> Void
     public let onChangeReducedMotion: (Bool) -> Void
     public let onToggleProMotionTelemetry: (Bool) -> Void
     public let onReplayCosmicIntro: () -> Void
@@ -27,11 +31,15 @@ public struct ProfileAndSettingsSheet: View {
         isMuted: Bool,
         musicVolume: Float,
         sfxVolume: Float,
+        voiceCoachEnabled: Bool = true,
+        coachLanguage: CoachLanguage = .english,
         reducedMotion: Bool,
         showProMotionTelemetry: Bool,
         onSaveProfile: @escaping (String, Int, String) -> Void,
         onChangeQuality: @escaping (QualityPreference) -> Void,
         onChangeAudio: @escaping (Bool, Float, Float) -> Void,
+        onChangeVoiceCoach: @escaping (Bool) -> Void = { _ in },
+        onChangeLanguage: @escaping (CoachLanguage) -> Void = { _ in },
         onChangeReducedMotion: @escaping (Bool) -> Void,
         onToggleProMotionTelemetry: @escaping (Bool) -> Void,
         onReplayCosmicIntro: @escaping () -> Void
@@ -43,11 +51,15 @@ public struct ProfileAndSettingsSheet: View {
         _isMuted = State(initialValue: isMuted)
         _musicVolume = State(initialValue: Double(musicVolume))
         _sfxVolume = State(initialValue: Double(sfxVolume))
+        _voiceCoachEnabled = State(initialValue: voiceCoachEnabled)
+        _coachLanguage = State(initialValue: coachLanguage)
         _reducedMotion = State(initialValue: reducedMotion)
         _showProMotionTelemetry = State(initialValue: showProMotionTelemetry)
         self.onSaveProfile = onSaveProfile
         self.onChangeQuality = onChangeQuality
         self.onChangeAudio = onChangeAudio
+        self.onChangeVoiceCoach = onChangeVoiceCoach
+        self.onChangeLanguage = onChangeLanguage
         self.onChangeReducedMotion = onChangeReducedMotion
         self.onToggleProMotionTelemetry = onToggleProMotionTelemetry
         self.onReplayCosmicIntro = onReplayCosmicIntro
@@ -159,6 +171,48 @@ public struct ProfileAndSettingsSheet: View {
                             .onChange(of: reducedMotion) { _, next in
                                 onChangeReducedMotion(next)
                             }
+                    }
+                    .mlGlassCard()
+
+                    // Hands-Free Multilingual Voice Coach Card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("HANDS-FREE VOICE & LANGUAGE")
+                                .font(.system(.caption, design: .rounded, weight: .bold))
+                                .foregroundStyle(MLTheme.cyanAccent)
+                            Spacer()
+                            Text("\(coachLanguage.flagEmoji) \(coachLanguage.nativeName)")
+                                .font(.system(.caption2, design: .rounded, weight: .bold))
+                                .foregroundStyle(MLTheme.mintClean)
+                        }
+
+                        Toggle("Spoken Brush-Along Voice Coach", isOn: $voiceCoachEnabled)
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            .tint(MLTheme.mintClean)
+                            .onChange(of: voiceCoachEnabled) { _, next in
+                                onChangeVoiceCoach(next)
+                            }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(CoachLanguage.allCases) { lang in
+                                    let active = (coachLanguage == lang)
+                                    Button {
+                                        coachLanguage = lang
+                                        onChangeLanguage(lang)
+                                    } label: {
+                                        Text("\(lang.flagEmoji) \(lang.nativeName)")
+                                            .font(.system(.caption, design: .rounded, weight: .bold))
+                                            .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textPrimary)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 7)
+                                            .background(
+                                                Capsule().fill(active ? MLTheme.mintClean : Color.white.opacity(0.08))
+                                            )
+                                    }
+                                }
+                            }
+                        }
                     }
                     .mlGlassCard()
 

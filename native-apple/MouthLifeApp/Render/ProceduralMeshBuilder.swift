@@ -30,6 +30,10 @@ public struct CompanionCrownFrame: Equatable, Sendable {
 public struct PacerCoachVisualState: Sendable {
     public let activeCrownIndex: Int
     public let activeQuadrant: Int
+    public let completedQuadMask: Int
+    public let activeSurfaceIdx: Int
+    public let preEcho01: Float
+    public let upcomingQuadrant: Int
     public let contactWorldPos: SIMD3<Float>
     public let focusWorldPos: SIMD3<Float>
     public let camYaw: Float
@@ -118,14 +122,20 @@ public final class CompanionArchNodes {
             return PacerCoachVisualState(
                 activeCrownIndex: 0,
                 activeQuadrant: 0,
+                completedQuadMask: 0,
+                activeSurfaceIdx: 0,
+                preEcho01: 0,
+                upcomingQuadrant: -1,
                 contactWorldPos: rootOrigin,
                 focusWorldPos: rootOrigin,
                 camYaw: 0,
                 camPitch: 0.35,
-                camDistPortrait: 22.0,
-                camDistLandscape: 15.0
+                camDistPortrait: 20.0,
+                camDistLandscape: 14.0
             )
         }
+
+        let phase = BrushPhaseState.evaluate(elapsedSec: elapsedSec, inFlossBonus: inFlossBonus)
 
         if inFlossBonus {
             coachBrushNode.isHidden = true
@@ -146,13 +156,15 @@ public final class CompanionArchNodes {
             lowerJawNode.simdPosition = .zero
             lowerJawNode.opacity = 1.0
 
+            // Sweep Mirror-Right -> Mirror-Left (cIdx 12 -> 0) so Screen-Right = Your Right in the bathroom mirror!
             let contactCount = max(1, crownFrames.count - 1) // 13 interdental contacts (0..12) per arch
             let contactProg = min(Float(contactCount) - 0.001, max(0.0, halfNorm * Float(contactCount)))
-            let cIdx = min(contactCount - 1, max(0, Int(floor(contactProg))))
-            let gapFrac = contactProg - Float(cIdx)
-            let nextCrownIdx = min(crownFrames.count - 1, cIdx + 1)
+            let stepIdx = min(contactCount - 1, max(0, Int(floor(contactProg))))
+            let cIdx = (contactCount - 1) - stepIdx
+            let gapFrac = contactProg - Float(stepIdx)
+            let rightCrownIdx = min(crownFrames.count - 1, cIdx + 1)
             let fA = crownFrames[cIdx]
-            let fB = crownFrames[nextCrownIdx]
+            let fB = crownFrames[rightCrownIdx]
 
             let posA = isUpper ? SIMD3<Float>(fA.localPosition.x, Self.upperMirrorY - fA.localPosition.y, fA.localPosition.z) : fA.localPosition
             let posB = isUpper ? SIMD3<Float>(fB.localPosition.x, Self.upperMirrorY - fB.localPosition.y, fB.localPosition.z) : fB.localPosition
@@ -165,10 +177,10 @@ public final class CompanionArchNodes {
                 : SIMD3<Float>(outAvg.z, 0, -outAvg.x)
             let gumSign: Float = isUpper ? 1.0 : -1.0
 
-            // 3-Phase Floss Pick Technique per gap:
+            // 3-Phase Mirror-Aligned Floss Pick Technique per gap:
             //   1) 0.00..<0.30: Gentle saw-wiggle in-and-out past tight contact (never snap!)
-            //   2) 0.30..<0.65: Lean pick onto Tooth A wall & sweep into gingival sulcus
-            //   3) 0.65...1.00: Lean pick onto Tooth B wall, sweep sulcus & lift out over cusp
+            //   2) 0.30..<0.65: Lean right (+archDir) onto Right Tooth wall & sweep sulcus
+            //   3) 0.65...1.00: Lean left (-archDir) onto Left Tooth wall, sweep & lift out over cusp
             let depthIntoGap: Float
             let leanSide: Float
             let sawZ: Float
@@ -180,43 +192,45 @@ public final class CompanionArchNodes {
                 depthIntoGap = simd_mix(-(halfH + 0.18), halfH * 0.10, ease)
                 leanSide = 0.0
                 sawZ = reducedMotion ? 0 : sin(t * .pi * 4.0) * 0.15
-                spotlightCrown = cIdx
+                spotlightCrown = rightCrownIdx
             } else if gapFrac < 0.65 {
                 let t = (gapFrac - 0.30) / 0.35
                 depthIntoGap = halfH * (0.10 + 0.28 * sin(t * .pi))
-                leanSide = -simd_smoothstep(0.0, 0.22, t) * (1.0 - 0.35 * simd_smoothstep(0.80, 1.0, t))
+                leanSide = simd_smoothstep(0.0, 0.22, t) * (1.0 - 0.35 * simd_smoothstep(0.80, 1.0, t))
                 sawZ = reducedMotion ? 0 : sin(t * .pi * 2.0) * 0.05
-                spotlightCrown = cIdx
+                spotlightCrown = rightCrownIdx
             } else {
                 let t = (gapFrac - 0.65) / 0.35
                 if t < 0.72 {
                     let sub = t / 0.72
                     depthIntoGap = halfH * (0.10 + 0.28 * sin(sub * .pi))
-                    leanSide = simd_smoothstep(0.0, 0.25, sub)
+                    leanSide = -simd_smoothstep(0.0, 0.25, sub)
                     sawZ = reducedMotion ? 0 : sin(sub * .pi * 2.0) * 0.05
                 } else {
                     let lift = simd_smoothstep(0.0, 1.0, (t - 0.72) / 0.28)
                     depthIntoGap = simd_mix(halfH * 0.10, -(halfH + 0.20), lift)
-                    leanSide = 1.0 - lift
+                    leanSide = -(1.0 - lift)
                     sawZ = 0
                 }
-                spotlightCrown = nextCrownIdx
+                spotlightCrown = cIdx
             }
 
             let contactLocal = mid
                 + SIMD3<Float>(0, gumSign * depthIntoGap, 0)
-                + archDir * (leanSide * 0.14)
+                + archDir * (leanSide * 0.15)
                 + outAvg * sawZ
 
+            let pickScale: Float = 1.16
             if usePick {
-                var yAxis = SIMD3<Float>(0, -gumSign, 0) + archDir * (leanSide * 0.24)
+                var yAxis = SIMD3<Float>(0, -gumSign, 0) + archDir * (leanSide * 0.25)
                 yAxis = simd_normalize(yAxis - outAvg * simd_dot(yAxis, outAvg))
-                let xAxis = simd_normalize(simd_cross(yAxis, outAvg))
-                let zAxis = outAvg
+                let xAxis = simd_normalize(simd_cross(yAxis, outAvg)) * pickScale
+                let yScaled = yAxis * pickScale
+                let zScaled = outAvg * pickScale
                 coachFlossPickNode.simdTransform = simd_float4x4(
                     SIMD4<Float>(xAxis.x, xAxis.y, xAxis.z, 0),
-                    SIMD4<Float>(yAxis.x, yAxis.y, yAxis.z, 0),
-                    SIMD4<Float>(zAxis.x, zAxis.y, zAxis.z, 0),
+                    SIMD4<Float>(yScaled.x, yScaled.y, yScaled.z, 0),
+                    SIMD4<Float>(zScaled.x, zScaled.y, zScaled.z, 0),
                     SIMD4<Float>(contactLocal.x, contactLocal.y, contactLocal.z, 1)
                 )
             } else {
@@ -227,43 +241,46 @@ public final class CompanionArchNodes {
                 coachFlossNode.simdEulerAngles = SIMD3<Float>(isUpper ? .pi : 0, yaw, 0)
             }
 
-            // Crisp ~24° three-quarter oblique angle so the Floss Pick's U-bow, horns, taut string & handle never foreshorten!
+            // Crisp ~24° three-quarter oblique angle from 3 feet away so the Floss Pick's U-bow, horns & string pop!
             let baseYaw = atan2(outAvg.x, outAvg.z)
             let camYaw: Float
-            if cIdx <= 5 {
-                camYaw = max(-0.92, min(0.85, baseYaw + 0.42))
+            if cIdx >= 7 {
+                camYaw = max(-0.85, min(0.92, baseYaw - 0.42))
             } else if cIdx == 6 {
                 camYaw = 0.38
             } else {
-                camYaw = max(-0.85, min(0.92, baseYaw - 0.42))
+                camYaw = max(-0.92, min(0.85, baseYaw + 0.42))
             }
 
-            let activeQuad = isUpper ? (cIdx < 6 ? 0 : 1) : (cIdx < 6 ? 3 : 2)
+            let activeQuad = isUpper ? (cIdx >= 6 ? 0 : 1) : (cIdx >= 6 ? 3 : 2)
             let contactWorld = rootOrigin + contactLocal
             let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.85 : 1.35, 1.0)
             return PacerCoachVisualState(
                 activeCrownIndex: spotlightCrown,
                 activeQuadrant: activeQuad,
+                completedQuadMask: 0b1111,
+                activeSurfaceIdx: -1,
+                preEcho01: phase.preEcho01,
+                upcomingQuadrant: -1,
                 contactWorldPos: contactWorld,
-                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.66)),
+                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.68)),
                 camYaw: camYaw,
                 camPitch: isUpper ? -0.26 : 0.30,
-                camDistPortrait: 18.6,
-                camDistLandscape: 13.0
+                camDistPortrait: 17.8,
+                camDistLandscape: 12.6
             )
         }
 
-        // Standard 2-Minute 4-Quadrant x 3-Surface Guided Brushing
+        // Standard 2-Minute 4-Quadrant x 3-Surface Mirror-Matched Guided Brushing
         coachFlossNode.isHidden = true
         coachFlossPickNode.isHidden = true
         coachBrushNode.isHidden = false
 
-        let qIdx = min(3, max(0, Int(elapsedSec / 30.0)))
-        let isUpper = (qIdx < 2)
-        let isRightSide = (qIdx == 0 || qIdx == 3)
-        let qElapsed = elapsedSec - Double(qIdx) * 30.0
-        let sIdx = min(2, max(0, Int(qElapsed / 10.0)))
-        let sFrac = Float(min(0.999, max(0.0, (qElapsed - Double(sIdx) * 10.0) / 10.0)))
+        let qIdx = phase.quadrant.rawValue
+        let isUpper = phase.quadrant.isUpper
+        let isRightSide = phase.quadrant.isPatientRight
+        let sIdx = phase.surface.rawValue
+        let sFrac = Float(min(0.999, max(0.0, phase.phaseElapsedSec / 10.0)))
 
         // Show active jaw at full clarity; on Outer Cheek (sIdx == 0) show opposite jaw hinged open for instant Top vs Bottom context!
         if isUpper {
@@ -272,8 +289,8 @@ public final class CompanionArchNodes {
             upperJawNode.opacity = 1.0
             if sIdx == 0 {
                 lowerJawNode.isHidden = false
-                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.7, -0.7)
-                lowerJawNode.opacity = 0.42
+                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.8, -0.7)
+                lowerJawNode.opacity = 0.38
             } else {
                 lowerJawNode.isHidden = true
             }
@@ -283,16 +300,19 @@ public final class CompanionArchNodes {
             lowerJawNode.opacity = 1.0
             if sIdx == 0 {
                 upperJawNode.isHidden = false
-                upperJawNode.simdPosition = SIMD3<Float>(0, 3.7, -0.7)
-                upperJawNode.opacity = 0.42
+                upperJawNode.simdPosition = SIMD3<Float>(0, 3.8, -0.7)
+                upperJawNode.opacity = 0.38
             } else {
                 upperJawNode.isHidden = true
             }
         }
 
-        // Sweep back-molar -> front-incisor on Outer (0) & Inner (2), and front -> back on Chewing (1)
+        // Mirror-Matched Sweep:
+        //   - Patient Right (Q1, Q4) = Screen-Right (+X, crowns 13 -> 7: back right molar -> right front incisor)
+        //   - Patient Left  (Q2, Q3) = Screen-Left  (-X, crowns 0 -> 6:  back left molar -> left front incisor)
         let u = (sIdx == 1) ? (1.0 - sFrac) : sFrac
-        let crownProgress: Float = isRightSide ? (u * 6.0) : (13.0 - u * 6.0)
+        let crownProgress: Float = isRightSide ? (13.0 - u * 6.0) : (u * 6.0)
+        let distFromBack: Float = isRightSide ? (13.0 - crownProgress) : crownProgress
         let i0 = min(13, max(0, Int(floor(crownProgress))))
         let i1 = min(13, i0 + 1)
         let alpha = crownProgress - Float(i0)
@@ -317,21 +337,21 @@ public final class CompanionArchNodes {
         coachBristlesNode.simdPosition.x = reducedMotion ? 0 : sin(nowSec * 42.0) * 0.045
 
         let contactLocal: SIMD3<Float>
-        let zAxis: SIMD3<Float> // Points from bristle tips toward back of brush head
-        let handleHint: SIMD3<Float> // Points along brush neck/handle out through the open lips
+        let zAxis: SIMD3<Float>
+        let handleHint: SIMD3<Float>
 
         switch sIdx {
         case 0:
-            // OUTER CHEEK / LIP: 45° Bass angle tucked gently into the gingival collar
+            // OUTER — The Crescent: 45° Bass angle tucked gently into the gingival collar
             contactLocal = toothCenter
                 + outward * (halfD * 0.98)
                 + SIMD3<Float>(0, gumSign * (halfH * 0.38) + microVert, 0)
                 + tangent * microSweep
             zAxis = simd_normalize(outward + SIMD3<Float>(0, -gumSign * 0.84, 0))
-            handleHint = simd_normalize(SIMD3<Float>(outward.x * 0.22, -gumSign * 0.08, 1.0))
+            handleHint = simd_normalize(SIMD3<Float>(outward.x * 0.24, -gumSign * 0.08, 1.0))
 
         case 1:
-            // CHEWING / BITING SURFACE: Bristles flat onto occlusal cusps & fissures
+            // CHEWING — The Grooves: Bristles flat onto occlusal cusps & fissures
             contactLocal = toothCenter
                 + SIMD3<Float>(0, -gumSign * (halfH * 1.02), 0)
                 + tangent * (microSweep * 1.35)
@@ -339,19 +359,19 @@ public final class CompanionArchNodes {
             handleHint = simd_normalize(SIMD3<Float>(outward.x * 0.15, 0, 1.0))
 
         default:
-            // INNER TONGUE / PALATE: 45° inside collar on molars -> tilts vertically heel-to-toe behind front teeth!
-            let frontBlend = simd_smoothstep(2.8, 4.6, isRightSide ? crownProgress : (13.0 - crownProgress))
+            // INNER — The Portal: 45° inside collar on molars -> rotates vertically heel-to-toe behind front teeth!
+            let frontBlend = simd_smoothstep(2.8, 4.5, distFromBack)
             contactLocal = toothCenter
                 + inward * (halfD * 0.96)
                 + SIMD3<Float>(0, gumSign * (halfH * 0.28) + microVert, 0)
                 + tangent * (microSweep * (1.0 - 0.5 * frontBlend))
             zAxis = simd_normalize(inward + SIMD3<Float>(0, -gumSign * (0.76 - 0.22 * frontBlend), 0))
             let molarHandle = simd_normalize(SIMD3<Float>(-outward.x * 0.20, -gumSign * 0.18, 1.0))
-            let verticalFrontHandle = simd_normalize(SIMD3<Float>(0, -gumSign * 0.86, 0.52))
+            let verticalFrontHandle = simd_normalize(SIMD3<Float>(0, -gumSign * 0.88, 0.48))
             handleHint = simd_normalize(simd_mix(molarHandle, verticalFrontHandle, SIMD3<Float>(repeating: frontBlend)))
         }
 
-        // Build clean right-handed orthonormal basis for coachBrushNode
+        // Build clean right-handed orthonormal basis for coachBrushNode (scaled 1.18x for 3-foot mirror visibility!)
         var yAxis = handleHint - zAxis * simd_dot(handleHint, zAxis)
         if simd_length_squared(yAxis) < 1e-5 {
             yAxis = SIMD3<Float>(0, 0, 1) - zAxis * zAxis.z
@@ -359,17 +379,18 @@ public final class CompanionArchNodes {
         yAxis = simd_normalize(yAxis)
         let xAxis = simd_normalize(simd_cross(yAxis, zAxis))
         yAxis = simd_normalize(simd_cross(zAxis, xAxis))
+        let brushScale: Float = 1.18
 
         coachBrushNode.simdTransform = simd_float4x4(
-            SIMD4<Float>(xAxis.x, xAxis.y, xAxis.z, 0),
-            SIMD4<Float>(yAxis.x, yAxis.y, yAxis.z, 0),
-            SIMD4<Float>(zAxis.x, zAxis.y, zAxis.z, 0),
+            SIMD4<Float>(xAxis.x * brushScale, xAxis.y * brushScale, xAxis.z * brushScale, 0),
+            SIMD4<Float>(yAxis.x * brushScale, yAxis.y * brushScale, yAxis.z * brushScale, 0),
+            SIMD4<Float>(zAxis.x * brushScale, zAxis.y * brushScale, zAxis.z * brushScale, 0),
             SIMD4<Float>(contactLocal.x, contactLocal.y, contactLocal.z, 1)
         )
 
-        // Dramatic 3D Camera Orbit so user vividly sees Cheek vs Chewing Cusps vs Inner Tongue/Palate!
-        let rightSign: Float = isRightSide ? -1.0 : 1.0
-        let frontProg: Float = isRightSide ? (crownProgress / 6.0) : ((13.0 - crownProgress) / 6.0)
+        // Settled, high-clarity 3-foot cutaway camera framing (Screen-Right = Mirror Right, Screen-Left = Mirror Left!)
+        let mirrorSideSign: Float = isRightSide ? 1.0 : -1.0
+        let frontProg: Float = distFromBack / 6.0
         let camYaw: Float
         let camPitch: Float
         let distP: Float
@@ -377,32 +398,36 @@ public final class CompanionArchNodes {
 
         switch sIdx {
         case 0:
-            // Orbit around outer cheek (-54°/+54° at 2nd molar -> -14°/+14° at central incisor)
-            camYaw = rightSign * (0.94 - 0.68 * frontProg)
-            camPitch = isUpper ? -0.14 : 0.22
-            distP = 21.0
-            distL = 14.5
+            // OUTER ("Crescent"): Settled mirror-side cheek framing (never flips Left/Right!)
+            camYaw = mirrorSideSign * (0.78 - 0.48 * frontProg)
+            camPitch = isUpper ? -0.15 : 0.22
+            distP = 18.8
+            distL = 13.4
         case 1:
-            // Tilt steeply overhead (Lower) or underneath (Upper) straight into the chewing grooves!
-            camYaw = rightSign * (0.46 - 0.24 * frontProg)
-            camPitch = isUpper ? -0.68 : 0.72
-            distP = 19.8
-            distL = 13.8
+            // CHEWING ("Grooves"): Steep overhead/underneath cutaway straight into biting fissures!
+            camYaw = mirrorSideSign * (0.36 - 0.20 * frontProg)
+            camPitch = isUpper ? -0.72 : 0.76
+            distP = 18.2
+            distL = 12.8
         default:
-            // Swing across the arch to look directly onto the inner tongue/palate collar & vertical front sweep!
-            camYaw = -rightSign * (0.62 - 0.44 * frontProg)
-            camPitch = isUpper ? -0.54 : 0.58
-            distP = 20.8
-            distL = 14.4
+            // INNER ("Portal"): Elevated cross-arch cutaway showing lingual/palatal wall & vertical front brush!
+            camYaw = -mirrorSideSign * (0.48 - 0.34 * frontProg)
+            camPitch = isUpper ? -0.58 : 0.62
+            distP = 18.6
+            distL = 13.2
         }
 
         let contactWorld = rootOrigin + contactLocal
-        let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.9 : 1.3, 0.8)
-        let focusWorld = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.54))
+        let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.9 : 1.3, 0.9)
+        let focusWorld = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.62))
 
         return PacerCoachVisualState(
             activeCrownIndex: activeCrownIdx,
             activeQuadrant: qIdx,
+            completedQuadMask: phase.completedQuadrantsMask,
+            activeSurfaceIdx: sIdx,
+            preEcho01: phase.preEcho01,
+            upcomingQuadrant: phase.upcomingQuadrantIndex,
             contactWorldPos: contactWorld,
             focusWorldPos: focusWorld,
             camYaw: camYaw,
@@ -1380,8 +1405,8 @@ public enum ProceduralMeshBuilder {
             let halfH = Float(spec.h * mmToU * 0.5 * 1.05)
             let segCount = (spec.kind == .molar || spec.kind == .premolar) ? max(28, segments) : max(24, segments - 2)
 
-            // Lower Arch: Right half (ti < 7) = Q4 (#25–#31, quadIdx 3); Left half (ti >= 7) = Q3 (#18–#24, quadIdx 2)
-            let lowerQuadIdx = (ti < 7) ? 3 : 2
+            // Bathroom Mirror Orientation: Screen-Right (ti >= 7) = Patient Right (Q1/Q4); Screen-Left (ti < 7) = Patient Left (Q2/Q3)
+            let lowerQuadIdx = (ti >= 7) ? 3 : 2
             let crownGeo = sculptCrownGeometry(
                 kind: spec.kind,
                 width: halfW * 2.0,
@@ -1395,8 +1420,8 @@ public enum ProceduralMeshBuilder {
             )
             crownGeo.materials = [enamelMaterial]
 
-            // Upper Arch: Right half (ti < 7) = Q1 (#2–#8, quadIdx 0); Left half (ti >= 7) = Q2 (#9–#15, quadIdx 1)
-            let upperQuadIdx = (ti < 7) ? 0 : 1
+            // Upper Arch: Screen-Right (ti >= 7) = Q1 (Top Right, quadIdx 0); Screen-Left (ti < 7) = Q2 (Top Left, quadIdx 1)
+            let upperQuadIdx = (ti >= 7) ? 0 : 1
             let upperCrownGeo = sculptCrownGeometry(
                 kind: spec.kind,
                 width: halfW * 2.0,
@@ -1542,14 +1567,21 @@ public enum ProceduralMeshBuilder {
         brushRoot.name = "PacerCoachToothbrush"
         brushRoot.isHidden = true
 
-        // Glowing mint-cyan contact spotlight halo right where bristle tips meet the tooth/gumline
-        let contactHalo = SCNTorus(ringRadius: 0.92, pipeRadius: 0.055)
+        // Glowing mint-cyan contact spotlight halo + translucent 45° luminous contact plane wedge
+        let contactHalo = SCNTorus(ringRadius: 1.02, pipeRadius: 0.068)
         contactHalo.ringSegmentCount = 36
-        contactHalo.materials = [makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.86, additive: true)]
+        contactHalo.materials = [makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.90, additive: true)]
         let haloNode = SCNNode(geometry: contactHalo)
         haloNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
-        haloNode.simdPosition = SIMD3<Float>(0, 0, 0.06)
+        haloNode.simdPosition = SIMD3<Float>(0, 0, 0.05)
         brushRoot.addChildNode(haloNode)
+
+        // Luminous gold-mint bristle contact plane ribbon so the 45° / Flat / Vertical angle reads from 3 feet away!
+        let anglePlane = SCNBox(width: 1.48, height: 1.72, length: 0.04, chamferRadius: 0.02)
+        anglePlane.materials = [makeUnlitGlowMaterial(hex: 0xFBBF24, opacity: 0.34, additive: true)]
+        let anglePlaneNode = SCNNode(geometry: anglePlane)
+        anglePlaneNode.simdPosition = SIMD3<Float>(0, -0.05, 0.03)
+        brushRoot.addChildNode(anglePlaneNode)
 
         // 3 x 6 soft tapered sonic bristle tufts (tips at z=0, bases at z=+0.84)
         let bristlesGroup = SCNNode()

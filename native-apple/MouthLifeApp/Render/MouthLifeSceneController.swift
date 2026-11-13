@@ -550,6 +550,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         touchSystem.step(dt: Double(dt), nowSec: Double(sceneNowSec))
 
         let activeQuad: Int
+        var completedQuadMask: Int = 0
+        var activeSurfaceIdx: Int = -1
+        var preEcho01: Float = 0.0
+        var upcomingQuad: Int = -1
         var pacerFoamOrigin: Vec2 = .zero
         var pacerFoamStrength: Float = 0
 
@@ -569,9 +573,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             )
             latestPacerCoachState = coach
             activeQuad = coach.activeQuadrant
+            completedQuadMask = coach.completedQuadMask
+            activeSurfaceIdx = coach.activeSurfaceIdx
+            preEcho01 = coach.preEcho01
+            upcomingQuad = coach.upcomingQuadrant
             companionEnamelController.setHighlightedCrown(index: coach.activeCrownIndex, pulse01: 1.0)
             pacerFoamOrigin = Vec2(x: Double(coach.contactWorldPos.x), z: Double(coach.contactWorldPos.z))
-            pacerFoamStrength = pacerInFlossBonus ? 0.36 : 0.88
+            pacerFoamStrength = pacerInFlossBonus ? 0.42 : 0.90
         } else {
             activeQuad = -1
             companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
@@ -589,7 +597,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             smoothness01: smooth01,
             fluorideGlow01: smooth01 > 0.84 ? 0.55 : 0.15,
             acidStress01: companionAcidStress,
-            activeQuadrant: activeQuad
+            activeQuadrant: activeQuad,
+            completedQuadMask: completedQuadMask,
+            activeSurfaceIdx: activeSurfaceIdx,
+            preEcho01: preEcho01,
+            upcomingQuadrant: upcomingQuad
         )
         companionEnamelController.updateFrameUniforms(
             EnamelFrameUniforms(
@@ -1029,7 +1041,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     private func updateCameraRig(dt: Float) {
         let targets = computeCameraTargets()
-        let rate: Float = appMode == .brushAlong ? 4.8 : 7.5
+        let rate: Float = appMode == .brushAlong ? 6.8 : 7.5
         let k = 1.0 - exp(-rate * max(0.001, dt))
         camCurrentPos += (targets.pos - camCurrentPos) * k
         camCurrentLookAt += (targets.look - camCurrentLookAt) * k

@@ -60,6 +60,8 @@ public final class AppCoordinator {
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
     public var flossToolStyle: FlossToolStyle = .flossPick
+    public var voiceCoachEnabled: Bool = NativeSoundEngine.shared.isVoiceCoachEnabled
+    public var coachLanguage: CoachLanguage = NativeSoundEngine.shared.coachLanguage
     private var pacerPausedByUser: Bool = false
     private var pacerSuspendedBySystem: Bool = false
     private var announcedFlossLowerHalf: Bool = false
@@ -67,6 +69,7 @@ public final class AppCoordinator {
     private var lastPacerTickUptime: TimeInterval?
     private var lastAnnouncedQuadrant: Int = -1
     private var lastAnnouncedSurface: Int = -1
+    private var lastCountdownPipKey: String = ""
 
     // Companion & Sheet UI State
     public var activeSheet: HubSheetKind?
@@ -123,6 +126,8 @@ public final class AppCoordinator {
             .flatMap(FlossToolStyle.init(rawValue:)) ?? .flossPick
         self.flossToolStyle = persistedFlossStyle
         self.sceneController.pacerFlossToolStyle = persistedFlossStyle
+        self.voiceCoachEnabled = NativeSoundEngine.shared.isVoiceCoachEnabled
+        self.coachLanguage = NativeSoundEngine.shared.coachLanguage
 
         setupSceneAndAudioBridges()
         NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
@@ -457,6 +462,7 @@ public final class AppCoordinator {
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
+        NativeSoundEngine.shared.stopVoiceCoach()
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.stopScrub()
         transition(to: .hub)
@@ -522,6 +528,7 @@ public final class AppCoordinator {
         brushRadioStation = .livingClock
         lastAnnouncedQuadrant = 0
         lastAnnouncedSurface = 0
+        lastCountdownPipKey = ""
         tappedCrownSummary = nil
         sceneController.highlightedCrownIndex = nil
         sceneController.pacerElapsedSec = 0
@@ -530,9 +537,47 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setPaused(false)
         transition(to: .brushAlong)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
-        NativeSoundEngine.shared.playPacerCue(.quadrant)
-        HapticsEngine.shared.playPacerQuadrantCue()
+        NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
+        NativeSoundEngine.shared.speakCoachingPhrase(
+            BrushCoachCopy.spokenBrushCue(quadrant: .upperRight, surface: .outerCheek, lang: coachLanguage)
+        )
         startPacerTimer()
+    }
+
+    public func toggleVoiceCoach() {
+        setVoiceCoachEnabled(!voiceCoachEnabled)
+    }
+
+    public func setVoiceCoachEnabled(_ enabled: Bool) {
+        voiceCoachEnabled = enabled
+        NativeSoundEngine.shared.setVoiceCoachEnabled(enabled)
+        NativeSoundEngine.shared.playUiTap()
+        if enabled && mode == .brushAlong && !pacerIsPaused {
+            speakCurrentPacerPhaseCue()
+        }
+    }
+
+    public func setCoachLanguage(_ language: CoachLanguage) {
+        guard coachLanguage != language else { return }
+        coachLanguage = language
+        NativeSoundEngine.shared.setCoachLanguage(language)
+        NativeSoundEngine.shared.playUiTap()
+        if mode == .brushAlong && !pacerIsPaused && voiceCoachEnabled {
+            speakCurrentPacerPhaseCue()
+        }
+    }
+
+    private func speakCurrentPacerPhaseCue() {
+        let phase = BrushPhaseState.evaluate(elapsedSec: pacerElapsedSec, inFlossBonus: pacerInFlossBonus)
+        if phase.inFlossBonus {
+            let cue = phase.flossIsUpper
+                ? BrushCoachCopy.spokenFlossStartCue(style: flossToolStyle, lang: coachLanguage)
+                : BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
+            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+        } else {
+            let cue = BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
+            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+        }
     }
 
     public func setFlossToolStyle(_ style: FlossToolStyle) {
@@ -559,6 +604,7 @@ public final class AppCoordinator {
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         announcedFlossLowerHalf = false
+        lastCountdownPipKey = ""
         pacerElapsedSec = max(pacerElapsedSec, GameConfig.brushAlongTotalSec)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = true
@@ -566,8 +612,10 @@ public final class AppCoordinator {
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
-        NativeSoundEngine.shared.playPacerCue(.quadrant)
-        HapticsEngine.shared.playPacerQuadrantCue()
+        NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
+        NativeSoundEngine.shared.speakCoachingPhrase(
+            BrushCoachCopy.spokenFlossStartCue(style: flossToolStyle, lang: coachLanguage)
+        )
         updateIdleTimerPolicy()
     }
 
@@ -584,6 +632,9 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.playPacerCue(.complete)
         HapticsEngine.shared.playDistrictSeal()
         transition(to: .hub)
+        NativeSoundEngine.shared.speakCoachingPhrase(
+            BrushCoachCopy.spokenSessionCompleteCue(lang: coachLanguage)
+        )
         showHubToast("🦷 Fresh Mint Smooth Bask! +\(outcome.ionsAwarded) F⁻\(outcome.stampAwarded ? " & +1 Habit Stamp!" : "")")
     }
 
@@ -619,31 +670,49 @@ public final class AppCoordinator {
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = pacerInFlossBonus
 
+        let phase = BrushPhaseState.evaluate(elapsedSec: pacerElapsedSec, inFlossBonus: pacerInFlossBonus)
+
+        // Musical 3-second anticipation pickup ("3... 2... 1...") so users watching the mirror prepare to switch
+        if let pip = phase.countdownPip {
+            let pipKey = "\(phase.inFlossBonus ? 1 : 0)-\(phase.phaseIndex12)-\(phase.flossIsUpper ? 1 : 0)-\(pip)"
+            if pipKey != lastCountdownPipKey {
+                lastCountdownPipKey = pipKey
+                let isUpper = phase.inFlossBonus ? phase.flossIsUpper : phase.quadrant.isUpper
+                NativeSoundEngine.shared.playPacerAnticipationPip(secondsLeft: pip, isUpper: isUpper)
+            }
+        }
+
         if !pacerInFlossBonus {
             if pacerElapsedSec >= GameConfig.brushAlongTotalSec - 0.04 {
                 // Seamlessly chime & roll hands-free into the 45s Floss Pick Bonus Round when 2:00 finishes!
                 enterFlossBonusNow()
                 return
             }
-            let qIdx = min(3, Int(pacerElapsedSec / 30.0))
-            let sIdx = min(2, Int((pacerElapsedSec - Double(qIdx) * 30.0) / 10.0))
+            let qIdx = phase.quadrant.rawValue
+            let sIdx = phase.surface.rawValue
             if qIdx != lastAnnouncedQuadrant && pacerElapsedSec < GameConfig.brushAlongTotalSec - 0.2 {
                 lastAnnouncedQuadrant = qIdx
                 lastAnnouncedSurface = sIdx
                 NativeSoundEngine.shared.setPacerState(quadrantIdx: qIdx, inFlossBonus: false)
-                NativeSoundEngine.shared.playPacerCue(.quadrant)
-                HapticsEngine.shared.playPacerQuadrantCue()
+                NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: phase.quadrant, surface: phase.surface, isNewQuadrant: true)
+                NativeSoundEngine.shared.speakCoachingPhrase(
+                    BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
+                )
             } else if sIdx != lastAnnouncedSurface && pacerElapsedSec < GameConfig.brushAlongTotalSec - 0.2 {
                 lastAnnouncedSurface = sIdx
-                NativeSoundEngine.shared.playPacerCue(.surface)
-                HapticsEngine.shared.playPacerSurfaceTick()
+                NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: phase.quadrant, surface: phase.surface, isNewQuadrant: false)
+                NativeSoundEngine.shared.speakCoachingPhrase(
+                    BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
+                )
             }
         } else {
             let flossElapsed = pacerElapsedSec - GameConfig.brushAlongTotalSec
             if !announcedFlossLowerHalf && flossElapsed >= GameConfig.brushAlongFlossBonusSec * 0.5 {
                 announcedFlossLowerHalf = true
-                NativeSoundEngine.shared.playPacerCue(.surface)
-                HapticsEngine.shared.playPacerQuadrantCue()
+                NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .lowerRight, surface: .outerCheek, isNewQuadrant: true)
+                NativeSoundEngine.shared.speakCoachingPhrase(
+                    BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
+                )
             }
             if pacerElapsedSec >= cap - 0.05 {
                 completeBrushAlongSession(withFlossBonus: true)

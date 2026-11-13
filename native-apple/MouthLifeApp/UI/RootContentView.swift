@@ -29,6 +29,7 @@ public struct RootContentView: View {
                     save: coordinator.save,
                     selectedWorldId: coordinator.selectedWorldId,
                     hubRadioStation: coordinator.hubRadioStation,
+                    coachLanguage: coordinator.coachLanguage,
                     tappedCrownSummary: coordinator.tappedCrownSummary,
                     statusToast: coordinator.hubToast,
                     liveFps: coordinator.liveFps,
@@ -55,8 +56,12 @@ public struct RootContentView: View {
                     isPaused: coordinator.pacerIsPaused,
                     inFlossBonus: coordinator.pacerInFlossBonus,
                     flossToolStyle: coordinator.flossToolStyle,
+                    voiceCoachEnabled: coordinator.voiceCoachEnabled,
+                    coachLanguage: coordinator.coachLanguage,
                     stationLabel: coordinator.currentRadioStationLabel,
                     onCycleStation: { coordinator.cycleRadioStation() },
+                    onToggleVoiceCoach: { coordinator.toggleVoiceCoach() },
+                    onSelectLanguage: { lang in coordinator.setCoachLanguage(lang) },
                     onTogglePause: { coordinator.togglePacerPause() },
                     onSelectFlossToolStyle: { style in coordinator.setFlossToolStyle(style) },
                     onEnterFlossBonusNow: { coordinator.enterFlossBonusNow() },
@@ -153,6 +158,8 @@ public struct RootContentView: View {
                         isMuted: NativeSoundEngine.shared.isMuted,
                         musicVolume: NativeSoundEngine.shared.musicVolume,
                         sfxVolume: NativeSoundEngine.shared.sfxVolume,
+                        voiceCoachEnabled: coordinator.voiceCoachEnabled,
+                        coachLanguage: coordinator.coachLanguage,
                         reducedMotion: coordinator.reducedMotion,
                         showProMotionTelemetry: coordinator.showProMotionBadge,
                         onSaveProfile: { name, tone, city in
@@ -162,6 +169,8 @@ public struct RootContentView: View {
                         onChangeAudio: { muted, music, sfx in
                             coordinator.updateAudio(muted: muted, music: music, sfx: sfx)
                         },
+                        onChangeVoiceCoach: { enabled in coordinator.setVoiceCoachEnabled(enabled) },
+                        onChangeLanguage: { lang in coordinator.setCoachLanguage(lang) },
                         onChangeReducedMotion: { red in coordinator.reducedMotion = red },
                         onToggleProMotionTelemetry: { show in coordinator.showProMotionBadge = show },
                         onReplayCosmicIntro: { coordinator.replayCosmicIntro() }

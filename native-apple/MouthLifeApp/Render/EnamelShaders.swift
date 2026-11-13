@@ -619,10 +619,14 @@ public enum EnamelShaders {
     float3 pellicleBaseColor = paletteMatrixA[1].xyz;
     int detailTier = int(floor(paletteMatrixA[1].w + 0.5));
     float3 biofilmBaseColor = paletteMatrixA[2].xyz;
+    int completedQuadMask = int(floor(paletteMatrixA[2].w + 0.5));
     float3 sulcusTintColor = paletteMatrixA[3].xyz;
+    int activeSurfaceIdx = int(floor(paletteMatrixA[3].w + 0.5));
 
     float3 acidWashTintColor = paletteMatrixB[0].xyz;
+    float preEchoStrength = clamp(paletteMatrixB[0].w, 0.0, 1.0);
     float3 epsDomeTintColor = paletteMatrixB[1].xyz;
+    int upcomingQuadrant = int(floor(paletteMatrixB[1].w + 0.5));
     float4 depthCueVec = paletteMatrixB[2];
     float4 companionStateVec = paletteMatrixB[3];
 
@@ -969,34 +973,64 @@ public enum EnamelShaders {
         emissionGlow += float3(0.78, 1.0, 0.93) * sweep * 0.68;
     }
 
-    // 2-Minute Sink Brush-Along Quadrant & Active Tooth Spotlight (vivid from 2–3 ft at bathroom sink!)
+    // 2-Minute Sink Brush-Along "Enamel Awakening":
+    //   - Upcoming quadrants: Frosted matte recessive slate
+    //   - Active quadrant + active surface (Outer Crescent / Chewing Grooves / Inner Portal): Vivid cyan & gold
+    //   - Completed quadrants (and full mouth in Floss Bonus): Restored luminous crystal porcelain!
     bool inActiveBrushQuadrant = true;
     if (activeQuadrant >= 0 && quadCode > 0.01) {
         int vertQuad = int(floor(quadCode * 4.0 + 0.01));
+        bool quadCompleted = (vertQuad >= 0 && vertQuad < 4) ? (((completedQuadMask >> vertQuad) & 1) != 0) : false;
         inActiveBrushQuadrant = (vertQuad == activeQuadrant);
-        if (inActiveBrushQuadrant) {
+
+        float2 archRadial = normalize(worldPos.xz - float2(32.0, 13.0) + float2(0.0, 0.0001));
+        float outDot = dot(N.xz, archRadial);
+        float surfFocus = 1.0;
+        if (activeSurfaceIdx == 0) {
+            // OUTER — The Crescent (glowing outer cheek + gumline collar)
+            surfFocus = 0.25 + 0.75 * smoothstep(-0.08, 0.42, outDot) * (1.0 - 0.30 * smoothstep(0.62, 0.96, hFrac));
+        } else if (activeSurfaceIdx == 1) {
+            // CHEWING — The Grooves (glowing biting cusps & occlusal fissures)
+            surfFocus = 0.22 + 0.78 * max(smoothstep(0.54, 0.90, hFrac), smoothstep(0.40, 0.78, abs(N.y)));
+        } else if (activeSurfaceIdx == 2) {
+            // INNER — The Portal (glowing lingual/palatal inside wall)
+            surfFocus = 0.25 + 0.75 * smoothstep(0.08, -0.42, outDot);
+        }
+
+        if (inActiveBrushQuadrant && activeSurfaceIdx >= 0) {
             float coachPulse = 0.55 + 0.45 * sin(motionTime * 5.2);
             float grooveLift = audioBass * 0.55 + audioMid * 0.30;
             float quadRim = pow(max(1.0 - NdotV, 0.0), 1.45);
-            float3 quadCyan = float3(0.08, 0.84, 0.96);
-            baseColor = mix(baseColor, mix(baseColor, quadCyan, 0.28 + 0.24 * quadRim), 0.78);
-            emissionGlow += quadCyan * (0.22 + 0.18 * coachPulse + 0.22 * grooveLift + 0.26 * quadRim);
+            float3 quadCyan = mix(float3(0.08, 0.84, 0.96), float3(0.98, 0.84, 0.32), preEchoStrength * 0.45);
+            baseColor = mix(baseColor, mix(baseColor, quadCyan, (0.24 + 0.28 * quadRim) * surfFocus), 0.82);
+            emissionGlow += quadCyan * surfFocus * (0.20 + 0.18 * coachPulse + 0.20 * grooveLift + 0.28 * quadRim);
+        } else if (quadCompleted) {
+            // Completed Crystal Enamel: bright restored porcelain with subtle fluorapatite diamond sheen!
+            float crystalRim = pow(max(1.0 - NdotV, 0.0), 1.85);
+            baseColor = mix(baseColor * 0.92, float3(0.92, 0.98, 1.0), 0.26);
+            emissionGlow += float3(0.16, 0.76, 0.82) * (0.09 + 0.20 * crystalRim + audioHigh * 0.08);
         } else {
-            baseColor *= 0.34;
-            emissionGlow *= 0.25;
+            // Upcoming Frosted Enamel (+ 0.85s pre-echo warm pulse right before switching quadrants!)
+            baseColor = mix(baseColor * 0.35, float3(0.16, 0.22, 0.28), 0.28);
+            emissionGlow *= 0.20;
+            if (upcomingQuadrant == vertQuad && preEchoStrength > 0.01) {
+                float prePulse = 0.65 + 0.35 * sin(motionTime * 12.0);
+                emissionGlow += float3(1.0, 0.82, 0.30) * preEchoStrength * prePulse * 0.32;
+            }
         }
     }
 
-    // Tapped Hub crown OR live Brush-Along target tooth: vivid 24k Gold + Mint spotlight
-    if (inActiveBrushQuadrant && highlightedTooth > -0.5 && toothId > -0.5 && abs(toothId - highlightedTooth) < 0.5) {
+    // Tapped Hub crown OR live Brush-Along / Floss Pick target tooth: vivid 24k Gold + Mint spotlight
+    bool allowSpotlight = inActiveBrushQuadrant || (activeQuadrant >= 0 && activeSurfaceIdx < 0);
+    if (allowSpotlight && highlightedTooth > -0.5 && toothId > -0.5 && abs(toothId - highlightedTooth) < 0.5) {
         float rim = pow(max(1.0 - NdotV, 0.0), 1.45);
-        float targetPulse = (activeQuadrant >= 0) ? (0.78 + 0.22 * sin(motionTime * 7.5)) : 1.0;
+        float targetPulse = (activeQuadrant >= 0) ? (0.80 + 0.20 * sin(motionTime * 7.5)) : 1.0;
         float strength = highlightPulse * targetPulse;
         float3 mint = float3(0.16, 0.96, 0.78);
         float3 gold = float3(1.0, 0.84, 0.28);
         float3 selected = mix(mint, gold, smoothstep(0.05, 0.62, rim + (1.0 - hFrac) * 0.25));
-        baseColor = mix(baseColor, selected, strength * (0.58 + 0.34 * rim));
-        emissionGlow += selected * strength * (0.38 + 0.42 * rim);
+        baseColor = mix(baseColor, selected, strength * (0.62 + 0.34 * rim));
+        emissionGlow += selected * strength * (0.42 + 0.44 * rim);
     }
 
     // Dynamic PBR roughness: 0.06 mirror-glass when clean/sealed -> 0.85 chalky matte plaque when dirty!
@@ -1335,7 +1369,8 @@ public enum EnamelShaders {
             bChannelMode: bChannelMode,
             detailTier: detail,
             depthCue: SIMD4<Float>(18.0, 0.085, -1.0, 0.0),
-            companionState: SIMD4<Float>(0.0, -1.0, -1.0, 0.0)
+            companionState: SIMD4<Float>(0.0, -1.0, -1.0, 0.0),
+            pacerAwakening: SIMD4<Float>(0.0, -1.0, 0.0, -1.0)
         )
 
         // Initialize packed constant buffers cleanly under Metal's 31-buffer limit
@@ -1365,6 +1400,7 @@ public enum EnamelShaders {
         detailTier: Float = 2.0,
         depthCue: SIMD4<Float> = SIMD4<Float>(18.0, 0.085, -1.0, 0.0),
         companionState: SIMD4<Float> = SIMD4<Float>(0.0, -1.0, -1.0, 0.0),
+        pacerAwakening: SIMD4<Float> = SIMD4<Float>(0.0, -1.0, 0.0, -1.0),
         resetWorldSizeAndTime: Bool = true
     ) {
         let landmarks = landmarkColors ?? LandmarkPaletteColors.resolve(for: palette)
@@ -1384,12 +1420,12 @@ public enum EnamelShaders {
         let matA = RenderBridge.scnMat4(
             SIMD4<Float>(enamel.x, enamel.y, enamel.z, Float(bChannelMode.shaderIndex)),
             SIMD4<Float>(pellicle.x, pellicle.y, pellicle.z, detailTier),
-            SIMD4<Float>(biofilm.x, biofilm.y, biofilm.z, 0),
-            SIMD4<Float>(sulcus.x, sulcus.y, sulcus.z, 0)
+            SIMD4<Float>(biofilm.x, biofilm.y, biofilm.z, pacerAwakening.x),
+            SIMD4<Float>(sulcus.x, sulcus.y, sulcus.z, pacerAwakening.y)
         )
         let matB = RenderBridge.scnMat4(
-            SIMD4<Float>(acidWash.x, acidWash.y, acidWash.z, 0),
-            SIMD4<Float>(epsDome.x, epsDome.y, epsDome.z, 0),
+            SIMD4<Float>(acidWash.x, acidWash.y, acidWash.z, pacerAwakening.z),
+            SIMD4<Float>(epsDome.x, epsDome.y, epsDome.z, pacerAwakening.w),
             depthCue,
             companionState
         )
@@ -1524,6 +1560,10 @@ public final class EnamelMaterialController {
     private var fluorideGlow: Float = 0.0
     private var acidStress: Float = 0.0
     private var activeQuadrant: Int = -1
+    private var completedQuadMask: Int = 0
+    private var activeSurfaceIdx: Int = -1
+    private var preEcho01: Float = 0.0
+    private var upcomingQuadrant: Int = -1
     private var highlightedCrown: Int = -1
     private var highlightPulse: Float = 0.0
 
@@ -1577,6 +1617,10 @@ public final class EnamelMaterialController {
         fluorideGlow = 0.0
         acidStress = 0.0
         activeQuadrant = -1
+        completedQuadMask = 0
+        activeSurfaceIdx = -1
+        preEcho01 = 0.0
+        upcomingQuadrant = -1
         highlightedCrown = -1
         highlightPulse = 0.0
         lastDistrictCols = nil
@@ -1617,18 +1661,30 @@ public final class EnamelMaterialController {
         smoothness01: Float = 0.95,
         fluorideGlow01: Float = 0.35,
         acidStress01: Float = 0.0,
-        activeQuadrant: Int = -1
+        activeQuadrant: Int = -1,
+        completedQuadMask: Int = 0,
+        activeSurfaceIdx: Int = -1,
+        preEcho01: Float = 0.0,
+        upcomingQuadrant: Int = -1
     ) {
         let nextSmooth: Float = active ? min(1, max(0, smoothness01)) : -1.0
         let nextFluoride: Float = active ? min(1, max(0, fluorideGlow01)) : 0.0
         let nextAcid: Float = active ? min(1, max(0, acidStress01)) : 0.0
         let nextQuad: Int = active ? activeQuadrant : -1
+        let nextMask: Int = active ? completedQuadMask : 0
+        let nextSurf: Int = active ? activeSurfaceIdx : -1
+        let nextPre: Float = active ? min(1, max(0, preEcho01)) : 0.0
+        let nextUp: Int = active ? upcomingQuadrant : -1
 
         guard companionModeActive != active
             || abs(self.smoothnessOverride - nextSmooth) > 1e-4
             || abs(self.fluorideGlow - nextFluoride) > 1e-4
             || abs(self.acidStress - nextAcid) > 1e-4
             || self.activeQuadrant != nextQuad
+            || self.completedQuadMask != nextMask
+            || self.activeSurfaceIdx != nextSurf
+            || abs(self.preEcho01 - nextPre) > 1e-3
+            || self.upcomingQuadrant != nextUp
         else { return }
 
         companionModeActive = active
@@ -1636,6 +1692,10 @@ public final class EnamelMaterialController {
         self.fluorideGlow = nextFluoride
         self.acidStress = nextAcid
         self.activeQuadrant = nextQuad
+        self.completedQuadMask = nextMask
+        self.activeSurfaceIdx = nextSurf
+        self.preEcho01 = nextPre
+        self.upcomingQuadrant = nextUp
         pushPaletteAndCompanionMatrices()
     }
 
@@ -1803,6 +1863,7 @@ public final class EnamelMaterialController {
             detailTier: detailTierFloat,
             depthCue: SIMD4<Float>(depthStart, depthDensity, smoothnessOverride, fluorideGlow),
             companionState: SIMD4<Float>(acidStress, Float(activeQuadrant), Float(highlightedCrown), highlightPulse),
+            pacerAwakening: SIMD4<Float>(Float(completedQuadMask), Float(activeSurfaceIdx), preEcho01, Float(upcomingQuadrant)),
             resetWorldSizeAndTime: false
         )
     }

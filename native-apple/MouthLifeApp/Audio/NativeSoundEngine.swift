@@ -1565,6 +1565,114 @@ private final class SunoStreamDeck {
     }
 }
 
+// MARK: - Multilingual Hands-Free Speech Coach Delegate
+
+private final class SpeechCoachBox: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
+    private let synthesizer = AVSpeechSynthesizer()
+    private var voiceCache: [CoachLanguage: AVSpeechSynthesisVoice] = [:]
+    private weak var currentUtterance: AVSpeechUtterance?
+    private var activeToken: UInt64 = 0
+    var onDuckingChanged: ((Bool) -> Void)?
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+        #if os(iOS)
+        synthesizer.usesApplicationAudioSession = true
+        #endif
+    }
+
+    func speak(text: String, language: CoachLanguage, volume: Float) {
+        let work = { [weak self] in
+            guard let self, !text.isEmpty else { return }
+            self.activeToken &+= 1
+            let token = self.activeToken
+
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = self.resolveVoice(for: language)
+            utterance.rate = 0.49
+            utterance.pitchMultiplier = 1.03
+            utterance.postUtteranceDelay = 0.02
+            utterance.volume = min(1.0, max(0.55, volume))
+
+            self.currentUtterance = utterance
+            if self.synthesizer.isSpeaking {
+                self.synthesizer.stopSpeaking(at: .immediate)
+            }
+            self.onDuckingChanged?(true)
+            self.synthesizer.speak(utterance)
+
+            // Safety fallback so music ducking can never remain stuck if OS speech interrupts silently
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+                guard let self, self.activeToken == token, self.currentUtterance != nil else { return }
+                self.currentUtterance = nil
+                self.onDuckingChanged?(false)
+            }
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
+
+    func stop() {
+        let work = { [weak self] in
+            guard let self else { return }
+            self.activeToken &+= 1
+            self.currentUtterance = nil
+            if self.synthesizer.isSpeaking {
+                self.synthesizer.stopSpeaking(at: .immediate)
+            }
+            self.onDuckingChanged?(false)
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard utterance === currentUtterance else { return }
+        currentUtterance = nil
+        onDuckingChanged?(false)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        guard utterance === currentUtterance else { return }
+        currentUtterance = nil
+        onDuckingChanged?(false)
+    }
+
+    private func resolveVoice(for language: CoachLanguage) -> AVSpeechSynthesisVoice? {
+        if let cached = voiceCache[language] {
+            return cached
+        }
+        let targetCode = language.bcp47VoiceCode.lowercased()
+        let prefix = language.rawValue.lowercased()
+        let candidates = AVSpeechSynthesisVoice.speechVoices().filter { voice in
+            guard !voice.voiceTraits.contains(.isNoveltyVoice) else { return false }
+            let code = voice.language.lowercased()
+            return code == targetCode || code.hasPrefix(prefix + "-") || code == prefix
+        }
+        let best = candidates.max { a, b in
+            let aExact = a.language.lowercased() == targetCode ? 1 : 0
+            let bExact = b.language.lowercased() == targetCode ? 1 : 0
+            if a.quality.rawValue != b.quality.rawValue {
+                return a.quality.rawValue < b.quality.rawValue
+            }
+            return aExact < bExact
+        } ?? AVSpeechSynthesisVoice(language: language.bcp47VoiceCode)
+          ?? AVSpeechSynthesisVoice(language: language.rawValue)
+
+        if let best {
+            voiceCache[language] = best
+        }
+        return best
+    }
+}
+
 // MARK: - Public NativeSoundEngine
 
 public enum RadioStation: Equatable, Sendable {
@@ -1583,11 +1691,15 @@ public final class NativeSoundEngine {
     private static let musicVolKey = "mouthlife.nativeAudio.musicVolume"
     private static let sfxVolKey = "mouthlife.nativeAudio.sfxVolume"
     private static let earthRadioKey = "mouthlife.nativeAudio.earthRadio"
+    private static let voiceCoachKey = "mouthlife.nativeAudio.voiceCoach"
+    private static let coachLangKey = "mouthlife.nativeAudio.coachLanguage"
 
     public private(set) var isMuted: Bool
     public private(set) var musicVolume: Float
     public private(set) var sfxVolume: Float
     public private(set) var isEarthRadioEnabled: Bool
+    public private(set) var isVoiceCoachEnabled: Bool
+    public private(set) var coachLanguage: CoachLanguage
     public private(set) var tunedRadioWorldId: String = "world_1"
     public var onPreferencesChanged: ((Bool, Float, Float) -> Void)?
 
@@ -1595,6 +1707,9 @@ public final class NativeSoundEngine {
     private var sourceNode: AVAudioSourceNode?
     private var kernel: RealtimeSynthKernel?
     private let sunoDeck = SunoStreamDeck()
+    private let speechCoach = SpeechCoachBox()
+    private let duckLock = NSLock()
+    private var isVoiceDuckingStorage: Bool = false
     private let sequencerQueue = DispatchQueue(label: "com.mouthlife.audio.sequencer", qos: .userInteractive)
     private var sequencerTimer: DispatchSourceTimer?
 
@@ -1649,8 +1764,30 @@ public final class NativeSoundEngine {
         } else {
             self.isEarthRadioEnabled = true
         }
+        if defaults.object(forKey: Self.voiceCoachKey) != nil {
+            self.isVoiceCoachEnabled = defaults.bool(forKey: Self.voiceCoachKey)
+        } else {
+            self.isVoiceCoachEnabled = true
+        }
+        if let rawLang = defaults.string(forKey: Self.coachLangKey),
+           let savedLang = CoachLanguage(rawValue: rawLang) {
+            self.coachLanguage = savedLang
+        } else {
+            self.coachLanguage = CoachLanguage.detectSystemDefault()
+        }
         self.earthRadioActive = self.isEarthRadioEnabled
         self.hubRadioStation = self.isEarthRadioEnabled ? .city("world_1") : .sanctuary
+
+        self.speechCoach.onDuckingChanged = { [weak self] ducking in
+            guard let self else { return }
+            self.duckLock.lock()
+            let changed = (self.isVoiceDuckingStorage != ducking)
+            self.isVoiceDuckingStorage = ducking
+            self.duckLock.unlock()
+            if changed {
+                self.pushMixStateToKernel()
+            }
+        }
 
         configureAudioSessionIfNeeded()
         setupAudioGraph()
@@ -1661,6 +1798,7 @@ public final class NativeSoundEngine {
     deinit {
         sequencerTimer?.cancel()
         sequencerTimer = nil
+        speechCoach.stop()
         sunoDeck.stopAll()
         if engine.isRunning {
             engine.stop()
@@ -1674,8 +1812,9 @@ public final class NativeSoundEngine {
         #if os(iOS)
         do {
             let session = AVAudioSession.sharedInstance()
-            // .ambient + .mixWithOthers lets players keep listening to podcasts/music while brushing!
-            try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+            // .playback + .mixWithOthers ensures hands-free voice & musical coaching play on the bathroom
+            // counter even when the hardware Silent Mode bell is on, while still mixing politely with external audio!
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
             // Non-fatal in headless test / simulator environments
@@ -1778,6 +1917,7 @@ public final class NativeSoundEngine {
         case .began:
             isInterrupted = true
             stopScrub()
+            stopVoiceCoach()
             pushMixStateToKernel()
         case .ended:
             isInterrupted = false
@@ -1792,13 +1932,14 @@ public final class NativeSoundEngine {
     }
     #endif
 
-    // MARK: Volume & Preferences API
+    // MARK: Volume, Voice Coach & Preferences API
 
     public func setMuted(_ muted: Bool) {
         isMuted = muted
         persistPreferences()
         if muted {
             stopScrub()
+            stopVoiceCoach()
         } else {
             startEngineIfNeeded()
         }
@@ -1823,12 +1964,43 @@ public final class NativeSoundEngine {
         pushMixStateToKernel()
     }
 
+    public func setVoiceCoachEnabled(_ enabled: Bool) {
+        isVoiceCoachEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.voiceCoachKey)
+        if !enabled {
+            stopVoiceCoach()
+        }
+    }
+
+    public func setCoachLanguage(_ language: CoachLanguage) {
+        coachLanguage = language
+        UserDefaults.standard.set(language.rawValue, forKey: Self.coachLangKey)
+    }
+
+    /// Speaks a concise hands-free coaching cue in the selected language while smoothly ducking background music.
+    public func speakCoachingPhrase(_ text: String, language: CoachLanguage? = nil) {
+        guard !isMuted, !isPaused, !isInterrupted, isVoiceCoachEnabled, !text.isEmpty else { return }
+        configureAudioSessionIfNeeded()
+        speechCoach.speak(text: text, language: language ?? coachLanguage, volume: sfxVolume)
+    }
+
+    public func stopVoiceCoach() {
+        speechCoach.stop()
+    }
+
     public func setPaused(_ paused: Bool) {
         isPaused = paused
         if paused {
             stopScrub()
+            stopVoiceCoach()
         }
         pushMixStateToKernel()
+    }
+
+    private var isVoiceDucking: Bool {
+        duckLock.lock()
+        defer { duckLock.unlock() }
+        return isVoiceDuckingStorage
     }
 
     /// Lock-free / O(1) 120Hz query returning real-time 3-band `(bass, mid, high, beatPulse)` energy
@@ -1864,13 +2036,17 @@ public final class NativeSoundEngine {
     }
 
     private func pushMixStateToKernel() {
+        let ducking = isVoiceDucking
+        let duckScale: Float = ducking ? 0.36 : 1.0
         let hubRadioAtten: Float = (currentMode == .hub && earthRadioActive && !pulpZeroActive) ? 0.86 : 1.0
         let baseMusic = musicVolume <= 0.001 ? Float(0) : (musicVolume * 0.55 * activeTheme.mixGain * hubRadioAtten)
-        let effectiveMusic = isPaused ? (baseMusic * 0.42) : baseMusic
+        let effectiveMusic = (isPaused ? (baseMusic * 0.42) : baseMusic) * duckScale
         let effectiveSfx = sfxVolume <= 0.001 ? Float(0) : (sfxVolume * 0.95)
         let cutoff: Float
         if isPaused {
             cutoff = 720.0
+        } else if ducking {
+            cutoff = 4800.0
         } else if acidTensionActive && activeTheme.id == .world3 {
             cutoff = 2400.0
         } else {
@@ -1885,14 +2061,15 @@ public final class NativeSoundEngine {
             delaySec: dotted8th
         )
 
+        let sunoDuckScale: Float = ducking ? 0.38 : 1.0
         let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72 * hubRadioAtten)
         let effectiveSuno: Float
         if isPaused {
             effectiveSuno = baseSuno * 0.38
         } else if acidTensionActive && activeTheme.id == .world3 {
-            effectiveSuno = baseSuno * 0.82
+            effectiveSuno = baseSuno * 0.82 * sunoDuckScale
         } else {
-            effectiveSuno = baseSuno
+            effectiveSuno = baseSuno * sunoDuckScale
         }
         sunoDeck.sync(
             themeId: activeTheme.id,
@@ -2799,6 +2976,53 @@ public final class NativeSoundEngine {
         case .complete:
             playDistrictSealed()
         }
+    }
+
+    /// 4D Eyes-Optional Surface Earcons:
+    /// - Upper Jaw plays in a sparkling higher octave (`60`), Lower Jaw in a warm grounded register (`48`).
+    /// - Subtle mirror stereo panning (`+0.24` Right, `-0.24` Left).
+    /// - Distinct timbre per surface: **Outer** = Flowing Glass-Harp Crescent, **Chewing** = Wooden Marimba Double-Tap, **Inner** = Rising Crystal Bell Portal.
+    public func playPacerSurfaceMotif(quadrant: BrushQuadrant, surface: BrushSurface, isNewQuadrant: Bool) {
+        guard canPlaySfx() else { return }
+        let oct = quadrant.isUpper ? 60 : 48
+        let pan: Float = quadrant.isPatientRight ? 0.24 : -0.24
+
+        if isNewQuadrant {
+            emitSfxVoice(.rhodes, midi: harmonicMidi(degree: 0, octaveShift: oct - 12), durationSec: 0.48, vel: 0.54, pan: pan * 0.5, reverb: 0.44)
+            emitSfxVoice(.bell, midi: harmonicMidi(degree: 4, octaveShift: oct), offsetSec: 0.055, durationSec: 0.42, vel: 0.56, pan: pan, reverb: 0.60)
+        }
+
+        let baseOffset = isNewQuadrant ? 0.13 : 0.0
+        switch surface {
+        case .outerCheek:
+            emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: 0, octaveShift: oct), offsetSec: baseOffset, durationSec: 0.46, vel: 0.58, pan: pan, reverb: 0.68)
+            emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: 4, octaveShift: oct), offsetSec: baseOffset + 0.075, durationSec: 0.50, vel: 0.52, pan: pan * 0.7, reverb: 0.72)
+        case .chewingGrooves:
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct - 12), offsetSec: baseOffset, durationSec: 0.24, vel: 0.68, pan: pan, reverb: 0.24)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 4, octaveShift: oct - 12), offsetSec: baseOffset + 0.085, durationSec: 0.26, vel: 0.64, pan: pan, reverb: 0.26)
+        case .innerTongue:
+            emitSfxVoice(.bell, midi: harmonicMidi(degree: 1, octaveShift: oct), offsetSec: baseOffset, durationSec: 0.36, vel: 0.56, pan: pan * 0.6, reverb: 0.64)
+            emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: oct), offsetSec: baseOffset + 0.095, durationSec: 0.46, vel: 0.64, pan: pan, reverb: 0.70)
+        }
+    }
+
+    /// Final 3-second musical anticipation pickup (`3... 2... 1...`) before each surface or arch transition,
+    /// letting the user prepare to move while watching their reflection in the bathroom mirror.
+    public func playPacerAnticipationPip(secondsLeft: Int, isUpper: Bool) {
+        guard (1...3).contains(secondsLeft), canPlaySfx() else { return }
+        let deg = (3 - secondsLeft) * 2 // 3s -> 0, 2s -> 2, 1s -> 4 (rising triad!)
+        let oct = isUpper ? 60 : 48
+        let voice: SynthVoiceKind = (secondsLeft == 1) ? .celesta : .kalimba
+        let vel: Float = (secondsLeft == 1) ? 0.42 : 0.32
+        emitSfxVoice(
+            voice,
+            midi: harmonicMidi(degree: deg, octaveShift: oct),
+            durationSec: 0.20,
+            vel: vel,
+            pan: 0,
+            reverb: 0.45,
+            delay: 0.06
+        )
     }
 
     public func playOrbitalDive() {

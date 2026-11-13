@@ -479,4 +479,77 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(chem.samplePh(atX: 14.0, z: 14.0), cart.baselinePh, accuracy: 0.02)
         XCTAssertEqual(chem.maxGumIrritation, 0.0, accuracy: 0.01)
     }
+
+    // MARK: - 8. Hands-Free BrushPhaseState Mirror Timeline & 8-Language Coach System
+
+    func testBrushPhaseMirrorTimelineAndMultilingualCoachCopy() {
+        // Phase 0 (0.5s): Upper Right, Outer Cheek, 0 completed, no countdown pip yet
+        let p0 = BrushPhaseState.evaluate(elapsedSec: 0.5, inFlossBonus: false)
+        XCTAssertEqual(p0.quadrant, .upperRight)
+        XCTAssertTrue(p0.quadrant.isUpper)
+        XCTAssertTrue(p0.quadrant.isPatientRight)
+        XCTAssertEqual(p0.surface, .outerCheek)
+        XCTAssertEqual(p0.phaseIndex12, 0)
+        XCTAssertEqual(p0.completedQuadrantsMask, 0)
+        XCTAssertNil(p0.countdownPip)
+        XCTAssertEqual(p0.preEcho01, 0.0, accuracy: 1e-5)
+
+        // Final 3 seconds of Surface 0: 3 -> 2 -> 1 musical anticipation pips
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: 7.4, inFlossBonus: false).countdownPip, 3)
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: 8.4, inFlossBonus: false).countdownPip, 2)
+        XCTAssertEqual(BrushPhaseState.evaluate(elapsedSec: 9.4, inFlossBonus: false).countdownPip, 1)
+
+        // Pre-echo 0.85s before Q1 -> Q2 boundary (t = 29.5s) previews upcomingQuadrantIndex = 1
+        let preQ2 = BrushPhaseState.evaluate(elapsedSec: 29.5, inFlossBonus: false)
+        XCTAssertEqual(preQ2.quadrant, .upperRight)
+        XCTAssertEqual(preQ2.surface, .innerTongue)
+        XCTAssertEqual(preQ2.upcomingQuadrantIndex, 1)
+        XCTAssertGreaterThan(preQ2.preEcho01, 0.35)
+
+        // Q3 Lower Left Chewing (t = 72.0s): Q1 & Q2 completed (0b0011)
+        let q3Chew = BrushPhaseState.evaluate(elapsedSec: 72.0, inFlossBonus: false)
+        XCTAssertEqual(q3Chew.quadrant, .lowerLeft)
+        XCTAssertFalse(q3Chew.quadrant.isUpper)
+        XCTAssertFalse(q3Chew.quadrant.isPatientRight)
+        XCTAssertEqual(q3Chew.surface, .chewingGrooves)
+        XCTAssertEqual(q3Chew.completedQuadrantsMask, 0b0011)
+
+        // Floss Pick Bonus Round: all 4 quadrants crystal-completed (0b1111), upper -> lower arch
+        let flossTop = BrushPhaseState.evaluate(elapsedSec: 122.0, inFlossBonus: true)
+        XCTAssertTrue(flossTop.inFlossBonus)
+        XCTAssertTrue(flossTop.flossIsUpper)
+        XCTAssertEqual(flossTop.completedQuadrantsMask, 0b1111)
+
+        let flossBot = BrushPhaseState.evaluate(elapsedSec: 150.0, inFlossBonus: true)
+        XCTAssertTrue(flossBot.inFlossBonus)
+        XCTAssertFalse(flossBot.flossIsUpper)
+        XCTAssertEqual(flossBot.completedQuadrantsMask, 0b1111)
+
+        // Locale auto-detection & 8-language glanceable/spoken copy coverage
+        XCTAssertEqual(CoachLanguage.detectSystemDefault(preferredLanguages: ["es-US", "en-US"]), .spanish)
+        XCTAssertEqual(CoachLanguage.detectSystemDefault(preferredLanguages: ["ja-JP"]), .japanese)
+        XCTAssertEqual(CoachLanguage.detectSystemDefault(preferredLanguages: ["zh-Hans-CN"]), .chinese)
+        XCTAssertEqual(CoachLanguage.detectSystemDefault(preferredLanguages: ["ko-KR"]), .korean)
+        XCTAssertEqual(CoachLanguage.detectSystemDefault(preferredLanguages: ["it-IT"]), .english)
+
+        for lang in CoachLanguage.allCases {
+            let sides = BrushCoachCopy.mirrorSideLabels(for: lang)
+            XCTAssertFalse(sides.left.isEmpty)
+            XCTAssertFalse(sides.right.isEmpty)
+            XCTAssertFalse(BrushCoachCopy.hubStartBrushLabel(for: lang).isEmpty)
+            XCTAssertFalse(BrushCoachCopy.spokenFlossStartCue(style: .flossPick, lang: lang).isEmpty)
+            XCTAssertFalse(BrushCoachCopy.spokenFlossLowerCue(lang: lang).isEmpty)
+            XCTAssertFalse(BrushCoachCopy.spokenSessionCompleteCue(lang: lang).isEmpty)
+
+            for q in BrushQuadrant.allCases {
+                XCTAssertFalse(BrushCoachCopy.quadrantLabel(q, lang: lang).isEmpty)
+                for s in BrushSurface.allCases {
+                    let badge = BrushCoachCopy.surfaceActionBadge(s, lang: lang)
+                    XCTAssertFalse(badge.headline.isEmpty)
+                    XCTAssertFalse(badge.angleTag.isEmpty)
+                    XCTAssertFalse(BrushCoachCopy.spokenBrushCue(quadrant: q, surface: s, lang: lang).isEmpty)
+                }
+            }
+        }
+    }
 }
