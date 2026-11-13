@@ -170,7 +170,8 @@ if (!glossary || redo) {
   const prompt = `${rules(null)}
 
 These are game terms. Choose one short, kid-friendly translation for each. Words like "Dive" (start a
-level), "Hub" (home screen) and "Lab" (upgrade shop) are menu names. Reply with ONE JSON object mapping
+level), "Hub" (home screen) and "Lab" (upgrade shop) are menu names. "Safe Patch" is the protective
+dressing a dentist puts on a hurt tooth (like a bandage), not a safe place. "Surge" is a wave of fluoride. Reply with ONE JSON object mapping
 each English term to its translation, and nothing else.
 
 ${JSON.stringify(GLOSSARY_TERMS)}`;

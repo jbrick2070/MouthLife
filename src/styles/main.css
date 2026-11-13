@@ -301,9 +301,21 @@ textarea:focus-visible {
 .mini-meter-label {
   display: flex;
   justify-content: space-between;
+  gap: 4px;
   font-size: 0.67rem;
   color: var(--text-muted);
   margin-bottom: 4px;
+  min-width: 0;
+}
+/* Long words (German "Zahnschmelz") shrink with an ellipsis instead of touching the number. */
+.mini-meter-label > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-meter-label > :last-child {
+  flex-shrink: 0;
 }
 
 .mini-meter-bar {
