@@ -276,7 +276,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         companionNodes.rootNode.isHidden = !inCompanion
         activeStageNodes?.rootNode.isHidden = !inStage
         probeRig.rootNode.isHidden = !inStage
-        cosmicNodes.rootNode.isHidden = inStage
+        // The Earth backdrop belongs to the hub sky. During Brush-Along the close mirror camera would
+        // see it hanging over the teeth (seen in the simulator screenshots), so hide it there.
+        cosmicNodes.rootNode.isHidden = inStage || mode == .brushAlong
         if !inStage {
             probeRig.flossBeamNode.isHidden = true
             directTouchWorldPos = nil

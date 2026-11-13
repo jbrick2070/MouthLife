@@ -25,7 +25,9 @@ private struct MirrorArchCompassView: View {
                         ? (tiltLeft ? MLTheme.fluorapatiteGold : totalCareLavender)
                         : (!phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
-                .frame(width: 28, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: 40, alignment: .trailing)
 
             Canvas { ctx, size in
                 let cx = size.width * 0.5
@@ -147,7 +149,9 @@ private struct MirrorArchCompassView: View {
                         ? (tiltRight ? MLTheme.fluorapatiteGold : totalCareLavender)
                         : (phase.quadrant.isPatientRight ? MLTheme.fluorapatiteGold : MLTheme.textMuted)
                 )
-                .frame(width: 28, alignment: .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: 40, alignment: .leading)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Mirror Mouth Compass")
