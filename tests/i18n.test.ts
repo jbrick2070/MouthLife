@@ -39,6 +39,12 @@ describe('screen translator matching', () => {
     expect(matcher.translate('Dive (W1): Unknown Place')).toBe('Inmersión (W1): Unknown Place');
   });
 
+  it('translates a known line that the screen prefixed with an icon', () => {
+    expect(matcher.translate('🎯 Restore 10 colonies — scrub glowing rings!')).toBe('🎯 ¡Recupera 10 colonias: frota los anillos!');
+    expect(matcher.translate('✓ Save Player')).toBe('✓ Guardar jugador');
+    expect(matcher.translate('🎯 Unknown goal')).toBe('🎯 Unknown goal');
+  });
+
   it('prefers the more specific pattern', () => {
     expect(matcher.translate('Sites 0/10')).toBe('Sitios 0/10');
     expect(matcher.translate('Sites 3/10')).toBe('Sitios 3/10');

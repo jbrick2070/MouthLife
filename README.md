@@ -31,12 +31,22 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 184 Vitest unit tests
+npm test          # Run all 208 Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
 
 ---
+
+## 🌐 Languages (web)
+
+The web game runs in English, Spanish, French, German, Brazilian Portuguese, Japanese, Simplified Chinese and Korean, picked from the browser language and changeable in Profile or during Brush-Along. The spoken brushing coach follows the same setting.
+
+- `npm run i18n:extract` collects every on-screen string into `src/i18n/strings.en.json` (a test fails if it is out of date).
+- `npm run i18n:translate -- <lang>` translates missing strings with the Antigravity CLI (`agy`), using a per-language glossary of game terms.
+- `node scripts/i18n-review.mjs <lang>` has a second model review every pair; changes are listed in `src/i18n/locales/<lang>.review.md`.
+
+These are machine translations reviewed by a second model, not by native speakers. The native Apple app is not localized yet; it can reuse the same files.
 
 ## 🎮 Playable Modes & Features
 
@@ -76,7 +86,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 25 Vitest suites (184 deterministic web tests)
+└── tests/                                # 26 Vitest suites (208 deterministic web tests)
 ```
 
 ---

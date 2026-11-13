@@ -73,21 +73,32 @@ export class CatalogMatcher {
     if (hit !== undefined) return hit;
     const cached = this.cache.get(k);
     if (cached !== undefined) return cached;
-    let result: string | null = null;
-    for (const p of this.patterns) {
-      const m = p.re.exec(k);
-      if (m) {
-        // Fill the slots; a slot that is itself known text (a world or city name) is translated too.
-        result = p.out.replace(/\$(\d+)/g, (_, n) => {
-          const part = m[Number(n)] ?? '';
-          return this.exact.get(part) ?? part;
-        });
-        break;
+    // Patterns fill their slots; a slot that is itself known text (a world or city name) is translated too.
+    let result: string | null = this.matchPatterns(k);
+    if (result === null) {
+      // Screens sometimes put an icon in front of a known line ("🎯 " + objective): translate the rest.
+      const m = /^([^\p{L}\p{N}]+?)\s*(\p{L}[\s\S]*)$/u.exec(k);
+      if (m && /[^\s]/.test(m[1])) {
+        const rest = this.exact.get(m[2]) ?? this.matchPatterns(m[2]);
+        if (rest !== null) result = `${m[1].trimEnd()} ${rest}`;
       }
     }
     if (this.cache.size > CACHE_LIMIT) this.cache.clear();
     this.cache.set(k, result);
     return result;
+  }
+
+  private matchPatterns(k: string): string | null {
+    for (const p of this.patterns) {
+      const m = p.re.exec(k);
+      if (m) {
+        return p.out.replace(/\$(\d+)/g, (_, n) => {
+          const part = m[Number(n)] ?? '';
+          return this.exact.get(part) ?? part;
+        });
+      }
+    }
+    return null;
   }
 
   /** Translate keeping the original's leading and trailing spaces. */
