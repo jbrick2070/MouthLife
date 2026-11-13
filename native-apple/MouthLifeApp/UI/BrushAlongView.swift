@@ -13,10 +13,33 @@ public struct BrushAlongView: View {
     public let onCancelToHub: () -> Void
 
     private let quadrantTitles = [
-        "Q1 • Upper Right Arch (#1–#8)",
-        "Q2 • Upper Left Arch (#9–#16)",
-        "Q3 • Lower Left Arch (#17–#24)",
-        "Q4 • Lower Right Arch (#25–#32)"
+        "Q1 • Upper Right Arch (#2–#8)",
+        "Q2 • Upper Left Arch (#9–#15)",
+        "Q3 • Lower Left Arch (#18–#24)",
+        "Q4 • Lower Right Arch (#25–#31)"
+    ]
+
+    private let crownTypeNames = [
+        "2nd Molar",
+        "1st Molar",
+        "2nd Premolar",
+        "1st Premolar",
+        "Canine",
+        "Lateral Incisor",
+        "Central Incisor",
+        "Central Incisor",
+        "Lateral Incisor",
+        "Canine",
+        "1st Premolar",
+        "2nd Premolar",
+        "1st Molar",
+        "2nd Molar"
+    ]
+
+    private let surfaceShortLabels = [
+        "Outer Cheek 45°",
+        "Chewing Grooves",
+        "Inner Tongue / Palate"
     ]
 
     private let surfaceCoaching = [
@@ -100,17 +123,34 @@ public struct BrushAlongView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            // Large High-Visibility Sink Countdown Ring
-            VStack(spacing: 6) {
+            // Large High-Visibility Sink Countdown Ring + Live Active Tooth Spotlight Badge
+            VStack(spacing: 5) {
                 Text(inFlossBonus ? "C-CURVE FLOSS BONUS (+25 F⁻)" : quadrantTitles[qIdx])
                     .font(.system(.subheadline, design: .rounded, weight: .heavy))
                     .foregroundStyle(inFlossBonus ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent)
 
                 Text(formatClock(ceil(remaining), pad: true))
-                    .font(.system(size: 54, weight: .heavy, design: .rounded))
+                    .font(.system(size: 46, weight: .heavy, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(MLTheme.textPrimary)
-                    .shadow(color: MLTheme.cyanAccent.opacity(0.45), radius: 14)
+                    .foregroundStyle(isPaused ? MLTheme.fluorapatiteGold : MLTheme.textPrimary)
+                    .shadow(color: (isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent).opacity(0.45), radius: 14)
+
+                if isPaused {
+                    Button {
+                        onTogglePause()
+                    } label: {
+                        Label("PAUSED • TAP TO RESUME", systemImage: "play.circle.fill")
+                            .font(.system(.caption, design: .rounded, weight: .heavy))
+                    }
+                    .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
+                    .padding(.vertical, 2)
+                } else {
+                    Text(liveTargetToothCaption(qIdx: qIdx, qElapsed: qElapsed, sIdx: sIdx))
+                        .font(.system(.caption, design: .rounded, weight: .bold))
+                        .foregroundStyle(MLTheme.fluorapatiteGold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
 
                 // 4-Quadrant Progress Pips
                 HStack(spacing: 8) {
@@ -128,9 +168,10 @@ public struct BrushAlongView: View {
                     }
                 }
                 .frame(maxWidth: 280)
+                .padding(.top, 2)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 18)
             .mlGlassCard(cornerRadius: 24)
             .padding(.horizontal, 16)
 
@@ -200,5 +241,36 @@ public struct BrushAlongView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
         }
+    }
+
+    private func liveTargetToothCaption(qIdx: Int, qElapsed: Double, sIdx: Int) -> String {
+        if inFlossBonus {
+            let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
+            let bonusTotal = max(1.0, GameConfig.brushAlongFlossBonusSec)
+            let norm = min(0.999, max(0.0, flossElapsed / bonusTotal))
+            let isUpper = norm < 0.5
+            let halfNorm = isUpper ? (norm * 2.0) : ((norm - 0.5) * 2.0)
+            let cIdx = min(12, max(0, Int((halfNorm * 12.0).rounded())))
+            let numA = isUpper ? (2 + cIdx) : (31 - cIdx)
+            let numB = isUpper ? (3 + cIdx) : (30 - cIdx)
+            return "✨ C-Curve Contact #\(numA)–#\(numB) • \(isUpper ? "Upper Arch" : "Lower Arch")"
+        }
+
+        let isUpper = (qIdx < 2)
+        let isRightSide = (qIdx == 0 || qIdx == 3)
+        let sFrac = min(0.999, max(0.0, (qElapsed - Double(sIdx) * 10.0) / 10.0))
+        let u = (sIdx == 1) ? (1.0 - sFrac) : sFrac
+        let crownProg = isRightSide ? (u * 6.0) : (13.0 - u * 6.0)
+        let ti = min(13, max(0, Int(crownProg.rounded())))
+        let adaNum = isUpper ? (2 + ti) : (31 - ti)
+        let sideWord = isRightSide ? "Right" : "Left"
+        let jawWord = isUpper ? "Upper" : "Lower"
+        let surfWord: String
+        if sIdx == 2 && (4...9).contains(ti) {
+            surfWord = "Vertical Heel-to-Toe"
+        } else {
+            surfWord = surfaceShortLabels[min(2, max(0, sIdx))]
+        }
+        return "🦷 #\(adaNum) \(jawWord) \(sideWord) \(crownTypeNames[ti]) • \(surfWord)"
     }
 }

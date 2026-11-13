@@ -969,26 +969,34 @@ public enum EnamelShaders {
         emissionGlow += float3(0.78, 1.0, 0.93) * sweep * 0.68;
     }
 
-    // 2-Minute Sink Brush-Along Quadrant Coaching Highlight (pulses gently on Suno groove!)
+    // 2-Minute Sink Brush-Along Quadrant & Active Tooth Spotlight (vivid from 2–3 ft at bathroom sink!)
+    bool inActiveBrushQuadrant = true;
     if (activeQuadrant >= 0 && quadCode > 0.01) {
         int vertQuad = int(floor(quadCode * 4.0 + 0.01));
-        if (vertQuad == activeQuadrant) {
-            float coachPulse = 0.55 + 0.45 * sin(motionTime * 5.0);
+        inActiveBrushQuadrant = (vertQuad == activeQuadrant);
+        if (inActiveBrushQuadrant) {
+            float coachPulse = 0.55 + 0.45 * sin(motionTime * 5.2);
             float grooveLift = audioBass * 0.55 + audioMid * 0.30;
-            emissionGlow += float3(0.10, 0.70, 0.78) * (0.16 + 0.15 * coachPulse + 0.20 * grooveLift);
+            float quadRim = pow(max(1.0 - NdotV, 0.0), 1.45);
+            float3 quadCyan = float3(0.08, 0.84, 0.96);
+            baseColor = mix(baseColor, mix(baseColor, quadCyan, 0.28 + 0.24 * quadRim), 0.78);
+            emissionGlow += quadCyan * (0.22 + 0.18 * coachPulse + 0.22 * grooveLift + 0.26 * quadRim);
         } else {
-            baseColor *= 0.76;
+            baseColor *= 0.34;
+            emissionGlow *= 0.25;
         }
     }
 
-    // Tapped / inspected Companion crown: pearlescent mint-gold rim highlight
-    if (highlightedTooth > -0.5 && toothId > -0.5 && abs(toothId - highlightedTooth) < 0.5) {
-        float rim = pow(max(1.0 - NdotV, 0.0), 1.65);
-        float3 mint = float3(0.12, 0.84, 0.56);
-        float3 gold = float3(1.0, 0.81, 0.29);
-        float3 selected = mix(mint, gold, smoothstep(0.07, 0.68, rim));
-        baseColor = mix(baseColor, selected, highlightPulse * (0.45 + 0.32 * rim));
-        emissionGlow += selected * highlightPulse * (0.20 + 0.28 * rim);
+    // Tapped Hub crown OR live Brush-Along target tooth: vivid 24k Gold + Mint spotlight
+    if (inActiveBrushQuadrant && highlightedTooth > -0.5 && toothId > -0.5 && abs(toothId - highlightedTooth) < 0.5) {
+        float rim = pow(max(1.0 - NdotV, 0.0), 1.45);
+        float targetPulse = (activeQuadrant >= 0) ? (0.78 + 0.22 * sin(motionTime * 7.5)) : 1.0;
+        float strength = highlightPulse * targetPulse;
+        float3 mint = float3(0.16, 0.96, 0.78);
+        float3 gold = float3(1.0, 0.84, 0.28);
+        float3 selected = mix(mint, gold, smoothstep(0.05, 0.62, rim + (1.0 - hFrac) * 0.25));
+        baseColor = mix(baseColor, selected, strength * (0.58 + 0.34 * rim));
+        emissionGlow += selected * strength * (0.38 + 0.42 * rim);
     }
 
     // Dynamic PBR roughness: 0.06 mirror-glass when clean/sealed -> 0.85 chalky matte plaque when dirty!

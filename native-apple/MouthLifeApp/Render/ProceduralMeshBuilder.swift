@@ -24,10 +24,26 @@ public struct CompanionCrownFrame: Equatable, Sendable {
     public let halfDepth: Float
     public let halfHeight: Float
     public let yawRadians: Float
+    public let outwardXZ: SIMD2<Float>
+}
+
+public struct PacerCoachVisualState: Sendable {
+    public let activeCrownIndex: Int
+    public let activeQuadrant: Int
+    public let contactWorldPos: SIMD3<Float>
+    public let focusWorldPos: SIMD3<Float>
+    public let camYaw: Float
+    public let camPitch: Float
+    public let camDistPortrait: Float
+    public let camDistLandscape: Float
 }
 
 public final class CompanionArchNodes {
+    public static let upperMirrorY: Float = 3.20
+
     public let rootNode: SCNNode
+    public let lowerJawNode: SCNNode
+    public let upperJawNode: SCNNode
     public let archContainerNode: SCNNode
     public let crownNodes: [SCNNode]
     public let crownFrames: [CompanionCrownFrame]
@@ -35,21 +51,31 @@ public final class CompanionArchNodes {
     public let gingivaMaterial: SCNMaterial
     public let sugarSplatNodes: [SCNNode]
     public let polishHaloNode: SCNNode
+    public let coachBrushNode: SCNNode
+    public let coachBristlesNode: SCNNode
+    public let coachFlossNode: SCNNode
 
     private var hadVisibleSplats: Bool = true
     private var lastHaloOpacity: CGFloat = -1
 
     public init(
         rootNode: SCNNode,
+        lowerJawNode: SCNNode,
+        upperJawNode: SCNNode,
         archContainerNode: SCNNode,
         crownNodes: [SCNNode],
         crownFrames: [CompanionCrownFrame],
         gingivaNode: SCNNode,
         gingivaMaterial: SCNMaterial,
         sugarSplatNodes: [SCNNode],
-        polishHaloNode: SCNNode
+        polishHaloNode: SCNNode,
+        coachBrushNode: SCNNode,
+        coachBristlesNode: SCNNode,
+        coachFlossNode: SCNNode
     ) {
         self.rootNode = rootNode
+        self.lowerJawNode = lowerJawNode
+        self.upperJawNode = upperJawNode
         self.archContainerNode = archContainerNode
         self.crownNodes = crownNodes
         self.crownFrames = crownFrames
@@ -57,6 +83,252 @@ public final class CompanionArchNodes {
         self.gingivaMaterial = gingivaMaterial
         self.sugarSplatNodes = sugarSplatNodes
         self.polishHaloNode = polishHaloNode
+        self.coachBrushNode = coachBrushNode
+        self.coachBristlesNode = coachBristlesNode
+        self.coachFlossNode = coachFlossNode
+    }
+
+    public func setHubModeLayout() {
+        lowerJawNode.isHidden = false
+        lowerJawNode.simdPosition = .zero
+        lowerJawNode.opacity = 1.0
+        upperJawNode.isHidden = true
+        coachBrushNode.isHidden = true
+        coachFlossNode.isHidden = true
+    }
+
+    /// Drives Upper/Lower jaw visibility, smooth tooth-by-tooth 3D Sonic Toothbrush / C-Curve Floss choreography,
+    /// and dynamic 3D orbital camera targets for the 2-Minute Sink Brush-Along.
+    public func updatePacerCoaching(
+        elapsedSec: Double,
+        inFlossBonus: Bool,
+        nowSec: Float,
+        reducedMotion: Bool
+    ) -> PacerCoachVisualState {
+        if !polishHaloNode.isHidden {
+            polishHaloNode.isHidden = true
+        }
+        let rootOrigin = rootNode.simdPosition
+        guard !crownFrames.isEmpty else {
+            return PacerCoachVisualState(
+                activeCrownIndex: 0,
+                activeQuadrant: 0,
+                contactWorldPos: rootOrigin,
+                focusWorldPos: rootOrigin,
+                camYaw: 0,
+                camPitch: 0.35,
+                camDistPortrait: 22.0,
+                camDistLandscape: 15.0
+            )
+        }
+
+        if inFlossBonus {
+            coachBrushNode.isHidden = true
+            coachFlossNode.isHidden = false
+
+            let flossElapsed = max(0.0, elapsedSec - GameConfig.brushAlongTotalSec)
+            let bonusTotal = max(1.0, GameConfig.brushAlongFlossBonusSec)
+            let norm = Float(min(0.999, max(0.0, flossElapsed / bonusTotal)))
+            let isUpper = norm < 0.5
+            let halfNorm = isUpper ? (norm * 2.0) : ((norm - 0.5) * 2.0)
+
+            upperJawNode.isHidden = !isUpper
+            upperJawNode.simdPosition = .zero
+            upperJawNode.opacity = 1.0
+            lowerJawNode.isHidden = isUpper
+            lowerJawNode.simdPosition = .zero
+            lowerJawNode.opacity = 1.0
+
+            let contactCount = max(1, crownFrames.count - 1) // 13 contacts (0..12)
+            let contactProg = halfNorm * Float(contactCount - 1)
+            let cIdx = min(contactCount - 1, max(0, Int(contactProg.rounded())))
+            let fA = crownFrames[cIdx]
+            let fB = crownFrames[min(crownFrames.count - 1, cIdx + 1)]
+
+            let posA = isUpper ? SIMD3<Float>(fA.localPosition.x, Self.upperMirrorY - fA.localPosition.y, fA.localPosition.z) : fA.localPosition
+            let posB = isUpper ? SIMD3<Float>(fB.localPosition.x, Self.upperMirrorY - fB.localPosition.y, fB.localPosition.z) : fB.localPosition
+            let mid = (posA + posB) * 0.5
+            let outAvg = simd_normalize(SIMD3<Float>(fA.outwardXZ.x + fB.outwardXZ.x, 0, fA.outwardXZ.y + fB.outwardXZ.y))
+            let slideY: Float = reducedMotion ? 0 : sin(nowSec * 6.2) * 0.32
+            let gumSign: Float = isUpper ? 1.0 : -1.0
+
+            let flossLocal = mid + SIMD3<Float>(0, gumSign * 0.18 + slideY, 0)
+            coachFlossNode.simdPosition = flossLocal
+            let yaw = atan2(outAvg.x, outAvg.z)
+            coachFlossNode.simdEulerAngles = SIMD3<Float>(isUpper ? .pi : 0, yaw, 0)
+
+            let activeQuad = isUpper ? (cIdx < 6 ? 0 : 1) : (cIdx < 6 ? 3 : 2)
+            let contactWorld = rootOrigin + flossLocal
+            let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.85 : 1.35, 1.2)
+            let camYaw = (halfNorm - 0.5) * 1.35
+            return PacerCoachVisualState(
+                activeCrownIndex: cIdx,
+                activeQuadrant: activeQuad,
+                contactWorldPos: contactWorld,
+                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.52)),
+                camYaw: camYaw,
+                camPitch: isUpper ? -0.22 : 0.28,
+                camDistPortrait: 20.5,
+                camDistLandscape: 14.2
+            )
+        }
+
+        // Standard 2-Minute 4-Quadrant x 3-Surface Guided Brushing
+        coachFlossNode.isHidden = true
+        coachBrushNode.isHidden = false
+
+        let qIdx = min(3, max(0, Int(elapsedSec / 30.0)))
+        let isUpper = (qIdx < 2)
+        let isRightSide = (qIdx == 0 || qIdx == 3)
+        let qElapsed = elapsedSec - Double(qIdx) * 30.0
+        let sIdx = min(2, max(0, Int(qElapsed / 10.0)))
+        let sFrac = Float(min(0.999, max(0.0, (qElapsed - Double(sIdx) * 10.0) / 10.0)))
+
+        // Show active jaw at full clarity; on Outer Cheek (sIdx == 0) show opposite jaw hinged open for instant Top vs Bottom context!
+        if isUpper {
+            upperJawNode.isHidden = false
+            upperJawNode.simdPosition = .zero
+            upperJawNode.opacity = 1.0
+            if sIdx == 0 {
+                lowerJawNode.isHidden = false
+                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.7, -0.7)
+                lowerJawNode.opacity = 0.42
+            } else {
+                lowerJawNode.isHidden = true
+            }
+        } else {
+            lowerJawNode.isHidden = false
+            lowerJawNode.simdPosition = .zero
+            lowerJawNode.opacity = 1.0
+            if sIdx == 0 {
+                upperJawNode.isHidden = false
+                upperJawNode.simdPosition = SIMD3<Float>(0, 3.7, -0.7)
+                upperJawNode.opacity = 0.42
+            } else {
+                upperJawNode.isHidden = true
+            }
+        }
+
+        // Sweep back-molar -> front-incisor on Outer (0) & Inner (2), and front -> back on Chewing (1)
+        let u = (sIdx == 1) ? (1.0 - sFrac) : sFrac
+        let crownProgress: Float = isRightSide ? (u * 6.0) : (13.0 - u * 6.0)
+        let i0 = min(13, max(0, Int(floor(crownProgress))))
+        let i1 = min(13, i0 + 1)
+        let alpha = crownProgress - Float(i0)
+        let activeCrownIdx = min(13, max(0, Int(crownProgress.rounded())))
+
+        let f0 = crownFrames[i0]
+        let f1 = crownFrames[i1]
+        let p0 = isUpper ? SIMD3<Float>(f0.localPosition.x, Self.upperMirrorY - f0.localPosition.y, f0.localPosition.z) : f0.localPosition
+        let p1 = isUpper ? SIMD3<Float>(f1.localPosition.x, Self.upperMirrorY - f1.localPosition.y, f1.localPosition.z) : f1.localPosition
+        let toothCenter = simd_mix(p0, p1, SIMD3<Float>(repeating: alpha))
+        let halfD = f0.halfDepth * (1.0 - alpha) + f1.halfDepth * alpha
+        let halfH = f0.halfHeight * (1.0 - alpha) + f1.halfHeight * alpha
+
+        let out2 = simd_normalize(f0.outwardXZ * (1.0 - alpha) + f1.outwardXZ * alpha)
+        let outward = SIMD3<Float>(out2.x, 0, out2.y)
+        let inward = -outward
+        let tangent = SIMD3<Float>(outward.z, 0, -outward.x)
+        let gumSign: Float = isUpper ? 1.0 : -1.0
+
+        let microSweep: Float = reducedMotion ? 0 : sin(nowSec * 9.0) * 0.26
+        let microVert: Float = reducedMotion ? 0 : cos(nowSec * 9.0) * 0.08
+        coachBristlesNode.simdPosition.x = reducedMotion ? 0 : sin(nowSec * 42.0) * 0.045
+
+        let contactLocal: SIMD3<Float>
+        let zAxis: SIMD3<Float> // Points from bristle tips toward back of brush head
+        let handleHint: SIMD3<Float> // Points along brush neck/handle out through the open lips
+
+        switch sIdx {
+        case 0:
+            // OUTER CHEEK / LIP: 45° Bass angle tucked gently into the gingival collar
+            contactLocal = toothCenter
+                + outward * (halfD * 0.98)
+                + SIMD3<Float>(0, gumSign * (halfH * 0.38) + microVert, 0)
+                + tangent * microSweep
+            zAxis = simd_normalize(outward + SIMD3<Float>(0, -gumSign * 0.84, 0))
+            handleHint = simd_normalize(SIMD3<Float>(outward.x * 0.22, -gumSign * 0.08, 1.0))
+
+        case 1:
+            // CHEWING / BITING SURFACE: Bristles flat onto occlusal cusps & fissures
+            contactLocal = toothCenter
+                + SIMD3<Float>(0, -gumSign * (halfH * 1.02), 0)
+                + tangent * (microSweep * 1.35)
+            zAxis = simd_normalize(SIMD3<Float>(outward.x * 0.14, -gumSign, 0.10))
+            handleHint = simd_normalize(SIMD3<Float>(outward.x * 0.15, 0, 1.0))
+
+        default:
+            // INNER TONGUE / PALATE: 45° inside collar on molars -> tilts vertically heel-to-toe behind front teeth!
+            let frontBlend = simd_smoothstep(2.8, 4.6, isRightSide ? crownProgress : (13.0 - crownProgress))
+            contactLocal = toothCenter
+                + inward * (halfD * 0.96)
+                + SIMD3<Float>(0, gumSign * (halfH * 0.28) + microVert, 0)
+                + tangent * (microSweep * (1.0 - 0.5 * frontBlend))
+            zAxis = simd_normalize(inward + SIMD3<Float>(0, -gumSign * (0.76 - 0.22 * frontBlend), 0))
+            let molarHandle = simd_normalize(SIMD3<Float>(-outward.x * 0.20, -gumSign * 0.18, 1.0))
+            let verticalFrontHandle = simd_normalize(SIMD3<Float>(0, -gumSign * 0.86, 0.52))
+            handleHint = simd_normalize(simd_mix(molarHandle, verticalFrontHandle, SIMD3<Float>(repeating: frontBlend)))
+        }
+
+        // Build clean right-handed orthonormal basis for coachBrushNode
+        var yAxis = handleHint - zAxis * simd_dot(handleHint, zAxis)
+        if simd_length_squared(yAxis) < 1e-5 {
+            yAxis = SIMD3<Float>(0, 0, 1) - zAxis * zAxis.z
+        }
+        yAxis = simd_normalize(yAxis)
+        let xAxis = simd_normalize(simd_cross(yAxis, zAxis))
+        yAxis = simd_normalize(simd_cross(zAxis, xAxis))
+
+        coachBrushNode.simdTransform = simd_float4x4(
+            SIMD4<Float>(xAxis.x, xAxis.y, xAxis.z, 0),
+            SIMD4<Float>(yAxis.x, yAxis.y, yAxis.z, 0),
+            SIMD4<Float>(zAxis.x, zAxis.y, zAxis.z, 0),
+            SIMD4<Float>(contactLocal.x, contactLocal.y, contactLocal.z, 1)
+        )
+
+        // Dramatic 3D Camera Orbit so user vividly sees Cheek vs Chewing Cusps vs Inner Tongue/Palate!
+        let rightSign: Float = isRightSide ? -1.0 : 1.0
+        let frontProg: Float = isRightSide ? (crownProgress / 6.0) : ((13.0 - crownProgress) / 6.0)
+        let camYaw: Float
+        let camPitch: Float
+        let distP: Float
+        let distL: Float
+
+        switch sIdx {
+        case 0:
+            // Orbit around outer cheek (-54°/+54° at 2nd molar -> -14°/+14° at central incisor)
+            camYaw = rightSign * (0.94 - 0.68 * frontProg)
+            camPitch = isUpper ? -0.14 : 0.22
+            distP = 21.0
+            distL = 14.5
+        case 1:
+            // Tilt steeply overhead (Lower) or underneath (Upper) straight into the chewing grooves!
+            camYaw = rightSign * (0.46 - 0.24 * frontProg)
+            camPitch = isUpper ? -0.68 : 0.72
+            distP = 19.8
+            distL = 13.8
+        default:
+            // Swing across the arch to look directly onto the inner tongue/palate collar & vertical front sweep!
+            camYaw = -rightSign * (0.62 - 0.44 * frontProg)
+            camPitch = isUpper ? -0.54 : 0.58
+            distP = 20.8
+            distL = 14.4
+        }
+
+        let contactWorld = rootOrigin + contactLocal
+        let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.9 : 1.3, 0.8)
+        let focusWorld = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.54))
+
+        return PacerCoachVisualState(
+            activeCrownIndex: activeCrownIdx,
+            activeQuadrant: qIdx,
+            contactWorldPos: contactWorld,
+            focusWorldPos: focusWorld,
+            camYaw: camYaw,
+            camPitch: camPitch,
+            camDistPortrait: distP,
+            camDistLandscape: distL
+        )
     }
 
     /// Updates 3D sticky sugar-plaque overlay blobs on the Companion Arch (0..6 active splats).
@@ -205,10 +477,10 @@ public final class CosmicBackdropNodes {
     }
 
     public func setCosmicIntroState(visible: Bool, beatIndex: Int = 0) {
-        cosmicShowcaseNode.isHidden = !visible
+        cosmicShowcaseNode.isHidden = !(visible && beatIndex < 3)
         cosmicBeatIndex = beatIndex
         mohsLineupNode.isHidden = !(visible && beatIndex == 1)
-        fluorideLockNode.isHidden = !(visible && beatIndex >= 2)
+        fluorideLockNode.isHidden = !(visible && beatIndex >= 2 && beatIndex < 3)
     }
 
     public func selectMohsSpecimen(_ index: Int) {
@@ -733,7 +1005,8 @@ public enum ProceduralMeshBuilder {
         segments: Int = 28,
         quadrantIndex: Int? = nil,
         crownIndex: Int? = nil,
-        seed: Float = 0
+        seed: Float = 0,
+        invertVertically: Bool = false
     ) -> SCNGeometry {
         let radialSegs = max(12, segments)
         let ringSegs = max(12, Int(round(Float(radialSegs) * 0.76)))
@@ -864,7 +1137,7 @@ public enum ProceduralMeshBuilder {
 
                 let idx = iy * cols + ix
                 positions[idx * 3] = x
-                positions[idx * 3 + 1] = y
+                positions[idx * 3 + 1] = invertVertically ? -y : y
                 positions[idx * 3 + 2] = z
 
                 uvs[idx * 2] = u
@@ -882,7 +1155,7 @@ public enum ProceduralMeshBuilder {
             }
         }
 
-        // CCW outward winding: (i00, i10, i01) and (i10, i11, i01)
+        // CCW outward winding (reverse triangle order when mirrored vertically so normals stay outward!)
         var indices = [UInt32]()
         indices.reserveCapacity(radialSegs * ringSegs * 6)
         for iy in 0..<ringSegs {
@@ -891,7 +1164,11 @@ public enum ProceduralMeshBuilder {
                 let i10 = i00 + 1
                 let i01 = UInt32((iy + 1) * cols + ix)
                 let i11 = i01 + 1
-                indices.append(contentsOf: [i00, i10, i01, i10, i11, i01])
+                if invertVertically {
+                    indices.append(contentsOf: [i00, i01, i10, i10, i01, i11])
+                } else {
+                    indices.append(contentsOf: [i00, i10, i01, i10, i11, i01])
+                }
             }
         }
 
@@ -960,9 +1237,9 @@ public enum ProceduralMeshBuilder {
         return table.ts[lo] + (table.ts[hi] - table.ts[lo]) * u
     }
 
-    /// Builds the 14 sculpted anatomical Companion crowns (`"crown_0"` .. `"crown_13"`),
-    /// swept scalloped gingival collar with interdental papillae, sugar-splat blobs, and
-    /// Smooth Bask polish halo motes.
+    /// Builds the 14 sculpted anatomical Lower Companion crowns (`"crown_0"` .. `"crown_13"`),
+    /// matching 14 sculpted Upper Maxillary crowns + upper gingival collar for 2-Minute Brush-Along,
+    /// guided 3D Sonic Toothbrush & C-Curve Floss ribbon, sugar-splat blobs, and Smooth Bask motes.
     public static func buildCompanionArchSceneNodes(
         enamelMaterial: SCNMaterial,
         gingivaMaterial: SCNMaterial? = nil,
@@ -973,9 +1250,22 @@ public enum ProceduralMeshBuilder {
         let rootOrigin = SIMD3<Float>(32.0, 0.4, 16.0)
         rootNode.simdPosition = rootOrigin
 
+        let lowerJawNode = SCNNode()
+        lowerJawNode.name = "CompanionLowerJaw"
+        rootNode.addChildNode(lowerJawNode)
+
+        let upperJawNode = SCNNode()
+        upperJawNode.name = "CompanionUpperJaw"
+        upperJawNode.isHidden = true
+        rootNode.addChildNode(upperJawNode)
+
         let crownsContainer = SCNNode()
         crownsContainer.name = "CompanionCrownsContainer"
-        rootNode.addChildNode(crownsContainer)
+        lowerJawNode.addChildNode(crownsContainer)
+
+        let upperCrownsContainer = SCNNode()
+        upperCrownsContainer.name = "CompanionUpperCrownsContainer"
+        upperJawNode.addChildNode(upperCrownsContainer)
 
         let halfArchSpecs: [(kind: ToothKind, w: Double, d: Double, h: Double)] = [
             (.centralIncisor, 8.6, 7.0, 10.4),
@@ -1007,21 +1297,40 @@ public enum ProceduralMeshBuilder {
             let halfW = Float(width * 0.5 * 1.02)
             let halfD = Float(spec.d * mmToU * 0.5 * 0.92)
             let halfH = Float(spec.h * mmToU * 0.5 * 1.05)
+            let segCount = (spec.kind == .molar || spec.kind == .premolar) ? max(28, segments) : max(24, segments - 2)
 
-            let quadIdx = min(3, (ti * 4) / orderedSpecs.count)
+            // Lower Arch: Right half (ti < 7) = Q4 (#25–#31, quadIdx 3); Left half (ti >= 7) = Q3 (#18–#24, quadIdx 2)
+            let lowerQuadIdx = (ti < 7) ? 3 : 2
             let crownGeo = sculptCrownGeometry(
                 kind: spec.kind,
                 width: halfW * 2.0,
                 height: halfH * 2.0,
                 depth: halfD * 2.0,
-                segments: (spec.kind == .molar || spec.kind == .premolar) ? max(28, segments) : max(24, segments - 2),
-                quadrantIndex: quadIdx,
+                segments: segCount,
+                quadrantIndex: lowerQuadIdx,
                 crownIndex: ti,
-                seed: Float(ti) * 0.37
+                seed: Float(ti) * 0.37,
+                invertVertically: false
             )
             crownGeo.materials = [enamelMaterial]
 
+            // Upper Arch: Right half (ti < 7) = Q1 (#2–#8, quadIdx 0); Left half (ti >= 7) = Q2 (#9–#15, quadIdx 1)
+            let upperQuadIdx = (ti < 7) ? 0 : 1
+            let upperCrownGeo = sculptCrownGeometry(
+                kind: spec.kind,
+                width: halfW * 2.0,
+                height: halfH * 2.0,
+                depth: halfD * 2.0,
+                segments: segCount,
+                quadrantIndex: upperQuadIdx,
+                crownIndex: ti,
+                seed: Float(ti) * 0.37,
+                invertVertically: true
+            )
+            upperCrownGeo.materials = [enamelMaterial]
+
             let yaw = Float(atan2(-ap.tz, ap.tx))
+            let outXZ = simd_normalize(SIMD2<Float>(Float(-ap.tz), Float(ap.tx)))
             let centerY: Float = 0.62 + 0.64 * halfH
             let localPos = SIMD3<Float>(Float(ap.x), centerY, Float(ap.z))
 
@@ -1031,19 +1340,26 @@ public enum ProceduralMeshBuilder {
             node.simdEulerAngles = SIMD3<Float>(0, yaw, 0)
             crownsContainer.addChildNode(node)
 
+            let upperNode = SCNNode(geometry: upperCrownGeo)
+            upperNode.name = "upper_crown_\(ti)"
+            upperNode.simdPosition = SIMD3<Float>(localPos.x, CompanionArchNodes.upperMirrorY - centerY, localPos.z)
+            upperNode.simdEulerAngles = SIMD3<Float>(0, yaw, 0)
+            upperCrownsContainer.addChildNode(upperNode)
+
             crownNodes.append(node)
             crownFrames.append(
                 CompanionCrownFrame(
                     index: ti,
                     name: "crown_\(ti)",
                     kind: spec.kind,
-                    quadrantIndex: quadIdx,
+                    quadrantIndex: lowerQuadIdx,
                     localPosition: localPos,
                     worldPosition: rootOrigin + localPos,
                     halfWidth: halfW,
                     halfDepth: halfD,
                     halfHeight: halfH,
-                    yawRadians: yaw
+                    yawRadians: yaw,
+                    outwardXZ: outXZ
                 )
             )
 
@@ -1054,17 +1370,29 @@ public enum ProceduralMeshBuilder {
             cursor += width + contactGap
         }
 
-        // Swept scalloped gingival collar with interdental papillae
+        // Swept scalloped gingival collars (Lower & Upper) with interdental papillae
         let resolvedGumMat = gingivaMaterial ?? EnamelShaders.makeGingivaMaterial(gingivaHex: 0xD4526A)
         let gumGeo = buildScallopedGingivaCollarGeometry(
             table: table,
             spans: toothArcSpans,
-            contacts: contactArcPositions
+            contacts: contactArcPositions,
+            invertVertically: false
         )
         gumGeo.materials = [resolvedGumMat]
         let gingivaNode = SCNNode(geometry: gumGeo)
         gingivaNode.name = "CompanionGingivaArch"
-        rootNode.addChildNode(gingivaNode)
+        lowerJawNode.addChildNode(gingivaNode)
+
+        let upperGumGeo = buildScallopedGingivaCollarGeometry(
+            table: table,
+            spans: toothArcSpans,
+            contacts: contactArcPositions,
+            invertVertically: true
+        )
+        upperGumGeo.materials = [resolvedGumMat]
+        let upperGingivaNode = SCNNode(geometry: upperGumGeo)
+        upperGingivaNode.name = "CompanionUpperGingivaArch"
+        upperJawNode.addChildNode(upperGingivaNode)
 
         // Sticky Regional Treat sugar-plaque splat overlay nodes (hidden until active)
         let splatMat = makeGlossyPropMaterial(hex: 0xEAB308, emissionHex: 0xCA8A04, roughness: 0.48, opacity: 0.72)
@@ -1102,22 +1430,167 @@ public enum ProceduralMeshBuilder {
         }
         rootNode.addChildNode(polishHaloNode)
 
+        // 3D Guided Sonic Toothbrush + C-Curve Floss Rig for 2-Minute Sink Brush-Along
+        let (coachBrushNode, coachBristlesNode, coachFlossNode) = buildPacerCoachRig()
+        rootNode.addChildNode(coachBrushNode)
+        rootNode.addChildNode(coachFlossNode)
+
         return CompanionArchNodes(
             rootNode: rootNode,
+            lowerJawNode: lowerJawNode,
+            upperJawNode: upperJawNode,
             archContainerNode: crownsContainer,
             crownNodes: crownNodes,
             crownFrames: crownFrames,
             gingivaNode: gingivaNode,
             gingivaMaterial: resolvedGumMat,
             sugarSplatNodes: splatNodes,
-            polishHaloNode: polishHaloNode
+            polishHaloNode: polishHaloNode,
+            coachBrushNode: coachBrushNode,
+            coachBristlesNode: coachBristlesNode,
+            coachFlossNode: coachFlossNode
         )
+    }
+
+    /// Builds a sleek, high-visibility 3D Sonic Toothbrush (`local origin = bristle tips`, `+Z = bristle-to-back`,
+    /// `+Y = handle shaft out of lips`) plus a curved C-Shape Floss Silk guide for `BrushAlongView`.
+    private static func buildPacerCoachRig() -> (brush: SCNNode, bristles: SCNNode, floss: SCNNode) {
+        let brushRoot = SCNNode()
+        brushRoot.name = "PacerCoachToothbrush"
+        brushRoot.isHidden = true
+
+        // Glowing mint-cyan contact spotlight halo right where bristle tips meet the tooth/gumline
+        let contactHalo = SCNTorus(ringRadius: 0.92, pipeRadius: 0.055)
+        contactHalo.ringSegmentCount = 36
+        contactHalo.materials = [makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.86, additive: true)]
+        let haloNode = SCNNode(geometry: contactHalo)
+        haloNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
+        haloNode.simdPosition = SIMD3<Float>(0, 0, 0.06)
+        brushRoot.addChildNode(haloNode)
+
+        // 3 x 6 soft tapered sonic bristle tufts (tips at z=0, bases at z=+0.84)
+        let bristlesGroup = SCNNode()
+        bristlesGroup.name = "PacerCoachBristles"
+        let whiteTuftMat = makeGlossyPropMaterial(hex: 0xF8FAFC, emissionHex: 0x38BDF8, roughness: 0.16)
+        let cyanTuftMat = makeUnlitGlowMaterial(hex: 0x5EEAD4, opacity: 0.96)
+        let tuftCone = SCNCone(topRadius: 0.048, bottomRadius: 0.072, height: 0.84)
+        tuftCone.radialSegmentCount = 10
+        for row in 0..<6 {
+            for col in 0..<3 {
+                let isIndicator = (row == 0 || row == 5 || col == 1)
+                let tGeo = tuftCone.copy() as? SCNGeometry ?? tuftCone
+                tGeo.materials = [isIndicator ? cyanTuftMat : whiteTuftMat]
+                let tNode = SCNNode(geometry: tGeo)
+                // SCNCone axis is +Y; rotate -pi/2 around X so topRadius (tip) points toward -Z (into tooth)!
+                tNode.simdEulerAngles = SIMD3<Float>(-.pi * 0.5, 0, 0)
+                tNode.simdPosition = SIMD3<Float>(
+                    Float(col - 1) * 0.22,
+                    Float(row) * 0.26 - 0.62,
+                    0.42
+                )
+                bristlesGroup.addChildNode(tNode)
+            }
+        }
+        brushRoot.addChildNode(bristlesGroup)
+
+        // Sleek pearlescent sonic brush head plate (at z = +0.94)
+        let bodyMat = makeGlossyPropMaterial(hex: 0xF0F9FF, emissionHex: 0x0EA5E9, roughness: 0.12, metalness: 0.18)
+        let cyanTrimMat = makeUnlitGlowMaterial(hex: 0x38BDF8, opacity: 0.94)
+        let goldRingMat = makeGlossyPropMaterial(hex: 0xFBBF24, emissionHex: 0xD97706, roughness: 0.18, metalness: 0.85)
+
+        let headPlate = SCNCapsule(capRadius: 0.44, height: 1.95)
+        headPlate.materials = [bodyMat]
+        let headNode = SCNNode(geometry: headPlate)
+        headNode.simdScale = SIMD3<Float>(1.0, 1.0, 0.42)
+        headNode.simdPosition = SIMD3<Float>(0, 0.05, 0.95)
+        brushRoot.addChildNode(headNode)
+
+        // Tapered sonic neck extending along +Y out of the mouth
+        let neck = SCNCone(topRadius: 0.26, bottomRadius: 0.17, height: 2.6)
+        neck.radialSegmentCount = 16
+        neck.materials = [bodyMat]
+        let neckNode = SCNNode(geometry: neck)
+        neckNode.simdPosition = SIMD3<Float>(0, 2.15, 1.02)
+        neckNode.simdEulerAngles = SIMD3<Float>(0.06, 0, 0)
+        brushRoot.addChildNode(neckNode)
+
+        // Glowing 45° smart pressure sensor ring (like premium electric sonic brushes!)
+        let sensorRing = SCNTorus(ringRadius: 0.28, pipeRadius: 0.055)
+        sensorRing.materials = [cyanTrimMat]
+        let sensorNode = SCNNode(geometry: sensorRing)
+        sensorNode.simdPosition = SIMD3<Float>(0, 3.45, 1.10)
+        brushRoot.addChildNode(sensorNode)
+
+        let goldCollar = SCNTorus(ringRadius: 0.27, pipeRadius: 0.03)
+        goldCollar.materials = [goldRingMat]
+        let collarNode = SCNNode(geometry: goldCollar)
+        collarNode.simdPosition = SIMD3<Float>(0, 3.60, 1.11)
+        brushRoot.addChildNode(collarNode)
+
+        // Ergonomic Sonic Handle Grip extending along +Y
+        let handle = SCNCapsule(capRadius: 0.34, height: 4.4)
+        handle.materials = [bodyMat]
+        let handleNode = SCNNode(geometry: handle)
+        handleNode.simdPosition = SIMD3<Float>(0, 5.55, 1.18)
+        brushRoot.addChildNode(handleNode)
+
+        // C-Curve Polymer Floss Silk Guide Node
+        let flossRoot = SCNNode()
+        flossRoot.name = "PacerCoachFloss"
+        flossRoot.isHidden = true
+
+        let silkCoreMat = makeUnlitGlowMaterial(hex: 0xFFFFFF, opacity: 0.96, additive: true)
+        let silkHaloMat = makeUnlitGlowMaterial(hex: 0x2DD4BF, opacity: 0.72, additive: true)
+        let cSegments = 9
+        let cRadius: Float = 0.82
+        for i in 0..<cSegments {
+            let f0 = Float(i) / Float(cSegments)
+            let f1 = Float(i + 1) / Float(cSegments)
+            let a0 = -1.25 + f0 * 2.50
+            let a1 = -1.25 + f1 * 2.50
+            let p0 = SIMD3<Float>(sin(a0) * 0.42, 0, cos(a0) * cRadius - 0.15)
+            let p1 = SIMD3<Float>(sin(a1) * 0.42, 0, cos(a1) * cRadius - 0.15)
+            let seg = p1 - p0
+            let len = max(0.02, simd_length(seg))
+            let mid = (p0 + p1) * 0.5
+            let up = SIMD3<Float>(0, 1, 0)
+            let dir = seg / len
+
+            let coreCyl = SCNCylinder(radius: 0.042, height: CGFloat(len + 0.03))
+            coreCyl.materials = [silkCoreMat]
+            let cNode = SCNNode(geometry: coreCyl)
+            cNode.simdPosition = mid
+            if abs(simd_dot(up, dir)) < 0.999 {
+                cNode.simdOrientation = simd_quatf(from: up, to: dir)
+            }
+            flossRoot.addChildNode(cNode)
+
+            let haloCyl = SCNCylinder(radius: 0.11, height: CGFloat(len + 0.03))
+            haloCyl.materials = [silkHaloMat]
+            let hNode = SCNNode(geometry: haloCyl)
+            hNode.simdPosition = mid
+            hNode.simdOrientation = cNode.simdOrientation
+            flossRoot.addChildNode(hNode)
+        }
+
+        // Extend tensioned floss tails forward & inward so user clearly sees the C-hug pull direction
+        for side: Float in [-1, 1] {
+            let tail = SCNCylinder(radius: 0.035, height: 2.2)
+            tail.materials = [silkHaloMat]
+            let tNode = SCNNode(geometry: tail)
+            tNode.simdPosition = SIMD3<Float>(side * 0.46, 0.25, 1.45)
+            tNode.simdEulerAngles = SIMD3<Float>(.pi * 0.46, side * 0.12, 0)
+            flossRoot.addChildNode(tNode)
+        }
+
+        return (brushRoot, bristlesGroup, flossRoot)
     }
 
     private static func buildScallopedGingivaCollarGeometry(
         table: ArchTable,
         spans: [(s0: Double, s1: Double, halfD: Double)],
-        contacts: [Double]
+        contacts: [Double],
+        invertVertically: Bool = false
     ) -> SCNGeometry {
         let along = 200
         enum ProfileKey { case base, mid, crestOuter, crest, inner }
@@ -1211,7 +1684,7 @@ public enum ProceduralMeshBuilder {
 
                 let idx = a * rows + r
                 positions[idx * 3] = Float(ap.x + nx * off)
-                positions[idx * 3 + 1] = Float(y)
+                positions[idx * 3 + 1] = invertVertically ? (CompanionArchNodes.upperMirrorY - Float(y)) : Float(y)
                 positions[idx * 3 + 2] = Float(ap.z + nz * off)
 
                 uvs[idx * 2] = Float(uFrac)
@@ -1224,7 +1697,7 @@ public enum ProceduralMeshBuilder {
             }
         }
 
-        // Outward & upward CCW winding: (i0, i2, i1) and (i1, i2, i3)
+        // Outward CCW winding (reversed when mirrored vertically for Upper Maxillary Gingiva!)
         var indices = [UInt32]()
         indices.reserveCapacity(along * (rows - 1) * 6)
         for a in 0..<along {
@@ -1233,7 +1706,11 @@ public enum ProceduralMeshBuilder {
                 let i1 = i0 + 1
                 let i2 = i0 + UInt32(rows)
                 let i3 = i2 + 1
-                indices.append(contentsOf: [i0, i2, i1, i1, i2, i3])
+                if invertVertically {
+                    indices.append(contentsOf: [i0, i1, i2, i1, i3, i2])
+                } else {
+                    indices.append(contentsOf: [i0, i2, i1, i1, i2, i3])
+                }
             }
         }
 

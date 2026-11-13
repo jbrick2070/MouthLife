@@ -58,6 +58,8 @@ public final class AppCoordinator {
     public var pacerElapsedSec: Double = 0.0
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
+    private var pacerPausedByUser: Bool = false
+    private var pacerSuspendedBySystem: Bool = false
     private var pacerTimer: Timer?
     private var lastPacerTickUptime: TimeInterval?
     private var lastAnnouncedQuadrant: Int = -1
@@ -292,6 +294,11 @@ public final class AppCoordinator {
             }
         }
 
+        sceneController.onCosmicMohsSelected = { idx in
+            NativeSoundEngine.shared.playCrownRub(crownIndex: idx * 3, smoothnessIndex: 96.0)
+            HapticsEngine.shared.playEnamelRub(smoothnessIndex: 96.0, intensity: 0.75)
+        }
+
         unsubscribeToken = eventBus.subscribe { [weak self] event in
             Task { @MainActor [weak self] in
                 self?.handleGameEvent(event)
@@ -440,6 +447,10 @@ public final class AppCoordinator {
 
     public func returnToHub() {
         stopPacerTimer()
+        pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
+        NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.stopScrub()
         transition(to: .hub)
     }
@@ -497,12 +508,17 @@ public final class AppCoordinator {
     public func startBrushAlong() {
         pacerElapsedSec = 0
         pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
         pacerInFlossBonus = false
         brushRadioStation = .livingClock
         lastAnnouncedQuadrant = 0
         lastAnnouncedSurface = 0
+        tappedCrownSummary = nil
+        sceneController.highlightedCrownIndex = nil
         sceneController.pacerElapsedSec = 0
         sceneController.pacerInFlossBonus = false
+        NativeSoundEngine.shared.setPaused(false)
         transition(to: .brushAlong)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
         NativeSoundEngine.shared.playPacerCue(.quadrant)
@@ -512,23 +528,36 @@ public final class AppCoordinator {
 
     public func togglePacerPause() {
         pacerIsPaused.toggle()
+        pacerPausedByUser = pacerIsPaused
+        pacerSuspendedBySystem = false
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        NativeSoundEngine.shared.setPaused(pacerIsPaused)
         updateIdleTimerPolicy()
         eventBus.emit(.pacerPaused(paused: pacerIsPaused))
     }
 
     public func enterFlossBonusNow() {
         pacerInFlossBonus = true
+        pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
         pacerElapsedSec = max(pacerElapsedSec, GameConfig.brushAlongTotalSec)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = true
+        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
         NativeSoundEngine.shared.playPacerCue(.quadrant)
         HapticsEngine.shared.playPacerQuadrantCue()
+        updateIdleTimerPolicy()
     }
 
     public func completeBrushAlongSession(withFlossBonus: Bool) {
         stopPacerTimer()
+        pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
+        NativeSoundEngine.shared.setPaused(false)
         let outcome = saveSystem.recordBrushAlongCompletion(withFlossBonus: withFlossBonus)
         save = saveSystem.getSave()
         sceneController.touchSystem.clearAll()
@@ -542,11 +571,13 @@ public final class AppCoordinator {
     private func startPacerTimer() {
         stopPacerTimer()
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
-        pacerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.tickPacer()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pacerTimer = timer
     }
 
     private func stopPacerTimer() {
@@ -557,6 +588,7 @@ public final class AppCoordinator {
 
     private func tickPacer() {
         guard mode == .brushAlong, !pacerIsPaused else { return }
+        ensureIdleTimerDisabledIfNeeded()
         let now = ProcessInfo.processInfo.systemUptime
         let dt = min(0.5, max(0.0, now - (lastPacerTickUptime ?? now)))
         lastPacerTickUptime = now
@@ -592,15 +624,35 @@ public final class AppCoordinator {
     public func handleScenePhase(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            NativeSoundEngine.shared.resumeFromForeground()
+            if mode == .brushAlong {
+                if pacerSuspendedBySystem && !pacerPausedByUser {
+                    pacerSuspendedBySystem = false
+                    pacerIsPaused = false
+                    NativeSoundEngine.shared.setPaused(false)
+                    eventBus.emit(.pacerPaused(paused: false))
+                }
+                lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+                if !pacerIsPaused && pacerTimer == nil {
+                    startPacerTimer()
+                }
+            }
             updateIdleTimerPolicy()
-            NativeSoundEngine.shared.startEngineIfNeeded()
-        case .inactive, .background:
+
+        case .inactive:
+            // Do NOT pause Brush-Along or drop wake-lock on momentary notification banners / Control Center peeks!
+            break
+
+        case .background:
             if mode == .brushAlong && !pacerIsPaused {
                 pacerIsPaused = true
+                pacerSuspendedBySystem = true
+                NativeSoundEngine.shared.setPaused(true)
                 eventBus.emit(.pacerPaused(paused: true))
             }
             _ = saveSystem.save()
             setIdleTimerDisabled(false)
+
         @unknown default:
             break
         }
@@ -609,6 +661,14 @@ public final class AppCoordinator {
     private func updateIdleTimerPolicy() {
         let keepAwake = (mode == .brushAlong && !pacerIsPaused)
         setIdleTimerDisabled(keepAwake)
+    }
+
+    private func ensureIdleTimerDisabledIfNeeded() {
+        #if os(iOS)
+        if mode == .brushAlong && !pacerIsPaused && !UIApplication.shared.isIdleTimerDisabled {
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+        #endif
     }
 
     private func setIdleTimerDisabled(_ disabled: Bool) {

@@ -70,6 +70,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     // Input State (120Hz Direct Touch Steering + Thumbstick + Orbit)
     private var hubOrbitYaw: Float = 0.0
     private var hubOrbitPitch: Float = 0.34
+    private var cosmicOrbitYaw: Float = 0.0
+    private var brushOrbitOffsetYaw: Float = 0.0
+    private var brushOrbitOffsetPitch: Float = 0.0
+    private var brushUserDragging: Bool = false
+    private var latestPacerCoachState: PacerCoachVisualState?
     private var hasRenderedFirstFrame: Bool = false
     private var directTouchWorldPos: Vec2?
     private var stickMoveX: Double = 0
@@ -109,6 +114,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     // Callbacks to Coordinator (invoked on MainActor)
     public var onSessionStepped: ((SessionSnapshot) -> Void)?
     public var onCompanionCrownRubbed: ((Int?, TouchFeedback) -> Void)?
+    public var onCosmicMohsSelected: ((Int) -> Void)?
     public var onFpsUpdated: ((Int) -> Void)?
 
     public override init() {
@@ -236,6 +242,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
         cosmicNodes.setCosmicIntroState(visible: mode == .cosmicIntro, beatIndex: cosmicBeatIndex)
         if mode == .cosmicIntro {
+            cosmicOrbitYaw = 0
             cosmicNodes.rootNode.simdPosition = SIMD3<Float>(
                 Float(GameConfig.earthBackdropPos.x),
                 Float(GameConfig.earthBackdropPos.y),
@@ -248,6 +255,20 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             cosmicNodes.rootNode.simdPosition = SIMD3<Float>(32.0, 6.2, -44.0)
             cosmicNodes.rootNode.simdScale = SIMD3<Float>(repeating: 0.64)
             cosmicNodes.focusOnCity(selectedCityId)
+            if mode == .hub {
+                companionNodes.setHubModeLayout()
+                companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
+            } else if mode == .brushAlong {
+                brushOrbitOffsetYaw = 0
+                brushOrbitOffsetPitch = 0
+                brushUserDragging = false
+                latestPacerCoachState = companionNodes.updatePacerCoaching(
+                    elapsedSec: pacerElapsedSec,
+                    inFlossBonus: pacerInFlossBonus,
+                    nowSec: sceneNowSec,
+                    reducedMotion: reducedMotion
+                )
+            }
         }
 
         if !hasRenderedFirstFrame || prevMode != mode {
@@ -366,6 +387,24 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             updateArcadeGroundTarget(at: point, in: scnView)
         } else if appMode == .hub {
             _ = tryRubCompanionCrown(at: point, in: scnView, phase: .down)
+        } else if appMode == .cosmicIntro && cosmicBeatIndex == 1 {
+            let hits = scnView.hitTest(point, options: [.boundingBoxOnly: false])
+            for hit in hits {
+                var cur: SCNNode? = hit.node
+                while let n = cur {
+                    if let name = n.name, name.hasPrefix("mohs_"),
+                       let idx = Int(name.replacingOccurrences(of: "mohs_", with: "")),
+                       (0...4).contains(idx) {
+                        cosmicNodes.selectMohsSpecimen(idx)
+                        let cb = onCosmicMohsSelected
+                        DispatchQueue.main.async { cb?(idx) }
+                        return
+                    }
+                    cur = n.parent
+                }
+            }
+        } else if appMode == .brushAlong {
+            brushUserDragging = true
         }
     }
 
@@ -378,11 +417,18 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 hubOrbitYaw = max(-0.85, min(0.85, hubOrbitYaw - Float(delta.width) * 0.0055))
                 hubOrbitPitch = max(0.18, min(0.82, hubOrbitPitch + Float(delta.height) * 0.0035))
             }
+        } else if appMode == .cosmicIntro {
+            cosmicOrbitYaw = max(-0.75, min(0.75, cosmicOrbitYaw - Float(delta.width) * 0.005))
+        } else if appMode == .brushAlong {
+            brushUserDragging = true
+            brushOrbitOffsetYaw = max(-0.85, min(0.85, brushOrbitOffsetYaw - Float(delta.width) * 0.0055))
+            brushOrbitOffsetPitch = max(-0.45, min(0.45, brushOrbitOffsetPitch + Float(delta.height) * 0.0035))
         }
     }
 
     public func handlePointerUp() {
         directTouchWorldPos = nil
+        brushUserDragging = false
         if appMode == .hub {
             touchSystem.endTouch()
         }
@@ -500,15 +546,38 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     private func updateCompanionFrame(dt: Float, motionTime: Float) {
         touchSystem.step(dt: Double(dt), nowSec: Double(sceneNowSec))
-        if appMode == .brushAlong {
-            touchSystem.fadeSplatsForPacer(elapsedSec: pacerElapsedSec)
-        }
 
         let activeQuad: Int
-        if appMode == .brushAlong && !pacerInFlossBonus {
-            activeQuad = min(3, max(0, Int(pacerElapsedSec / 30.0)))
+        var pacerFoamOrigin: Vec2 = .zero
+        var pacerFoamStrength: Float = 0
+
+        if appMode == .brushAlong {
+            touchSystem.fadeSplatsForPacer(elapsedSec: pacerElapsedSec)
+            if !brushUserDragging {
+                let relax = exp(-2.2 * max(0.001, dt))
+                brushOrbitOffsetYaw *= relax
+                brushOrbitOffsetPitch *= relax
+            }
+            let coach = companionNodes.updatePacerCoaching(
+                elapsedSec: pacerElapsedSec,
+                inFlossBonus: pacerInFlossBonus,
+                nowSec: sceneNowSec,
+                reducedMotion: reducedMotion
+            )
+            latestPacerCoachState = coach
+            activeQuad = coach.activeQuadrant
+            companionEnamelController.setHighlightedCrown(index: coach.activeCrownIndex, pulse01: 1.0)
+            pacerFoamOrigin = Vec2(x: Double(coach.contactWorldPos.x), z: Double(coach.contactWorldPos.z))
+            pacerFoamStrength = pacerInFlossBonus ? 0.36 : 0.88
         } else {
             activeQuad = -1
+            companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
+            companionNodes.updatePolishHalo(
+                smoothnessIndex: companionSmoothness,
+                nowSec: sceneNowSec,
+                reducedMotion: reducedMotion,
+                audioBands: smoothedAudioBands
+            )
         }
 
         let smooth01 = Float(min(1.0, max(0.0, companionSmoothness / 100.0)))
@@ -523,6 +592,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             EnamelFrameUniforms(
                 nowSec: sceneNowSec,
                 motionTimeSec: motionTime,
+                probePosition: pacerFoamOrigin,
+                probeFoamRadius: 1.55,
+                probeFoamStrength: pacerFoamStrength,
                 audioBands: smoothedAudioBands
             )
         )
@@ -545,12 +617,6 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         }
         companionEnamelController.setSugarSplats(splats)
         companionNodes.updateSugarSplats(splats)
-        companionNodes.updatePolishHalo(
-            smoothnessIndex: companionSmoothness,
-            nowSec: sceneNowSec,
-            reducedMotion: reducedMotion,
-            audioBands: smoothedAudioBands
-        )
         EnamelShaders.updateGingivaMaterial(
             companionNodes.gingivaMaterial,
             motionTimeSec: motionTime,
@@ -860,34 +926,36 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 Float(GameConfig.earthBackdropPos.z)
             )
             let showcaseCenter = earthCenter + SIMD3<Float>(0, 38.0, 0)
+            let sinYaw = sin(cosmicOrbitYaw)
+            let cosYaw = cos(cosmicOrbitYaw)
             switch cosmicBeatIndex {
             case 0:
-                // Beat 0: Stellar Forge & Hydroxyapatite Lattice
-                let dist: Float = isPortrait ? 24.5 : 17.0
+                // Beat 0: Stellar Forge & Hydroxyapatite Lattice centered at ~25% from top (top 1/3 hero!)
+                let dist: Float = isPortrait ? 20.0 : 15.5
                 return (
-                    showcaseCenter + SIMD3<Float>(0, 1.8, dist),
-                    showcaseCenter + SIMD3<Float>(0, -0.6, 0)
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -4.2 : 0.4, cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -6.2 : -1.8, 0)
                 )
             case 1:
-                // Beat 1: 5 Mohs Hardness Specimens Lineup (Gold 2.5 -> Iron 4.0 -> Enamel 5.0 -> Quartz 7 -> Diamond 10)
-                let dist: Float = isPortrait ? 24.5 : 15.5
+                // Beat 1: Lattice + 5 Mohs Specimens spanning ~13%..36% from top above the story card
+                let dist: Float = isPortrait ? 21.5 : 15.0
                 return (
-                    showcaseCenter + SIMD3<Float>(0, -1.8, 2.2 + dist),
-                    showcaseCenter + SIMD3<Float>(0, -4.1, 2.2)
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist * 0.45, isPortrait ? -6.4 : -2.6, 2.2 + cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -8.4 : -4.8, 2.2)
                 )
             case 2:
-                // Beat 2: Fluorapatite 9F Crystal Lock
-                let dist: Float = isPortrait ? 20.5 : 14.5
+                // Beat 2: Fluorapatite 9F Crystal Lock closeup in upper hero third (~14%..37% from top)
+                let dist: Float = isPortrait ? 17.5 : 13.5
                 return (
-                    showcaseCenter + SIMD3<Float>(0, 1.4, dist),
-                    showcaseCenter + SIMD3<Float>(0, -0.4, 0)
+                    showcaseCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -3.6 : 0.2, cosYaw * dist),
+                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -5.4 : -1.5, 0)
                 )
             default:
-                // Beat 3: Full 3D Orbital Earth, 5 Host Cities & Station Aurora (408 km LEO)
-                let dist: Float = isPortrait ? 76.0 : 50.0
+                // Beat 3: Full 3D Orbital Earth, Polar Aurora & LEO Station Aurora filling ~10%..51% from top
+                let dist: Float = isPortrait ? 74.0 : 48.0
                 return (
-                    earthCenter + SIMD3<Float>(0, 5.0, dist),
-                    earthCenter + SIMD3<Float>(0, -3.5, 0)
+                    earthCenter + SIMD3<Float>(sinYaw * dist, isPortrait ? -11.5 : -1.0, cosYaw * dist),
+                    earthCenter + SIMD3<Float>(0, isPortrait ? -18.5 : -6.5, 0)
                 )
             }
 
@@ -903,18 +971,22 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             )
 
         case .brushAlong:
-            let archCenter = SIMD3<Float>(32.0, 1.6, 15.5)
-            let gentleSway = reducedMotion ? Float(0) : sin(sceneNowSec * 0.35) * 0.16
-            let dist: Float = isPortrait ? 35.0 : 21.0
-            let pitch: Float = 0.38
-            return (
-                archCenter + SIMD3<Float>(
-                    sin(gentleSway) * cos(pitch) * dist,
-                    sin(pitch) * dist,
-                    cos(gentleSway) * cos(pitch) * dist
-                ),
-                archCenter + SIMD3<Float>(0, isPortrait ? 1.6 : 0.7, -0.8)
+            let coach = latestPacerCoachState ?? companionNodes.updatePacerCoaching(
+                elapsedSec: pacerElapsedSec,
+                inFlossBonus: pacerInFlossBonus,
+                nowSec: sceneNowSec,
+                reducedMotion: reducedMotion
             )
+            let dist = isPortrait ? coach.camDistPortrait : coach.camDistLandscape
+            let yaw = coach.camYaw + brushOrbitOffsetYaw
+            let pitch = max(-0.92, min(0.92, coach.camPitch + brushOrbitOffsetPitch))
+            let focus = coach.focusWorldPos
+            let pos = focus + SIMD3<Float>(
+                sin(yaw) * cos(pitch) * dist,
+                sin(pitch) * dist,
+                cos(yaw) * cos(pitch) * dist
+            )
+            return (pos, focus)
 
         case .arcade, .pulpRescue:
             let px = currProbePos.x
@@ -953,7 +1025,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     private func updateCameraRig(dt: Float) {
         let targets = computeCameraTargets()
-        let k = 1.0 - exp(-7.5 * max(0.001, dt))
+        let rate: Float = appMode == .brushAlong ? 4.8 : 7.5
+        let k = 1.0 - exp(-rate * max(0.001, dt))
         camCurrentPos += (targets.pos - camCurrentPos) * k
         camCurrentLookAt += (targets.look - camCurrentLookAt) * k
         cameraNode.simdPosition = camCurrentPos
@@ -966,15 +1039,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         // Keep 3D Orbital Earth & starfield gracefully framed behind the arch with cosmic parallax as user orbits
         if appMode == .hub || appMode == .brushAlong {
             let sight = camCurrentLookAt - camCurrentPos
-            let horizLen = max(0.001, hypot(sight.x, sight.z))
-            let fwdX = sight.x / horizLen
-            let fwdZ = sight.z / horizLen
+            let sightLen = max(0.001, simd_length(sight))
+            let dir = sight / sightLen
             let earthDist: Float = 59.0
-            let pitchLift = (hubOrbitPitch - 0.34) * 18.0
             cosmicNodes.rootNode.simdPosition = SIMD3<Float>(
-                32.0 + fwdX * earthDist,
-                6.2 - pitchLift,
-                15.6 + fwdZ * earthDist
+                32.0 + dir.x * earthDist,
+                6.2 + dir.y * earthDist * 0.45,
+                15.6 + dir.z * earthDist
             )
         }
     }

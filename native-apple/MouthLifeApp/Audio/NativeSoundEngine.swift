@@ -1369,7 +1369,18 @@ private final class SunoStreamDeck {
             return
         }
         if !player.isPlaying {
-            player.play()
+            player.prepareToPlay()
+            if !player.play(), let url = activeURL, let fresh = try? AVAudioPlayer(contentsOf: url) {
+                let resumeTime = player.currentTime
+                fresh.numberOfLoops = -1
+                fresh.currentTime = resumeTime
+                fresh.volume = 0
+                fresh.prepareToPlay()
+                _ = fresh.play()
+                activePlayer = fresh
+                fresh.setVolume(gain, fadeDuration: fadeSec)
+                return
+            }
         }
         player.setVolume(gain, fadeDuration: fadeSec)
     }
@@ -1717,6 +1728,17 @@ public final class NativeSoundEngine {
                 isEngineStarted = false
             }
         }
+    }
+
+    /// Re-activates `AVAudioSession`, restarts `AVAudioEngine`, and resumes any hardware-decoded
+    /// Suno `.m4a` soundtrack that iOS paused during screen lock / background suspension.
+    public func resumeFromForeground() {
+        isInterrupted = false
+        configureAudioSessionIfNeeded()
+        if !isMuted {
+            startEngineIfNeeded()
+        }
+        pushMixStateToKernel()
     }
 
     private func registerLifecycleObservers() {
