@@ -348,12 +348,18 @@ public struct CompanionHubView: View {
                     Button {
                         onStartBrushAlong()
                     } label: {
-                        Label(L10n.t(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage)), systemImage: "timer")
-                            // One line where it fits (English, Korean...); long languages may use two
-                            // rather than be cut off.
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                            .multilineTextAlignment(.leading)
+                        // One line whenever it fits (SwiftUI would otherwise wrap before it shrinks);
+                        // only long languages fall back to two lines.
+                        let brushLabel = L10n.t(BrushCoachCopy.hubStartBrushLabel(for: coachLanguage))
+                        ViewThatFits(in: .horizontal) {
+                            Label(brushLabel, systemImage: "timer")
+                                .lineLimit(1)
+                                .fixedSize()
+                            Label(brushLabel, systemImage: "timer")
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                                .multilineTextAlignment(.leading)
+                        }
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
