@@ -1510,6 +1510,13 @@ private final class SunoStreamDeck {
 
 // MARK: - Public NativeSoundEngine
 
+public enum RadioStation: Equatable, Sendable {
+    case sanctuary
+    case planetOfEnamel
+    case livingClock
+    case city(String)
+}
+
 /// Real-time procedural `AVAudioEngine` + `AVAudioSourceNode` polyphonic synthesizer & adaptive
 /// music/SFX director for MouthLife on iOS 17+ and macOS 14+ (with automatic hardware Suno track crossfading).
 public final class NativeSoundEngine {
@@ -1543,6 +1550,8 @@ public final class NativeSoundEngine {
     private var currentWorldId: String = "world_1"
     private var earthRadioActive: Bool = true
     private var radioWorldId: String = "world_1"
+    private var hubRadioStation: RadioStation = .city("world_1")
+    private var brushRadioStation: RadioStation = .livingClock
     private var hubGlobeActive: Bool = false
     private var pulpZeroActive: Bool = false
     private var urgencyActive: Bool = false
@@ -1581,6 +1590,7 @@ public final class NativeSoundEngine {
             self.isEarthRadioEnabled = true
         }
         self.earthRadioActive = self.isEarthRadioEnabled
+        self.hubRadioStation = self.isEarthRadioEnabled ? .city("world_1") : .sanctuary
 
         configureAudioSessionIfNeeded()
         setupAudioGraph()
@@ -1835,6 +1845,37 @@ public final class NativeSoundEngine {
             if let wid = tunedUnlockedWorldId {
                 self.radioWorldId = wid
             }
+            self.hubRadioStation = enabled ? .city(self.radioWorldId) : .sanctuary
+            self.refreshActiveTheme()
+        }
+    }
+
+    public func setHubRadioStation(_ station: RadioStation) {
+        let isCity: Bool
+        switch station {
+        case let .city(wid):
+            isCity = true
+            tunedRadioWorldId = wid
+        case .sanctuary, .planetOfEnamel, .livingClock:
+            isCity = false
+        }
+        isEarthRadioEnabled = isCity
+        UserDefaults.standard.set(isCity, forKey: Self.earthRadioKey)
+        sequencerQueue.async { [weak self] in
+            guard let self else { return }
+            self.earthRadioActive = isCity
+            if case let .city(wid) = station {
+                self.radioWorldId = wid
+            }
+            self.hubRadioStation = station
+            self.refreshActiveTheme()
+        }
+    }
+
+    public func setBrushRadioStation(_ station: RadioStation) {
+        sequencerQueue.async { [weak self] in
+            guard let self else { return }
+            self.brushRadioStation = station
             self.refreshActiveTheme()
         }
     }
@@ -1842,7 +1883,11 @@ public final class NativeSoundEngine {
     public func setAmbientMode(_ mode: AppMode) {
         sequencerQueue.async { [weak self] in
             guard let self else { return }
+            let enteringBrush = (mode == .brushAlong && self.currentMode != .brushAlong)
             self.currentMode = mode
+            if enteringBrush {
+                self.brushRadioStation = .livingClock
+            }
             if mode != .brushAlong {
                 self.pacerQuadrant = 0
                 self.pacerInFlossBonus = false
@@ -1923,12 +1968,25 @@ public final class NativeSoundEngine {
         return .world1
     }
 
+    private func themeForStation(_ station: RadioStation) -> MusicThemeId {
+        switch station {
+        case .sanctuary:
+            return .hub
+        case .planetOfEnamel:
+            return .cosmic
+        case .livingClock:
+            return .brushAlong
+        case let .city(wid):
+            return themeForWorld(wid)
+        }
+    }
+
     private func resolveThemeId() -> MusicThemeId {
         switch currentMode {
         case .cosmicIntro:
             return .cosmic
         case .brushAlong:
-            return earthRadioActive ? themeForWorld(radioWorldId) : .brushAlong
+            return themeForStation(brushRadioStation)
         case .report:
             return .report
         case .pulpRescue:
@@ -1937,8 +1995,10 @@ public final class NativeSoundEngine {
             return themeForWorld(currentWorldId)
         case .hub:
             if pulpZeroActive { return .hubReady }
-            if earthRadioActive { return themeForWorld(radioWorldId) }
-            return hubGlobeActive ? .hubGlobe : .hub
+            if hubRadioStation == .sanctuary {
+                return hubGlobeActive ? .hubGlobe : .hub
+            }
+            return themeForStation(hubRadioStation)
         }
     }
 

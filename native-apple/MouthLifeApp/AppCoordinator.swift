@@ -18,6 +18,8 @@ public final class AppCoordinator {
     public var mode: AppMode = .hub
     public var save: MouthLifeSaveV2
     public var earthRadioEnabled: Bool = NativeSoundEngine.shared.isEarthRadioEnabled
+    public var hubRadioStation: RadioStation = NativeSoundEngine.shared.isEarthRadioEnabled ? .city("world_1") : .sanctuary
+    public var brushRadioStation: RadioStation = .livingClock
     public var activeRadioWorldId: String = "world_1"
     public var selectedWorldId: String = "world_1" {
         didSet {
@@ -28,7 +30,8 @@ public final class AppCoordinator {
             if isWorldUnlocked(selectedWorldId) {
                 activeRadioWorldId = selectedWorldId
                 if earthRadioEnabled {
-                    NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: selectedWorldId)
+                    hubRadioStation = .city(selectedWorldId)
+                    NativeSoundEngine.shared.setHubRadioStation(.city(selectedWorldId))
                 }
             }
         }
@@ -108,12 +111,10 @@ public final class AppCoordinator {
         self.selectedWorldId = initialWorld
         self.activeRadioWorldId = initialWorld
         self.earthRadioEnabled = NativeSoundEngine.shared.isEarthRadioEnabled
+        self.hubRadioStation = self.earthRadioEnabled ? .city(initialWorld) : .sanctuary
 
         setupSceneAndAudioBridges()
-        NativeSoundEngine.shared.setEarthRadio(
-            enabled: self.earthRadioEnabled,
-            tunedUnlockedWorldId: self.activeRadioWorldId
-        )
+        NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
         applyLaunchArgumentsIfPresent()
         syncSceneMode()
     }
@@ -125,30 +126,43 @@ public final class AppCoordinator {
         return save.totalBrushStamps >= host.unlockStampsRequired
     }
 
-    public var currentRadioStationLabel: String {
-        guard earthRadioEnabled else { return "Sanctuary" }
-        switch activeRadioWorldId {
-        case "world_1": return "Toronto FM"
-        case "world_2": return "New Orleans FM"
-        case "world_3": return "Tokyo FM"
-        case "world_4": return "Accra FM"
-        case "world_5": return "Aurora FM"
-        default:
-            let city = HostsAndHistory.host(forWorldId: activeRadioWorldId)?.city ?? "Toronto"
-            return "\(city) FM"
+    private func labelForStation(_ station: RadioStation) -> String {
+        switch station {
+        case .livingClock:
+            return "Living Clock"
+        case .sanctuary:
+            return "Sanctuary"
+        case .planetOfEnamel:
+            return "Planet of Enamel"
+        case let .city(wid):
+            switch wid {
+            case "world_1": return "Toronto FM"
+            case "world_2": return "New Orleans FM"
+            case "world_3": return "Tokyo FM"
+            case "world_4": return "Accra FM"
+            case "world_5": return "Aurora FM"
+            default:
+                let city = HostsAndHistory.host(forWorldId: wid)?.city ?? "Toronto"
+                return "\(city) FM"
+            }
         }
+    }
+
+    public var currentRadioStationLabel: String {
+        labelForStation(mode == .brushAlong ? brushRadioStation : hubRadioStation)
     }
 
     public func selectHubCity(_ worldId: String) {
         let unlocked = isWorldUnlocked(worldId)
-        let wasAlreadyBroadcasting = earthRadioEnabled && activeRadioWorldId == worldId
+        let wasAlreadyBroadcasting = hubRadioStation == .city(worldId)
         selectedWorldId = worldId
         NativeSoundEngine.shared.playUiTap()
 
         if unlocked {
             earthRadioEnabled = true
             activeRadioWorldId = worldId
-            NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: worldId)
+            hubRadioStation = .city(worldId)
+            NativeSoundEngine.shared.setHubRadioStation(.city(worldId))
             if !wasAlreadyBroadcasting, let host = HostsAndHistory.host(forWorldId: worldId) {
                 showHubToast("📻 Earth Radio • \(host.city)")
             }
@@ -156,34 +170,43 @@ public final class AppCoordinator {
     }
 
     public func selectSanctuaryRadio() {
-        guard earthRadioEnabled else {
+        guard hubRadioStation != .sanctuary else {
             NativeSoundEngine.shared.playUiTap()
             return
         }
         earthRadioEnabled = false
-        NativeSoundEngine.shared.setEarthRadio(enabled: false)
+        hubRadioStation = .sanctuary
+        NativeSoundEngine.shared.setHubRadioStation(.sanctuary)
         NativeSoundEngine.shared.playUiTap()
-        showHubToast("🌙 Sanctuary Ambient Active")
+        showHubToast("🌙 The Sanctuary Active")
+    }
+
+    public func selectPlanetRadio() {
+        guard hubRadioStation != .planetOfEnamel else {
+            NativeSoundEngine.shared.playUiTap()
+            return
+        }
+        earthRadioEnabled = false
+        hubRadioStation = .planetOfEnamel
+        NativeSoundEngine.shared.setHubRadioStation(.planetOfEnamel)
+        NativeSoundEngine.shared.playUiTap()
+        showHubToast("🪐 Planet of Enamel Active")
     }
 
     public func cycleRadioStation() {
-        let unlockedWorldIds = HostsAndHistory.hostCities
+        let unlockedCityStations = HostsAndHistory.hostCities
             .map(\.worldId)
             .filter { isWorldUnlocked($0) }
-        let stations: [String?] = [nil] + unlockedWorldIds.map { Optional($0) }
-        let currentSlot: String? = earthRadioEnabled ? activeRadioWorldId : nil
-        let curIdx = stations.firstIndex(where: { $0 == currentSlot }) ?? 0
-        let nextSlot = stations[(curIdx + 1) % stations.count]
+            .map { RadioStation.city($0) }
+        let stations: [RadioStation] = [.livingClock] + unlockedCityStations + [.sanctuary, .planetOfEnamel]
+        let curIdx = stations.firstIndex(of: brushRadioStation) ?? 0
+        let nextStation = stations[(curIdx + 1) % stations.count]
 
         NativeSoundEngine.shared.playUiTap()
-        if let wid = nextSlot {
-            earthRadioEnabled = true
-            activeRadioWorldId = wid
+        brushRadioStation = nextStation
+        NativeSoundEngine.shared.setBrushRadioStation(nextStation)
+        if case let .city(wid) = nextStation {
             selectedWorldId = wid
-            NativeSoundEngine.shared.setEarthRadio(enabled: true, tunedUnlockedWorldId: wid)
-        } else {
-            earthRadioEnabled = false
-            NativeSoundEngine.shared.setEarthRadio(enabled: false)
         }
     }
 
@@ -466,6 +489,7 @@ public final class AppCoordinator {
         pacerElapsedSec = 0
         pacerIsPaused = false
         pacerInFlossBonus = false
+        brushRadioStation = .livingClock
         lastAnnouncedQuadrant = 0
         lastAnnouncedSurface = 0
         sceneController.pacerElapsedSec = 0
