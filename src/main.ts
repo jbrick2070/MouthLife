@@ -104,7 +104,10 @@ function bootstrapMouthLife(): void {
     `;
     return;
   }
-  sceneMgr.setQualityPreference(saveSys.getSave().qualityPreference);
+  // Graphics quality is automatic: the game watches its own frame rate and adjusts. The manual
+  // picker was removed, so a fixed choice saved earlier goes back to automatic.
+  if (saveSys.getSave().qualityPreference !== 'auto') saveSys.setQualityPreference('auto');
+  sceneMgr.setQualityPreference('auto');
 
   const input = new InputManager(canvas);
   const touch = new CompanionTouchSystem();

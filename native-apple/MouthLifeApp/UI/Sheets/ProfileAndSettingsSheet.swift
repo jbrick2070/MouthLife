@@ -135,23 +135,9 @@ public struct ProfileAndSettingsSheet: View {
                     }
                     .mlGlassCard()
 
-                    // Graphics quality card
+                    // Comfort card. Graphics quality is chosen automatically, as players expect on a
+                    // phone: the app watches its own frame rate and adjusts without asking.
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(L10n.t("Change Graphics Quality").uppercased())
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                            .foregroundStyle(MLTheme.cyanAccent)
-
-                        Picker(L10n.t("GPU Tier"), selection: $qualityPref) {
-                            Text(L10n.t("Auto")).tag(QualityPreference.auto)
-                            Text(L10n.t("Ultra")).tag(QualityPreference.ultra)
-                            Text(L10n.t("Med")).tag(QualityPreference.medium)
-                            Text(L10n.t("Low")).tag(QualityPreference.low)
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: qualityPref) { _, next in
-                            onChangeQuality(next)
-                        }
-
                         Toggle(L10n.t("Less Camera Motion"), isOn: $reducedMotion)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.cyanAccent)

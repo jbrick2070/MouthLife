@@ -292,7 +292,7 @@ export class TelemetryHudOverlay implements OverlayView {
           </div>
           <div class="row-wrap hud-action-pills">
             <span id="hud-score" class="pill-badge">1.0x • 0</span>
-            <button type="button" id="btn-hud-quality" class="btn btn-sm" aria-label="Change Graphics Quality" title="Change Graphics Quality (slower devices)">
+            <button type="button" id="btn-hud-quality" class="btn btn-sm" hidden style="display:none" aria-label="Change Graphics Quality" title="Change Graphics Quality (slower devices)">
               ${this.formatQualityLabel()}
             </button>
             <button
@@ -1307,7 +1307,7 @@ export class TelemetryHudOverlay implements OverlayView {
         </div>
         <div class="row-wrap" style="margin:0 0 6px 0;gap:6px;">
           <button type="button" id="btn-pause-shake" aria-pressed="${reduced ? 'true' : 'false'}" class="btn btn-sm ${reduced ? 'btn-primary' : ''}">${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}</button>
-          <button type="button" id="btn-pause-quality" class="btn btn-sm" aria-label="Change Graphics Quality">${this.formatQualityLabel()}</button>
+          <button type="button" id="btn-pause-quality" class="btn btn-sm" hidden style="display:none" aria-label="Change Graphics Quality">${this.formatQualityLabel()}</button>
         </div>
         <details id="pause-dental-lesson" class="report-lesson"${openLessonAttr}>
           <summary>🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</summary>

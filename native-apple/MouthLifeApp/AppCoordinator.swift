@@ -255,7 +255,12 @@ public final class AppCoordinator {
         HapticsEngine.shared.prepare()
         NativeSoundEngine.shared.startEngineIfNeeded()
 
-        // Apply saved GPU quality preference
+        // Graphics quality is automatic. The manual picker was removed, so a fixed choice saved
+        // earlier goes back to automatic.
+        if save.qualityPreference != .auto {
+            saveSystem.setQualityPreference(.auto)
+            save = saveSystem.getSave()
+        }
         let initialTier = save.qualityPreference.explicitTier ?? .ultra
         sceneController.qualityTier = initialTier
         sceneController.companionSmoothness = save.companion.smoothnessIndex
