@@ -100,10 +100,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private var camCurrentLookAt = SIMD3<Float>(32.0, 1.2, 16.0)
     private var viewportAspect: Float = 0.50 // Portrait default on iPhone
 
-    // Rolling ProMotion Frame Rate Counter
+    // Rolling ProMotion Frame Rate Counter & 120Hz Smoothed Audio-Reactive Envelope
     private var fpsFrameCount: Int = 0
     private var fpsWindowStart: TimeInterval = 0
     public private(set) var measuredFps: Int = 120
+    private var smoothedAudioBands = SIMD4<Float>.zero
 
     // Callbacks to Coordinator (invoked on MainActor)
     public var onSessionStepped: ((SessionSnapshot) -> Void)?
@@ -451,6 +452,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         sceneNowSec += dtFloat
         let motionTime = reducedMotion ? Float(0) : sceneNowSec
 
+        // 120Hz asymmetric smoothing over 3-band Suno + Synth/SFX audio levels (auto-zeroed for Reduce Motion)
+        if reducedMotion {
+            smoothedAudioBands = .zero
+        } else {
+            let target = NativeSoundEngine.shared.sampleAudioReactiveBands().simd
+            let atk = 1.0 - exp(-28.0 * max(0.001, dtFloat))
+            let rel = 1.0 - exp(-8.5 * max(0.001, dtFloat))
+            for c in 0..<4 {
+                let k = target[c] > smoothedAudioBands[c] ? atk : rel
+                smoothedAudioBands[c] += (target[c] - smoothedAudioBands[c]) * k
+            }
+        }
+
         // Measure real ProMotion Hz
         fpsFrameCount += 1
         if time - fpsWindowStart >= 0.5 {
@@ -466,7 +480,12 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
         // Update Cosmic Orbital Earth + Mohs Showcase only when visible
         if !cosmicNodes.rootNode.isHidden {
-            cosmicNodes.update(dt: dtFloat, nowSec: sceneNowSec, reducedMotion: reducedMotion)
+            cosmicNodes.update(
+                dt: dtFloat,
+                nowSec: sceneNowSec,
+                reducedMotion: reducedMotion,
+                audioBands: smoothedAudioBands
+            )
         }
 
         if appMode == .hub || appMode == .brushAlong {
@@ -501,7 +520,11 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             activeQuadrant: activeQuad
         )
         companionEnamelController.updateFrameUniforms(
-            EnamelFrameUniforms(nowSec: sceneNowSec, motionTimeSec: motionTime)
+            EnamelFrameUniforms(
+                nowSec: sceneNowSec,
+                motionTimeSec: motionTime,
+                audioBands: smoothedAudioBands
+            )
         )
 
         let rawRipples = touchSystem.activeRipples(nowSec: Double(sceneNowSec))
@@ -525,11 +548,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         companionNodes.updatePolishHalo(
             smoothnessIndex: companionSmoothness,
             nowSec: sceneNowSec,
-            reducedMotion: reducedMotion
+            reducedMotion: reducedMotion,
+            audioBands: smoothedAudioBands
         )
         EnamelShaders.updateGingivaMaterial(
             companionNodes.gingivaMaterial,
-            motionTimeSec: motionTime
+            motionTimeSec: motionTime,
+            audioBass: smoothedAudioBands.x,
+            audioHigh: smoothedAudioBands.z
         )
     }
 
@@ -630,7 +656,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             nowSec: sceneNowSec,
             probeSpeed: Float(snap.probeSpeed),
             isScrubbing: snap.scrubActive,
-            surgeFraction01: Float(snap.surgeMeter / GameConfig.surgeMax)
+            surgeFraction01: Float(snap.surgeMeter / GameConfig.surgeMax),
+            audioBass: smoothedAudioBands.x
         )
 
         if snap.scrubActive && sceneNowSec - lastFoamSampleSec > 0.09 {
@@ -647,7 +674,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             if foamTrail.count > 6 { foamTrail.removeLast() }
         }
 
-        // Update Enamel Biophysics Uniforms (Disclosing Scan, Fluoride Rinse Wave, Gold Seals, Foam)
+        // Update Enamel Biophysics Uniforms (Disclosing Scan, Fluoride Rinse Wave, Gold Seals, Foam, 3-Band Audio)
         let discloseProg = snap.discloseActiveRemaining > 0
             ? Float(1.0 - snap.discloseActiveRemaining / GameConfig.discloseDurationSec)
             : 0
@@ -669,9 +696,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 probePosition: Vec2(x: interpX, z: interpZ),
                 probeFoamRadius: Float(snap.effectiveBrushRadius),
                 probeFoamStrength: snap.scrubActive ? 1.0 : 0.2,
-                acidStress: snap.stephanTimerSec > 0 ? 0.65 : 0.0
+                acidStress: snap.stephanTimerSec > 0 ? 0.65 : 0.0,
+                audioBands: smoothedAudioBands
             )
         )
+        if let arcadeGumMat = activeStageNodes?.gingivaBedNode.geometry?.firstMaterial {
+            EnamelShaders.updateGingivaMaterial(
+                arcadeGumMat,
+                motionTimeSec: motionTime,
+                audioBass: smoothedAudioBands.x,
+                audioHigh: smoothedAudioBands.z,
+                headlamp: SIMD4<Float>(Float(interpX), Float(interpY + 2.4), Float(interpZ), 0.85)
+            )
+        }
         arcadeEnamelController.setHeadlamp(
             worldPos: SIMD3<Float>(Float(interpX), Float(interpY + 2.4), Float(interpZ)),
             weight: 0.85,
@@ -696,12 +733,15 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private func syncStageEntities(snap: SessionSnapshot, cart: WorldCartridge, alpha: Double) {
         guard let stage = activeStageNodes else { return }
 
+        stage.updateSalivaSprings(audioBands: smoothedAudioBands)
+
         for site in snap.sites {
             stage.updateCommensalSite(
                 id: site.id,
                 restored: site.restored,
                 localCleanRatio: site.localCleanRatio,
-                nowSec: sceneNowSec
+                nowSec: sceneNowSec,
+                audioBands: smoothedAudioBands
             )
         }
 
@@ -711,7 +751,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                     node.isHidden = !crystal.intact
                 }
                 if crystal.intact {
-                    node.simdEulerAngles.y = sceneNowSec * 0.9
+                    node.simdEulerAngles.y = sceneNowSec * 0.9 + smoothedAudioBands.z * 0.32
                 }
             }
         }
@@ -759,7 +799,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             let prev = prevMutansPos[m.id] ?? m.pos
             let mx = prev.x + (m.pos.x - prev.x) * alpha
             let mz = prev.z + (m.pos.z - prev.z) * alpha
-            let hop = abs(sin(m.hopPhase)) * 0.48
+            let hop = abs(sin(m.hopPhase)) * 0.48 + Double(smoothedAudioBands.w) * 0.09
             let groundY = sampleTerrainHeight(cartridge: cart, x: mx, z: mz)
             node.simdPosition = SIMD3<Float>(Float(mx), Float(groundY + 0.34 + hop), Float(mz))
             if hypot(m.vel.x, m.vel.z) > 0.05 {

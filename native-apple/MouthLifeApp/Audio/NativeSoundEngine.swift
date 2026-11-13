@@ -2,8 +2,32 @@ import AVFoundation
 import Foundation
 import MouthLifeCore
 import os
+import simd
 
 // MARK: - Public Audio Types
+
+/// Real-time 3-band spectral envelope + beat onset levels (`0...1`) sampled at 120Hz by Metal shaders
+/// and 3D scene controllers. Combines hardware-decoded Suno songs and procedural synth / live SFX.
+public struct AudioReactiveBands: Equatable, Sendable {
+    public var bass: Float
+    public var mid: Float
+    public var high: Float
+    public var beatPulse: Float
+
+    public static let zero = AudioReactiveBands(bass: 0, mid: 0, high: 0, beatPulse: 0)
+
+    @inline(__always)
+    public var simd: SIMD4<Float> {
+        SIMD4<Float>(bass, mid, high, beatPulse)
+    }
+
+    public init(bass: Float, mid: Float, high: Float, beatPulse: Float) {
+        self.bass = bass
+        self.mid = mid
+        self.high = high
+        self.beatPulse = beatPulse
+    }
+}
 
 public enum PacerAudioCueKind: String, Sendable {
     case surface   // Every 10s surface switch soft wooden tick
@@ -484,18 +508,37 @@ private final class RealtimeSynthKernel {
     private var apPosL = [0, 0]
     private var apPosR = [0, 0]
 
-    // Master DC blocker (30Hz HP) & reverb tail activity tracker
+    // Master DC blocker (30Hz HP), reverb tail activity tracker & 3-band reactive envelope follower
     private var dcPrevInL: Float = 0, dcPrevOutL: Float = 0
     private var dcPrevInR: Float = 0, dcPrevOutR: Float = 0
     private var tailFramesRemaining: Int = 0
+
+    private let meterLockPtr: UnsafeMutablePointer<os_unfair_lock>
+    private let lpAlphaLow: Float
+    private let lpAlphaMid: Float
+    private var meterLpLow: Float = 0
+    private var meterLpMid: Float = 0
+    private var envBass: Float = 0
+    private var envMid: Float = 0
+    private var envHigh: Float = 0
+    private var envBeat: Float = 0
+    private var prevRawBass: Float = 0
+    private var pubBass: Float = 0
+    private var pubMid: Float = 0
+    private var pubHigh: Float = 0
+    private var pubBeat: Float = 0
 
     init(sampleRate: Double) {
         let sr = Float(max(22050.0, min(96000.0, sampleRate)))
         self.sampleRate = sr
         self.invSampleRate = 1.0 / sr
+        self.lpAlphaLow = min(0.5, 1.0 - exp(-2.0 * .pi * 140.0 / sr))
+        self.lpAlphaMid = min(0.85, 1.0 - exp(-2.0 * .pi * 2100.0 / sr))
 
         self.lockPtr = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
         self.lockPtr.initialize(to: os_unfair_lock())
+        self.meterLockPtr = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+        self.meterLockPtr.initialize(to: os_unfair_lock())
 
         let ringPtr = UnsafeMutablePointer<SynthCommand>.allocate(capacity: Self.ringCapacity)
         ringPtr.initialize(repeating: SynthCommand(), count: Self.ringCapacity)
@@ -548,8 +591,17 @@ private final class RealtimeSynthKernel {
         delayBufR.baseAddress?.deallocate()
         voices.baseAddress?.deallocate()
         ringBuffer.baseAddress?.deallocate()
+        meterLockPtr.deinitialize(count: 1)
+        meterLockPtr.deallocate()
         lockPtr.deinitialize(count: 1)
         lockPtr.deallocate()
+    }
+
+    func readReactiveBands() -> AudioReactiveBands {
+        os_unfair_lock_lock(meterLockPtr)
+        let bands = AudioReactiveBands(bass: pubBass, mid: pubMid, high: pubHigh, beatPulse: pubBeat)
+        os_unfair_lock_unlock(meterLockPtr)
+        return bands
     }
 
     // MARK: Producer API (Control / Main Thread)
@@ -729,6 +781,11 @@ private final class RealtimeSynthKernel {
         if (locMuted > 0.5 && smoothMaster < 0.0001)
             || (!anyVoiceActive && scrubGoalGain <= 0.0002 && smoothScrubGain <= 0.0002 && tailFramesRemaining <= 0)
         {
+            envBass = 0; envMid = 0; envHigh = 0; envBeat = 0; prevRawBass = 0
+            if os_unfair_lock_trylock(meterLockPtr) {
+                pubBass = 0; pubMid = 0; pubHigh = 0; pubBeat = 0
+                os_unfair_lock_unlock(meterLockPtr)
+            }
             if let outR {
                 outL.update(repeating: 0, count: frameCount)
                 if outR != outL {
@@ -744,6 +801,9 @@ private final class RealtimeSynthKernel {
         let baseScrubTone: Float = (locScrubProf == 1) ? 740.0 : ((locScrubProf == 2) ? 1550.0 : 1020.0)
         let scrubCenterHz = baseScrubTone + locScrubSpd * 780.0 + locScrubCln * 480.0
         let scrubLfoHz: Float = ((locScrubProf == 2) ? 4.2 : 1.7) + locScrubSpd * 5.2
+        var sumBassSq: Float = 0
+        var sumMidSq: Float = 0
+        var sumHighSq: Float = 0
 
         for frame in 0..<frameCount {
             smoothMaster += (desiredMaster - smoothMaster) * 0.0025
@@ -1082,6 +1142,17 @@ private final class RealtimeSynthKernel {
             let limL = tanh(hpL * 0.95)
             let limR = tanh(hpR * 0.95)
 
+            // 7. Inline 3-band spectral energy split (<140Hz bass, 140–2100Hz mid, >2100Hz sparkle)
+            let mono = (limL + limR) * 0.5
+            meterLpLow += (mono - meterLpLow) * lpAlphaLow
+            meterLpMid += (mono - meterLpMid) * lpAlphaMid
+            let lowS = meterLpLow
+            let midS = meterLpMid - meterLpLow
+            let highS = mono - meterLpMid
+            sumBassSq += lowS * lowS
+            sumMidSq += midS * midS
+            sumHighSq += highS * highS
+
             if let outR {
                 outL[frame] = limL
                 outR[frame] = limR
@@ -1090,6 +1161,31 @@ private final class RealtimeSynthKernel {
                 outL[frame * 2] = limL
                 outL[frame * 2 + 1] = limR
             }
+        }
+
+        // Publish block-rate smoothed 3-band envelope + transient beat flux (wait-free trylock)
+        let invFrames = 1.0 / Float(max(1, frameCount))
+        let dtBlock = Float(frameCount) * invSampleRate
+        let rawB = min(1.0, sqrt(sumBassSq * invFrames) * 5.8)
+        let rawM = min(1.0, sqrt(sumMidSq * invFrames) * 5.4)
+        let rawH = min(1.0, sqrt(sumHighSq * invFrames) * 8.2)
+
+        let atk = min(1.0, dtBlock * 32.0)
+        let rel = min(1.0, dtBlock * 8.5)
+        envBass += (rawB - envBass) * (rawB > envBass ? atk : rel)
+        envMid += (rawM - envMid) * (rawM > envMid ? atk : rel)
+        envHigh += (rawH - envHigh) * (rawH > envHigh ? atk : rel)
+
+        let flux = max(0.0, rawB - prevRawBass) * 3.4
+        prevRawBass = rawB
+        envBeat = min(1.0, max(envBeat * exp(-dtBlock * 9.5), flux))
+
+        if os_unfair_lock_trylock(meterLockPtr) {
+            pubBass = envBass
+            pubMid = envMid
+            pubHigh = envHigh
+            pubBeat = envBeat
+            os_unfair_lock_unlock(meterLockPtr)
         }
     }
 }
@@ -1102,8 +1198,16 @@ private final class RealtimeSynthKernel {
 private final class SunoStreamDeck {
     private static let supportedExtensions = ["m4a", "mp3", "caf", "wav", "aac"]
 
+    private struct SunoEnvelopeTrack {
+        let hopHz: Float
+        let durationSec: Double
+        let frames: [SIMD4<Float>]
+    }
+
     private let lock = NSLock()
     private var resolvedURLCache: [MusicThemeId: URL?] = [:]
+    private var envelopeCache: [URL: SunoEnvelopeTrack] = [:]
+    private var analyzingURLs: Set<URL> = []
     private var activePlayer: AVAudioPlayer?
     private var activeURL: URL?
     private var fadingOutPlayers: [AVAudioPlayer] = []
@@ -1114,12 +1218,44 @@ private final class SunoStreamDeck {
         return activePlayer != nil
     }
 
+    func sampleReactiveBands() -> AudioReactiveBands {
+        lock.lock()
+        guard let player = activePlayer,
+              player.isPlaying,
+              player.volume > 0.001,
+              let url = activeURL,
+              let env = envelopeCache[url],
+              !env.frames.isEmpty
+        else {
+            lock.unlock()
+            return .zero
+        }
+        let curTime = player.currentTime
+        let gainScale = min(1.0, player.volume / 0.48)
+        lock.unlock()
+
+        let dur = max(0.02, env.durationSec)
+        var wrapped = curTime.truncatingRemainder(dividingBy: dur)
+        if wrapped < 0 { wrapped += dur }
+        let pos = Float(wrapped) * env.hopHz
+        let count = env.frames.count
+        let i0 = min(count - 1, max(0, Int(pos)))
+        let i1 = (i0 + 1) % count
+        let frac = pos - Float(Int(pos))
+        let interp = env.frames[i0] * (1.0 - frac) + env.frames[i1] * frac
+        let scaled = simd_clamp(interp * gainScale, .zero, SIMD4<Float>(repeating: 1.0))
+        return AudioReactiveBands(bass: scaled.x, mid: scaled.y, high: scaled.z, beatPulse: scaled.w)
+    }
+
     func sync(themeId: MusicThemeId, targetVolume: Float, muted: Bool, interrupted: Bool) {
         lock.lock()
         defer { lock.unlock() }
 
         reapFinishedFadesLocked()
         let nextURL = resolveTrackURLLocked(for: themeId)
+        if let url = nextURL {
+            triggerEnvelopeAnalysisIfNeededLocked(for: url)
+        }
         let clampedGain = min(1.0, max(0.0, targetVolume))
 
         if nextURL == activeURL {
@@ -1238,6 +1374,114 @@ private final class SunoStreamDeck {
         }
         resolvedURLCache[themeId] = found
         return found
+    }
+
+    private func triggerEnvelopeAnalysisIfNeededLocked(for url: URL) {
+        guard envelopeCache[url] == nil, !analyzingURLs.contains(url) else { return }
+        analyzingURLs.insert(url)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let analyzed = Self.analyzeTrackEnvelope(url: url)
+            guard let self else { return }
+            self.lock.lock()
+            self.analyzingURLs.remove(url)
+            if let analyzed {
+                self.envelopeCache[url] = analyzed
+            }
+            self.lock.unlock()
+        }
+    }
+
+    private static func analyzeTrackEnvelope(url: URL) -> SunoEnvelopeTrack? {
+        guard let file = try? AVAudioFile(forReading: url) else { return nil }
+        let format = file.processingFormat
+        let sr = Float(max(8000.0, format.sampleRate))
+        let chCount = Int(format.channelCount)
+        guard chCount >= 1,
+              let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096)
+        else { return nil }
+
+        let targetHopHz: Float = 60.0
+        let samplesPerBin = max(1, Int((sr / targetHopHz).rounded()))
+        let actualHopHz = sr / Float(samplesPerBin)
+
+        let alphaLow = min(0.5, 1.0 - exp(-2.0 * .pi * 140.0 / sr))
+        let alphaMid = min(0.85, 1.0 - exp(-2.0 * .pi * 2100.0 / sr))
+        var lpLow: Float = 0
+        var lpMid: Float = 0
+
+        var binBassSq: Float = 0
+        var binMidSq: Float = 0
+        var binHighSq: Float = 0
+        var binCount: Int = 0
+
+        var rawBins: [SIMD3<Float>] = []
+        rawBins.reserveCapacity(Int(Double(file.length) / Double(samplesPerBin)) + 4)
+
+        while true {
+            chunk.frameLength = 0
+            guard (try? file.read(into: chunk)) != nil, chunk.frameLength > 0 else { break }
+            guard let chData = chunk.floatChannelData else { break }
+            let n = Int(chunk.frameLength)
+            let c0 = chData[0]
+            let c1 = chCount >= 2 ? chData[1] : nil
+
+            for i in 0..<n {
+                let mono = c1 != nil ? (c0[i] + c1![i]) * 0.5 : c0[i]
+                lpLow += (mono - lpLow) * alphaLow
+                lpMid += (mono - lpMid) * alphaMid
+                let b = lpLow
+                let m = lpMid - lpLow
+                let h = mono - lpMid
+                binBassSq += b * b
+                binMidSq += m * m
+                binHighSq += h * h
+                binCount += 1
+
+                if binCount >= samplesPerBin {
+                    let inv = 1.0 / Float(binCount)
+                    rawBins.append(SIMD3<Float>(sqrt(binBassSq * inv), sqrt(binMidSq * inv), sqrt(binHighSq * inv)))
+                    binBassSq = 0; binMidSq = 0; binHighSq = 0; binCount = 0
+                }
+            }
+        }
+        if binCount > 0 {
+            let inv = 1.0 / Float(binCount)
+            rawBins.append(SIMD3<Float>(sqrt(binBassSq * inv), sqrt(binMidSq * inv), sqrt(binHighSq * inv)))
+        }
+        guard !rawBins.isEmpty else { return nil }
+
+        // Auto-normalize each frequency band against its 95th percentile so soft & loud Suno songs both groove naturally
+        func p95Scale(_ extract: (SIMD3<Float>) -> Float, fallback: Float) -> Float {
+            var active = rawBins.map(extract).filter { $0 > 1e-4 }
+            guard !active.isEmpty else { return fallback }
+            active.sort()
+            let idx = min(active.count - 1, Int(Double(active.count - 1) * 0.95))
+            return 0.88 / max(1e-3, active[idx])
+        }
+        let scaleB = p95Scale({ $0.x }, fallback: 5.5)
+        let scaleM = p95Scale({ $0.y }, fallback: 5.2)
+        let scaleH = p95Scale({ $0.z }, fallback: 8.0)
+
+        var frames: [SIMD4<Float>] = []
+        frames.reserveCapacity(rawBins.count)
+        var prevB: Float = 0
+        var beatEnv: Float = 0
+        let dt = 1.0 / actualHopHz
+        let decay = exp(-dt * 9.5)
+
+        for raw in rawBins {
+            let nb = min(1.0, raw.x * scaleB)
+            let nm = min(1.0, raw.y * scaleM)
+            let nh = min(1.0, raw.z * scaleH)
+            let flux = max(0.0, nb - prevB) * 2.8
+            prevB = nb
+            beatEnv = min(1.0, max(beatEnv * decay, flux))
+            frames.append(SIMD4<Float>(nb, nm, nh, beatEnv))
+        }
+
+        let durationSec = Double(file.length) / Double(sr)
+        return SunoEnvelopeTrack(hopHz: actualHopHz, durationSec: durationSec, frames: frames)
     }
 }
 
@@ -1470,6 +1714,20 @@ public final class NativeSoundEngine {
             stopScrub()
         }
         pushMixStateToKernel()
+    }
+
+    /// Lock-free / O(1) 120Hz query returning real-time 3-band `(bass, mid, high, beatPulse)` energy
+    /// across both hardware-decoded Suno songs and procedural synth + live interactive SFX.
+    public func sampleAudioReactiveBands() -> AudioReactiveBands {
+        guard !isMuted, !isInterrupted else { return .zero }
+        let synth = kernel?.readReactiveBands() ?? .zero
+        let suno = sunoDeck.sampleReactiveBands()
+        return AudioReactiveBands(
+            bass: max(synth.bass, suno.bass),
+            mid: max(synth.mid, suno.mid),
+            high: max(synth.high, suno.high),
+            beatPulse: max(synth.beatPulse, suno.beatPulse)
+        )
     }
 
     private func persistPreferences() {

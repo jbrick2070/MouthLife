@@ -459,6 +459,7 @@ public struct EnamelFrameUniforms: Sendable {
     public var probeFoamRadius: Float
     public var probeFoamStrength: Float
     public var acidStress: Float?
+    public var audioBands: SIMD4<Float>
 
     public init(
         nowSec: Float,
@@ -473,7 +474,8 @@ public struct EnamelFrameUniforms: Sendable {
         probePosition: Vec2 = .zero,
         probeFoamRadius: Float = 2.0,
         probeFoamStrength: Float = 0,
-        acidStress: Float? = nil
+        acidStress: Float? = nil,
+        audioBands: SIMD4<Float> = .zero
     ) {
         self.nowSec = nowSec
         self.motionTimeSec = motionTimeSec ?? nowSec
@@ -488,6 +490,7 @@ public struct EnamelFrameUniforms: Sendable {
         self.probeFoamRadius = probeFoamRadius
         self.probeFoamStrength = probeFoamStrength
         self.acidStress = acidStress
+        self.audioBands = audioBands
     }
 }
 
@@ -627,6 +630,9 @@ public enum EnamelShaders {
     float4 rinseWave = waveMatrix[1];
     float4 probeFoamVec = waveMatrix[2];
     float rinseBufferedFlag = waveMatrix[3].x;
+    float audioBass = waveMatrix[3].y;
+    float audioMid = waveMatrix[3].z;
+    float audioHigh = waveMatrix[3].w;
 
     float globalSmoothnessOverride = depthCueVec.z;
     float globalFluorideGlow = depthCueVec.w;
@@ -732,7 +738,7 @@ public enum EnamelShaders {
                     + float3(0.04, 0.11, 0.22) * (0.45 + fresnel * 1.6)
                     + float3(0.10, 0.05, 0.02) * backScatter * 0.45;
     cleanEnamel = mix(cleanEnamel, opalBlue, incisal * (0.58 + 0.32 * fresnel) * cleanFactor);
-    cleanEnamel += float3(0.06, 0.14, 0.22) * fresnel * (1.0 - plaqueMask);
+    cleanEnamel += float3(0.06, 0.14, 0.22) * fresnel * (1.0 - plaqueMask) * (1.0 + audioMid * 0.24);
 
     // Hunter-Schreger & perikymata horizontal micro-ridges subtle optical banding
     cleanEnamel *= 1.0 - (0.036 * perikymataWave + 0.022 * (0.5 + 0.5 * hunterSchreger)) * perikFade * cleanFactor;
@@ -747,11 +753,12 @@ public enum EnamelShaders {
     float neckGlow = 1.0 - smoothstep(0.14, 0.34, hFrac);
     cleanEnamel += float3(0.11, 0.05, 0.01) * neckGlow * (0.35 + 0.55 * backScatter) * cleanFactor;
 
-    // Fluorapatite crystalline iridescent mint-cyan sheen (G channel)
+    // Fluorapatite crystalline iridescent mint-cyan sheen (G channel, subtly harmonic with high/bass)
     float3 emissionGlow = float3(0.0);
     if (fluorideSeal > 0.05) {
         float hexShimmer = 0.5 + 0.5 * sin(worldPos.x * 5.2 + worldPos.z * 5.2 + motionTime * 2.1);
-        float3 faGlow = float3(0.08, 0.42, 0.38) * fluorideSeal * (0.40 + 0.65 * fresnel) * (0.72 + 0.28 * hexShimmer);
+        float audioSealLift = 1.0 + audioHigh * 0.42 + audioBass * 0.18;
+        float3 faGlow = float3(0.08, 0.42, 0.38) * fluorideSeal * (0.40 + 0.65 * fresnel) * (0.72 + 0.28 * hexShimmer) * audioSealLift;
         cleanEnamel += faGlow * 0.65;
         emissionGlow += faGlow * 0.45;
     }
@@ -826,13 +833,15 @@ public enum EnamelShaders {
     float contourEdge = smoothstep(0.07, 0.105, rawPlaque) * (1.0 - smoothstep(0.115, 0.16, rawPlaque));
     emissionGlow += float3(0.55, 0.96, 0.92) * contourEdge * 0.38;
 
-    // Enamel prism micro-sparkle on mirror-clean Smooth Bask enamel (smoothness >= 85%)
+    // Enamel prism micro-sparkle on mirror-clean Smooth Bask enamel (smoothness >= 85%, glints with melody highs!)
     float shimmerGate = ((globalSmoothnessOverride >= 0.0) ? smoothstep(0.84, 0.90, globalSmoothnessOverride) : 1.0) * (1.0 - plaqueMask);
     if (detailTier > 1 && shimmerGate > 0.01) {
         float perik = 0.5 + 0.5 * sin(dot(worldPos, float3(0.35, 1.0, 0.22)) * 44.0 + enamelValueNoise(worldPos.xz * 1.8) * 4.0);
         float prism = enamelValueNoise(worldPos.xz * 31.0 + worldPos.y * 17.0);
         float glint = pow(max(dot(N, H1), 0.0), 20.0) + pow(max(dot(N, H2), 0.0), 26.0) * 0.5;
-        float sparkle = smoothstep(0.84, 0.97, prism) * (0.55 + 0.45 * sin(motionTime * 3.2 + prism * 23.0));
+        float sparkle = smoothstep(0.84 - audioHigh * 0.05, 0.97, prism)
+                      * (0.55 + 0.45 * sin(motionTime * 3.2 + prism * 23.0))
+                      * (1.0 + audioHigh * 1.15);
         emissionGlow += float3(0.78, 0.93, 1.0) * shimmerGate * (perik * glint * 0.14 + sparkle * (0.10 + glint * 0.75));
     }
 
@@ -867,7 +876,8 @@ public enum EnamelShaders {
         float rimRing = smoothstep(0.62, 0.70, bub) * (1.0 - smoothstep(0.70, 0.78, bub));
         float boundary = 0.45 + 1.4 * contourEdge + 0.5 * (1.0 - plaqueMask);
         baseColor = mix(baseColor, float3(0.93, 1.0, 1.0), clamp(foamAmount * bubbles * 0.50 * boundary, 0.0, 0.85));
-        emissionGlow += float3(0.40, 0.95, 1.0) * foamAmount * (rimRing * 0.55 + bubbles * 0.12);
+        float foamAudioBoost = 1.0 + audioBass * 0.35 + audioHigh * 0.30;
+        emissionGlow += float3(0.40, 0.95, 1.0) * foamAmount * (rimRing * 0.55 * foamAudioBoost + bubbles * 0.12);
     }
 
     // Companion Crown Touch Specular Ripples
@@ -946,7 +956,7 @@ public enum EnamelShaders {
         float sd = length(max(dVec, float2(0.0))) + min(max(dVec.x, dVec.y), 0.0) - cornerR;
         float bevel = 1.0 - smoothstep(0.18, 0.64, abs(sd));
         float core = 1.0 - smoothstep(0.0, 0.30, abs(sd));
-        float goldGlint = 0.90 + 0.10 * sin(q.x * 1.5 + q.y * 1.5 + motionTime * 2.4);
+        float goldGlint = 0.90 + 0.10 * sin(q.x * 1.5 + q.y * 1.5 + motionTime * 2.4) + audioHigh * 0.22;
 
         baseColor = mix(baseColor, baseColor * float3(0.94, 1.04, 1.04), 0.40);
         baseColor = mix(baseColor, float3(0.58, 0.36, 0.04), bevel * 0.62);
@@ -959,12 +969,13 @@ public enum EnamelShaders {
         emissionGlow += float3(0.78, 1.0, 0.93) * sweep * 0.68;
     }
 
-    // 2-Minute Sink Brush-Along Quadrant Coaching Highlight
+    // 2-Minute Sink Brush-Along Quadrant Coaching Highlight (pulses gently on Suno groove!)
     if (activeQuadrant >= 0 && quadCode > 0.01) {
         int vertQuad = int(floor(quadCode * 4.0 + 0.01));
         if (vertQuad == activeQuadrant) {
             float coachPulse = 0.55 + 0.45 * sin(motionTime * 5.0);
-            emissionGlow += float3(0.10, 0.68, 0.75) * (0.18 + 0.18 * coachPulse);
+            float grooveLift = audioBass * 0.55 + audioMid * 0.30;
+            emissionGlow += float3(0.10, 0.70, 0.78) * (0.16 + 0.15 * coachPulse + 0.20 * grooveLift);
         } else {
             baseColor *= 0.76;
         }
@@ -1050,6 +1061,8 @@ public enum EnamelShaders {
 
     float motionTime = gingivaTimeAndBreath.x;
     float breathStrength = gingivaTimeAndBreath.y;
+    float audioBass = gingivaTimeAndBreath.z;
+    float audioHigh = gingivaTimeAndBreath.w;
 
     float4 meta = in.gingivaMeta;
     bool hasMeta = (meta.w <= 0.95);
@@ -1075,8 +1088,8 @@ public enum EnamelShaders {
     float wrap = max(0.0, (dot(N, L) + 0.55) / 1.55);
     float fill = max(0.0, (dot(N, L2) + 0.40) / 1.40) * 0.30;
 
-    // Subtle living capillary breathing warmth
-    float breathWave = 0.5 + 0.5 * sin(motionTime * 1.45);
+    // Subtle living capillary breathing warmth + gentle bass pulse
+    float breathWave = clamp(0.5 + 0.5 * sin(motionTime * 1.45) + audioBass * 0.26, 0.0, 1.25);
     float3 breathTint = mix(float3(1.0), float3(1.05, 0.97, 0.98), breathStrength * breathWave);
 
     float3 albedo = mix(
@@ -1099,7 +1112,7 @@ public enum EnamelShaders {
 
     float broadSpec = pow(max(dot(N, H), 0.0), 32.0) * 0.12;
     float sharpGlint = (detailTier > 0) ? pow(max(dot(N, H), 0.0), 140.0) : 0.0;
-    float sparkle = smoothstep(0.66, 0.92, s2) * (0.60 + 0.40 * sin(motionTime * 2.3 + s1 * 18.0));
+    float sparkle = smoothstep(0.66, 0.92, s2) * (0.60 + 0.40 * sin(motionTime * 2.3 + s1 * 18.0)) * (1.0 + audioHigh * 0.55);
     specGlow += float3(1.0, 0.88, 0.90) * (broadSpec + sharpGlint * (0.35 + 0.95 * sparkle));
 
     float sulcusShadow = smoothstep(0.28, 0.72, marginal) * (1.0 - smoothstep(0.64, 0.96, marginal));
@@ -1172,6 +1185,9 @@ public enum EnamelShaders {
     float3 camPos = scn_frame.inverseViewTransform[3].xyz;
 
     float t = earthTimeAndSun.x;
+    float earthBass = earthTimeAndSun.y;
+    float earthMid = earthTimeAndSun.z;
+    float earthHigh = earthTimeAndSun.w;
     float3 sunDir = normalize(float3(0.55, 0.42, 0.72));
 
     float lat = abs(localNormal.y);
@@ -1205,10 +1221,10 @@ public enum EnamelShaders {
 
     float3 lit = albedo * (0.14 + 0.92 * max(NdotL, 0.0));
 
-    // Golden night-side city lights twinkling under clear skies
+    // Golden night-side city lights twinkling under clear skies (shimmers softly with melody highs!)
     float metro = smoothstep(0.52, 0.80, earthFbm(localNormal * 6.5 + 3.7));
     float dots = smoothstep(0.78, 0.93, earthNoise3(localNormal * 38.0));
-    float twinkle = 0.78 + 0.22 * sin(t * 2.6 + earthNoise3(localNormal * 55.0) * 40.0);
+    float twinkle = (0.78 + 0.22 * sin(t * 2.6 + earthNoise3(localNormal * 55.0) * 40.0)) * (1.0 + earthHigh * 0.50);
     float nightGlow = (1.0 - dayTerm) * landMask * (metro * 0.45 + dots * metro * 1.15) * (1.0 - clouds * 0.70);
     lit += float3(1.0, 0.78, 0.40) * nightGlow * 0.65 * twinkle;
 
@@ -1217,12 +1233,13 @@ public enum EnamelShaders {
     float oceanSpec = pow(max(dot(worldNormal, H), 0.0), 42.0) * (1.0 - landMask) * (1.0 - clouds);
     lit += float3(0.65, 0.88, 1.0) * oceanSpec * 0.48 * dayTerm;
 
-    // Cyan-blue Rayleigh limb glow + golden-orange sunset terminator
+    // Cyan-blue Rayleigh limb glow + golden-orange sunset terminator (breathes softly on bass/mid)
     float NdotV = max(dot(worldNormal, V), 0.0);
     float rim = pow(1.0 - NdotV, 2.8);
-    lit += float3(0.22, 0.68, 1.0) * rim * 0.82;
+    float limbBreath = 1.0 + earthBass * 0.32 + earthMid * 0.18;
+    lit += float3(0.22, 0.68, 1.0) * rim * 0.82 * limbBreath;
     float limbLine = pow(1.0 - NdotV, 7.0);
-    lit += float3(0.55, 0.88, 1.0) * limbLine * 0.55 * (0.35 + 0.65 * dayTerm);
+    lit += float3(0.55, 0.88, 1.0) * limbLine * 0.55 * (0.35 + 0.65 * dayTerm) * limbBreath;
     float terminator = smoothstep(-0.20, 0.0, NdotL) * (1.0 - smoothstep(0.0, 0.30, NdotL));
     lit += float3(1.0, 0.52, 0.28) * terminator * rim * 0.45;
 
@@ -1235,6 +1252,9 @@ public enum EnamelShaders {
 
     public static let atmosphereFragmentModifierMSL: String = #"""
     #pragma transparent
+    #pragma arguments
+    float4 atmosphereAudio;
+
     #pragma body
     float3 worldNormal = normalize((scn_frame.inverseViewTransform * float4(_surface.normal, 0.0)).xyz);
     float3 worldPos = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
@@ -1246,13 +1266,17 @@ public enum EnamelShaders {
     float NdotL = dot(worldNormal, sunDir);
     float dayWeight = smoothstep(-0.35, 0.35, NdotL) * 0.72 + 0.28;
 
-    // Soft outer Rayleigh scattering crown: strongest near limb silhouette, fading smoothly to vacuum
+    // Soft outer Rayleigh scattering crown + polar aurora shimmer on musical highs & bass breath
     float limbBand = pow(1.0 - NdotV, 2.6) * smoothstep(0.0, 0.42, NdotV);
     float sunset = smoothstep(-0.22, 0.05, NdotL) * (1.0 - smoothstep(0.05, 0.38, NdotL));
     float3 rayleighColor = mix(float3(0.18, 0.72, 1.0), float3(0.52, 0.92, 1.0), limbBand);
     rayleighColor = mix(rayleighColor, float3(1.0, 0.58, 0.34), sunset * 0.32);
 
-    float alpha = clamp(limbBand * dayWeight * 0.52, 0.0, 0.55);
+    float polarAurora = smoothstep(0.66, 0.92, abs(worldNormal.y)) * atmosphereAudio.z;
+    rayleighColor = mix(rayleighColor, float3(0.22, 0.96, 0.76), polarAurora * 0.42);
+
+    float audioBreath = 1.0 + atmosphereAudio.x * 0.28 + atmosphereAudio.w * 0.16;
+    float alpha = clamp(limbBand * dayWeight * 0.52 * audioBreath, 0.0, 0.64);
     float3 linRayleigh = pow(max(rayleighColor, float3(0.0)), float3(2.15));
     _output.color = float4(linRayleigh * alpha, alpha);
     """#
@@ -1398,6 +1422,8 @@ public enum EnamelShaders {
         gingivaHex: UInt32? = nil,
         motionTimeSec: Float,
         breathingStrength: Float = 0.35,
+        audioBass: Float = 0,
+        audioHigh: Float = 0,
         headlamp: SIMD4<Float>? = nil
     ) {
         if let hex = gingivaHex {
@@ -1405,7 +1431,7 @@ public enum EnamelShaders {
             material.setValue(NSValue(scnVector3: RenderBridge.scnVec3(base)), forKey: "gingivaBaseColor")
         }
         material.setValue(
-            NSValue(scnVector4: RenderBridge.scnVec4(motionTimeSec, breathingStrength, 0, 0)),
+            NSValue(scnVector4: RenderBridge.scnVec4(motionTimeSec, breathingStrength, audioBass, audioHigh)),
             forKey: "gingivaTimeAndBreath"
         )
         if let headlamp {
@@ -1424,8 +1450,15 @@ public enum EnamelShaders {
         return mat
     }
 
-    public static func updateEarthGlobeTime(_ material: SCNMaterial, timeSec: Float) {
-        material.setValue(NSValue(scnVector4: RenderBridge.scnVec4(timeSec, 0, 0, 0)), forKey: "earthTimeAndSun")
+    public static func updateEarthGlobeTime(
+        _ material: SCNMaterial,
+        timeSec: Float,
+        audioBands: SIMD4<Float> = .zero
+    ) {
+        material.setValue(
+            NSValue(scnVector4: RenderBridge.scnVec4(timeSec, audioBands.x, audioBands.y, audioBands.z)),
+            forKey: "earthTimeAndSun"
+        )
     }
 
     public static func makeAtmosphereHaloMaterial() -> SCNMaterial {
@@ -1437,7 +1470,12 @@ public enum EnamelShaders {
         mat.writesToDepthBuffer = false
         mat.isDoubleSided = true
         mat.shaderModifiers = [.fragment: atmosphereFragmentModifierMSL]
+        mat.setValue(NSValue(scnVector4: RenderBridge.scnVec4(0, 0, 0, 0)), forKey: "atmosphereAudio")
         return mat
+    }
+
+    public static func updateAtmosphereHalo(_ material: SCNMaterial, audioBands: SIMD4<Float>) {
+        material.setValue(NSValue(scnVector4: RenderBridge.scnVec4(audioBands)), forKey: "atmosphereAudio")
     }
 
     public static func setQualityTier(material: SCNMaterial, tier: QualityTier) {
@@ -1623,7 +1661,7 @@ public final class EnamelMaterialController {
         let c0 = SIMD4<Float>(Float(u.discloseOrigin.x), Float(u.discloseOrigin.z), u.discloseRadius, u.discloseStrength)
         let c1 = SIMD4<Float>(Float(u.rinseOrigin.x), Float(u.rinseOrigin.z), u.rinseRadius, u.rinseStrength)
         let c2 = SIMD4<Float>(Float(u.probePosition.x), Float(u.probePosition.z), u.probeFoamRadius, u.probeFoamStrength)
-        let c3 = SIMD4<Float>(u.bufferedRinse ? 1.0 : 0.0, 0, 0, 0)
+        let c3 = SIMD4<Float>(u.bufferedRinse ? 1.0 : 0.0, u.audioBands.x, u.audioBands.y, u.audioBands.z)
         let waveSimd = simd_float4x4(c0, c1, c2, c3)
         if lastWaveCols != waveSimd {
             lastWaveCols = waveSimd

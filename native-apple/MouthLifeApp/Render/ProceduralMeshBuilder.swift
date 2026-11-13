@@ -81,7 +81,12 @@ public final class CompanionArchNodes {
     }
 
     /// Animates the floating Smooth Bask crystalline motes halo above the arch when smoothness >= 85%.
-    public func updatePolishHalo(smoothnessIndex: Double, nowSec: Float, reducedMotion: Bool = false) {
+    public func updatePolishHalo(
+        smoothnessIndex: Double,
+        nowSec: Float,
+        reducedMotion: Bool = false,
+        audioBands: SIMD4<Float> = .zero
+    ) {
         let visible = smoothnessIndex >= GameConfig.smoothBaskThreshold
         if polishHaloNode.isHidden == visible {
             polishHaloNode.isHidden = !visible
@@ -89,9 +94,12 @@ public final class CompanionArchNodes {
         guard visible else { return }
         if !reducedMotion {
             polishHaloNode.simdEulerAngles = SIMD3<Float>(0, sin(nowSec * 0.35) * 0.08, 0)
+            polishHaloNode.simdPosition.y = sin(nowSec * 1.15) * 0.035 + audioBands.x * 0.065
+        } else {
+            polishHaloNode.simdPosition.y = 0
         }
         let norm = Float(min(1.0, max(0.0, (smoothnessIndex - 84.0) / 16.0)))
-        let nextOpacity = CGFloat(0.45 + 0.55 * norm)
+        let nextOpacity = CGFloat(min(1.0, 0.42 + 0.44 * norm + 0.16 * audioBands.z))
         if abs(nextOpacity - lastHaloOpacity) > 0.002 {
             lastHaloOpacity = nextOpacity
             polishHaloNode.opacity = nextOpacity
@@ -114,6 +122,7 @@ public final class CosmicBackdropNodes {
     public let earthGlobeNode: SCNNode
     public let earthGlobeMaterial: SCNMaterial
     public let atmosphereHaloNode: SCNNode
+    public let atmosphereHaloMaterial: SCNMaterial?
     public let cityBeaconNodes: [String: SCNNode]
     public let stationOrbitPivotNode: SCNNode
     public let stationAuroraNode: SCNNode
@@ -162,6 +171,7 @@ public final class CosmicBackdropNodes {
         self.earthGlobeNode = earthGlobeNode
         self.earthGlobeMaterial = earthGlobeMaterial
         self.atmosphereHaloNode = atmosphereHaloNode
+        self.atmosphereHaloMaterial = atmosphereHaloNode.geometry?.firstMaterial
         self.cityBeaconNodes = cityBeaconNodes
         self.stationOrbitPivotNode = stationOrbitPivotNode
         self.stationAuroraNode = stationAuroraNode
@@ -219,9 +229,20 @@ public final class CosmicBackdropNodes {
         return SIMD3<Float>(wt.columns.3.x, wt.columns.3.y, wt.columns.3.z)
     }
 
-    public func update(dt: Float, nowSec: Float, reducedMotion: Bool = false) {
+    public func update(
+        dt: Float,
+        nowSec: Float,
+        reducedMotion: Bool = false,
+        audioBands: SIMD4<Float> = .zero
+    ) {
         let t = reducedMotion ? Float(0) : nowSec
-        EnamelShaders.updateEarthGlobeTime(earthGlobeMaterial, timeSec: t)
+        let audio = reducedMotion ? SIMD4<Float>.zero : audioBands
+        EnamelShaders.updateEarthGlobeTime(earthGlobeMaterial, timeSec: t, audioBands: audio)
+        if let atmoMat = atmosphereHaloMaterial {
+            EnamelShaders.updateAtmosphereHalo(atmoMat, audioBands: audio)
+        }
+        let haloBreath: Float = 1.0 + audio.x * 0.022 + audio.w * 0.014
+        atmosphereHaloNode.simdScale = SIMD3<Float>(repeating: haloBreath)
 
         // Orbit Station Aurora along 408 km LEO inclined ring
         stationOrbitPivotNode.simdEulerAngles.z = t * 0.38
@@ -230,7 +251,7 @@ public final class CosmicBackdropNodes {
             guard let pin = cityBeaconNodes[city.id] else { continue }
             let isSel = (city.id == selectedCityId)
             let base: Float = city.isOrbital ? 1.0 : (city.playableInSlice ? 1.32 : 0.95)
-            let pulse: Float = isSel ? (1.18 + 0.14 * sin(t * 5.0)) : 1.0
+            let pulse: Float = isSel ? (1.16 + 0.12 * sin(t * 5.0) + 0.18 * audio.w) : (1.0 + 0.05 * audio.z)
             pin.simdScale = SIMD3<Float>(repeating: base * pulse)
         }
 
@@ -250,17 +271,17 @@ public final class CosmicBackdropNodes {
         atomicOrbitNode.simdEulerAngles = SIMD3<Float>(sin(t * 0.5) * 0.25, -t * 0.72, 0)
 
         if cosmicBeatIndex == 0 {
-            let s = 0.58 + 0.10 * sin(t * 2.2)
+            let s = 0.58 + 0.10 * sin(t * 2.2) + 0.07 * audio.w
             hydroxyapatiteCrystalNode.simdScale = SIMD3<Float>(repeating: s)
-            atomicOrbitNode.simdScale = SIMD3<Float>(repeating: 1.32)
+            atomicOrbitNode.simdScale = SIMD3<Float>(repeating: 1.32 + 0.06 * audio.z)
         } else if cosmicBeatIndex == 1 {
-            hydroxyapatiteCrystalNode.simdScale = SIMD3<Float>(repeating: 1.0)
+            hydroxyapatiteCrystalNode.simdScale = SIMD3<Float>(repeating: 1.0 + 0.04 * audio.x)
             atomicOrbitNode.simdScale = SIMD3<Float>(repeating: 0.95)
         } else {
-            hydroxyapatiteCrystalNode.simdScale = SIMD3<Float>(repeating: 1.06)
+            hydroxyapatiteCrystalNode.simdScale = SIMD3<Float>(repeating: 1.06 + 0.04 * audio.x)
             atomicOrbitNode.simdScale = SIMD3<Float>(repeating: 0.88)
             fluorideLockNode.simdEulerAngles.y = t * 1.35
-            let lockScale = 0.80 + 0.12 * sin(t * 3.2)
+            let lockScale = 0.80 + 0.10 * sin(t * 3.2) + 0.09 * audio.z
             fluorideLockNode.simdScale = SIMD3<Float>(repeating: lockScale)
         }
 
@@ -355,7 +376,13 @@ public final class CartridgeStageNodes {
         self.colonyCache = cache
     }
 
-    public func updateCommensalSite(id: String, restored: Bool, localCleanRatio: Double, nowSec: Float) {
+    public func updateCommensalSite(
+        id: String,
+        restored: Bool,
+        localCleanRatio: Double,
+        nowSec: Float,
+        audioBands: SIMD4<Float> = .zero
+    ) {
         guard var entry = colonyCache[id] else { return }
         if entry.wasRestored != restored {
             entry.wasRestored = restored
@@ -367,11 +394,24 @@ public final class CartridgeStageNodes {
             colonyCache[id] = entry
         }
         let clean01 = Float(min(1.0, max(0.0, localCleanRatio)))
-        let scale: Float = restored ? (1.12 + 0.08 * sin(nowSec * 3.4)) : (0.85 + 0.20 * clean01)
+        let beatScale = audioBands.x * 0.09 + audioBands.z * 0.05
+        let scale: Float = restored
+            ? (1.10 + 0.07 * sin(nowSec * 3.4) + beatScale)
+            : (0.85 + 0.20 * clean01 + audioBands.w * 0.05)
         entry.core?.simdScale = SIMD3<Float>(repeating: scale)
         entry.core?.simdEulerAngles.y = nowSec * (restored ? 1.5 : 0.65)
         if restored {
             entry.halo?.simdEulerAngles.y = -nowSec * 0.95
+            entry.halo?.simdScale = SIMD3<Float>(repeating: 1.0 + audioBands.w * 0.10)
+        }
+    }
+
+    public func updateSalivaSprings(audioBands: SIMD4<Float>) {
+        guard !salivaSpringNodes.isEmpty else { return }
+        let s = 1.0 + audioBands.x * 0.075 + audioBands.w * 0.045
+        let scaleVec = SIMD3<Float>(s, 1.0, s)
+        for node in salivaSpringNodes {
+            node.simdScale = scaleVec
         }
     }
 }
@@ -431,24 +471,27 @@ public final class HydraProbeRig {
         nowSec: Float,
         probeSpeed: Float,
         isScrubbing: Bool,
-        surgeFraction01: Float
+        surgeFraction01: Float,
+        audioBass: Float = 0
     ) {
-        let spinRate: Float = (isScrubbing ? 12.0 : 3.2) + probeSpeed * 0.85
+        let spinRate: Float = (isScrubbing ? 12.0 : 3.2) + probeSpeed * 0.85 + audioBass * 1.4
         outerEmitterRingNode.simdEulerAngles.x += dt * spinRate
         innerEmitterRingNode.simdEulerAngles.x -= dt * spinRate * 1.35
 
         // Sonic micro-oscillation on front bristle head when scrubbing
         if isScrubbing {
             bristleGroupNode.simdPosition.z = sin(nowSec * 52.0) * 0.045
-            sweepConeNode.opacity = CGFloat(0.42 + 0.14 * sin(nowSec * 18.0))
+            sweepConeNode.opacity = CGFloat(0.42 + 0.14 * sin(nowSec * 18.0) + 0.08 * audioBass)
         } else {
             bristleGroupNode.simdPosition.z = 0
-            sweepConeNode.opacity = 0.24
+            sweepConeNode.opacity = CGFloat(0.22 + 0.06 * audioBass)
         }
 
         // Surge core brightness & scale inside the translucent cockpit canopy
         let surge = min(1, max(0, surgeFraction01))
-        let readyPulse: Float = surge >= 0.999 ? (1.18 + 0.18 * sin(nowSec * 8.0)) : (0.65 + 0.45 * surge)
+        let readyPulse: Float = surge >= 0.999
+            ? (1.16 + 0.16 * sin(nowSec * 8.0) + 0.12 * audioBass)
+            : (0.65 + 0.45 * surge + 0.09 * audioBass)
         surgeCoreNode.simdScale = SIMD3<Float>(repeating: readyPulse)
 
         if flossRemainingSec > 0 {
