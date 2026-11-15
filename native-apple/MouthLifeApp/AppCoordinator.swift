@@ -580,7 +580,7 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
         NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
         NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenBrushCue(quadrant: .upperRight, surface: .outerCheek, lang: coachLanguage)
+            BrushCoachCopy.spokenQuadrantNumber(.upperRight, lang: coachLanguage)
         )
         startPacerTimer()
     }
@@ -609,27 +609,19 @@ public final class AppCoordinator {
         }
     }
 
+    /// Re-speaks the one-word cue for wherever the timeline is now (after a voice or language change).
     private func speakCurrentPacerPhaseCue() {
-        let phase = BrushPhaseState.evaluate(
-            elapsedSec: pacerElapsedSec,
-            stage: pacerStage,
-            mouthwashDurationSec: mouthwashDurationStyle.durationSec
-        )
-        switch phase.stage {
+        let cue: String
+        switch pacerStage {
         case .mouthwashBonus:
-            let cue = phase.mouthwashStepIndex == 0
-                ? BrushCoachCopy.spokenMouthwashStartCue(durationSec: Int(mouthwashDurationStyle.durationSec.rounded()), lang: coachLanguage)
-                : BrushCoachCopy.spokenMouthwashStepCue(stepIndex: phase.mouthwashStepIndex, lang: coachLanguage)
-            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+            cue = BrushCoachCopy.spokenStageWord(.rinse, lang: coachLanguage)
         case .flossBonus:
-            let cue = phase.flossIsUpper
-                ? BrushCoachCopy.spokenFlossStartCue(style: flossToolStyle, lang: coachLanguage)
-                : BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
-            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+            cue = BrushCoachCopy.spokenStageWord(.floss, lang: coachLanguage)
         case .brushing:
-            let cue = BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
-            NativeSoundEngine.shared.speakCoachingPhrase(cue)
+            let phase = BrushPhaseState.evaluate(elapsedSec: pacerElapsedSec, stage: .brushing)
+            cue = BrushCoachCopy.spokenQuadrantNumber(phase.quadrant, lang: coachLanguage)
         }
+        NativeSoundEngine.shared.speakCoachingPhrase(cue)
     }
 
     public func setFlossToolStyle(_ style: FlossToolStyle) {
@@ -684,7 +676,7 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
         NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
         NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenFlossStartCue(style: flossToolStyle, lang: coachLanguage)
+            BrushCoachCopy.spokenStageWord(.floss, lang: coachLanguage)
         )
         updateIdleTimerPolicy()
     }
@@ -710,10 +702,7 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
         NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: 0)
         NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenMouthwashStartCue(
-                durationSec: Int(mouthwashDurationStyle.durationSec.rounded()),
-                lang: coachLanguage
-            )
+            BrushCoachCopy.spokenStageWord(.rinse, lang: coachLanguage)
         )
         updateIdleTimerPolicy()
     }
@@ -735,10 +724,7 @@ public final class AppCoordinator {
         HapticsEngine.shared.playDistrictSeal()
         transition(to: .hub)
         NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenSessionCompleteCue(
-                includedMouthwash: withMouthwashBonus,
-                lang: coachLanguage
-            )
+            BrushCoachCopy.spokenStageWord(.done, lang: coachLanguage)
         )
         if withMouthwashBonus {
             showHubToast("💜 Fluoride Rinse Seal! +\(outcome.ionsAwarded) F⁻ • Spit out, no water for 30 min!")
@@ -820,14 +806,12 @@ public final class AppCoordinator {
                 NativeSoundEngine.shared.setPacerState(quadrantIdx: qIdx, inFlossBonus: false)
                 NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: phase.quadrant, surface: phase.surface, isNewQuadrant: true)
                 NativeSoundEngine.shared.speakCoachingPhrase(
-                    BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
+                    BrushCoachCopy.spokenQuadrantNumber(phase.quadrant, lang: coachLanguage)
                 )
             } else if sIdx != lastAnnouncedSurface && pacerElapsedSec < GameConfig.brushAlongTotalSec - 0.2 {
                 lastAnnouncedSurface = sIdx
+                // Surface changes are an earcon only: the voice just counts quadrants.
                 NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: phase.quadrant, surface: phase.surface, isNewQuadrant: false)
-                NativeSoundEngine.shared.speakCoachingPhrase(
-                    BrushCoachCopy.spokenBrushCue(quadrant: phase.quadrant, surface: phase.surface, lang: coachLanguage)
-                )
             }
 
         case .flossBonus:
@@ -835,9 +819,6 @@ public final class AppCoordinator {
             if !announcedFlossLowerHalf && flossElapsed >= GameConfig.brushAlongFlossBonusSec * 0.5 {
                 announcedFlossLowerHalf = true
                 NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .lowerRight, surface: .outerCheek, isNewQuadrant: true)
-                NativeSoundEngine.shared.speakCoachingPhrase(
-                    BrushCoachCopy.spokenFlossLowerCue(lang: coachLanguage)
-                )
             }
             if pacerElapsedSec >= flossEnd - 0.05 {
                 // Seamlessly chime & roll hands-free into Stage 3: 60s Purple Total Care Fluoride Rinse Bonus!
@@ -848,9 +829,6 @@ public final class AppCoordinator {
             if phase.mouthwashStepIndex != lastAnnouncedMouthwashStep && phase.mouthwashStepIndex > 0 && pacerElapsedSec < cap - 0.25 {
                 lastAnnouncedMouthwashStep = phase.mouthwashStepIndex
                 NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: phase.mouthwashStepIndex)
-                NativeSoundEngine.shared.speakCoachingPhrase(
-                    BrushCoachCopy.spokenMouthwashStepCue(stepIndex: phase.mouthwashStepIndex, lang: coachLanguage)
-                )
             }
             if pacerElapsedSec >= cap - 0.05 {
                 completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: true)

@@ -676,6 +676,13 @@ public struct BrushAlongView: View {
                     let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: coachLanguage)
 
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // Step number: the one word the voice says for this quadrant.
+                        Text("\(phase.quadrant.rawValue + 1)")
+                            .font(.system(size: 23, weight: .heavy, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(MLTheme.fluorapatiteGold)
+                            .accessibilityHidden(true)
+
                         Text(L10n.t(qHeadline))
                             .font(.system(size: 23, weight: .heavy, design: .rounded))
                             .foregroundStyle(MLTheme.textPrimary)

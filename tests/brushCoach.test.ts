@@ -230,9 +230,6 @@ describe('8-language coach copy', () => {
       expect(sides.left).not.toBe(sides.right);
       for (let q = 0; q < 4; q++) {
         expect(BrushCoachCopy.quadrantLabel(q, lang).length).toBeGreaterThan(0);
-        for (let s = 0; s < 3; s++) {
-          expect(BrushCoachCopy.spokenBrushCue(q, s, lang).length).toBeGreaterThan(0);
-        }
       }
       for (let s = 0; s < 3; s++) {
         const badge = BrushCoachCopy.surfaceActionBadge(s, lang);
@@ -245,15 +242,6 @@ describe('8-language coach copy', () => {
         expect(floss.archTitle.length).toBeGreaterThan(0);
         expect(floss.actionBadge.length).toBeGreaterThan(0);
       }
-      expect(BrushCoachCopy.spokenFlossStartCue('flossPick', lang).length).toBeGreaterThan(0);
-      expect(BrushCoachCopy.spokenFlossLowerCue(lang).length).toBeGreaterThan(0);
-      expect(BrushCoachCopy.spokenMouthwashStartCue(60, lang)).not.toBe(
-        BrushCoachCopy.spokenMouthwashStartCue(30, lang)
-      );
-      expect(BrushCoachCopy.spokenMouthwashStepCue(1, lang)).not.toBe(BrushCoachCopy.spokenMouthwashStepCue(2, lang));
-      expect(BrushCoachCopy.spokenSessionCompleteCue(true, lang)).not.toBe(
-        BrushCoachCopy.spokenSessionCompleteCue(false, lang)
-      );
       expect(BrushCoachCopy.hubStartBrushLabel(lang).length).toBeGreaterThan(0);
       expect(BrushCoachCopy.gyroSwishStatusLabel(true, lang)).not.toBe(BrushCoachCopy.gyroSwishStatusLabel(false, lang));
     }
@@ -264,8 +252,32 @@ describe('8-language coach copy', () => {
     expect(BrushCoachCopy.quadrantLabel(BrushQuadrant.lowerLeft, 'en')).toBe('BOTTOM LEFT');
     expect(BrushCoachCopy.quadrantLabel(BrushQuadrant.upperLeft, 'de')).toBe('OBEN LINKS');
     expect(BrushCoachCopy.quadrantLabel(BrushQuadrant.lowerRight, 'ja')).toBe('右下');
-    expect(BrushCoachCopy.spokenBrushCue(BrushQuadrant.upperLeft, BrushSurface.outerCheek, 'es')).toContain('izquierda');
-    expect(BrushCoachCopy.spokenBrushCue(BrushQuadrant.lowerRight, BrushSurface.outerCheek, 'fr')).toContain('droite');
+  });
+
+  it('speaks only a number per quadrant and one word per stage', () => {
+    expect([0, 1, 2, 3].map((q) => BrushCoachCopy.spokenQuadrantNumber(q, 'en'))).toEqual([
+      'One',
+      'Two',
+      'Three',
+      'Four',
+    ]);
+    expect(BrushCoachCopy.spokenQuadrantNumber(BrushQuadrant.lowerRight, 'es')).toBe('Cuatro');
+    expect(BrushCoachCopy.spokenQuadrantNumber(BrushQuadrant.upperRight, 'ja')).toBe('いち。');
+    expect(BrushCoachCopy.spokenStageWord('floss', 'en')).toBe('Floss');
+    expect(BrushCoachCopy.spokenStageWord('rinse', 'en')).toBe('Rinse');
+    expect(BrushCoachCopy.spokenStageWord('done', 'de')).toBe('Fertig');
+    for (const lang of COACH_LANGUAGES) {
+      const spoken = [
+        ...[0, 1, 2, 3].map((q) => BrushCoachCopy.spokenQuadrantNumber(q, lang)),
+        ...(['floss', 'rinse', 'done'] as const).map((w) => BrushCoachCopy.spokenStageWord(w, lang)),
+      ];
+      // Seven distinct cues, each a single word: no sentences to sit through every day.
+      expect(new Set(spoken).size).toBe(7);
+      for (const cue of spoken) {
+        expect(cue.length).toBeGreaterThan(0);
+        expect(cue.trim()).not.toMatch(/\s/);
+      }
+    }
   });
 
   it('string floss changes the English coaching, pick mode steps through three moves', () => {
@@ -275,9 +287,6 @@ describe('8-language coach copy', () => {
     });
     const steps = [0, 1, 2].map((i) => BrushCoachCopy.flossHeadline(false, 'flossPick', i, 'en').actionBadge);
     expect(new Set(steps).size).toBe(3);
-    expect(BrushCoachCopy.spokenFlossStartCue('stringFloss', 'en')).not.toBe(
-      BrushCoachCopy.spokenFlossStartCue('flossPick', 'en')
-    );
   });
 
   it('picks the coach language from the browser list and falls back to English', () => {

@@ -258,7 +258,7 @@ public struct BrushPhaseState: Equatable, Sendable {
     }
 }
 
-/// Glanceable 3-foot visual headlines (zero paragraph reading!) + concise natural spoken voice cues across 8 languages.
+/// Glanceable 3-foot visual headlines (zero paragraph reading!) + a minimal spoken script (numbers and single words) across 8 languages.
 public enum BrushCoachCopy {
 
     // MARK: - Mirror Compass Side Labels
@@ -538,207 +538,66 @@ public enum BrushCoachCopy {
         }
     }
 
-    // MARK: - Concise Hands-Free Spoken Audio Cues
+    // MARK: - Minimal Spoken Cues (a number per quadrant, one word per stage)
 
-    public static func spokenBrushCue(quadrant: BrushQuadrant, surface: BrushSurface, lang: CoachLanguage) -> String {
-        if surface == .outerCheek {
-            switch (lang, quadrant) {
-            case (.english, .upperRight): return "Top right, outside. Angle gently to the gumline."
-            case (.english, .upperLeft): return "Switch. Top left, outside."
-            case (.english, .lowerLeft): return "Bottom left, outside."
-            case (.english, .lowerRight): return "Final section. Bottom right, outside."
-
-            case (.spanish, .upperRight): return "Arriba a la derecha, por fuera. Inclina hacia la encía."
-            case (.spanish, .upperLeft): return "Cambio. Arriba a la izquierda, por fuera."
-            case (.spanish, .lowerLeft): return "Abajo a la izquierda, por fuera."
-            case (.spanish, .lowerRight): return "Última zona. Abajo a la derecha, por fuera."
-
-            case (.french, .upperRight): return "En haut à droite, extérieur. Inclinez vers la gencive."
-            case (.french, .upperLeft): return "Changez. En haut à gauche, extérieur."
-            case (.french, .lowerLeft): return "En bas à gauche, extérieur."
-            case (.french, .lowerRight): return "Dernière zone. En bas à droite, extérieur."
-
-            case (.japanese, .upperRight): return "右上、外側。歯ぐきに斜めにあてます。"
-            case (.japanese, .upperLeft): return "チェンジ。左上、外側。"
-            case (.japanese, .lowerLeft): return "左下、外側。"
-            case (.japanese, .lowerRight): return "最後です。右下、外側。"
-
-            case (.chinese, .upperRight): return "右上，外侧。斜向牙龈轻刷。"
-            case (.chinese, .upperLeft): return "换边。左上，外侧。"
-            case (.chinese, .lowerLeft): return "左下，外侧。"
-            case (.chinese, .lowerRight): return "最后一段。右下，外侧。"
-
-            case (.korean, .upperRight): return "오른쪽 위, 바깥쪽. 잇몸선으로 살짝 기울이세요."
-            case (.korean, .upperLeft): return "바꿔서, 왼쪽 위 바깥쪽."
-            case (.korean, .lowerLeft): return "왼쪽 아래, 바깥쪽."
-            case (.korean, .lowerRight): return "마지막 구역, 오른쪽 아래 바깥쪽."
-
-            case (.portuguese, .upperRight): return "Em cima à direita, por fora. Incline em direção à gengiva."
-            case (.portuguese, .upperLeft): return "Troque. Em cima à esquerda, por fora."
-            case (.portuguese, .lowerLeft): return "Embaixo à esquerda, por fora."
-            case (.portuguese, .lowerRight): return "Última parte. Embaixo à direita, por fora."
-
-            case (.german, .upperRight): return "Oben rechts, außen. Sanft zum Zahnfleisch neigen."
-            case (.german, .upperLeft): return "Wechsel. Oben links, außen."
-            case (.german, .lowerLeft): return "Unten links, außen."
-            case (.german, .lowerRight): return "Letzter Abschnitt. Unten rechts, außen."
-            }
-        } else if surface == .chewingGrooves {
-            switch lang {
-            case .english: return "Chewing surfaces."
-            case .spanish: return "Superficies de masticar."
-            case .french: return "Surfaces de mastication."
-            case .japanese: return "かみ合わせの面。"
-            case .chinese: return "咬合面沟槽。"
-            case .korean: return "씹는 면."
-            case .portuguese: return "Topo dos dentes."
-            case .german: return "Kauflächen."
-            }
-        } else {
-            switch lang {
-            case .english: return "Inside. Tilt brush vertical behind front teeth."
-            case .spanish: return "Por dentro. Cepillo vertical en los dientes frontales."
-            case .french: return "Intérieur. Brosse verticale derrière les dents de devant."
-            case .japanese: return "内側。前歯の裏はブラシを縦にします。"
-            case .chinese: return "内侧。前牙内侧请把牙刷竖起来。"
-            case .korean: return "안쪽. 앞니 뒤는 칫솔을 세워주세요."
-            case .portuguese: return "Por dentro. Escova na vertical nos dentes da frente."
-            case .german: return "Innen. Hinter den Schneidezähnen Bürste hochkant halten."
-            }
-        }
+    /// The three stage changes the voice names. Everything else is a chime plus the screen.
+    public enum SpokenStageWord: CaseIterable, Sendable {
+        case floss
+        case rinse
+        case done
     }
 
-    public static func spokenFlossStartCue(style: FlossToolStyle, lang: CoachLanguage) -> String {
-        let usePick = (style == .flossPick)
+    /// Brushing is a daily ritual, so the voice only counts the four quadrants ("One" ... "Four").
+    /// The number matches the step badge beside the on-screen headline, which carries the detail.
+    public static func spokenQuadrantNumber(_ quadrant: BrushQuadrant, lang: CoachLanguage) -> String {
+        let words: [String]
         switch lang {
-        case .english:
-            return usePick
-                ? "Great brushing! Bonus round: Floss Pick, top teeth. Wiggle gently in, lean left and right."
-                : "Great brushing! Bonus round: Floss top teeth, hugging each side."
-        case .spanish:
-            return "Muy bien. Ronda extra con hilo, dientes de arriba. Desliza suave e inclina a cada lado."
-        case .french:
-            return "Bravo. Bonus porte-fil, dents du haut. Glissez doucement sur chaque côté."
-        case .japanese:
-            return "ブラッシング完了！ボーナス、フロスピックで上の歯。やさしく入れて左右に沿わせましょう。"
-        case .chinese:
-            return "刷得真棒！加分环节，牙线棒清洁上排牙齿，轻轻滑入，左右贴紧牙面。"
-        case .korean:
-            return "잘하셨어요! 보너스 치실 픽, 윗니부터 살살 넣어 양쪽 벽을 쓸어주세요."
-        case .portuguese:
-            return "Ótima escovação! Bônus com fio, dentes de cima. Deslize suave nos dois lados."
-        case .german:
-            return "Super geputzt! Bonusrunde Zahnseidestick, obere Zähne. Sanft gleiten und beidseitig anlehnen."
+        case .english: words = ["One", "Two", "Three", "Four"]
+        case .spanish: words = ["Uno", "Dos", "Tres", "Cuatro"]
+        case .french: words = ["Un", "Deux", "Trois", "Quatre"]
+        case .japanese: words = ["いち。", "に。", "さん。", "よん。"]
+        case .chinese: words = ["一。", "二。", "三。", "四。"]
+        case .korean: words = ["하나", "둘", "셋", "넷"]
+        case .portuguese: words = ["Um", "Dois", "Três", "Quatro"]
+        case .german: words = ["Eins", "Zwei", "Drei", "Vier"]
         }
+        return words[min(3, max(0, quadrant.rawValue))]
     }
 
-    public static func spokenFlossLowerCue(lang: CoachLanguage) -> String {
-        switch lang {
-        case .english: return "Halfway. Bottom teeth."
-        case .spanish: return "Vamos a la mitad. Dientes de abajo."
-        case .french: return "À mi-chemin. Dents du bas."
-        case .japanese: return "半分です。下の歯へ。"
-        case .chinese: return "过半啦，换下排牙齿。"
-        case .korean: return "절반 완료. 이제 아랫니입니다."
-        case .portuguese: return "Metade. Dentes de baixo."
-        case .german: return "Halbzeit. Untere Zähne."
-        }
-    }
+    /// One word when the ritual moves to flossing, to the rinse, or finishes.
+    public static func spokenStageWord(_ word: SpokenStageWord, lang: CoachLanguage) -> String {
+        switch (lang, word) {
+        case (.english, .floss): return "Floss"
+        case (.english, .rinse): return "Rinse"
+        case (.english, .done): return "Done"
 
-    public static func spokenMouthwashStartCue(durationSec: Int, lang: CoachLanguage) -> String {
-        let is60 = (durationSec >= 45)
-        switch lang {
-        case .english:
-            return is60
-                ? "Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for one minute. Do not swallow."
-                : "Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for thirty seconds. Do not swallow."
-        case .spanish:
-            return is60
-                ? "Ronda final: enjuague con flúor. Toma diez mililitros y haz buches por un minuto sin tragar."
-                : "Ronda final: enjuague con flúor. Haz buches por treinta segundos sin tragar."
-        case .french:
-            return is60
-                ? "Bonus final : bain de bouche au fluor. Prenez dix millilitres et rincez pendant une minute sans avaler."
-                : "Bonus final : bain de bouche au fluor pendant trente secondes, sans avaler."
-        case .japanese:
-            return is60
-                ? "最後のボーナス、フッ素洗口液！10ミリリットルを口に含み、1分間ブクブクゆすぎます。飲み込まないでください。"
-                : "最後のボーナス、フッ素洗口液！30秒間しっかりブクブクゆすぎます。飲み込まないでください。"
-        case .chinese:
-            return is60
-                ? "最后一关：含氟漱口水！倒十毫升，左右鼓漱一分钟，不要吞咽。"
-                : "最后一关：含氟漱口水！左右鼓漱三十秒，不要吞咽。"
-        case .korean:
-            return is60
-                ? "마지막 보너스, 불소 가글! 10밀리리터를 머금고 1분 동안 양볼로 힘차게 가글하세요. 삼키지 마세요."
-                : "마지막 보너스, 불소 가글! 30초 동안 힘차게 가글하세요. 삼키지 마세요."
-        case .portuguese:
-            return is60
-                ? "Bônus final: enxaguante com flúor! Bocheche dez mililitros por um minuto, sem engolir."
-                : "Bônus final: enxaguante com flúor por trinta segundos, sem engolir."
-        case .german:
-            return is60
-                ? "Letzte Bonusrunde: Fluorid-Mundspülung! Zehn Milliliter eine Minute kräftig spülen, nicht schlucken."
-                : "Letzte Bonusrunde: Fluorid-Mundspülung dreißig Sekunden kräftig spülen, nicht schlucken."
-        }
-    }
+        case (.spanish, .floss): return "Hilo"
+        case (.spanish, .rinse): return "Enjuague"
+        case (.spanish, .done): return "Listo"
 
-    public static func spokenMouthwashStepCue(stepIndex: Int, lang: CoachLanguage) -> String {
-        if stepIndex == 1 {
-            switch lang {
-            case .english: return "Pump the rinse vigorously between all your teeth."
-            case .spanish: return "Empuja el líquido con fuerza entre todos los dientes."
-            case .french: return "Faites passer le liquide vigoureusement entre toutes les dents."
-            case .japanese: return "歯と歯の間へ、液体を強く通しましょう。"
-            case .chinese: return "用力把漱口水冲过每一处牙缝。"
-            case .korean: return "치아 사이사이로 가글액을 힘차게 통과시키세요."
-            case .portuguese: return "Passe o líquido com força entre todos os dentes."
-            case .german: return "Spülung kräftig zwischen alle Zähne pressen."
-            }
-        } else {
-            switch lang {
-            case .english: return "Final stretch! Keep swishing, and remember: after spitting, no water or food for thirty minutes."
-            case .spanish: return "Últimos segundos. Al escupir, no tomes agua ni comas por treinta minutos."
-            case .french: return "Dernière ligne droite ! Après avoir craché, ni eau ni repas pendant trente minutes."
-            case .japanese: return "あと少し！吐き出した後は、30分間水ですすいだり飲食しないでください。"
-            case .chinese: return "最后冲刺！吐掉后三十分钟内不要用水漱口或进食。"
-            case .korean: return "거의 다 됐어요! 뱉은 뒤 30분 동안 물로 헹구거나 드시지 마세요."
-            case .portuguese: return "Reta final! Depois de cuspir, fique trinta minutos sem água ou comida."
-            case .german: return "Endspurt! Nach dem Ausspucken dreißig Minuten kein Wasser und nichts essen."
-            }
-        }
-    }
+        case (.french, .floss): return "Fil"
+        case (.french, .rinse): return "Rinçage"
+        case (.french, .done): return "Terminé"
 
-    public static func spokenSessionCompleteCue(includedMouthwash: Bool = false, lang: CoachLanguage) -> String {
-        if includedMouthwash {
-            switch lang {
-            case .english:
-                return "Rinse complete! Spit out completely. Do not rinse with water, eat, or drink for thirty minutes so your fluoride shield locks in."
-            case .spanish:
-                return "¡Enjuague completo! Escupe todo. No enjuagues con agua ni comas o bebas por treinta minutos para fijar el flúor."
-            case .french:
-                return "Soin complet terminé ! Crachez tout. Ne rincez pas à l'eau et ne mangez ni ne buvez pendant trente minutes."
-            case .japanese:
-                return "洗口完了！しっかり吐き出して、フッ素が定着するよう30分間は水ゆすぎや飲食を控えてください。"
-            case .chinese:
-                return "漱口完成！请完全吐出，三十分钟内不要用水漱口、喝水或进食，让氟保护层牢牢锁住。"
-            case .korean:
-                return "가글 완료! 완전히 뱉어내시고, 불소막이 고정되도록 30분 동안 물로 헹구거나 드시지 마세요."
-            case .portuguese:
-                return "Enxágue concluído! Cuspa tudo. Não enxágue com água nem coma ou beba por trinta minutos."
-            case .german:
-                return "Spülung geschafft! Komplett ausspucken und dreißig Minuten nicht mit Wasser nachspülen, essen oder trinken."
-            }
-        }
-        switch lang {
-        case .english: return "All sparkling clean! Spit excess foam, don't rinse right away."
-        case .spanish: return "Todo brillante. Escupe la espuma sin enjuagar todavía."
-        case .french: return "Tout est propre ! Crachez la mousse sans rincer tout de suite."
-        case .japanese: return "ピカピカです！泡を吐き出して、すぐにはゆすがないでくださいね。"
-        case .chinese: return "全部亮晶晶！吐掉多余泡沫，先别马上漱口哦。"
-        case .korean: return "반짝반짝 깨끗해졌어요! 거품만 뱉고 바로 헹구지 마세요."
-        case .portuguese: return "Tudo brilhando! Cuspa a espuma sem enxaguar agora."
-        case .german: return "Alles blitzblank! Schaum ausspucken, noch nicht direkt nachspülen."
+        case (.japanese, .floss): return "フロス。"
+        case (.japanese, .rinse): return "すすぎ。"
+        case (.japanese, .done): return "完了。"
+
+        case (.chinese, .floss): return "牙线。"
+        case (.chinese, .rinse): return "漱口。"
+        case (.chinese, .done): return "完成。"
+
+        case (.korean, .floss): return "치실"
+        case (.korean, .rinse): return "가글"
+        case (.korean, .done): return "완료"
+
+        case (.portuguese, .floss): return "Fio"
+        case (.portuguese, .rinse): return "Enxágue"
+        case (.portuguese, .done): return "Pronto"
+
+        case (.german, .floss): return "Zahnseide"
+        case (.german, .rinse): return "Spülen"
+        case (.german, .done): return "Fertig"
         }
     }
 

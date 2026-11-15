@@ -229,7 +229,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.lastAnnouncedQuadrant = 0;
     this.lastAnnouncedSurface = 0;
     this.callbacks.onPlayCue('quadrant');
-    this.voice.speak(BrushCoachCopy.spokenBrushCue(0, BrushSurface.outerCheek, this.lang));
+    this.voice.speak(BrushCoachCopy.spokenQuadrantNumber(0, this.lang));
   }
 
   dispose(): void {
@@ -309,18 +309,17 @@ export class BrushAlongOverlay implements OverlayView {
         this.lastAnnouncedSurface = phase.surface;
         this.callbacks.onActiveQuadrantChanged(phase.quadrant);
         this.callbacks.onPlayCue('quadrant');
-        this.voice.speak(BrushCoachCopy.spokenBrushCue(phase.quadrant, phase.surface, this.lang));
+        this.voice.speak(BrushCoachCopy.spokenQuadrantNumber(phase.quadrant, this.lang));
       } else if (phase.surface !== this.lastAnnouncedSurface && !nearEnd) {
         this.lastAnnouncedSurface = phase.surface;
+        // Surface changes are a chime only: the voice just counts quadrants.
         this.callbacks.onPlayCue('surface');
-        this.voice.speak(BrushCoachCopy.spokenBrushCue(phase.quadrant, phase.surface, this.lang));
       }
     } else if (stage === 'flossBonus') {
       const flossElapsed = elapsedSec - BRUSH_ALONG_TOTAL_SEC;
       if (!this.announcedFlossLowerHalf && flossElapsed >= BRUSH_ALONG_FLOSS_BONUS_SEC * 0.5) {
         this.announcedFlossLowerHalf = true;
         this.callbacks.onPlayCue('quadrant');
-        this.voice.speak(BrushCoachCopy.spokenFlossLowerCue(this.lang));
       }
       this.callbacks.onActiveQuadrantChanged(phase.quadrant);
       if (elapsedSec >= flossEnd - 0.05) {
@@ -337,7 +336,6 @@ export class BrushAlongOverlay implements OverlayView {
       ) {
         this.lastAnnouncedMouthwashStep = phase.mouthwashStepIndex;
         this.callbacks.onPlayCue('surface');
-        this.voice.speak(BrushCoachCopy.spokenMouthwashStepCue(phase.mouthwashStepIndex, this.lang));
       }
       if (elapsedSec >= cap - 0.05) {
         this.completeSession(this.completedFloss, true);
@@ -354,7 +352,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.clock.enterFlossBonus();
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onPlayCue('quadrant');
-    this.voice.speak(BrushCoachCopy.spokenFlossStartCue(this.flossToolStyle, this.lang));
+    this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
     this.render();
   }
 
@@ -369,9 +367,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
     this.callbacks.onPlayCue('quadrant');
-    this.voice.speak(
-      BrushCoachCopy.spokenMouthwashStartCue(Math.round(mouthwashDurationSec(this.mouthwashStyle)), this.lang)
-    );
+    this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
     this.bindMotion();
     this.render();
   }
@@ -394,7 +390,7 @@ export class BrushAlongOverlay implements OverlayView {
     });
 
     this.callbacks.onPlayCue('complete');
-    this.voice.speak(BrushCoachCopy.spokenSessionCompleteCue(withMouthwashBonus, this.lang));
+    this.voice.speak(BrushCoachCopy.spokenStageWord('done', this.lang));
     this.view = 'summary';
     this.render();
   }
@@ -402,21 +398,14 @@ export class BrushAlongOverlay implements OverlayView {
   /** Re-speak the cue for wherever the timeline is now (after a language or voice change). */
   private speakCurrentCue(): void {
     if (this.view !== 'running' || this.clock.isPacerPaused()) return;
-    const phase = this.currentPhase();
-    if (phase.stage === 'mouthwashBonus') {
-      this.voice.speak(
-        phase.mouthwashStepIndex === 0
-          ? BrushCoachCopy.spokenMouthwashStartCue(Math.round(this.clock.getPacerMouthwashDurationSec()), this.lang)
-          : BrushCoachCopy.spokenMouthwashStepCue(phase.mouthwashStepIndex, this.lang)
-      );
-    } else if (phase.stage === 'flossBonus') {
-      this.voice.speak(
-        phase.flossIsUpper
-          ? BrushCoachCopy.spokenFlossStartCue(this.flossToolStyle, this.lang)
-          : BrushCoachCopy.spokenFlossLowerCue(this.lang)
-      );
+    const stage = this.clock.getPacerStage();
+    if (stage === 'mouthwashBonus') {
+      this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
+    } else if (stage === 'flossBonus') {
+      this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
     } else {
-      this.voice.speak(BrushCoachCopy.spokenBrushCue(phase.quadrant, phase.surface, this.lang));
+      const phase = this.currentPhase();
+      this.voice.speak(BrushCoachCopy.spokenQuadrantNumber(phase.quadrant, this.lang));
     }
   }
 
@@ -478,7 +467,8 @@ export class BrushAlongOverlay implements OverlayView {
     } else {
       const badge = BrushCoachCopy.surfaceActionBadge(phase.surface, this.lang);
       const title = BrushCoachCopy.quadrantLabel(phase.quadrant, this.lang);
-      this.setText('#pacer-title', title);
+      // The step number is the one word the voice says for this quadrant.
+      this.setText('#pacer-title', `${phase.quadrant + 1} · ${title}`);
       this.setText('#pacer-rule', badge.angleTag);
       this.setText('#pacer-action', badge.headline);
       this.setText('#pacer-action-icon', SURFACE_ICONS[phase.surface]);
@@ -488,8 +478,8 @@ export class BrushAlongOverlay implements OverlayView {
     }
     if (liveText !== this.lastLiveText) {
       this.lastLiveText = liveText;
-      // With the voice coach speaking, a screen reader repeating the same line would talk over it.
-      this.setText('#pacer-live', this.voice.isEnabled() && this.voice.isSupported() ? '' : liveText);
+      // The voice only says a number or one word, so screen readers always get the full line.
+      this.setText('#pacer-live', liveText);
     }
   }
 

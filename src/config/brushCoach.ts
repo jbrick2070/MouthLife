@@ -1,6 +1,6 @@
 /**
  * Hands-free Brush-Along coach: 3-stage timeline (2:00 brush → 0:45 floss → 1:00/0:30 fluoride rinse),
- * glanceable headlines, spoken cues in 8 languages, and the tilt-slosh model for the rinse stage.
+ * glanceable headlines, a minimal spoken script (numbers and single words) in 8 languages, and the tilt-slosh model for the rinse stage.
  *
  * This is the web twin of `native-apple/Sources/MouthLifeCore/Config/BrushCoachSystem.swift`.
  * Keep the two in lockstep: same timings, same indices, same copy.
@@ -431,188 +431,30 @@ const MOUTHWASH_HEADLINES: PerLang<{ title: string; steps: readonly [RinseStep, 
   },
 };
 
-/** Spoken outer-surface cue per quadrant: upperRight, upperLeft, lowerLeft, lowerRight. */
-const SPOKEN_OUTER: PerLang<readonly [string, string, string, string]> = {
-  en: [
-    'Top right, outside. Angle gently to the gumline.',
-    'Switch. Top left, outside.',
-    'Bottom left, outside.',
-    'Final section. Bottom right, outside.',
-  ],
-  es: [
-    'Arriba a la derecha, por fuera. Inclina hacia la encía.',
-    'Cambio. Arriba a la izquierda, por fuera.',
-    'Abajo a la izquierda, por fuera.',
-    'Última zona. Abajo a la derecha, por fuera.',
-  ],
-  fr: [
-    'En haut à droite, extérieur. Inclinez vers la gencive.',
-    'Changez. En haut à gauche, extérieur.',
-    'En bas à gauche, extérieur.',
-    'Dernière zone. En bas à droite, extérieur.',
-  ],
-  ja: ['右上、外側。歯ぐきに斜めにあてます。', 'チェンジ。左上、外側。', '左下、外側。', '最後です。右下、外側。'],
-  zh: ['右上，外侧。斜向牙龈轻刷。', '换边。左上，外侧。', '左下，外侧。', '最后一段。右下，外侧。'],
-  ko: [
-    '오른쪽 위, 바깥쪽. 잇몸선으로 살짝 기울이세요.',
-    '바꿔서, 왼쪽 위 바깥쪽.',
-    '왼쪽 아래, 바깥쪽.',
-    '마지막 구역, 오른쪽 아래 바깥쪽.',
-  ],
-  pt: [
-    'Em cima à direita, por fora. Incline em direção à gengiva.',
-    'Troque. Em cima à esquerda, por fora.',
-    'Embaixo à esquerda, por fora.',
-    'Última parte. Embaixo à direita, por fora.',
-  ],
-  de: [
-    'Oben rechts, außen. Sanft zum Zahnfleisch neigen.',
-    'Wechsel. Oben links, außen.',
-    'Unten links, außen.',
-    'Letzter Abschnitt. Unten rechts, außen.',
-  ],
+/** The voice only counts the four brushing quadrants; the screen carries the detail. */
+const SPOKEN_QUADRANT_NUMBERS: PerLang<[string, string, string, string]> = {
+  en: ['One', 'Two', 'Three', 'Four'],
+  es: ['Uno', 'Dos', 'Tres', 'Cuatro'],
+  fr: ['Un', 'Deux', 'Trois', 'Quatre'],
+  ja: ['いち。', 'に。', 'さん。', 'よん。'],
+  zh: ['一。', '二。', '三。', '四。'],
+  ko: ['하나', '둘', '셋', '넷'],
+  pt: ['Um', 'Dois', 'Três', 'Quatro'],
+  de: ['Eins', 'Zwei', 'Drei', 'Vier'],
 };
 
-const SPOKEN_CHEWING: PerLang<string> = {
-  en: 'Chewing surfaces.',
-  es: 'Superficies de masticar.',
-  fr: 'Surfaces de mastication.',
-  ja: 'かみ合わせの面。',
-  zh: '咬合面沟槽。',
-  ko: '씹는 면.',
-  pt: 'Topo dos dentes.',
-  de: 'Kauflächen.',
-};
+export type SpokenStageWord = 'floss' | 'rinse' | 'done';
 
-const SPOKEN_INNER: PerLang<string> = {
-  en: 'Inside. Tilt brush vertical behind front teeth.',
-  es: 'Por dentro. Cepillo vertical en los dientes frontales.',
-  fr: 'Intérieur. Brosse verticale derrière les dents de devant.',
-  ja: '内側。前歯の裏はブラシを縦にします。',
-  zh: '内侧。前牙内侧请把牙刷竖起来。',
-  ko: '안쪽. 앞니 뒤는 칫솔을 세워주세요.',
-  pt: 'Por dentro. Escova na vertical nos dentes da frente.',
-  de: 'Innen. Hinter den Schneidezähnen Bürste hochkant halten.',
-};
-
-const SPOKEN_FLOSS_START: PerLang<string> = {
-  en: 'Great brushing! Bonus round: Floss Pick, top teeth. Wiggle gently in, lean left and right.',
-  es: 'Muy bien. Ronda extra con hilo, dientes de arriba. Desliza suave e inclina a cada lado.',
-  fr: 'Bravo. Bonus porte-fil, dents du haut. Glissez doucement sur chaque côté.',
-  ja: 'ブラッシング完了！ボーナス、フロスピックで上の歯。やさしく入れて左右に沿わせましょう。',
-  zh: '刷得真棒！加分环节，牙线棒清洁上排牙齿，轻轻滑入，左右贴紧牙面。',
-  ko: '잘하셨어요! 보너스 치실 픽, 윗니부터 살살 넣어 양쪽 벽을 쓸어주세요.',
-  pt: 'Ótima escovação! Bônus com fio, dentes de cima. Deslize suave nos dois lados.',
-  de: 'Super geputzt! Bonusrunde Zahnseidestick, obere Zähne. Sanft gleiten und beidseitig anlehnen.',
-};
-
-const SPOKEN_FLOSS_START_STRING_EN = 'Great brushing! Bonus round: Floss top teeth, hugging each side.';
-
-const SPOKEN_FLOSS_LOWER: PerLang<string> = {
-  en: 'Halfway. Bottom teeth.',
-  es: 'Vamos a la mitad. Dientes de abajo.',
-  fr: 'À mi-chemin. Dents du bas.',
-  ja: '半分です。下の歯へ。',
-  zh: '过半啦，换下排牙齿。',
-  ko: '절반 완료. 이제 아랫니입니다.',
-  pt: 'Metade. Dentes de baixo.',
-  de: 'Halbzeit. Untere Zähne.',
-};
-
-const SPOKEN_MOUTHWASH_START: PerLang<{ full: string; quick: string }> = {
-  en: {
-    full: 'Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for one minute. Do not swallow.',
-    quick: 'Final bonus, if you use one: fluoride rinse. Pour ten milliliters and swish cheek to cheek for thirty seconds. Do not swallow.',
-  },
-  es: {
-    full: 'Ronda final: enjuague con flúor. Toma diez mililitros y haz buches por un minuto sin tragar.',
-    quick: 'Ronda final: enjuague con flúor. Haz buches por treinta segundos sin tragar.',
-  },
-  fr: {
-    full: 'Bonus final : bain de bouche au fluor. Prenez dix millilitres et rincez pendant une minute sans avaler.',
-    quick: 'Bonus final : bain de bouche au fluor pendant trente secondes, sans avaler.',
-  },
-  ja: {
-    full: '最後のボーナス、フッ素洗口液！10ミリリットルを口に含み、1分間ブクブクゆすぎます。飲み込まないでください。',
-    quick: '最後のボーナス、フッ素洗口液！30秒間しっかりブクブクゆすぎます。飲み込まないでください。',
-  },
-  zh: {
-    full: '最后一关：含氟漱口水！倒十毫升，左右鼓漱一分钟，不要吞咽。',
-    quick: '最后一关：含氟漱口水！左右鼓漱三十秒，不要吞咽。',
-  },
-  ko: {
-    full: '마지막 보너스, 불소 가글! 10밀리리터를 머금고 1분 동안 양볼로 힘차게 가글하세요. 삼키지 마세요.',
-    quick: '마지막 보너스, 불소 가글! 30초 동안 힘차게 가글하세요. 삼키지 마세요.',
-  },
-  pt: {
-    full: 'Bônus final: enxaguante com flúor! Bocheche dez mililitros por um minuto, sem engolir.',
-    quick: 'Bônus final: enxaguante com flúor por trinta segundos, sem engolir.',
-  },
-  de: {
-    full: 'Letzte Bonusrunde: Fluorid-Mundspülung! Zehn Milliliter eine Minute kräftig spülen, nicht schlucken.',
-    quick: 'Letzte Bonusrunde: Fluorid-Mundspülung dreißig Sekunden kräftig spülen, nicht schlucken.',
-  },
-};
-
-const SPOKEN_MOUTHWASH_PUMP: PerLang<string> = {
-  en: 'Pump the rinse vigorously between all your teeth.',
-  es: 'Empuja el líquido con fuerza entre todos los dientes.',
-  fr: 'Faites passer le liquide vigoureusement entre toutes les dents.',
-  ja: '歯と歯の間へ、液体を強く通しましょう。',
-  zh: '用力把漱口水冲过每一处牙缝。',
-  ko: '치아 사이사이로 가글액을 힘차게 통과시키세요.',
-  pt: 'Passe o líquido com força entre todos os dentes.',
-  de: 'Spülung kräftig zwischen alle Zähne pressen.',
-};
-
-const SPOKEN_MOUTHWASH_FINAL: PerLang<string> = {
-  en: 'Final stretch! Keep swishing, and remember: after spitting, no water or food for thirty minutes.',
-  es: 'Últimos segundos. Al escupir, no tomes agua ni comas por treinta minutos.',
-  fr: 'Dernière ligne droite ! Après avoir craché, ni eau ni repas pendant trente minutes.',
-  ja: 'あと少し！吐き出した後は、30分間水ですすいだり飲食しないでください。',
-  zh: '最后冲刺！吐掉后三十分钟内不要用水漱口或进食。',
-  ko: '거의 다 됐어요! 뱉은 뒤 30분 동안 물로 헹구거나 드시지 마세요.',
-  pt: 'Reta final! Depois de cuspir, fique trinta minutos sem água ou comida.',
-  de: 'Endspurt! Nach dem Ausspucken dreißig Minuten kein Wasser und nichts essen.',
-};
-
-const SPOKEN_COMPLETE: PerLang<{ withRinse: string; plain: string }> = {
-  en: {
-    withRinse:
-      'Rinse complete! Spit out completely. Do not rinse with water, eat, or drink for thirty minutes so your fluoride shield locks in.',
-    plain: "All sparkling clean! Spit excess foam, don't rinse right away.",
-  },
-  es: {
-    withRinse:
-      '¡Enjuague completo! Escupe todo. No enjuagues con agua ni comas o bebas por treinta minutos para fijar el flúor.',
-    plain: 'Todo brillante. Escupe la espuma sin enjuagar todavía.',
-  },
-  fr: {
-    withRinse:
-      "Soin complet terminé ! Crachez tout. Ne rincez pas à l'eau et ne mangez ni ne buvez pendant trente minutes.",
-    plain: 'Tout est propre ! Crachez la mousse sans rincer tout de suite.',
-  },
-  ja: {
-    withRinse: '洗口完了！しっかり吐き出して、フッ素が定着するよう30分間は水ゆすぎや飲食を控えてください。',
-    plain: 'ピカピカです！泡を吐き出して、すぐにはゆすがないでくださいね。',
-  },
-  zh: {
-    withRinse: '漱口完成！请完全吐出，三十分钟内不要用水漱口、喝水或进食，让氟保护层牢牢锁住。',
-    plain: '全部亮晶晶！吐掉多余泡沫，先别马上漱口哦。',
-  },
-  ko: {
-    withRinse: '가글 완료! 완전히 뱉어내시고, 불소막이 고정되도록 30분 동안 물로 헹구거나 드시지 마세요.',
-    plain: '반짝반짝 깨끗해졌어요! 거품만 뱉고 바로 헹구지 마세요.',
-  },
-  pt: {
-    withRinse: 'Enxágue concluído! Cuspa tudo. Não enxágue com água nem coma ou beba por trinta minutos.',
-    plain: 'Tudo brilhando! Cuspa a espuma sem enxaguar agora.',
-  },
-  de: {
-    withRinse:
-      'Spülung geschafft! Komplett ausspucken und dreißig Minuten nicht mit Wasser nachspülen, essen oder trinken.',
-    plain: 'Alles blitzblank! Schaum ausspucken, noch nicht direkt nachspülen.',
-  },
+/** One word when the ritual moves to flossing, to the rinse, or finishes. */
+const SPOKEN_STAGE_WORDS: PerLang<Record<SpokenStageWord, string>> = {
+  en: { floss: 'Floss', rinse: 'Rinse', done: 'Done' },
+  es: { floss: 'Hilo', rinse: 'Enjuague', done: 'Listo' },
+  fr: { floss: 'Fil', rinse: 'Rinçage', done: 'Terminé' },
+  ja: { floss: 'フロス。', rinse: 'すすぎ。', done: '完了。' },
+  zh: { floss: '牙线。', rinse: '漱口。', done: '完成。' },
+  ko: { floss: '치실', rinse: '가글', done: '완료' },
+  pt: { floss: 'Fio', rinse: 'Enxágue', done: 'Pronto' },
+  de: { floss: 'Zahnseide', rinse: 'Spülen', done: 'Fertig' },
 };
 
 const GYRO_STATUS: PerLang<{ handheld: string; auto: string }> = {
@@ -697,33 +539,13 @@ export const BrushCoachCopy = {
     return { archTitle: row.title, actionBadge: step.actionBadge, ruleTag: step.ruleTag };
   },
 
-  spokenBrushCue(quadrant: number, surface: number, lang: CoachLanguage): string {
-    if (surface === BrushSurface.outerCheek) return SPOKEN_OUTER[lang][clamp(quadrant, 0, 3)];
-    if (surface === BrushSurface.chewingGrooves) return SPOKEN_CHEWING[lang];
-    return SPOKEN_INNER[lang];
+  /** "One" to "Four": matches the step number shown beside the on-screen headline. */
+  spokenQuadrantNumber(quadrant: number, lang: CoachLanguage): string {
+    return SPOKEN_QUADRANT_NUMBERS[lang][clamp(quadrant, 0, 3)];
   },
 
-  spokenFlossStartCue(style: FlossToolStyle, lang: CoachLanguage): string {
-    if (lang === 'en' && style !== 'flossPick') return SPOKEN_FLOSS_START_STRING_EN;
-    return SPOKEN_FLOSS_START[lang];
-  },
-
-  spokenFlossLowerCue(lang: CoachLanguage): string {
-    return SPOKEN_FLOSS_LOWER[lang];
-  },
-
-  spokenMouthwashStartCue(durationSec: number, lang: CoachLanguage): string {
-    const row = SPOKEN_MOUTHWASH_START[lang];
-    return durationSec >= 45 ? row.full : row.quick;
-  },
-
-  spokenMouthwashStepCue(stepIndex: number, lang: CoachLanguage): string {
-    return stepIndex === 1 ? SPOKEN_MOUTHWASH_PUMP[lang] : SPOKEN_MOUTHWASH_FINAL[lang];
-  },
-
-  spokenSessionCompleteCue(includedMouthwash: boolean, lang: CoachLanguage): string {
-    const row = SPOKEN_COMPLETE[lang];
-    return includedMouthwash ? row.withRinse : row.plain;
+  spokenStageWord(word: SpokenStageWord, lang: CoachLanguage): string {
+    return SPOKEN_STAGE_WORDS[lang][word];
   },
 
   gyroSwishStatusLabel(isHandheld: boolean, lang: CoachLanguage): string {

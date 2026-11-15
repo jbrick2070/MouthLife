@@ -537,20 +537,31 @@ final class MouthLifeCoreTests: XCTestCase {
             XCTAssertFalse(sides.left.isEmpty)
             XCTAssertFalse(sides.right.isEmpty)
             XCTAssertFalse(BrushCoachCopy.hubStartBrushLabel(for: lang).isEmpty)
-            XCTAssertFalse(BrushCoachCopy.spokenFlossStartCue(style: .flossPick, lang: lang).isEmpty)
-            XCTAssertFalse(BrushCoachCopy.spokenFlossLowerCue(lang: lang).isEmpty)
-            XCTAssertFalse(BrushCoachCopy.spokenSessionCompleteCue(lang: lang).isEmpty)
 
+            // Minimal spoken script: a number per quadrant and one word per stage, all distinct single words.
+            var spoken: [String] = []
             for q in BrushQuadrant.allCases {
                 XCTAssertFalse(BrushCoachCopy.quadrantLabel(q, lang: lang).isEmpty)
+                spoken.append(BrushCoachCopy.spokenQuadrantNumber(q, lang: lang))
                 for s in BrushSurface.allCases {
                     let badge = BrushCoachCopy.surfaceActionBadge(s, lang: lang)
                     XCTAssertFalse(badge.headline.isEmpty)
                     XCTAssertFalse(badge.angleTag.isEmpty)
-                    XCTAssertFalse(BrushCoachCopy.spokenBrushCue(quadrant: q, surface: s, lang: lang).isEmpty)
                 }
             }
+            for word in BrushCoachCopy.SpokenStageWord.allCases {
+                spoken.append(BrushCoachCopy.spokenStageWord(word, lang: lang))
+            }
+            XCTAssertEqual(Set(spoken).count, 7)
+            for cue in spoken {
+                XCTAssertFalse(cue.isEmpty)
+                XCTAssertFalse(cue.contains(" "))
+            }
         }
+        XCTAssertEqual(BrushQuadrant.allCases.map { BrushCoachCopy.spokenQuadrantNumber($0, lang: .english) }, ["One", "Two", "Three", "Four"])
+        XCTAssertEqual(BrushCoachCopy.spokenStageWord(.floss, lang: .english), "Floss")
+        XCTAssertEqual(BrushCoachCopy.spokenStageWord(.rinse, lang: .english), "Rinse")
+        XCTAssertEqual(BrushCoachCopy.spokenStageWord(.done, lang: .german), "Fertig")
     }
 
     func testPurpleTotalCareMouthwashBonusStageAndRewards() {
@@ -604,7 +615,7 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(brushPlusRinseOnly.ionsAwarded, 75)
         XCTAssertTrue(brushPlusRinseOnly.stampAwarded)
 
-        // 4. 8-Language Purple Total Care Headlines & 30-Minute Post-Rinse Spoken Guidance
+        // 4. 8-Language Purple Total Care Headlines & 30-Minute Post-Rinse On-Screen Guidance
         for lang in CoachLanguage.allCases {
             let btnsFull = BrushCoachCopy.mouthwashButtonLabels(didFloss: true, lang: lang)
             XCTAssertFalse(btnsFull.rinseJump.isEmpty)
@@ -612,21 +623,11 @@ final class MouthLifeCoreTests: XCTestCase {
             let btnsNoFloss = BrushCoachCopy.mouthwashButtonLabels(didFloss: false, lang: lang)
             XCTAssertTrue(btnsNoFloss.doneRinse.contains("75"))
 
-            XCTAssertFalse(BrushCoachCopy.spokenMouthwashStartCue(durationSec: 60, lang: lang).isEmpty)
-            XCTAssertFalse(BrushCoachCopy.spokenMouthwashStartCue(durationSec: 30, lang: lang).isEmpty)
-            XCTAssertFalse(BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: true, lang: lang).isEmpty)
-            XCTAssertNotEqual(
-                BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: true, lang: lang),
-                BrushCoachCopy.spokenSessionCompleteCue(includedMouthwash: false, lang: lang)
-            )
             for sIdx in 0..<3 {
                 let hl = BrushCoachCopy.mouthwashHeadline(stepIndex: sIdx, lang: lang)
                 XCTAssertFalse(hl.archTitle.isEmpty)
                 XCTAssertFalse(hl.actionBadge.isEmpty)
                 XCTAssertFalse(hl.ruleTag.isEmpty)
-                if sIdx > 0 {
-                    XCTAssertFalse(BrushCoachCopy.spokenMouthwashStepCue(stepIndex: sIdx, lang: lang).isEmpty)
-                }
             }
         }
     }

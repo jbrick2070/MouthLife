@@ -35,7 +35,7 @@ open MouthLife.xcodeproj
   - `CoachLanguage` (8 languages: `en`, `es`, `fr`, `ja`, `zh`, `ko`, `pt`, `de` with system-locale auto-detection).
   - `BrushQuadrant` (`Q1` Upper-Right → `Q2` Upper-Left → `Q3` Lower-Left → `Q4` Lower-Right) & `BrushSurface` (`outerCheek`, `chewingGrooves`, `innerTongue`).
   - `BrushPhaseState`: deterministic timeline evaluator across `.brushing` (`12 × 10s`), `.flossBonus` (`45s` Upper → Lower), and `.mouthwashBonus` (`60s` or `30s` split into 3 equal swish sub-phases), including `countdownPip` (`3, 2, 1` in the final 3s) and `0.85s` quadrant `preEcho01`.
-  - `BrushCoachCopy`: glanceable 3-foot mirror UI headlines, spoken voice cues, 30-minute post-rinse lock-in reminder, and gyro status badges in all 8 languages.
+  - `BrushCoachCopy`: glanceable 3-foot mirror UI headlines, a minimal spoken script (quadrant numbers `One`–`Four` plus `Floss` / `Rinse` / `Done`), on-screen 30-minute post-rinse lock-in reminder, and gyro status badges in all 8 languages.
   - `GyroSloshSim` & `GyroSloshSnapshot`: deterministic 120Hz counter-vs-handheld motion classifier + shallow-water spring-damper mouthwash slosh physics (`sloshPosition`, `pumpPulse01`, `leftCheekCharge01`, `rightCheekCharge01`, `swishCount`, `didTriggerSplash`, `splashPan`, and drift-free `parallaxX`/`parallaxY`).
 - **`Config/DentalChart.swift`, `CharityInfo.swift`, `HostsAndHistory.swift`, `UpgradeCatalog.swift`** — 32-tooth clinical atlas (`Universal #1–#32`, `FDI 11–48`, `Palmer` + Spot Quiz), `SmileOnU.org` 501(c)(3) external links, 5 Host Cities, and Biophysical Actuator upgrades.
 - **`Surface/OralSurfaceGrid.swift` & `OralChemistrySim.swift`** — `256×128` (`128×128` Pulp Rescue) enamel surface grid, dirty sub-rectangle `RGBA8Unorm` packing (`SurfaceDirtyRect`), `O(1)` equilibrium chemistry fast-path, Stephan `20s` acid curve, Hydroxyapatite (`pH 5.5`) vs. Fluorapatite (`pH 4.5`), and 1948 Bass 45° sulcus care.
@@ -58,7 +58,7 @@ open MouthLife.xcodeproj
 - **`NativeSoundEngine.swift`** —
   - `SunoStreamDeck`: dual-deck hardware AAC `.m4a` crossfader (`850ms`) bundling 10 mastered tracks in `MouthLifeApp/Music/` (`sanctuary`, `toronto`, `new_orleans`, `tokyo`, `accra`, `aurora`, `brush_along`, `cosmic`, `pulp`, `report`) with background 95th-percentile 3-band spectral envelope extraction (`60Hz`) and Live Earth Radio seamless station continuity.
   - `RealtimeSynthKernel`: lock-free 48-voice `AVAudioSourceNode` procedural synth + whisper-soft multi-textured sonic brushing bed, 4D quadrant/surface earcons, `3-2-1` anticipation kalimba/celesta pickups, floss-pick snap/squeak, and stereo-panned purple mouthwash swish splashes (`playMouthwashTiltSwish`).
-  - `AVSpeechSynthesizer` Voice Coach: 8-language hands-free spoken guidance over `.playback` + `.mixWithOthers` with smooth `-8.4 dB` music ducking.
+  - `AVSpeechSynthesizer` Voice Coach: 8-language hands-free minimal number cues (one word per quadrant or stage change, never sentences) over `.playback` + `.mixWithOthers` with smooth `-8.4 dB` music ducking.
 - **`MotionTiltMonitor.swift`** — Zero-permission 120Hz `CMMotionManager` pull monitor (`xArbitraryZVertical`, portrait/landscape gravity mapping, auto-paused on background or `Reduce Motion`, clean no-op on macOS).
 - **`HapticsEngine.swift`** — `CoreHaptics` enamel smoothness textures, floss-pick contact clicks, and mouthwash liquid-wave + micro-bubble fizz (`playMouthwashTiltSplash`).
 

@@ -14,6 +14,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
 
 1. **Hands-Free Bathroom Mirror Priority (`BrushAlongView` & `BrushCoachSystem`):**
    - Once **2-Min Brush** starts, the entire 3-stage ritual (`2:00` Brushing `+50 F⁻` → `0:45` 3D Y-Bow Floss Pick `+25 F⁻` → `1:00` Fluoride Rinse `+25 F⁻` = `+100 F⁻`) must run **100% hands-free and eyes-optional** when the phone sits untouched on the bathroom counter.
+   - **Keep the voice minimal:** this is a daily ritual, so the coach speaks only a quadrant number (`One`–`Four`) and one word per stage change (`Floss`, `Rinse`, `Done`). Earcons and the screen carry all technique detail; do not add spoken sentences.
    - Gyroscope interactions (`MotionTiltMonitor` + `GyroSloshSim`) auto-detect counter (`isHandheld == false`) vs. picked-up handheld tilt (`isHandheld == true`) and must always remain additive enhancements that honor `UIAccessibility.isReduceMotionEnabled`.
 2. **Bathroom Mirror Spatial Alignment (Never Flip Left/Right!):**
    - Both the 2D `MirrorArchCompassView` and the 3D pacer camera match looking into a bathroom mirror: **Screen-Left = Patient Left (`Q2` Upper-Left, `Q3` Lower-Left)** and **Screen-Right = Patient Right (`Q1` Upper-Right, `Q4` Lower-Right)**.
