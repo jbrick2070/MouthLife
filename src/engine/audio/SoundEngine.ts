@@ -49,6 +49,11 @@ const SFX_SCALE = 0.95;
 const VOICE_DUCK_GAIN = 0.38;
 const FLOOR = 0.0001;
 
+/** About +/-1 dB, so a cue heard many times never lands identically. Pitch stays in key. */
+function sfxJitter(): number {
+  return 0.89 + Math.random() * 0.23;
+}
+
 export interface ScrubState {
   active: boolean;
   probeSpeed: number;
@@ -85,6 +90,7 @@ export class SoundEngine {
   private seq: MusicSequencer | null = null;
   private musicOut: VoiceOut | null = null;
   private sfxOut: VoiceOut | null = null;
+  private lastScrubChimeDeg = -1;
 
   // context for theme selection
   private currentMode: AppMode = 'COSMIC_INTRO';
@@ -649,11 +655,11 @@ export class SoundEngine {
   // Low-level SFX primitives -------------------------------------------------
 
   private bell(out: VoiceOut, t: number, midi: number, vel = 0.7, pan = 0, send = 0.55): void {
-    celesta(out, t, midiToFreq(midi), vel, pan, send * SFX_REVERB_SCALE, false, true);
+    celesta(out, t, midiToFreq(midi), vel * sfxJitter(), pan, send * SFX_REVERB_SCALE, false, true);
   }
 
   private wood(out: VoiceOut, t: number, midi: number, vel = 0.7, pan = 0, send = 0.2): void {
-    marimba(out, t, midiToFreq(midi), vel, pan, send * SFX_REVERB_SCALE, false, true);
+    marimba(out, t, midiToFreq(midi), vel * sfxJitter(), pan, send * SFX_REVERB_SCALE, false, true);
   }
 
   private blip(out: VoiceOut, t: number, f0: number, f1: number, dur: number, peak: number, type: OscillatorType = 'sine', lpHz = 4000): void {
@@ -708,6 +714,7 @@ export class SoundEngine {
   // ------------------------------------------------------------ UI / one-shots
 
   playUiTap(): void {
+    if (!this.throttle('tap', 0.04)) return;
     this.run((o, t) => this.bell(o, t, this.harmonicMidi(2, 48), 0.5, 0, 0.3));
   }
 
@@ -729,7 +736,7 @@ export class SoundEngine {
       this.wood(o, t, this.harmonicMidi(3, 48), 0.7, -0.2);
       this.wood(o, t + 0.09, this.harmonicMidi(5, 48), 0.65, 0.1);
       this.wood(o, t + 0.18, this.harmonicMidi(2, 60), 0.6, 0.25);
-      this.noiseSweep(o, t, 1800, 3200, 0.18, 0.025, 0.8);
+      this.noiseSweep(o, t, 1800, 2200, 0.18, 0.025, 0.8);
     });
   }
 
@@ -759,7 +766,7 @@ export class SoundEngine {
       this.wood(o, t + 0.035, m + 7, 0.45);
       if (ribbon) this.noiseSweep(o, t, 2400, 1000, 0.16, 0.035, 1.5);
       if (zipped) {
-        this.noiseSweep(o, t, 1200, 3200, 0.22, 0.035, 1.0);
+        this.noiseSweep(o, t, 1200, 2200, 0.22, 0.035, 1.0);
         this.bell(o, t + 0.1, this.harmonicMidi(6, 48), 0.55);
       }
     });
@@ -768,8 +775,8 @@ export class SoundEngine {
   playIonRinseWave(buffered = false): void {
     this.run((o, t) => {
       for (let i = 0; i < 5; i++) this.bell(o, t + i * 0.055, this.harmonicMidi(i, 48), 0.55, (i - 2) * 0.12, 0.65);
-      this.noiseSweep(o, t, 900, 2800, 0.4, 0.035, 0.8);
-      if (buffered) this.noiseSweep(o, t + 0.14, 2800, 720, 0.4, 0.055, 1.2);
+      this.noiseSweep(o, t, 900, 2200, 0.4, 0.035, 0.8);
+      if (buffered) this.noiseSweep(o, t + 0.14, 2200, 720, 0.4, 0.055, 1.2);
     });
   }
 
@@ -804,6 +811,7 @@ export class SoundEngine {
 
   /** Squeaky-clean glass-harp note: rising in-key pentatonic scale with shimmer partials. */
   playGlassHarpNote(step: number): void {
+    if (!this.throttle('glass', 0.05)) return;
     this.run((o, t) => {
       const deg = Math.max(0, Math.min(11, step));
       const m = this.harmonicMidi(deg, 60);
@@ -828,14 +836,14 @@ export class SoundEngine {
   playCrystalShatter(): void {
     this.run((o, t) => {
       [7, 9, 6, 11].forEach((d, i) => this.bell(o, t + i * 0.028, this.harmonicMidi(d, 60), 0.45, (i - 1.5) * 0.3, 0.6));
-      this.noiseSweep(o, t, 3200, 1800, 0.1, 0.022, 0.7);
+      this.noiseSweep(o, t, 2200, 1400, 0.1, 0.022, 0.7);
     });
   }
 
   /** Fizzy sweet-sip drop: the Stephan clock restarts. */
   playAcidSip(): void {
     this.run((o, t) => {
-      this.noiseSweep(o, t, 1400, 3200, 0.22, 0.035, 0.9);
+      this.noiseSweep(o, t, 1400, 2200, 0.22, 0.035, 0.9);
       this.wood(o, t, this.harmonicMidi(4, 48), 0.6);
       this.wood(o, t + 0.11, this.harmonicMidi(1, 48), 0.55);
     });
@@ -923,8 +931,8 @@ export class SoundEngine {
     const octave = isUpper ? PACER_CUE_OCTAVE : PACER_CUE_OCTAVE - 12;
     this.run((o, t) => {
       const f = midiToFreq(this.harmonicMidi(degree, octave));
-      if (s === 1) celesta(o, t, f, 0.42, 0, 0.45 * SFX_REVERB_SCALE, false, true);
-      else marimba(o, t, f, 0.32, 0, 0.45 * SFX_REVERB_SCALE, true, true);
+      if (s === 1) celesta(o, t, f, 0.42 * sfxJitter(), 0, 0.45 * SFX_REVERB_SCALE, false, true);
+      else marimba(o, t, f, 0.32 * sfxJitter(), 0, 0.45 * SFX_REVERB_SCALE, true, true);
     });
   }
 
@@ -934,7 +942,7 @@ export class SoundEngine {
     const p = Math.max(-1, Math.min(1, pan));
     const k = Math.max(0, Math.min(1, intensity01));
     this.run((o, t) => {
-      this.noiseSweep(o, t, 900, 2600, 0.16, 0.02 + 0.03 * k, 1.0);
+      this.noiseSweep(o, t, 800, 2000, 0.16, 0.02 + 0.03 * k, 1.0);
       this.bell(o, t + 0.03, this.harmonicMidi(p > 0 ? 4 : 2, PACER_CUE_OCTAVE + 12), 0.22 + 0.2 * k, p, 0.6);
     });
   }
@@ -943,11 +951,11 @@ export class SoundEngine {
     // Every Brush-Along cue sits in the music's own register (roughly 400-700 Hz). They used
     // to be three to five octaves higher, up to 6 kHz, which sounded like a dog whistle.
     if (kind === 'surface') {
-      this.run((o, t) => this.wood(o, t, this.harmonicMidi(3, PACER_CUE_OCTAVE), 0.7));
+      this.run((o, t) => this.wood(o, t, this.harmonicMidi(3, PACER_CUE_OCTAVE), 0.45));
     } else if (kind === 'quadrant') {
       this.run((o, t) => {
-        this.wood(o, t, this.harmonicMidi(2, PACER_CUE_OCTAVE), 0.7);
-        this.bell(o, t + 0.08, this.harmonicMidi(5, PACER_CUE_OCTAVE), 0.55);
+        this.wood(o, t, this.harmonicMidi(2, PACER_CUE_OCTAVE), 0.55);
+        this.bell(o, t + 0.08, this.harmonicMidi(5, PACER_CUE_OCTAVE), 0.45);
       });
     } else {
       this.playDistrictSealed();
@@ -960,7 +968,7 @@ export class SoundEngine {
   playAcidWarn(): void {
     if (!this.throttle('acid', 0.7)) return;
     this.run((o, t) => {
-      this.noiseSweep(o, t, 2000, 3400, 0.12, 0.025, 1.0);
+      this.noiseSweep(o, t, 1500, 2200, 0.12, 0.025, 1.0);
       const m = this.harmonicMidi(0, 48);
       marimba(o, t, midiToFreq(m), 0.45, -0.1, 0.1, false, true);
       marimba(o, t + 0.09, midiToFreq(m), 0.38, 0.1, 0.1, false, true);
@@ -1073,8 +1081,11 @@ export class SoundEngine {
         this.blip(o, now + 0.005, f, f * 1.4, 0.035, 0.018 + Math.random() * 0.012);
       }
       if (state.newlyCleaned > 0 && this.throttle('scrub-chime', 0.22)) {
-        const deg = Math.floor(Math.random() * 10);
-        this.bell(this.sfxOut, now + 0.01, this.harmonicMidi(deg, 60), 0.32, (Math.random() - 0.5) * 0.6, 0.7);
+        // Six low degrees keep the partials out of the 3-5 kHz band; never the same note twice.
+        let deg = Math.floor(Math.random() * 6);
+        if (deg === this.lastScrubChimeDeg) deg = Math.floor(Math.random() * 6);
+        this.lastScrubChimeDeg = deg;
+        this.bell(this.sfxOut, now + 0.01, this.harmonicMidi(deg, 60), 0.26, (Math.random() - 0.5) * 0.6, 0.7);
       }
     }
   }

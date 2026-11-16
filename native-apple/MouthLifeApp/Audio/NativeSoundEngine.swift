@@ -885,6 +885,8 @@ private final class RealtimeSynthKernel {
                     sample = (c1 + c2 + sub) * env
 
                 case .marimba, .kalimba:
+                    // Effects keep upper partials quieter so they stay out of the ear's harsh 3-5 kHz band.
+                    let isFx = !voices[vi].isMusicBus
                     let isKal = (voices[vi].kind == SynthVoiceKind.kalimba.rawValue)
                     let atk = min(1.0, t / 0.004)
                     let decRate: Float = isKal ? 3.2 : 6.2
@@ -898,13 +900,14 @@ private final class RealtimeSynthKernel {
                     var over: Float = 0
                     if f0 * overMult < nyquistSafe {
                         voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * overMult) * invSampleRate)
-                        over = sin(voices[vi].phase2 * twoPi) * exp(-t * 28.0) * 0.38
+                        over = sin(voices[vi].phase2 * twoPi) * exp(-t * 28.0) * (isFx ? 0.21 : 0.38)
                     }
-                    let woodClick = t < 0.025 ? (pink * exp(-t * 140.0) * 0.25) : 0.0
+                    let woodClick = t < 0.025 ? (pink * exp(-t * 140.0) * (isFx ? 0.15 : 0.25)) : 0.0
                     sample = (baseWave + triHarm + over + woodClick) * env
 
                 case .celesta, .bell, .glassHarp:
                     let isBell = (voices[vi].kind != SynthVoiceKind.celesta.rawValue)
+                    let isFx = !voices[vi].isMusicBus
                     let isGlass = (voices[vi].kind == SynthVoiceKind.glassHarp.rawValue)
                     let atk = min(1.0, t / (isGlass ? 0.014 : 0.005))
                     let decRate: Float = isBell ? 2.1 : 3.2
@@ -917,11 +920,11 @@ private final class RealtimeSynthKernel {
                     let m3: Float = isBell ? 5.40 : 4.0
                     if f0 * m2 < nyquistSafe {
                         voices[vi].phase2 = wrapPhase(voices[vi].phase2 + (f0 * m2) * invSampleRate)
-                        s += sin(voices[vi].phase2 * twoPi) * (isBell ? 0.28 : 0.18) * exp(-t * 1.8)
+                        s += sin(voices[vi].phase2 * twoPi) * (isFx ? (isBell ? 0.20 : 0.14) : (isBell ? 0.28 : 0.18)) * exp(-t * 1.8)
                     }
                     if f0 * m3 < nyquistSafe {
                         voices[vi].phase3 = wrapPhase(voices[vi].phase3 + (f0 * m3) * invSampleRate)
-                        s += sin(voices[vi].phase3 * twoPi) * 0.11 * exp(-t * 3.5)
+                        s += sin(voices[vi].phase3 * twoPi) * (isFx ? 0.06 : 0.11) * exp(-t * 3.5)
                     }
                     sample = s * env
 
@@ -2574,7 +2577,8 @@ public final class NativeSoundEngine {
                 freq1: hz,
                 // Effects stay short and clear: shorter hold, less room, no echo.
                 durationSec: durationSec * 0.6,
-                velocity: vel,
+                // About +/-1 dB per trigger so a repeated cue never lands identically. Pitch stays in key.
+                velocity: vel * Float.random(in: 0.89...1.12),
                 pan: pan,
                 reverbSend: reverb * 0.6,
                 delaySend: 0,
@@ -2620,11 +2624,13 @@ public final class NativeSoundEngine {
         q: Float = 1.2
     ) {
         guard let kernel else { return }
+        // Noise sweeps stop near 2.2 kHz, below the ear's harshest band. Keep in step with the web.
+        let sweepTopHz: Float = 2200
         kernel.enqueue(
             SynthCommand(
                 voice: SynthVoiceKind.sfxNoiseSweep.rawValue,
-                freq0: f0,
-                freq1: f1,
+                freq0: min(f0, sweepTopHz),
+                freq1: min(f1, sweepTopHz),
                 durationSec: durSec,
                 velocity: peak,
                 pan: 0,
@@ -2733,7 +2739,7 @@ public final class NativeSoundEngine {
     // MARK: - Complete Procedural Gameplay & UI SFX Suite
 
     public func playUiTap() {
-        guard canPlaySfx() else { return }
+        guard throttle("ui-tap", minGapSec: 0.04), canPlaySfx() else { return }
         emitSfxVoice(.bell, midi: harmonicMidi(degree: 2, octaveShift: 48), vel: 0.48, reverb: 0.30)
     }
 
@@ -3037,10 +3043,10 @@ public final class NativeSoundEngine {
         let oct = Self.pacerCueOctave
         switch kind {
         case .surface:
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 3, octaveShift: oct), vel: 0.68, reverb: 0.22)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 3, octaveShift: oct), vel: 0.45, reverb: 0.22)
         case .quadrant:
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct), vel: 0.72, reverb: 0.30)
-            emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: oct), offsetSec: 0.08, vel: 0.6, reverb: 0.62)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct), vel: 0.55, reverb: 0.30)
+            emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: oct), offsetSec: 0.08, vel: 0.45, reverb: 0.62)
         case .complete:
             playDistrictSealed()
         }
@@ -3066,8 +3072,8 @@ public final class NativeSoundEngine {
             emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: 0, octaveShift: oct), offsetSec: baseOffset, durationSec: 0.46, vel: 0.58, pan: pan, reverb: 0.68)
             emitSfxVoice(.glassHarp, midi: harmonicMidi(degree: 4, octaveShift: oct), offsetSec: baseOffset + 0.075, durationSec: 0.50, vel: 0.52, pan: pan * 0.7, reverb: 0.72)
         case .chewingGrooves:
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct - 12), offsetSec: baseOffset, durationSec: 0.24, vel: 0.68, pan: pan, reverb: 0.24)
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 4, octaveShift: oct - 12), offsetSec: baseOffset + 0.085, durationSec: 0.26, vel: 0.64, pan: pan, reverb: 0.26)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct - 12), offsetSec: baseOffset, durationSec: 0.24, vel: 0.48, pan: pan, reverb: 0.24)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 4, octaveShift: oct - 12), offsetSec: baseOffset + 0.085, durationSec: 0.26, vel: 0.45, pan: pan, reverb: 0.26)
         case .innerTongue:
             emitSfxVoice(.bell, midi: harmonicMidi(degree: 1, octaveShift: oct), offsetSec: baseOffset, durationSec: 0.36, vel: 0.56, pan: pan * 0.6, reverb: 0.64)
             emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: oct), offsetSec: baseOffset + 0.095, durationSec: 0.46, vel: 0.64, pan: pan, reverb: 0.70)

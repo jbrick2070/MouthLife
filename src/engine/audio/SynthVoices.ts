@@ -123,7 +123,7 @@ export function marimba(out: VoiceOut, t: number, freq: number, vel: number, pan
   if (overHz < nyquist) {
     const h = osc(out, 'sine', overHz, t);
     const hg = out.ctx.createGain();
-    env(hg.gain, t, 0.09 * vel, 0.003, 0.05, 0.07, 0, 0.05);
+    env(hg.gain, t, (short ? 0.05 : 0.09) * vel, 0.003, 0.05, 0.07, 0, 0.05);
     h.connect(hg);
     hg.connect(g);
     h.start(t);
@@ -133,10 +133,10 @@ export function marimba(out: VoiceOut, t: number, freq: number, vel: number, pan
   const n = noiseSrc(out, t, 0.04);
   const bp = out.ctx.createBiquadFilter();
   bp.type = 'bandpass';
-  bp.frequency.value = safeHz(out.ctx, Math.min(6000, freq * 3));
+  bp.frequency.value = safeHz(out.ctx, Math.min(short ? 2400 : 6000, freq * 3));
   bp.Q.value = 1.2;
   const ng = out.ctx.createGain();
-  env(ng.gain, t, 0.05 * vel, 0.003, 0.05, 0.03, 0, 0.02);
+  env(ng.gain, t, (short ? 0.03 : 0.05) * vel, 0.003, 0.05, 0.03, 0, 0.02);
   n.connect(bp);
   bp.connect(ng);
   ng.connect(g);
@@ -150,16 +150,17 @@ export function celesta(out: VoiceOut, t: number, freq: number, vel: number, pan
   const ring = (bellLike ? 1.4 : 0.9) * (short ? 0.45 : 1);
   const end = env(g.gain, t, 0.14 * vel, 0.005, 0.03, ring, 0, short ? 0.15 : 0.35);
   const nyquist = out.ctx.sampleRate * 0.5 - 200;
+  // Effects keep their upper partials quieter so they stay out of the ear's harsh 3-5 kHz band.
   const parts: Array<[number, number]> = bellLike
     ? [
         [1, 1],
-        [2.76, 0.28],
-        [5.4, 0.1],
+        [2.76, short ? 0.2 : 0.28],
+        [5.4, short ? 0.06 : 0.1],
       ]
     : [
         [1, 1],
-        [2, 0.18],
-        [4, 0.12],
+        [2, short ? 0.14 : 0.18],
+        [4, short ? 0.06 : 0.12],
       ];
   for (const [m, w] of parts) {
     if (m > 1 && freq * m >= nyquist) continue;
