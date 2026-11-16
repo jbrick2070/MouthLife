@@ -421,6 +421,9 @@ final class MouthLifeCoreTests: XCTestCase {
             }
         }
         XCTAssertEqual(CharityInfo.moreCharities.first { $0.id == "remote_area_medical" }?.donateUrl.absoluteString, "https://www.ramusa.org/donate/")
+        XCTAssertEqual(CharityInfo.moreCharities.first { $0.id == "mission_of_mercy_adcf" }?.donateUrl.absoluteString, "https://adcf.net/donate/")
+        let partnerLinkIds = CharityInfo.moreCharities.flatMap { $0.links.map(\.id) }
+        XCTAssertEqual(Set(partnerLinkIds).count, partnerLinkIds.count)
         XCTAssertEqual(WorldRegistry.allWorlds.count, 6)
 
         // Step WorldSession deterministically

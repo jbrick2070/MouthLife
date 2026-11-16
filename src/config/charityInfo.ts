@@ -159,7 +159,7 @@ export const SMILE_ON_U_CHARITY: SmileOnUCharityInfo = {
     'MouthLife is a free game and brushing timer. If you liked it, you can help real people get dental care at SmileOnU.org.',
 };
 
-/** Facts and links checked against ramusa.org (November 2026). */
+/** Facts and links checked against ramusa.org and adcf.net (November 2026). */
 export const MORE_DENTAL_CHARITIES: readonly PartnerCharityInfo[] = [
   {
     id: 'remote_area_medical',
@@ -180,6 +180,23 @@ export const MORE_DENTAL_CHARITIES: readonly PartnerCharityInfo[] = [
         id: 'ram_volunteer',
         label: '🤝 Volunteer at a Clinic',
         url: 'https://www.ramusa.org/volunteer/',
+      },
+    ],
+  },
+  {
+    id: 'mission_of_mercy_adcf',
+    emoji: '🦷',
+    name: 'Mission of Mercy Dental Clinics (ADCF)',
+    legalStatus: 'U.S. 501(c)(3) Nonprofit • Since 2008',
+    summary:
+      'America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.',
+    websiteUrl: 'https://adcf.net/',
+    donateUrl: 'https://adcf.net/donate/',
+    links: [
+      {
+        id: 'adcf_schedule',
+        label: '📅 Find a Free Clinic',
+        url: 'https://adcf.net/clinic-schedule/',
       },
     ],
   },

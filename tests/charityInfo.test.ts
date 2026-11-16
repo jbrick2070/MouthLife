@@ -63,6 +63,12 @@ describe('SmileOnU humanitarian dental charity config', () => {
     const ram = MORE_DENTAL_CHARITIES.find((m) => m.id === 'remote_area_medical');
     expect(ram?.donateUrl).toBe('https://www.ramusa.org/donate/');
     expect(ram?.websiteUrl).toBe('https://www.ramusa.org/');
+    const mom = MORE_DENTAL_CHARITIES.find((m) => m.id === 'mission_of_mercy_adcf');
+    expect(mom?.donateUrl).toBe('https://adcf.net/donate/');
+    // The foundation's former domain, adcfmom.org, no longer belongs to it.
+    expect(JSON.stringify(MORE_DENTAL_CHARITIES)).not.toContain('adcfmom.org');
+    const linkIds = MORE_DENTAL_CHARITIES.flatMap((m) => m.links.map((l) => l.id));
+    expect(new Set(linkIds).size).toBe(linkIds.length);
     expect(MORE_CHARITIES_NOTE).toContain('no fee');
   });
 });

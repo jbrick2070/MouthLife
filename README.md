@@ -114,6 +114,7 @@ If you enjoyed playing **MouthLife**, please consider supporting [**SmileOnU**](
 The charity sheet in both editions also lists further charities under SmileOnU. Each opens the charity's own website; MouthLife takes no fee and never handles donations.
 
 - **Remote Area Medical (RAM)** — U.S. 501(c)(3) nonprofit running free pop-up dental, vision and medical clinics since 1985. Donate: [https://www.ramusa.org/donate/](https://www.ramusa.org/donate/) • Clinic schedule: [https://www.ramusa.org/schedule/](https://www.ramusa.org/schedule/) • Volunteer: [https://www.ramusa.org/volunteer/](https://www.ramusa.org/volunteer/)
+- **Mission of Mercy Dental Clinics (America's Dentists Care Foundation)** — U.S. 501(c)(3) nonprofit that has supplied equipment for free two-day Mission of Mercy dental clinics since 2008. Donate: [https://adcf.net/donate/](https://adcf.net/donate/) • Clinic schedule (patients and volunteers): [https://adcf.net/clinic-schedule/](https://adcf.net/clinic-schedule/). Use `adcf.net` only: the foundation's former domain `adcfmom.org` no longer belongs to it.
 
 **Adding another charity:** verify every fact and link on the charity's own website, add one entry to `MORE_DENTAL_CHARITIES` in `src/config/charityInfo.ts` and the matching entry to `CharityInfo.moreCharities` in `native-apple/Sources/MouthLifeCore/Config/CharityInfo.swift`, then run `npm run i18n:extract`, add the new strings to `src/i18n/locales/*.json`, and run `node scripts/i18n-native.mjs`.
 

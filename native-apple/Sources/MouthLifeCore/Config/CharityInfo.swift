@@ -206,7 +206,7 @@ public enum CharityInfo {
         )
     ]
 
-    /// Further free-dental-care charities. Facts and links checked against ramusa.org (November 2026).
+    /// Further free-dental-care charities. Facts and links checked against ramusa.org and adcf.net (November 2026).
     public static let moreCharities: [PartnerCharityInfo] = [
         PartnerCharityInfo(
             id: "remote_area_medical",
@@ -226,6 +226,22 @@ public enum CharityInfo {
                     id: "ram_volunteer",
                     label: "🤝 Volunteer at a Clinic",
                     url: URL(string: "https://www.ramusa.org/volunteer/")!
+                )
+            ]
+        ),
+        PartnerCharityInfo(
+            id: "mission_of_mercy_adcf",
+            emoji: "🦷",
+            name: "Mission of Mercy Dental Clinics (ADCF)",
+            legalStatus: "U.S. 501(c)(3) Nonprofit • Since 2008",
+            summary: "America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.",
+            websiteUrl: URL(string: "https://adcf.net/")!,
+            donateUrl: URL(string: "https://adcf.net/donate/")!,
+            links: [
+                CharityLinkItem(
+                    id: "adcf_schedule",
+                    label: "📅 Find a Free Clinic",
+                    url: URL(string: "https://adcf.net/clinic-schedule/")!
                 )
             ]
         )
