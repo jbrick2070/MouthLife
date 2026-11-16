@@ -1,17 +1,23 @@
 import {
+  TUTORIAL_BUTTON_KEYS,
   TUTORIAL_COPY,
   TUTORIAL_PAGES,
   tutorialControlsFor,
   tutorialPageIndex,
+  type TutorialButtonAction,
   type TutorialInputScheme,
+  type TutorialPage,
   type TutorialPageId,
 } from '../config/tutorial';
 
 /**
- * The How to Play guide: one card at a time, each with a small looping demo.
- * Tapping the demo plays it again with the game's own sound, so the player links the control
- * to what it does. The demos are drawn with plain shapes and CSS (see `.tut-*` in main.css) and
- * hold still when Reduced Motion is on.
+ * The How to Play guide: one card at a time.
+ *
+ * Most cards show real pictures of the game, photographed from the running game and played one
+ * after another like a flipbook (`src/assets/guide/`). Two cards are field guides: a real close-up
+ * of each thing on the tooth, its name, and what to do about it. One card shows the controls for
+ * the device in use. Tapping a flipbook plays it again with that control's own game sound, and
+ * Reduced Motion holds every picture still.
  */
 export interface TutorialOverlayOptions {
   scheme: TutorialInputScheme;
@@ -25,6 +31,24 @@ export interface TutorialOverlayOptions {
 
 const FOCUSABLE_SEL = 'button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Picture name (no extension) to the address the page can load it from. */
+const IMAGE_URLS: Record<string, string> = (() => {
+  const found = import.meta.glob('../assets/guide/*.jpg', { eager: true, query: '?url', import: 'default' }) as Record<
+    string,
+    string
+  >;
+  const byName: Record<string, string> = {};
+  for (const [path, url] of Object.entries(found)) {
+    const name = path.slice(path.lastIndexOf('/') + 1).replace(/\.jpg$/, '');
+    byName[name] = url;
+  }
+  return byName;
+})();
+
+export function tutorialImageUrl(name: string): string | undefined {
+  return IMAGE_URLS[name];
+}
+
 function escapeHtml(raw: string): string {
   return raw
     .replace(/&/g, '&amp;')
@@ -34,179 +58,90 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// ---------------------------------------------------------------- demo scenes (320 x 180)
+// ---------------------------------------------------------------- pictures
 
-const ROBOT = `<circle class="tut-robot-glow" r="15"/><circle class="tut-robot-body" r="8.5"/>`;
+/** Real game frames stacked on top of each other; CSS shows them in turn. */
+function flipbookHtml(frames: readonly string[]): string {
+  const n = Math.min(frames.length, 3);
+  // With motion off, the middle frame is the one that shows the action itself.
+  const still = n >= 3 ? 1 : n - 1;
+  const imgs = frames
+    .slice(0, n)
+    .map((name, i) => {
+      const url = tutorialImageUrl(name) ?? '';
+      return `<img class="tut-frame tut-frame-${i + 1}${i === still ? ' tut-still' : ''}" src="${escapeHtml(url)}" alt="" draggable="false" decoding="async">`;
+    })
+    .join('');
+  return `<span class="tut-flipbook tut-flip-${n}">${imgs}</span>`;
+}
+
 const SPARKLE = 'M0 -7 L1.8 -1.8 L7 0 L1.8 1.8 L0 7 L-1.8 1.8 L-7 0 L-1.8 -1.8 Z';
 
 function sparkle(x: number, y: number, n: number, scale = 1): string {
   return `<g transform="translate(${x} ${y}) scale(${scale})"><path class="tut-sparkle tut-sparkle-${n}" d="${SPARKLE}"/></g>`;
 }
 
-function sceneHome(): string {
-  const teeth = [0, 1, 2, 3, 4, 5]
-    .map((i) => `<rect class="tut-tooth" x="${55 + i * 36}" y="44" width="30" height="50" rx="10"/>`)
-    .join('');
-  return `
-    <rect class="tut-gum" x="44" y="22" width="232" height="34" rx="17"/>
-    ${teeth}
-    ${sparkle(88, 34, 1)}${sparkle(160, 28, 2, 1.2)}${sparkle(232, 34, 3)}
-    <circle class="tut-finger" cx="0" cy="0" r="13"/>
-    <g class="tut-pill tut-pill-a"><rect x="62" y="124" width="92" height="36" rx="18"/><text x="108" y="149" text-anchor="middle">🪥</text></g>
-    <g class="tut-pill tut-pill-b"><rect x="166" y="124" width="92" height="36" rx="18"/><text x="212" y="149" text-anchor="middle">🚀</text></g>
-  `;
-}
-
-function sceneBrush(): string {
-  // Sixteen teeth round an oval mouth, as seen in a bathroom mirror. The glow visits the four
-  // quarters in the order the coach calls them: top right, top left, bottom left, bottom right.
-  const quarterStartDeg = [-90, -180, 90, 0];
-  let teeth = '';
-  quarterStartDeg.forEach((start, q) => {
-    for (let k = 0; k < 4; k++) {
-      const deg = start + 11.25 + k * 22.5;
-      const rad = (deg * Math.PI) / 180;
-      const x = 160 + Math.cos(rad) * 78;
-      const y = 86 + Math.sin(rad) * 58;
-      teeth += `<circle class="tut-tooth tut-q tut-q${q + 1}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="10.5"/>`;
-    }
-  });
-  return `
-    <ellipse class="tut-mouth" cx="160" cy="86" rx="78" ry="58"/>
-    ${teeth}
-    <text class="tut-emoji" x="160" y="98" text-anchor="middle">🪥</text>
-    <text class="tut-note" x="196" y="70" text-anchor="middle">♪</text>
-  `;
-}
-
-const DIVE_BLOBS: ReadonlyArray<readonly [number, number]> = [
-  [108, 50],
-  [156, 42],
-  [206, 56],
-  [192, 98],
-  [124, 96],
-];
-
-function bigTooth(): string {
-  return `
-    <rect class="tut-tooth" x="70" y="14" width="180" height="118" rx="36"/>
-    <path class="tut-groove" d="M112 74 Q160 58 208 74"/>
-  `;
-}
-
-function sceneDive(): string {
-  const blobs = DIVE_BLOBS.map(
-    ([x, y], i) => `<ellipse class="tut-plaque tut-dive-blob-${i + 1}" cx="${x}" cy="${y}" rx="15" ry="11"/>`
-  ).join('');
-  return `
-    ${bigTooth()}
-    ${blobs}
-    <g class="tut-robot tut-dive-robot">${ROBOT}</g>
-    <rect class="tut-meter-track" x="84" y="150" width="130" height="9" rx="4.5"/>
-    <rect class="tut-meter-fill tut-dive-progress" x="84" y="150" width="130" height="9" rx="4.5"/>
-    <text class="tut-goal" x="224" y="159">90%</text>
-  `;
-}
-
-function sceneFloss(): string {
-  const dots = [104, 80, 56]
-    .map((y, i) => `<circle class="tut-plaque tut-floss-dot-${i + 1}" cx="160" cy="${y}" r="5.5"/>`)
-    .join('');
-  return `
-    <rect class="tut-tooth" x="70" y="26" width="83" height="106" rx="28"/>
-    <rect class="tut-tooth" x="167" y="26" width="83" height="106" rx="28"/>
-    ${dots}
-    <rect class="tut-floss-line" x="158.5" y="16" width="3" height="134"/>
-    ${sparkle(160, 20, 1, 1.1)}
-    <g class="tut-robot tut-floss-robot">${ROBOT}</g>
-  `;
-}
-
-const SURGE_BLOBS: ReadonlyArray<readonly [number, number]> = [
-  [112, 62],
-  [150, 50],
-  [206, 64],
-  [202, 110],
-  [150, 122],
-  [110, 104],
-];
-
-function sceneSurge(): string {
-  const blobs = SURGE_BLOBS.map(
-    ([x, y]) => `<ellipse class="tut-plaque tut-surge-blob" cx="${x}" cy="${y}" rx="13" ry="10"/>`
-  ).join('');
-  return `
-    <rect class="tut-tooth" x="70" y="30" width="180" height="118" rx="36"/>
-    ${blobs}
-    <circle class="tut-surge-ring" cx="160" cy="88" r="12"/>
-    <g class="tut-robot" transform="translate(160 88)">${ROBOT}</g>
-    <rect class="tut-meter-track" x="100" y="8" width="120" height="10" rx="5"/>
-    <rect class="tut-meter-fill tut-surge-meter" x="100" y="8" width="120" height="10" rx="5"/>
-  `;
-}
-
-function sceneScan(): string {
-  const blobs = DIVE_BLOBS.map(
-    ([x, y], i) => `<ellipse class="tut-scan-blob tut-scan-blob-${i + 1}" cx="${x}" cy="${y + 18}" rx="15" ry="11"/>`
-  ).join('');
-  return `
-    <rect class="tut-tooth" x="70" y="30" width="180" height="118" rx="36"/>
-    ${blobs}
-    <circle class="tut-scan-ring" cx="160" cy="92" r="12"/>
-    <g class="tut-robot" transform="translate(160 92)">${ROBOT}</g>
-  `;
-}
-
-/** Five cities: the first is open, the route reaches the others one by one. */
-const CITY_PINS: ReadonlyArray<readonly [number, number]> = [
-  [118, 66],
-  [150, 98],
-  [198, 84],
-  [172, 118],
-  [226, 36],
-];
-
-function sceneCities(): string {
-  const route = CITY_PINS.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ');
-  const pins = CITY_PINS.map(
-    ([x, y], i) => `<circle class="tut-city tut-city-${i + 1}" cx="${x}" cy="${y}" r="7"/>`
-  ).join('');
-  return `
-    <circle class="tut-globe" cx="160" cy="92" r="72"/>
-    <ellipse class="tut-land" cx="132" cy="70" rx="26" ry="16"/>
-    <ellipse class="tut-land" cx="186" cy="96" rx="30" ry="18"/>
-    <ellipse class="tut-land" cx="146" cy="126" rx="18" ry="10"/>
-    <path class="tut-route" d="${route}" pathLength="100"/>
-    ${pins}
-  `;
-}
-
-function sceneReady(): string {
-  return `
+/** The closing card is the one drawing: a happy tooth, and the ? that brings the guide back. */
+function readySceneSvg(): string {
+  return `<svg class="tut-scene tut-scene-ready" viewBox="0 0 320 180" aria-hidden="true" focusable="false">
     <rect class="tut-tooth" x="131" y="94" width="22" height="46" rx="11"/>
     <rect class="tut-tooth" x="167" y="94" width="22" height="46" rx="11"/>
-    <rect class="tut-tooth tut-happy" x="114" y="32" width="92" height="84" rx="34"/>
+    <rect class="tut-tooth" x="114" y="32" width="92" height="84" rx="34"/>
     <circle class="tut-eye" cx="143" cy="68" r="4.5"/>
     <circle class="tut-eye" cx="177" cy="68" r="4.5"/>
     <path class="tut-smile" d="M144 84 Q160 98 176 84"/>
     ${sparkle(84, 50, 1, 1.3)}${sparkle(238, 112, 2, 1.1)}${sparkle(92, 124, 3, 0.9)}
     <g class="tut-help-badge"><circle cx="240" cy="44" r="17"/><text x="240" y="52" text-anchor="middle">?</text></g>
-  `;
+  </svg>`;
 }
 
-const SCENES: Record<TutorialPageId, () => string> = {
-  home: sceneHome,
-  brush: sceneBrush,
-  dive: sceneDive,
-  floss: sceneFloss,
-  surge: sceneSurge,
-  scan: sceneScan,
-  cities: sceneCities,
-  ready: sceneReady,
-};
+/** What fills the picture area of a flipbook or drawing card. */
+export function buildTutorialStageHtml(page: TutorialPage): string {
+  return page.frames.length > 0 ? flipbookHtml(page.frames) : readySceneSvg();
+}
 
-export function buildTutorialSceneSvg(id: TutorialPageId): string {
-  return `<svg class="tut-scene tut-scene-${id}" viewBox="0 0 320 180" aria-hidden="true" focusable="false">${SCENES[id]()}</svg>`;
+// ---------------------------------------------------------------- field guides and controls
+
+function keycapsHtml(keys: readonly string[]): string {
+  return keys.map((k) => `<kbd class="tutorial-key" data-no-translate>${escapeHtml(k)}</kbd>`).join('');
+}
+
+/** A small copy of the real on-screen button, for players who tap or click. */
+function buttonReplicaHtml(action: TutorialButtonAction): string {
+  if (action === 'move') return '<span class="tut-btn tut-btn-pad"><span class="tut-btn-knob"></span></span>';
+  if (action === 'floss') return '<span class="tut-btn tut-btn-floss">🧵</span>';
+  if (action === 'surge') return '<span class="tut-btn tut-btn-pill">🌊</span>';
+  if (action === 'scan') return '<span class="tut-btn tut-btn-pill">🔍</span>';
+  return '<span class="tut-btn tut-btn-pill">⏸</span>';
+}
+
+function rowsHtml(page: TutorialPage, scheme: TutorialInputScheme): string {
+  if (page.buttonRows) {
+    const keys = scheme === 'keys' || scheme === 'pad' ? TUTORIAL_BUTTON_KEYS[scheme] : null;
+    return page.buttonRows
+      .map((row) => {
+        const picture = keys
+          ? `<span class="tutorial-row-keys">${keycapsHtml(keys[row.action])}</span>`
+          : `<span class="tutorial-row-pic">${buttonReplicaHtml(row.action)}</span>`;
+        return `<li class="tutorial-row${keys ? ' tutorial-row-keyed' : ''}">${picture}<span class="tutorial-row-text"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.tip)}</span></span></li>`;
+      })
+      .join('');
+  }
+  return (page.rows ?? [])
+    .map((row) => {
+      const url = tutorialImageUrl(row.image) ?? '';
+      return `<li class="tutorial-row"><span class="tutorial-row-pic"><img class="tutorial-thumb" src="${escapeHtml(url)}" alt="" draggable="false" decoding="async"></span><span class="tutorial-row-text"><strong>${escapeHtml(row.name)}</strong><span>${escapeHtml(row.tip)}</span></span></li>`;
+    })
+    .join('');
+}
+
+/** True for the cards that are a list (field guides, controls) rather than one big picture. */
+export function isTutorialListPage(page: TutorialPage): boolean {
+  return Boolean(page.rows || page.buttonRows);
+}
+
+export function buildTutorialRowsHtml(page: TutorialPage, scheme: TutorialInputScheme): string {
+  return rowsHtml(page, scheme);
 }
 
 // ---------------------------------------------------------------- the guide itself
@@ -302,8 +237,8 @@ export class TutorialOverlay {
     const stage = this.backdrop?.querySelector<HTMLElement>('#tutorial-stage');
     if (!stage || performance.now() < this.ignoreDemoTapUntil) return;
     const page = TUTORIAL_PAGES[this.pageIdx];
-    // A fresh copy of the drawing starts every animation from the beginning.
-    stage.innerHTML = buildTutorialSceneSvg(page.id);
+    // A fresh copy of the pictures starts the flipbook from its first frame.
+    stage.innerHTML = buildTutorialStageHtml(page);
     this.opts.onDemoSound?.(page.id);
   }
 
@@ -312,35 +247,36 @@ export class TutorialOverlay {
     const page = TUTORIAL_PAGES[this.pageIdx];
     const isFirst = this.pageIdx === 0;
     const isLast = this.pageIdx === TUTORIAL_PAGES.length - 1;
+    const isList = isTutorialListPage(page);
     const hints = tutorialControlsFor(page, this.opts.scheme);
 
     const hintsHtml = hints
-      .map((h) => {
-        const caps = (h.keys ?? [])
-          .map((k) => `<kbd class="tutorial-key" data-no-translate>${escapeHtml(k)}</kbd>`)
-          .join('');
-        return `<span class="tutorial-hint">${caps}<span>${escapeHtml(h.label)}</span></span>`;
-      })
+      .map((h) => `<span class="tutorial-hint">${keycapsHtml(h.keys ?? [])}<span>${escapeHtml(h.label)}</span></span>`)
       .join('');
 
     const dotsHtml = TUTORIAL_PAGES.map(
       (_, i) => `<span class="tutorial-dot${i === this.pageIdx ? ' active' : ''}"></span>`
     ).join('');
 
+    const pictureHtml = isList
+      ? `<ul class="tutorial-rows">${rowsHtml(page, this.opts.scheme)}</ul>`
+      : `<button type="button" id="tutorial-stage" class="tutorial-stage" aria-label="${TUTORIAL_COPY.replayDemo}">
+          ${buildTutorialStageHtml(page)}
+        </button>`;
+
     this.backdrop.innerHTML = `
-      <div class="tutorial-sheet" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-body">
+      <div class="tutorial-sheet${isList ? ' tutorial-sheet-list' : ''}" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-body">
         <div class="tutorial-top">
           <span class="tutorial-count" aria-hidden="true">${this.pageIdx + 1} / ${TUTORIAL_PAGES.length}</span>
           ${isLast ? '' : `<button type="button" id="btn-tutorial-skip" class="tutorial-skip">${TUTORIAL_COPY.skip}</button>`}
         </div>
-        <button type="button" id="tutorial-stage" class="tutorial-stage" aria-label="${TUTORIAL_COPY.replayDemo}">
-          ${buildTutorialSceneSvg(page.id)}
-        </button>
+        ${isList ? '' : pictureHtml}
         <div class="tutorial-copy" aria-live="polite">
           <h2 id="tutorial-title" class="tutorial-title">${escapeHtml(page.title)}</h2>
           <p id="tutorial-body" class="tutorial-body">${escapeHtml(page.body)}</p>
-          <div class="tutorial-hints">${hintsHtml}</div>
+          ${isList ? '' : `<div class="tutorial-hints">${hintsHtml}</div>`}
         </div>
+        ${isList ? pictureHtml : ''}
         <div class="tutorial-dots" aria-hidden="true">${dotsHtml}</div>
         <div class="tutorial-nav">
           <button type="button" id="btn-tutorial-back" class="btn tutorial-back" ${isFirst ? 'disabled' : ''}>${TUTORIAL_COPY.back}</button>

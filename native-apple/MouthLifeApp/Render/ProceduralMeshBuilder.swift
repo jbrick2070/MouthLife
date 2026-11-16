@@ -3339,7 +3339,12 @@ public enum ProceduralMeshBuilder {
         return root
     }
 
-    // MARK: - 5. Adorable Glossy White/Cyan HYDRA-1 Micro-Submersible Probe
+    // MARK: - 5. Glossy Deep-Blue HYDRA-1 Micro-Submersible Probe
+    //
+    // The hull is deep blue on purpose: the ship spends its time on yellow plaque and on freshly
+    // cleaned white enamel, and the old white hull vanished against both. Blue is the opposite of
+    // yellow and dark against white, so it reads on either. Keep the colours in step with
+    // `HYDRA_COLORS` in the web edition (`src/engine/render/EntityBatchRenderer.ts`).
 
     public static func buildHydraProbe() -> HydraProbeRig {
         let root = SCNNode()
@@ -3349,18 +3354,18 @@ public enum ProceduralMeshBuilder {
         hullContainer.name = "hydra_hull"
         root.addChildNode(hullContainer)
 
-        // Glossy pearlescent white upper hull (+X = forward)
+        // Glossy deep-blue upper hull (+X = forward)
         let hullSphere = SCNSphere(radius: 0.60)
         hullSphere.segmentCount = 28
-        hullSphere.materials = [makeGlossyPropMaterial(hex: 0xF0F9FF, emissionHex: 0x38BDF8, roughness: 0.08, metalness: 0.06)]
+        hullSphere.materials = [makeGlossyPropMaterial(hex: 0x1E40AF, emissionHex: 0x1E3A8A, roughness: 0.08, metalness: 0.06)]
         let mainHull = SCNNode(geometry: hullSphere)
         mainHull.simdScale = SIMD3<Float>(1.25, 0.60, 0.92)
         hullContainer.addChildNode(mainHull)
 
-        // Sky-cyan lower keel
+        // Dark navy lower keel
         let keelSphere = SCNSphere(radius: 0.50)
         keelSphere.segmentCount = 20
-        keelSphere.materials = [makeGlossyPropMaterial(hex: 0x7DD3FC, emissionHex: 0x0284C7, roughness: 0.14)]
+        keelSphere.materials = [makeGlossyPropMaterial(hex: 0x172554, emissionHex: 0x172554, roughness: 0.14)]
         let keelNode = SCNNode(geometry: keelSphere)
         keelNode.simdScale = SIMD3<Float>(1.10, 0.42, 0.70)
         keelNode.simdPosition = SIMD3<Float>(-0.08, -0.16, 0)
@@ -3368,7 +3373,7 @@ public enum ProceduralMeshBuilder {
 
         // Canopy seat collar + translucent cyan cockpit dome + glowing Surge Core
         let collarTorus = SCNTorus(ringRadius: 0.33, pipeRadius: 0.042)
-        collarTorus.materials = [makeGlossyPropMaterial(hex: 0x0E7490, roughness: 0.22, metalness: 0.35)]
+        collarTorus.materials = [makeGlossyPropMaterial(hex: 0x67E8F9, roughness: 0.22, metalness: 0.35)]
         let collarNode = SCNNode(geometry: collarTorus)
         collarNode.simdScale = SIMD3<Float>(1.25, 1.0, 0.92)
         collarNode.simdPosition = SIMD3<Float>(0.24, 0.20, 0)
@@ -3392,10 +3397,10 @@ public enum ProceduralMeshBuilder {
         hullContainer.addChildNode(domeNode)
 
         // Twin Lateral Thruster Pods + Polymer Floss Spool Pylons
-        let podMat = makeGlossyPropMaterial(hex: 0xBAE6FD, emissionHex: 0x38BDF8, roughness: 0.12)
-        let strutMat = makeGlossyPropMaterial(hex: 0x94A3B8, roughness: 0.28, metalness: 0.55)
+        let podMat = makeGlossyPropMaterial(hex: 0x0EA5E9, emissionHex: 0x0284C7, roughness: 0.12)
+        let strutMat = makeGlossyPropMaterial(hex: 0x334155, roughness: 0.28, metalness: 0.55)
         let thrusterGlowMat = makeUnlitGlowMaterial(hex: 0x5EEAD4, opacity: 0.95, additive: true)
-        let spoolMat = makeGlossyPropMaterial(hex: 0xFEF3C7, roughness: 0.25)
+        let spoolMat = makeGlossyPropMaterial(hex: 0xFBBF24, roughness: 0.25)
         let silkMat = makeUnlitGlowMaterial(hex: 0x5EEAD4, opacity: 0.92)
 
         for side: Float in [-1, 1] {
@@ -3449,7 +3454,7 @@ public enum ProceduralMeshBuilder {
         hullContainer.addChildNode(neckNode)
 
         let headPlate = SCNCapsule(capRadius: 0.16, height: 0.72)
-        headPlate.materials = [makeGlossyPropMaterial(hex: 0xF0FDFA, emissionHex: 0x2DD4BF, roughness: 0.12)]
+        headPlate.materials = [makeGlossyPropMaterial(hex: 0x0E7490, emissionHex: 0x0E7490, roughness: 0.12)]
         let headNode = SCNNode(geometry: headPlate)
         headNode.simdEulerAngles = SIMD3<Float>(.pi * 0.5, 0, 0)
         headNode.simdScale = SIMD3<Float>(1.25, 1.0, 0.55)

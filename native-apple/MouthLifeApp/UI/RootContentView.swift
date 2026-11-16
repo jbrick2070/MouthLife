@@ -132,6 +132,7 @@ public struct RootContentView: View {
             // The How to Play guide floats over the Home screen.
             if coordinator.isTutorialVisible {
                 TutorialView(
+                    startPage: coordinator.tutorialStartPage,
                     reduceMotion: coordinator.reducedMotion,
                     onDemoSound: { pageId in coordinator.playTutorialDemoSound(pageId) },
                     onPageTurn: { NativeSoundEngine.shared.playUiTap() },

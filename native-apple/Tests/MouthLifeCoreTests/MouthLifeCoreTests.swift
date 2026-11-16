@@ -818,13 +818,22 @@ final class MouthLifeCoreTests: XCTestCase {
     func testTutorialGuideCardsAndControls() {
         XCTAssertEqual(
             TutorialGuide.pages.map(\.id),
-            [.home, .brush, .dive, .floss, .surge, .scan, .cities, .ready]
+            [.home, .brush, .dive, .cleaner, .buttons, .floss, .surge, .scan, .enemies, .helpers, .cities, .ready]
         )
-        XCTAssertEqual(TutorialGuide.pageIndex(of: .surge), 4)
+        XCTAssertEqual(TutorialGuide.pageIndex(of: .surge), 6)
 
         for page in TutorialGuide.pages {
             XCTAssertLessThanOrEqual(page.title.count, 18, page.id.rawValue)
             XCTAssertLessThanOrEqual(page.body.count, 125, page.id.rawValue)
+            for row in page.rows {
+                XCTAssertLessThanOrEqual(row.name.count, 24, row.name)
+                XCTAssertLessThanOrEqual(row.tip.count, 50, row.name)
+            }
+            for row in page.buttonRows {
+                XCTAssertLessThanOrEqual(row.name.count, 24, row.name)
+                XCTAssertLessThanOrEqual(row.tip.count, 50, row.name)
+            }
+            guard !page.isList else { continue }
             for scheme in TutorialInputScheme.allCases {
                 let hints = TutorialGuide.controls(for: page, scheme: scheme)
                 XCTAssertFalse(hints.isEmpty, "\(page.id.rawValue)/\(scheme.rawValue)")
@@ -841,6 +850,82 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: true, gamepadConnected: false), .touch)
         XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: false, gamepadConnected: false), .keys)
         XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: true, gamepadConnected: true), .pad)
+    }
+
+    func testTutorialGuidePicturesFieldGuidesAndControls() {
+        // Real game pictures: the dive and each tool are flipbooks, the closing card is a drawing.
+        let frames: [TutorialPageId: [String]] = [
+            .home: ["home"],
+            .brush: ["brush-1", "brush-2"],
+            .dive: ["dive-1", "dive-2", "dive-3"],
+            .cleaner: ["cleaner"],
+            .floss: ["floss-1", "floss-2", "floss-3"],
+            .surge: ["surge-1", "surge-2", "surge-3"],
+            .scan: ["scan-1", "scan-2"],
+            .cities: ["cities"],
+            .ready: []
+        ]
+        for (id, names) in frames {
+            XCTAssertEqual(TutorialGuide.pages[TutorialGuide.pageIndex(of: id)].frames, names, id.rawValue)
+        }
+        XCTAssertEqual(TutorialGuide.imageNames.count, 26)
+        XCTAssertEqual(Set(TutorialGuide.imageNames).count, 26)
+
+        let enemies = TutorialGuide.pages[TutorialGuide.pageIndex(of: .enemies)]
+        XCTAssertEqual(enemies.rows.map(\.name), ["Plaque", "Sugar crystal", "Slime", "Acid puddle", "Slime dome"])
+        XCTAssertTrue(enemies.isList)
+        let helpers = TutorialGuide.pages[TutorialGuide.pageIndex(of: .helpers)]
+        XCTAssertEqual(
+            helpers.rows.map(\.name),
+            ["Sleeping helper germs", "Awake helper germs", "Gold seal", "Saliva spring", "Supply beacon"]
+        )
+
+        let controls = TutorialGuide.pages[TutorialGuide.pageIndex(of: .buttons)]
+        XCTAssertEqual(controls.buttonRows.map(\.action), [.move, .floss, .surge, .scan, .pause])
+        XCTAssertEqual(TutorialGuide.buttonKeys(for: .move, scheme: .keys), ["W", "A", "S", "D", "Space"])
+        XCTAssertEqual(TutorialGuide.buttonKeys(for: .pause, scheme: .pad), ["Start"])
+        XCTAssertTrue(TutorialGuide.buttonKeys(for: .floss, scheme: .touch).isEmpty)
+        XCTAssertTrue(TutorialGuide.buttonKeys(for: .floss, scheme: .mouse).isEmpty)
+    }
+
+    func testTutorialFlipbookTakesTurnsAndFades() {
+        // One picture is always fully shown.
+        XCTAssertEqual(TutorialGuide.flipbookOpacities(count: 1, elapsedSec: 12.3), [1])
+        XCTAssertEqual(TutorialGuide.flipbookOpacities(count: 0, elapsedSec: 1), [])
+
+        // Three pictures: each holds, then the next fades in over it.
+        XCTAssertEqual(TutorialGuide.flipbookOpacities(count: 3, elapsedSec: 0.2), [1, 0, 0])
+        XCTAssertEqual(TutorialGuide.flipbookOpacities(count: 3, elapsedSec: 1.7), [0, 1, 0])
+        XCTAssertEqual(TutorialGuide.flipbookOpacities(count: 3, elapsedSec: 3.3), [0, 0, 1])
+        let midFade = TutorialGuide.flipbookOpacities(count: 3, elapsedSec: 1.6 - 0.175)
+        XCTAssertEqual(midFade[0], 1, accuracy: 1e-9)
+        XCTAssertEqual(midFade[1], 0.5, accuracy: 1e-6)
+        XCTAssertEqual(midFade[2], 0, accuracy: 1e-9)
+        // The last picture fades back into the first, and the loop repeats.
+        let wrap = TutorialGuide.flipbookOpacities(count: 3, elapsedSec: 4.8 - 0.07)
+        XCTAssertEqual(wrap[2], 1, accuracy: 1e-9)
+        XCTAssertGreaterThan(wrap[0], 0.5)
+        XCTAssertEqual(
+            TutorialGuide.flipbookOpacities(count: 2, elapsedSec: 0.4),
+            TutorialGuide.flipbookOpacities(count: 2, elapsedSec: 0.4 + 3.2 * 5)
+        )
+        for step in 0...200 {
+            let values = TutorialGuide.flipbookOpacities(count: 3, elapsedSec: Double(step) * 0.05)
+            XCTAssertEqual(values.count, 3)
+            XCTAssertEqual(values.max() ?? 0, 1, accuracy: 1e-9)
+            XCTAssertTrue(values.allSatisfy { $0 >= 0 && $0 <= 1 })
+        }
+
+        // With motion off, show the picture of the action itself.
+        XCTAssertEqual(TutorialGuide.stillFrameIndex(count: 3), 1)
+        XCTAssertEqual(TutorialGuide.stillFrameIndex(count: 2), 1)
+        XCTAssertEqual(TutorialGuide.stillFrameIndex(count: 1), 0)
+
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 9, periodSec: 6), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: -1.5, periodSec: 6), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 3, periodSec: 0), 0)
+        XCTAssertEqual(TutorialMotion.twinkle(0.5), 1, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.twinkle(1.0), 0, accuracy: 1e-9)
     }
 
     func testTutorialOfferShowsOnFirstThreeLaunchesThenStops() {
@@ -879,35 +964,5 @@ final class MouthLifeCoreTests: XCTestCase {
         // Saved numbers out of range are pulled back in.
         XCTAssertEqual(TutorialProgress(offers: 99).offers, TutorialGuide.maxOffers)
         XCTAssertEqual(TutorialProgress(offers: -4).offers, 0)
-    }
-
-    func testTutorialMotionHelpersAreSmoothAndBounded() {
-        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 0, periodSec: 6), 0, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 9, periodSec: 6), 0.5, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: -1.5, periodSec: 6), 0.75, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 3, periodSec: 0), 0)
-
-        XCTAssertEqual(TutorialMotion.ramp(0.1, 0.2, 0.4), 0)
-        XCTAssertEqual(TutorialMotion.ramp(0.3, 0.2, 0.4), 0.5, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.ramp(0.9, 0.2, 0.4), 1)
-        XCTAssertEqual(TutorialMotion.ease(0.5), 0.5, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.window(0.5, 0.2, 0.3, 0.7, 0.8), 1, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.window(0.9, 0.2, 0.3, 0.7, 0.8), 0, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.twinkle(0.5), 1, accuracy: 1e-9)
-
-        let stops = [
-            TutorialMotion.Stop(at: 0.0, x: 0, y: 0),
-            TutorialMotion.Stop(at: 0.5, x: 10, y: 20),
-            TutorialMotion.Stop(at: 1.0, x: 0, y: 0)
-        ]
-        XCTAssertEqual(TutorialMotion.along(0.5, stops: stops).x, 10, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.along(0.25, stops: stops).y, 10, accuracy: 1e-9)
-        XCTAssertEqual(TutorialMotion.along(2.0, stops: stops).x, 0, accuracy: 1e-9)
-        for step in 0...100 {
-            let p = Double(step) / 100
-            let point = TutorialMotion.along(p, stops: stops)
-            XCTAssertTrue(point.x >= 0 && point.x <= 10)
-            XCTAssertTrue(point.y >= 0 && point.y <= 20)
-        }
     }
 }

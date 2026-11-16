@@ -1,11 +1,24 @@
 /**
- * The How to Play guide: eight short cards, one idea each.
+ * The How to Play guide: twelve short cards, one idea each, illustrated with real pictures of the
+ * game (`src/assets/guide/`, photographed from the running game).
  *
  * Shared word for word with the native app (`native-apple/Sources/MouthLifeCore/Config/TutorialGuide.swift`),
  * so both editions teach the same thing and use the same translations. Change them together.
  */
 
-export type TutorialPageId = 'home' | 'brush' | 'dive' | 'floss' | 'surge' | 'scan' | 'cities' | 'ready';
+export type TutorialPageId =
+  | 'home'
+  | 'brush'
+  | 'dive'
+  | 'cleaner'
+  | 'buttons'
+  | 'floss'
+  | 'surge'
+  | 'scan'
+  | 'enemies'
+  | 'helpers'
+  | 'cities'
+  | 'ready';
 
 /** How the player is controlling the game right now. */
 export type TutorialInputScheme = 'touch' | 'mouse' | 'keys' | 'pad';
@@ -16,11 +29,34 @@ export interface TutorialControlHint {
   label: string;
 }
 
+/** One line of a field-guide card: a real close-up, its name, and what to do about it. */
+export interface TutorialRow {
+  /** Picture name in `src/assets/guide/` (no extension). */
+  image: string;
+  name: string;
+  tip: string;
+}
+
+/** The on-screen controls a dive uses. */
+export type TutorialButtonAction = 'move' | 'floss' | 'surge' | 'scan' | 'pause';
+
+export interface TutorialButtonRow {
+  action: TutorialButtonAction;
+  name: string;
+  tip: string;
+}
+
 export interface TutorialPage {
   id: TutorialPageId;
   title: string;
   body: string;
   controls: Partial<Record<TutorialInputScheme, readonly TutorialControlHint[]>>;
+  /** Real pictures shown one after another, like a flipbook. None = a drawn picture. */
+  frames: readonly string[];
+  /** Field-guide rows (Troublemakers, Helpers). */
+  rows?: readonly TutorialRow[];
+  /** Control rows (Your controls). The picture for each depends on the device in use. */
+  buttonRows?: readonly TutorialButtonRow[];
 }
 
 const RUB_AND_TURN: readonly TutorialControlHint[] = [
@@ -29,26 +65,33 @@ const RUB_AND_TURN: readonly TutorialControlHint[] = [
 ];
 const HANDS_FREE: readonly TutorialControlHint[] = [{ label: 'Hands-free: just follow along' }];
 const DRAG_ON_TOOTH: readonly TutorialControlHint[] = [{ label: 'Drag on the tooth' }];
+const GOLD_GLOW: readonly TutorialControlHint[] = [{ label: 'It glows gold when Surge is ready' }];
 const PICK_A_CITY: readonly TutorialControlHint[] = [{ label: 'Pick a city on the Home screen' }];
 const FIND_AGAIN: readonly TutorialControlHint[] = [{ label: 'Tap ? on Home to see this again' }];
+
+function all(hints: readonly TutorialControlHint[]): TutorialPage['controls'] {
+  return { touch: hints, mouse: hints, keys: hints, pad: hints };
+}
 
 export const TUTORIAL_PAGES: readonly TutorialPage[] = [
   {
     id: 'home',
     title: 'Welcome home',
     body: 'This is your mouth. Rub the teeth to polish them, then pick a game at the bottom.',
-    controls: { touch: RUB_AND_TURN, mouse: RUB_AND_TURN, keys: RUB_AND_TURN, pad: RUB_AND_TURN },
+    controls: all(RUB_AND_TURN),
+    frames: ['home'],
   },
   {
     id: 'brush',
     title: '2-Min Brush',
     body: 'Brush your real teeth where the glow shows. A chime means move on. Floss and rinse come next.',
-    controls: { touch: HANDS_FREE, mouse: HANDS_FREE, keys: HANDS_FREE, pad: HANDS_FREE },
+    controls: all(HANDS_FREE),
+    frames: ['brush-1', 'brush-2'],
   },
   {
     id: 'dive',
     title: 'Dive',
-    body: 'Steer the tiny robot over a giant tooth and scrub off the plaque. Clean 90% to win.',
+    body: 'Steer the tiny ship over a giant tooth and scrub off the plaque. Clean 90% to win.',
     controls: {
       touch: DRAG_ON_TOOTH,
       mouse: DRAG_ON_TOOTH,
@@ -61,6 +104,28 @@ export const TUTORIAL_PAGES: readonly TutorialPage[] = [
         { keys: ['A'], label: 'Hold to scrub' },
       ],
     },
+    frames: ['dive-1', 'dive-2', 'dive-3'],
+  },
+  {
+    id: 'cleaner',
+    title: 'Meet HYDRA-1',
+    body: 'Your tooth-cleaning ship. The brush on its nose scrubs, and its spools shoot floss through tight gaps.',
+    controls: all(GOLD_GLOW),
+    frames: ['cleaner'],
+  },
+  {
+    id: 'buttons',
+    title: 'Your controls',
+    body: 'Four tools clean every tooth.',
+    controls: {},
+    frames: [],
+    buttonRows: [
+      { action: 'move', name: 'Move and scrub', tip: 'Steer the ship over the plaque.' },
+      { action: 'floss', name: 'Floss', tip: 'Shoots thread through tight gaps.' },
+      { action: 'surge', name: 'Surge', tip: 'A big wave. It fills as you scrub.' },
+      { action: 'scan', name: 'Dye Scan', tip: 'Shows the plaque you missed.' },
+      { action: 'pause', name: 'Pause', tip: 'Take a break any time.' },
+    ],
   },
   {
     id: 'floss',
@@ -72,6 +137,7 @@ export const TUTORIAL_PAGES: readonly TutorialPage[] = [
       keys: [{ keys: ['E'], label: 'or right-click' }],
       pad: [{ keys: ['X'], label: 'Fire floss' }],
     },
+    frames: ['floss-1', 'floss-2', 'floss-3'],
   },
   {
     id: 'surge',
@@ -83,6 +149,7 @@ export const TUTORIAL_PAGES: readonly TutorialPage[] = [
       keys: [{ keys: ['Q'], label: 'Fire at 100%' }],
       pad: [{ keys: ['Y'], label: 'Fire at 100%' }],
     },
+    frames: ['surge-1', 'surge-2', 'surge-3'],
   },
   {
     id: 'scan',
@@ -94,20 +161,72 @@ export const TUTORIAL_PAGES: readonly TutorialPage[] = [
       keys: [{ keys: ['R'], label: 'Show the dye' }],
       pad: [{ keys: ['B'], label: 'Show the dye' }],
     },
+    frames: ['scan-1', 'scan-2'],
+  },
+  {
+    id: 'enemies',
+    title: 'Troublemakers',
+    body: 'Know them when you see them.',
+    controls: {},
+    frames: [],
+    rows: [
+      { image: 't-plaque', name: 'Plaque', tip: 'Sticky yellow film. Scrub it off.' },
+      { image: 't-sugar', name: 'Sugar crystal', tip: 'It makes slimes. Floss shatters it.' },
+      { image: 't-slime', name: 'Slime', tip: 'Leaves plaque and acid. Scrub or floss it.' },
+      { image: 't-acid', name: 'Acid puddle', tip: 'Slows you down. Surge washes it away.' },
+      { image: 't-dome', name: 'Slime dome', tip: 'Blocks the brush. Crack it with Floss or Surge.' },
+    ],
+  },
+  {
+    id: 'helpers',
+    title: 'Helpers',
+    body: 'Good things to look for.',
+    controls: {},
+    frames: [],
+    rows: [
+      { image: 't-helper-asleep', name: 'Sleeping helper germs', tip: 'Clean around them to wake them.' },
+      { image: 't-helper-awake', name: 'Awake helper germs', tip: 'Wake them all to seal the zone.' },
+      { image: 't-seal', name: 'Gold seal', tip: 'A gold edge means the zone is sealed.' },
+      { image: 't-spring', name: 'Saliva spring', tip: 'Drive through it to wash acid away.' },
+      { image: 't-beacon', name: 'Supply beacon', tip: 'Grab it for a Surge boost.' },
+    ],
   },
   {
     id: 'cities',
     title: 'New cities',
     body: 'Each city has its own tooth and its own challenge. Win a dive, or earn Stamps with 2-Min Brush, to unlock the next one.',
-    controls: { touch: PICK_A_CITY, mouse: PICK_A_CITY, keys: PICK_A_CITY, pad: PICK_A_CITY },
+    controls: all(PICK_A_CITY),
+    frames: ['cities'],
   },
   {
     id: 'ready',
     title: 'You’re ready',
     body: 'You can’t lose a tooth, so take your time. Not into the games? The brush, floss and rinse timer is fun on its own.',
-    controls: { touch: FIND_AGAIN, mouse: FIND_AGAIN, keys: FIND_AGAIN, pad: FIND_AGAIN },
+    controls: all(FIND_AGAIN),
+    frames: [],
   },
 ];
+
+/**
+ * The key or controller button for each dive control. Touch and mouse players get a picture of
+ * the real on-screen button instead.
+ */
+export const TUTORIAL_BUTTON_KEYS: Record<'keys' | 'pad', Record<TutorialButtonAction, readonly string[]>> = {
+  keys: {
+    move: ['W', 'A', 'S', 'D', 'Space'],
+    floss: ['E'],
+    surge: ['Q'],
+    scan: ['R'],
+    pause: ['Esc'],
+  },
+  pad: {
+    move: ['L-Stick', 'A'],
+    floss: ['X'],
+    surge: ['Y'],
+    scan: ['B'],
+    pause: ['Start'],
+  },
+};
 
 /** Words on the guide's own buttons and on the Home screen offer. */
 export const TUTORIAL_COPY = {
@@ -122,6 +241,16 @@ export const TUTORIAL_COPY = {
   offerAccept: 'Show me',
   offerDecline: 'Not now',
 } as const;
+
+/** Every picture the guide uses, so a test can check each one is really in the project. */
+export function tutorialImageNames(): string[] {
+  const names = new Set<string>();
+  for (const page of TUTORIAL_PAGES) {
+    for (const f of page.frames) names.add(f);
+    for (const r of page.rows ?? []) names.add(r.image);
+  }
+  return [...names];
+}
 
 export function tutorialPageIndex(id: TutorialPageId): number {
   return Math.max(0, TUTORIAL_PAGES.findIndex((p) => p.id === id));

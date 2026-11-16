@@ -81,6 +81,8 @@ public final class AppCoordinator {
     private static let tutorialOffersDefaultsKey = "mouthlife.tutorial.offers"
     private static let tutorialOpenedDefaultsKey = "mouthlife.tutorial.opened"
     public var isTutorialVisible: Bool = false
+    /// The card the guide opens on. Always the first, except for `--tutorial=<card>` screenshots.
+    public var tutorialStartPage: TutorialPageId = .home
     public var showTutorialOffer: Bool = false
     private var tutorialGate = TutorialGate()
 
@@ -406,6 +408,11 @@ public final class AppCoordinator {
             } else if arg == "--tutorial" {
                 // For screenshots and testing: open the How to Play guide straight away.
                 isTutorialVisible = true
+            } else if arg.hasPrefix("--tutorial=") {
+                // ...or at one card, e.g. --tutorial=enemies
+                let card = String(arg.dropFirst("--tutorial=".count))
+                tutorialStartPage = TutorialPageId(rawValue: card) ?? .home
+                isTutorialVisible = true
             }
         }
     }
@@ -550,6 +557,7 @@ public final class AppCoordinator {
     }
 
     public func openTutorial() {
+        tutorialStartPage = .home
         NativeSoundEngine.shared.playUiTap()
         if tutorialGate.markOpened() {
             saveTutorialProgress()
@@ -574,6 +582,8 @@ public final class AppCoordinator {
         case .home: sound.playGlassHarpNote(step: 4)
         case .brush: sound.playPacerCue(.quadrant)
         case .dive: sound.playSiteRestored()
+        case .cleaner: sound.playSurgeReady()
+        case .buttons, .enemies, .helpers: sound.playUiTap()
         case .floss: sound.playFlossSnap()
         case .surge: sound.playIonRinseWave()
         case .scan: sound.playDisclosePulse()

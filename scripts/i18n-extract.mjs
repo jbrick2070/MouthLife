@@ -207,7 +207,7 @@ function isTextLike(s) {
   if (/^\{\d+\}$/.test(s)) return false;
   // Launch arguments and regular-expression sources are not on-screen text.
   if (s.startsWith('--') || s.includes('\\s') || s.includes('\\(')) return false;
-  if (/^(https?:|mailto:|data:|\.\.?\/|#|@|ML2)/.test(s)) return false;
+  if (/^(https?:|mailto:|data:|\.\.?\/|#|@|\?|ML2)/.test(s)) return false;
   if (/=>|;\s*$|\bfunction\b|\brgba?\(|\bvar\(--|^[.#][\w-]+\s*\{|px\b|\b(querySelector|innerHTML)\b/.test(s)) return false;
   if (/[{}]/.test(s.replace(/\{\d+\}/g, ''))) return false;
   // CSS selectors and media queries, e.g. "button, a, input" or "(prefers-reduced-motion: reduce)".

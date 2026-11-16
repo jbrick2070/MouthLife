@@ -124,6 +124,7 @@ function bootstrapMouthLife(): void {
     if (pageId === 'home') sound.playGlassHarpNote(4);
     else if (pageId === 'brush') sound.playPacerCue('quadrant');
     else if (pageId === 'dive') sound.playSiteRestored();
+    else if (pageId === 'cleaner') sound.playSurgeReady();
     else if (pageId === 'floss') sound.playFlossSnap(1, false);
     else if (pageId === 'surge') sound.playIonRinseWave();
     else if (pageId === 'scan') sound.playDisclosePulse();

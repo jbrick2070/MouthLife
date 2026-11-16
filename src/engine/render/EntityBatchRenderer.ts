@@ -279,68 +279,88 @@ function paint(geo: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
   return geo;
 }
 
+/**
+ * HYDRA-1's colours. The hull is deep blue on purpose: the ship spends its time on yellow plaque
+ * and on freshly cleaned white enamel, and the old white hull vanished against both. Blue is the
+ * opposite of yellow and dark against white, so it reads on either. Keep in step with
+ * `buildHydraProbe` in the native app.
+ */
+export const HYDRA_COLORS = {
+  hull: 0x1e40af,
+  keel: 0x172554,
+  trim: 0x67e8f9,
+  pod: 0x0ea5e9,
+  strut: 0x334155,
+  glow: 0x5eead4,
+  neck: 0x475569,
+  brushHead: 0x0e7490,
+  spool: 0xfbbf24,
+  thread: 0x5eead4,
+  collar: 0x1e293b,
+} as const;
+
 /** Detailed HYDRA-1 micro-dental craft hull merged into ONE vertex-colored geometry. */
 function buildHydraHullGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
 
   const hull = new THREE.SphereGeometry(0.6, 22, 14);
   hull.scale(1.25, 0.6, 0.92);
-  parts.push(paint(hull, 0xe8f6ff));
+  parts.push(paint(hull, HYDRA_COLORS.hull));
 
   const keel = new THREE.SphereGeometry(0.5, 16, 10);
   keel.scale(1.1, 0.42, 0.7);
   keel.translate(-0.08, -0.16, 0);
-  parts.push(paint(keel, 0x7dd3fc));
+  parts.push(paint(keel, HYDRA_COLORS.keel));
 
   // Canopy seat ring (the glass dome + Surge core are separate dynamic meshes)
   const seat = new THREE.TorusGeometry(0.33, 0.04, 8, 22);
   seat.rotateX(Math.PI / 2);
   seat.scale(1.25, 1, 0.92);
   seat.translate(0.24, 0.2, 0);
-  parts.push(paint(seat, 0x0e7490));
+  parts.push(paint(seat, HYDRA_COLORS.trim));
 
   for (const side of [-1, 1]) {
     const pod = new THREE.CapsuleGeometry(0.15, 0.62, 4, 10);
     pod.rotateZ(Math.PI / 2);
     pod.translate(-0.24, -0.02, side * 0.66);
-    parts.push(paint(pod, 0xbae6fd));
+    parts.push(paint(pod, HYDRA_COLORS.pod));
     const strut = new THREE.BoxGeometry(0.34, 0.06, 0.32);
     strut.translate(-0.18, 0.0, side * 0.45);
-    parts.push(paint(strut, 0x94a3b8));
+    parts.push(paint(strut, HYDRA_COLORS.strut));
     const glow = new THREE.SphereGeometry(0.1, 10, 8);
     glow.translate(-0.62, -0.02, side * 0.66);
-    parts.push(paint(glow, 0x5eead4));
+    parts.push(paint(glow, HYDRA_COLORS.glow));
   }
 
   // Brush-head neck & sonic head plate projecting forward-down
   const neck = new THREE.CylinderGeometry(0.07, 0.1, 0.62, 10);
   neck.rotateZ(Math.PI / 2 - 0.42);
   neck.translate(0.82, -0.2, 0);
-  parts.push(paint(neck, 0xcbd5e1));
+  parts.push(paint(neck, HYDRA_COLORS.neck));
   const head = new THREE.CapsuleGeometry(0.16, 0.4, 4, 10);
   head.rotateX(Math.PI / 2);
   head.scale(1.25, 0.55, 1.0);
   head.translate(1.12, -0.36, 0);
-  parts.push(paint(head, 0xf0fdfa));
+  parts.push(paint(head, HYDRA_COLORS.brushHead));
 
   // Glowing floss-spool pylons: slim mast + wound spool disc + bead of thread on each pod
   for (const side of [-1, 1]) {
     const mast = new THREE.CylinderGeometry(0.035, 0.05, 0.34, 8);
     mast.translate(-0.24, 0.2, side * 0.66);
-    parts.push(paint(mast, 0x94a3b8));
+    parts.push(paint(mast, HYDRA_COLORS.strut));
     const spool = new THREE.CylinderGeometry(0.13, 0.13, 0.1, 14);
     spool.rotateX(Math.PI / 2);
     spool.translate(-0.24, 0.4, side * 0.66);
-    parts.push(paint(spool, 0xfef3c7));
+    parts.push(paint(spool, HYDRA_COLORS.spool));
     const wound = new THREE.TorusGeometry(0.11, 0.035, 6, 14);
     wound.translate(-0.24, 0.4, side * 0.66);
-    parts.push(paint(wound, 0x5eead4));
+    parts.push(paint(wound, HYDRA_COLORS.thread));
   }
   // Rear emitter collar (static); the spinning rings are separate meshes
   const collar = new THREE.CylinderGeometry(0.1, 0.14, 0.18, 12);
   collar.rotateZ(Math.PI / 2);
   collar.translate(-0.62, 0.02, 0);
-  parts.push(paint(collar, 0x475569));
+  parts.push(paint(collar, HYDRA_COLORS.collar));
 
   const merged = mergeBufferGeometriesSimple(parts);
   for (const p of parts) p.dispose();
