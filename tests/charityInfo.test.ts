@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, SMILE_ON_U_CHARITY } from '../src/config/charityInfo';
+import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, NOT_ENDORSED_NOTE, SMILE_ON_U_CHARITY } from '../src/config/charityInfo';
 
 describe('SmileOnU humanitarian dental charity config', () => {
   it('exposes verified HTTPS donate, website, and mailto contact endpoints', () => {
@@ -70,5 +70,6 @@ describe('SmileOnU humanitarian dental charity config', () => {
     const linkIds = MORE_DENTAL_CHARITIES.flatMap((m) => m.links.map((l) => l.id));
     expect(new Set(linkIds).size).toBe(linkIds.length);
     expect(MORE_CHARITIES_NOTE).toContain('no fee');
+    expect(NOT_ENDORSED_NOTE).toContain('not affiliated with, sponsored by or endorsed by');
   });
 });

@@ -1,5 +1,5 @@
 import { COACH_LANGUAGES, COACH_LANGUAGE_INFO, isCoachLanguage, type CoachLanguage } from '../config/brushCoach';
-import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, SMILE_ON_U_CHARITY } from '../config/charityInfo';
+import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, NOT_ENDORSED_NOTE, SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   formatToothBadge,
   getCompanionCrownSummary,
@@ -1035,6 +1035,10 @@ export class CompanionHubOverlay implements OverlayView {
             </div>
             <p style="margin:0 0 10px 0;font-size:0.71rem;color:var(--text-muted);line-height:1.38;">
               ${escapeHtml(MORE_CHARITIES_NOTE)}
+            </p>
+
+            <p id="charity-not-endorsed" style="margin:0 0 10px 0;font-size:0.74rem;color:#e2e8f0;font-weight:600;line-height:1.38;">
+              ${escapeHtml(NOT_ENDORSED_NOTE)}
             </p>
 
             <p style="margin:0;font-size:0.71rem;color:var(--text-muted);line-height:1.38;">

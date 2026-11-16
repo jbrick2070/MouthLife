@@ -204,3 +204,7 @@ export const MORE_DENTAL_CHARITIES: readonly PartnerCharityInfo[] = [
 
 export const MORE_CHARITIES_NOTE =
   'Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.';
+
+/** Shown in the charity sheet: none of the listed charities has endorsed or reviewed MouthLife. */
+export const NOT_ENDORSED_NOTE =
+  'MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.';

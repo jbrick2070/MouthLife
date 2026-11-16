@@ -174,6 +174,11 @@ public struct CharitySheet: View {
 
                     // Independence & Clinical Disclaimer
                     VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.t(CharityInfo.notEndorsedNote))
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Divider().overlay(Color.white.opacity(0.12))
                         Text(L10n.t(CharityInfo.transparencyNote))
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)

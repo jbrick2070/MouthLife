@@ -247,5 +247,8 @@ public enum CharityInfo {
         )
     ]
 
+    /// Shown in the charity sheet: none of the listed charities has endorsed or reviewed MouthLife.
+    public static let notEndorsedNote = "MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here."
+
     public static let moreCharitiesNote = "Each link opens the charity’s own website. MouthLife takes no fee and never handles donations."
 }

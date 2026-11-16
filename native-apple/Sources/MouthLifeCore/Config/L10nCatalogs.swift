@@ -974,7 +974,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"Website von {0} besuchen",
 "Website":"Website",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"Gemeinnützige US-Organisation nach 501(c)(3) • Seit 2008",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"Die America’s Dentists Care Foundation stellt die Ausrüstung für Mission-of-Mercy-Kliniken: kostenlose zweitägige Zahnbehandlungen, die von Freiwilligen durchgeführt werden. Seit 2008 haben die von ihr unterstützten Kliniken über 375.000 Patienten in 31 Bundesstaaten behandelt."
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"Die America’s Dentists Care Foundation stellt die Ausrüstung für Mission-of-Mercy-Kliniken: kostenlose zweitägige Zahnbehandlungen, die von Freiwilligen durchgeführt werden. Seit 2008 haben die von ihr unterstützten Kliniken über 375.000 Patienten in 31 Bundesstaaten behandelt.",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife ist eine unabhängige App. Sie ist mit keiner der hier genannten Organisationen verbunden und wird von keiner gesponsert oder empfohlen."
 }
 """###
 
@@ -1934,7 +1935,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"Visita el sitio web de {0}",
 "Website":"Sitio web",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"Organización sin fines de lucro 501(c)(3) de EE. UU. • Desde 2008",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation aporta el equipo para las clínicas Mission of Mercy: jornadas dentales gratuitas de dos días atendidas por voluntarios. Desde 2008, las clínicas que apoya han atendido a más de 375,000 pacientes en 31 estados."
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation aporta el equipo para las clínicas Mission of Mercy: jornadas dentales gratuitas de dos días atendidas por voluntarios. Desde 2008, las clínicas que apoya han atendido a más de 375,000 pacientes en 31 estados.",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife es una app independiente. No está afiliada, patrocinada ni avalada por ninguna de las organizaciones que aparecen aquí."
 }
 """###
 
@@ -2894,7 +2896,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"Visiter le site web de {0}",
 "Website":"Site web",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"Association américaine à but non lucratif 501(c)(3) • Depuis 2008",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation fournit le matériel des cliniques Mission of Mercy : des journées de soins dentaires gratuits sur deux jours, assurées par des bénévoles. Depuis 2008, les cliniques qu’elle soutient ont soigné plus de 375 000 patients dans 31 États."
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation fournit le matériel des cliniques Mission of Mercy : des journées de soins dentaires gratuits sur deux jours, assurées par des bénévoles. Depuis 2008, les cliniques qu’elle soutient ont soigné plus de 375 000 patients dans 31 États.",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife est une application indépendante. Elle n’est ni affiliée, ni parrainée, ni approuvée par aucune des associations présentées ici."
 }
 """###
 
@@ -3854,7 +3857,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"{0} のウェブサイトを見る",
 "Website":"ウェブサイト",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"アメリカの501(c)(3)ひえいりだんたい • 2008年から",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation は、Mission of Mercy クリニックのきざいを用意しています。これは、ボランティアが2日間ひらく、むりょうの歯科イベントです。2008年から、このだんたいがささえるクリニックは、31の州で37万5千人をこえる人をみてきました。"
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation は、Mission of Mercy クリニックのきざいを用意しています。これは、ボランティアが2日間ひらく、むりょうの歯科イベントです。2008年から、このだんたいがささえるクリニックは、31の州で37万5千人をこえる人をみてきました。",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife は、どくりつしたアプリです。ここにのっているどのチャリティーとも関係はなく、スポンサーやすいせんも受けていません。"
 }
 """###
 
@@ -4814,7 +4818,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"{0} 웹사이트 방문하기",
 "Website":"웹사이트",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"미국 501(c)(3) 비영리 단체 • 2008년부터",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation은 Mission of Mercy 진료소에 필요한 장비를 지원해요. 자원봉사자들이 이틀 동안 여는 무료 치과 진료 행사예요. 2008년부터 이 단체가 지원한 진료소는 31개 주에서 375,000명이 넘는 환자를 치료했어요."
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation은 Mission of Mercy 진료소에 필요한 장비를 지원해요. 자원봉사자들이 이틀 동안 여는 무료 치과 진료 행사예요. 2008년부터 이 단체가 지원한 진료소는 31개 주에서 375,000명이 넘는 환자를 치료했어요.",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife는 독립적인 앱이에요. 여기에 나온 어떤 자선 단체와도 제휴하지 않았고, 후원이나 추천을 받지도 않았어요."
 }
 """###
 
@@ -5774,7 +5779,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"Visite o site de {0}",
 "Website":"Site",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"Organização sem fins lucrativos 501(c)(3) dos EUA • Desde 2008",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"A America’s Dentists Care Foundation fornece os equipamentos das clínicas Mission of Mercy: eventos odontológicos gratuitos de dois dias feitos por voluntários. Desde 2008, as clínicas que ela apoia atenderam mais de 375.000 pacientes em 31 estados."
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"A America’s Dentists Care Foundation fornece os equipamentos das clínicas Mission of Mercy: eventos odontológicos gratuitos de dois dias feitos por voluntários. Desde 2008, as clínicas que ela apoia atenderam mais de 375.000 pacientes em 31 estados.",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"O MouthLife é um app independente. Ele não é afiliado, patrocinado nem endossado por nenhuma das instituições listadas aqui."
 }
 """###
 
@@ -6734,7 +6740,8 @@ enum L10nCatalogs {
 "Visit the {0} website":"访问 {0} 的网站",
 "Website":"官方网站",
 "U.S. 501(c)(3) Nonprofit • Since 2008":"美国 501(c)(3) 非营利机构 • 始于 2008 年",
-"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation 为 Mission of Mercy 义诊提供设备：这是由志愿者开展的为期两天的免费牙科活动。自 2008 年以来，它支持的义诊已在 31 个州为超过 375,000 名患者提供治疗。"
+"America’s Dentists Care Foundation supplies the equipment for Mission of Mercy clinics: free two-day dental events run by volunteers. Since 2008, the clinics it supports have treated over 375,000 patients in 31 states.":"America’s Dentists Care Foundation 为 Mission of Mercy 义诊提供设备：这是由志愿者开展的为期两天的免费牙科活动。自 2008 年以来，它支持的义诊已在 31 个州为超过 375,000 名患者提供治疗。",
+"MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by any of the charities listed here.":"MouthLife 是一款独立应用，与此处列出的任何慈善机构均无隶属关系，也未获得它们的赞助或认可。"
 }
 """###
 }

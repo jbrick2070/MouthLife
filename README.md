@@ -111,6 +111,8 @@ If you enjoyed playing **MouthLife**, please consider supporting [**SmileOnU**](
 
 ### More free dental care charities
 
+**MouthLife is an independent app. It is not affiliated with, sponsored by or endorsed by SmileOnU, Remote Area Medical, America's Dentists Care Foundation or any other charity it lists.** The charity sheet shows this notice in both editions.
+
 The charity sheet in both editions also lists further charities under SmileOnU. Each opens the charity's own website; MouthLife takes no fee and never handles donations.
 
 - **Remote Area Medical (RAM)** — U.S. 501(c)(3) nonprofit running free pop-up dental, vision and medical clinics since 1985. Donate: [https://www.ramusa.org/donate/](https://www.ramusa.org/donate/) • Clinic schedule: [https://www.ramusa.org/schedule/](https://www.ramusa.org/schedule/) • Volunteer: [https://www.ramusa.org/volunteer/](https://www.ramusa.org/volunteer/)
