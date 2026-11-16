@@ -674,7 +674,7 @@ export class SceneManager {
     ) as HTMLElement | null;
     const w = Math.max(1, window.innerWidth);
     const deckRect = deck?.getBoundingClientRect();
-    const side = deckRect && deckRect.height > 0 ? sideLayoutFraming(w, h, deckRect.left) : null;
+    const side = deckRect && deckRect.height > 0 ? sideLayoutFraming(w, h, deckRect.left, deckRect.right) : null;
     if (side) {
       this.hubSideFrac = side.sideFrac;
       this.hubViewShiftXTarget = side.shiftX;

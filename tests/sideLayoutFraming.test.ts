@@ -13,7 +13,7 @@ import {
 
 describe('landscape side-layout framing', () => {
   it('shifts the arch into the free left column and backs the camera off', () => {
-    const f = sideLayoutFraming(844, 390, 447);
+    const f = sideLayoutFraming(844, 390, 447, 836);
     expect(f).not.toBeNull();
     expect(f!.shiftX).toBeLessThan(0);
     expect(f!.shiftX).toBeCloseTo(447 / 2 - 422, 5);
@@ -21,9 +21,16 @@ describe('landscape side-layout framing', () => {
   });
 
   it('ignores portrait and bottom-deck layouts', () => {
-    expect(sideLayoutFraming(390, 844, 120)).toBeNull();
-    expect(sideLayoutFraming(1280, 800, 200)).toBeNull();
-    expect(sideLayoutFraming(844, 390, 900)).toBeNull();
+    expect(sideLayoutFraming(390, 844, 120, 270)).toBeNull();
+    expect(sideLayoutFraming(1280, 800, 200, 1080)).toBeNull();
+    expect(sideLayoutFraming(844, 390, 900, 1200)).toBeNull();
+  });
+
+  it('keeps the mouth centred under a centred bottom card on a wide desktop window', () => {
+    // 2000x1091 browser window with the Brush-Along card centred at the bottom (left 714, right 1302).
+    expect(sideLayoutFraming(2000, 1091, 714, 1302)).toBeNull();
+    // The same card parked against the right edge is a real side column.
+    expect(sideLayoutFraming(2000, 1091, 1240, 1990)).not.toBeNull();
   });
 });
 

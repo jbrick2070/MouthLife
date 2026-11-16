@@ -330,9 +330,14 @@ export function sideLayoutFraming(
   viewW: number,
   viewH: number,
   deckLeft: number,
+  deckRight: number,
   archFraction = 0.52
 ): { sideFrac: number; shiftX: number; dolly: number } | null {
   if (!(viewW > viewH) || deckLeft <= viewW * 0.3 || deckLeft >= viewW) return null;
+  // A side column hugs the right edge. A bottom card centred on a wide window can also start past
+  // 30% of the width, but it leaves as much room on its right as on its left: keep that one centred.
+  const rightGap = viewW - deckRight;
+  if (rightGap < 0 || rightGap > deckLeft * 0.5) return null;
   const sideFrac = deckLeft / viewW;
   return {
     sideFrac,

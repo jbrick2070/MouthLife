@@ -696,9 +696,14 @@ public func sideLayoutFraming(
     viewW: Double,
     viewH: Double,
     deckLeft: Double,
+    deckRight: Double,
     archFraction: Double = 0.52
 ) -> SideLayoutFraming? {
     guard viewW > viewH, deckLeft > viewW * 0.3, deckLeft < viewW else { return nil }
+    // A side column hugs the right edge; a bottom card centred on a wide window leaves as much
+    // room on its right as on its left and must keep the arch centred.
+    let rightGap = viewW - deckRight
+    guard rightGap >= 0, rightGap <= deckLeft * 0.5 else { return nil }
     let sideFrac = deckLeft / viewW
     return SideLayoutFraming(
         sideFrac: sideFrac,
