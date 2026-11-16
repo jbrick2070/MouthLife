@@ -34,6 +34,7 @@ import { EnamelBiophysicsMaterial } from './EnamelBiophysicsMaterial';
 import { EntityBatchRenderer } from './EntityBatchRenderer';
 import { GlowPass } from './GlowPass';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
+import { brushCameraAim } from './brushCamera';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 
 export type HubCameraFocus = 'companion' | 'globe';
@@ -612,7 +613,13 @@ export class SceneManager {
       isArcade ? this.entityBatch.contactShadowCount : 0
     );
 
-    this.updateCameraRig(frameDt, nowSec, session, params.activePacerQuadrant);
+    this.updateCameraRig(
+      frameDt,
+      nowSec,
+      session,
+      params.activePacerQuadrant,
+      this.currentMode === 'BRUSH_ALONG' ? (params.pacer ?? null) : null
+    );
     this.applyHubViewShift(frameDt);
     this.applyCameraJuice(frameDt, nowSec);
     this.updateOralLighting(nowSec, isArcade, session);
@@ -790,7 +797,8 @@ export class SceneManager {
     dt: number,
     nowSec: number,
     session: WorldSession,
-    activeQuadrant: number
+    activeQuadrant: number,
+    pacer: PacerVisualState | null = null
   ): void {
     // 1. Bounded Powers-of-Ten Dive Transition
     if (this.diveActive) {
@@ -911,20 +919,31 @@ export class SceneManager {
         );
       const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.55 / (this.hubSideFrac * 0.92)) : 1;
       const radius = (portraitView ? 36.8 : 22.4) * bandDolly * sideDolly;
-      const pitch = portraitView ? 0.54 : 0.56;
       const panScale = portraitView ? 1.1 : 2.2;
-      // Mirror view: quadrants 0/3 are the patient's right (screen-right), 0/1 the upper arch.
-      const side = activeQuadrant < 0 ? 0 : activeQuadrant === 0 || activeQuadrant === 3 ? 1 : -1;
-      const lift = activeQuadrant < 0 ? 0 : activeQuadrant <= 1 ? 1 : -1;
-      const quadPanX = side * panScale * 0.5;
+      // Turn the teeth being brushed toward the viewer (cheek side, tops, or inside), like the
+      // native coaching camera. Mirror view: quadrants 0/3 are the patient's right (screen-right).
+      const aim = pacer
+        ? brushCameraAim(pacer, this.reducedMotion)
+        : brushCameraAim(
+            activeQuadrant < 0
+              ? null
+              : { stage: 'brushing', quadrant: activeQuadrant, surface: 0, flossIsUpper: true, flossContactIndex: 0 },
+            true
+          );
+      const pitch = (portraitView ? 0.54 : 0.56) + aim.pitchAdd;
+      const quadPanX = aim.side * panScale * 0.5;
       // Pull back so the upper and lower arches both fit, and aim between them (the open mouth).
-      const mouthRadius = radius * PACER_MOUTH_DOLLY;
+      const mouthRadius = radius * PACER_MOUTH_DOLLY * aim.dolly;
       desiredPos.set(
-        32 + quadPanX,
+        32 + quadPanX + Math.sin(aim.yaw) * Math.cos(pitch) * mouthRadius,
         2.1 + Math.sin(pitch) * mouthRadius,
-        16 + Math.cos(pitch) * mouthRadius
+        16 + Math.cos(aim.yaw) * Math.cos(pitch) * mouthRadius
       );
-      desiredLook.set(32 + quadPanX * 0.42, 3.8 + lift * 0.7, 13.2 - lift * 1.2);
+      desiredLook.set(
+        32 + quadPanX * (portraitView ? 0.42 : 0.8),
+        3.8 + aim.lift * 0.7,
+        13.2 - aim.lift * 1.2
+      );
     } else if (this.currentMode === 'REPORT') {
       const celebYaw = motionTime * 0.42 + this.orbitYaw;
       this.measureHubBand(dt);
@@ -945,7 +964,8 @@ export class SceneManager {
       desiredLook.set(px + leadX, session.probeY + 0.4, pz + leadZ - 0.8);
     }
 
-    const damp = 1 - Math.exp(-6.5 * dt);
+    // Brush-Along glides slowly between views so the move reads as calm, not a jump cut.
+    const damp = 1 - Math.exp(-(this.currentMode === 'BRUSH_ALONG' ? 2.4 : 6.5) * dt);
     this.rigPos.lerp(desiredPos, damp);
     this.currentLookAt.lerp(desiredLook, damp);
     this.camera.position.copy(this.rigPos);
