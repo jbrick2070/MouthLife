@@ -26,6 +26,22 @@ export interface CharityNeedStat {
   detail: string;
 }
 
+/**
+ * A further free-dental-care charity shown under SmileOnU in the charity sheet.
+ * To add one: verify every fact and link on the charity's own website, then add an entry to
+ * MORE_DENTAL_CHARITIES here and to `CharityInfo.moreCharities` in the native app's CharityInfo.swift.
+ */
+export interface PartnerCharityInfo {
+  id: string;
+  emoji: string;
+  name: string;
+  legalStatus: string;
+  summary: string;
+  websiteUrl: string;
+  donateUrl: string;
+  links: readonly CharityLinkItem[];
+}
+
 export interface SmileOnUCharityInfo {
   name: string;
   tagline: string;
@@ -142,3 +158,32 @@ export const SMILE_ON_U_CHARITY: SmileOnUCharityInfo = {
   independenceNote:
     'MouthLife is a free game and brushing timer. If you liked it, you can help real people get dental care at SmileOnU.org.',
 };
+
+/** Facts and links checked against ramusa.org (November 2026). */
+export const MORE_DENTAL_CHARITIES: readonly PartnerCharityInfo[] = [
+  {
+    id: 'remote_area_medical',
+    emoji: '⛺',
+    name: 'Remote Area Medical (RAM)',
+    legalStatus: 'U.S. 501(c)(3) Nonprofit • Since 1985',
+    summary:
+      'RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.',
+    websiteUrl: 'https://www.ramusa.org/',
+    donateUrl: 'https://www.ramusa.org/donate/',
+    links: [
+      {
+        id: 'ram_schedule',
+        label: '📅 Find a Free Clinic',
+        url: 'https://www.ramusa.org/schedule/',
+      },
+      {
+        id: 'ram_volunteer',
+        label: '🤝 Volunteer at a Clinic',
+        url: 'https://www.ramusa.org/volunteer/',
+      },
+    ],
+  },
+];
+
+export const MORE_CHARITIES_NOTE =
+  'Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.';

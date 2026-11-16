@@ -1,5 +1,5 @@
 import { COACH_LANGUAGES, COACH_LANGUAGE_INFO, isCoachLanguage, type CoachLanguage } from '../config/brushCoach';
-import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
+import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   formatToothBadge,
   getCompanionCrownSummary,
@@ -955,7 +955,7 @@ export class CompanionHubOverlay implements OverlayView {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    ${escapeHtml(l.label)} ↗
+                    ${escapeHtml(l.label)} <span aria-hidden="true">↗</span>
                   </a>
                 `
                 )
@@ -984,6 +984,58 @@ export class CompanionHubOverlay implements OverlayView {
                 )
                 .join('')}
             </div>
+
+            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🦷 More Free Dental Care Charities</div>
+            <div id="charity-more-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+              ${MORE_DENTAL_CHARITIES.map(
+                (m) => `
+                  <div data-charity="${escapeHtml(m.id)}" style="background:rgba(4,16,28,0.8);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:9px 11px;">
+                    <strong style="display:block;font-size:0.85rem;color:#fff;">${m.emoji} ${escapeHtml(m.name)}</strong>
+                    <div style="font-size:0.69rem;color:#fde68a;font-weight:600;">${escapeHtml(m.legalStatus)}</div>
+                    <p style="margin:5px 0 8px 0;font-size:0.75rem;color:#cbd5e1;line-height:1.38;">
+                      ${escapeHtml(m.summary)}
+                    </p>
+                    <div class="row-wrap">
+                      <a
+                        class="btn btn-sm btn-gold"
+                        href="${escapeHtml(m.donateUrl)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Donate to ${escapeHtml(m.name)}"
+                      >
+                        💛 Donate ↗
+                      </a>
+                      <a
+                        class="btn btn-sm"
+                        href="${escapeHtml(m.websiteUrl)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Visit the ${escapeHtml(m.name)} website"
+                      >
+                        🌐 Website ↗
+                      </a>
+                      ${m.links
+                        .map(
+                          (l) => `
+                          <a
+                            class="btn btn-sm"
+                            href="${escapeHtml(l.url)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            ${escapeHtml(l.label)} <span aria-hidden="true">↗</span>
+                          </a>
+                        `
+                        )
+                        .join('')}
+                    </div>
+                  </div>
+                `
+              ).join('')}
+            </div>
+            <p style="margin:0 0 10px 0;font-size:0.71rem;color:var(--text-muted);line-height:1.38;">
+              ${escapeHtml(MORE_CHARITIES_NOTE)}
+            </p>
 
             <p style="margin:0;font-size:0.71rem;color:var(--text-muted);line-height:1.38;">
               ${escapeHtml(c.independenceNote)}

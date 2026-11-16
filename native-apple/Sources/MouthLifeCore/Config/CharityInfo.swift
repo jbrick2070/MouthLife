@@ -48,6 +48,40 @@ public struct CharityNeedStat: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+/// A further free-dental-care charity shown under SmileOnU in the charity sheet.
+/// To add one: verify every fact and link on the charity's own website, then add an entry to
+/// `CharityInfo.moreCharities` here and to `MORE_DENTAL_CHARITIES` in the web edition's charityInfo.ts.
+public struct PartnerCharityInfo: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var emoji: String
+    public var name: String
+    public var legalStatus: String
+    public var summary: String
+    public var websiteUrl: URL
+    public var donateUrl: URL
+    public var links: [CharityLinkItem]
+
+    public init(
+        id: String,
+        emoji: String,
+        name: String,
+        legalStatus: String,
+        summary: String,
+        websiteUrl: URL,
+        donateUrl: URL,
+        links: [CharityLinkItem]
+    ) {
+        self.id = id
+        self.emoji = emoji
+        self.name = name
+        self.legalStatus = legalStatus
+        self.summary = summary
+        self.websiteUrl = websiteUrl
+        self.donateUrl = donateUrl
+        self.links = links
+    }
+}
+
 /// Verified public information and links for SmileOnU (https://smileonu.org/),
 /// a U.S. 501(c)(3) humanitarian dental relief nonprofit.
 public enum CharityInfo {
@@ -171,4 +205,31 @@ public enum CharityInfo {
             url: URL(string: "https://twitter.com/SmileOnU_")!
         )
     ]
+
+    /// Further free-dental-care charities. Facts and links checked against ramusa.org (November 2026).
+    public static let moreCharities: [PartnerCharityInfo] = [
+        PartnerCharityInfo(
+            id: "remote_area_medical",
+            emoji: "⛺",
+            name: "Remote Area Medical (RAM)",
+            legalStatus: "U.S. 501(c)(3) Nonprofit • Since 1985",
+            summary: "RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.",
+            websiteUrl: URL(string: "https://www.ramusa.org/")!,
+            donateUrl: URL(string: "https://www.ramusa.org/donate/")!,
+            links: [
+                CharityLinkItem(
+                    id: "ram_schedule",
+                    label: "📅 Find a Free Clinic",
+                    url: URL(string: "https://www.ramusa.org/schedule/")!
+                ),
+                CharityLinkItem(
+                    id: "ram_volunteer",
+                    label: "🤝 Volunteer at a Clinic",
+                    url: URL(string: "https://www.ramusa.org/volunteer/")!
+                )
+            ]
+        )
+    ]
+
+    public static let moreCharitiesNote = "Each link opens the charity’s own website. MouthLife takes no fee and never handles donations."
 }

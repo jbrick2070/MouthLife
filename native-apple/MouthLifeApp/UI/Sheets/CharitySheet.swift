@@ -125,6 +125,53 @@ public struct CharitySheet: View {
                     }
                     .mlGlassCard()
 
+                    // More free-dental-care charities (all external Safari)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(L10n.t("MORE FREE DENTAL CARE CHARITIES"))
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(MLTheme.cyanAccent)
+
+                        ForEach(CharityInfo.moreCharities) { charity in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(L10n.t("\(charity.emoji) \(charity.name)"))
+                                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                                    .foregroundStyle(MLTheme.textPrimary)
+                                Text(L10n.t(charity.legalStatus))
+                                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                                    .foregroundStyle(MLTheme.fluorapatiteGold)
+                                Text(L10n.t(charity.summary))
+                                    .font(.system(.footnote, design: .rounded))
+                                    .foregroundStyle(MLTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                HStack(spacing: 10) {
+                                    Link(destination: charity.donateUrl) {
+                                        Label(L10n.t("Donate in Safari"), systemImage: "safari.fill")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
+
+                                    Link(destination: charity.websiteUrl) {
+                                        Label(L10n.t("Website"), systemImage: "arrow.up.right.square")
+                                    }
+                                    .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
+                                }
+
+                                FlowLayoutLinks(items: charity.links)
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white.opacity(0.04))
+                            )
+                        }
+
+                        Text(L10n.t(CharityInfo.moreCharitiesNote))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(MLTheme.textMuted)
+                    }
+                    .mlGlassCard()
+
                     // Independence & Clinical Disclaimer
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.t(CharityInfo.transparencyNote))

@@ -407,6 +407,20 @@ final class MouthLifeCoreTests: XCTestCase {
 
         XCTAssertEqual(CharityInfo.donateUrl.scheme, "https")
         XCTAssertEqual(CharityInfo.websiteUrl.host, "smileonu.org")
+
+        // Further dental charities: every link is https and stays on that charity's own site.
+        XCTAssertFalse(CharityInfo.moreCharities.isEmpty)
+        XCTAssertEqual(Set(CharityInfo.moreCharities.map(\.id)).count, CharityInfo.moreCharities.count)
+        for charity in CharityInfo.moreCharities {
+            XCTAssertTrue(charity.legalStatus.contains("501(c)(3)"))
+            XCTAssertNotEqual(charity.donateUrl, charity.websiteUrl)
+            for url in [charity.websiteUrl, charity.donateUrl] + charity.links.map(\.url) {
+                XCTAssertEqual(url.scheme, "https")
+                XCTAssertEqual(url.host, charity.websiteUrl.host)
+                XCTAssertNotEqual(url.host, "smileonu.org")
+            }
+        }
+        XCTAssertEqual(CharityInfo.moreCharities.first { $0.id == "remote_area_medical" }?.donateUrl.absoluteString, "https://www.ramusa.org/donate/")
         XCTAssertEqual(WorldRegistry.allWorlds.count, 6)
 
         // Step WorldSession deterministically

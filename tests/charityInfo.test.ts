@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SMILE_ON_U_CHARITY } from '../src/config/charityInfo';
+import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, SMILE_ON_U_CHARITY } from '../src/config/charityInfo';
 
 describe('SmileOnU humanitarian dental charity config', () => {
   it('exposes verified HTTPS donate, website, and mailto contact endpoints', () => {
@@ -42,5 +42,27 @@ describe('SmileOnU humanitarian dental charity config', () => {
     expect(new Set(allUrls).size).toBe(allUrls.length);
     expect(SMILE_ON_U_CHARITY.needHighlights).toHaveLength(3);
     expect(SMILE_ON_U_CHARITY.independenceNote).toContain('SmileOnU.org');
+  });
+
+  it('lists further dental charities, each with its own https donate and website links', () => {
+    expect(MORE_DENTAL_CHARITIES.length).toBeGreaterThan(0);
+    expect(new Set(MORE_DENTAL_CHARITIES.map((m) => m.id)).size).toBe(MORE_DENTAL_CHARITIES.length);
+    for (const m of MORE_DENTAL_CHARITIES) {
+      expect(m.name.length).toBeGreaterThan(2);
+      expect(m.legalStatus).toContain('501(c)(3)');
+      expect(m.summary.length).toBeGreaterThan(40);
+      const host = new URL(m.websiteUrl).host;
+      // Every link stays on the charity's own site, and never points at SmileOnU by mistake.
+      for (const url of [m.websiteUrl, m.donateUrl, ...m.links.map((l) => l.url)]) {
+        expect(url.startsWith('https://')).toBe(true);
+        expect(new URL(url).host).toBe(host);
+        expect(url).not.toContain('smileonu.org');
+      }
+      expect(m.donateUrl).not.toBe(m.websiteUrl);
+    }
+    const ram = MORE_DENTAL_CHARITIES.find((m) => m.id === 'remote_area_medical');
+    expect(ram?.donateUrl).toBe('https://www.ramusa.org/donate/');
+    expect(ram?.websiteUrl).toBe('https://www.ramusa.org/');
+    expect(MORE_CHARITIES_NOTE).toContain('no fee');
   });
 });

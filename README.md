@@ -109,4 +109,12 @@ If you enjoyed playing **MouthLife**, please consider supporting [**SmileOnU**](
   - **Upcoming Clinics & CEUs for Charity:** [https://smileonu.org/upcoming-events/](https://smileonu.org/upcoming-events/)
   - **Contact:** `info@smileonu.org`
 
+### More free dental care charities
+
+The charity sheet in both editions also lists further charities under SmileOnU. Each opens the charity's own website; MouthLife takes no fee and never handles donations.
+
+- **Remote Area Medical (RAM)** — U.S. 501(c)(3) nonprofit running free pop-up dental, vision and medical clinics since 1985. Donate: [https://www.ramusa.org/donate/](https://www.ramusa.org/donate/) • Clinic schedule: [https://www.ramusa.org/schedule/](https://www.ramusa.org/schedule/) • Volunteer: [https://www.ramusa.org/volunteer/](https://www.ramusa.org/volunteer/)
+
+**Adding another charity:** verify every fact and link on the charity's own website, add one entry to `MORE_DENTAL_CHARITIES` in `src/config/charityInfo.ts` and the matching entry to `CharityInfo.moreCharities` in `native-apple/Sources/MouthLifeCore/Config/CharityInfo.swift`, then run `npm run i18n:extract`, add the new strings to `src/i18n/locales/*.json`, and run `node scripts/i18n-native.mjs`.
+
 *(MouthLife is a free, independent dental arcade & brushing companion encouraging players who enjoy the game to support charitable dental relief directly at SmileOnU.org.)*

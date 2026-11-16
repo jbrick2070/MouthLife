@@ -961,7 +961,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"Geflitzt! +{0} Schub",
 "Zipped! Surge Full":"Geflitzt! Schub voll",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome aus dem All in echte Städte und die Zahngeschichte. Freu dich jeden Tag über glatte, saubere Zähne durch Putzen, Zahnseide und Fluorid!",
-"Menu":"Menü"
+"Menu":"Menü",
+"🌐 Website ↗":"🌐 Website ↗",
+"📅 Find a Free Clinic":"📅 Kostenlose Klinik finden",
+"🤝 Volunteer at a Clinic":"🤝 Ehrenamtlich in einer Klinik helfen",
+"🦷 More Free Dental Care Charities":"🦷 Weitere Hilfsorganisationen für kostenlose Zahnbehandlung",
+"Donate to {0}":"An {0} spenden",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"Jeder Link öffnet die eigene Website der Organisation. MouthLife nimmt keine Gebühr und wickelt niemals Spenden ab.",
+"MORE FREE DENTAL CARE CHARITIES":"WEITERE HILFSORGANISATIONEN FÜR KOSTENLOSE ZAHNBEHANDLUNG",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM veranstaltet kostenlose mobile Kliniken in den ganzen USA. Freiwillige machen Zahnreinigungen, Füllungen, Zahnentfernungen und Röntgenbilder und bieten außerdem kostenlose Augen- und Arztbehandlungen an. Eine Versicherung ist nicht nötig.",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"Gemeinnützige US-Organisation nach 501(c)(3) • Seit 1985",
+"Visit the {0} website":"Website von {0} besuchen",
+"Website":"Website"
 }
 """###
 
@@ -1908,7 +1919,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"¡Lanzado! +{0} de Impulso",
 "Zipped! Surge Full":"¡Lanzado! Impulso lleno",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Acércate desde el espacio a ciudades reales y a la historia de los dientes. ¡Disfruta de dientes lisos y limpios cada día cepillándote, usando hilo dental y flúor!",
-"Menu":"Menú"
+"Menu":"Menú",
+"🌐 Website ↗":"🌐 Sitio web ↗",
+"📅 Find a Free Clinic":"📅 Busca una clínica gratuita",
+"🤝 Volunteer at a Clinic":"🤝 Sé voluntario en una clínica",
+"🦷 More Free Dental Care Charities":"🦷 Más organizaciones de atención dental gratuita",
+"Donate to {0}":"Donar a {0}",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"Cada enlace abre el sitio web de la propia organización. MouthLife no cobra ninguna comisión y nunca gestiona donaciones.",
+"MORE FREE DENTAL CARE CHARITIES":"MÁS ORGANIZACIONES DE ATENCIÓN DENTAL GRATUITA",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM organiza clínicas temporales gratuitas por todo Estados Unidos. Sus voluntarios hacen limpiezas dentales, empastes, extracciones y radiografías, además de ofrecer atención médica y de la vista gratis. No hace falta seguro.",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"Organización sin fines de lucro 501(c)(3) de EE. UU. • Desde 1985",
+"Visit the {0} website":"Visita el sitio web de {0}",
+"Website":"Sitio web"
 }
 """###
 
@@ -2855,7 +2877,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"Glissé ! +{0} Vague",
 "Zipped! Surge Full":"Glissé ! Vague pleine",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome depuis l'espace sur de vraies villes et l'histoire des dents. Profite de dents lisses et propres chaque jour grâce au brossage, au fil dentaire et au fluor !",
-"Menu":"Menu"
+"Menu":"Menu",
+"🌐 Website ↗":"🌐 Site web ↗",
+"📅 Find a Free Clinic":"📅 Trouver une clinique gratuite",
+"🤝 Volunteer at a Clinic":"🤝 Être bénévole en clinique",
+"🦷 More Free Dental Care Charities":"🦷 Autres associations de soins dentaires gratuits",
+"Donate to {0}":"Faire un don à {0}",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"Chaque lien ouvre le site de l’association elle-même. MouthLife ne prend aucuns frais et ne gère jamais les dons.",
+"MORE FREE DENTAL CARE CHARITIES":"AUTRES ASSOCIATIONS DE SOINS DENTAIRES GRATUITS",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM organise des cliniques éphémères gratuites partout aux États-Unis. Ses bénévoles font des nettoyages dentaires, des plombages, des extractions et des radios, et offrent aussi des soins médicaux et de la vue gratuits. Aucune assurance n’est nécessaire.",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"Association américaine à but non lucratif 501(c)(3) • Depuis 1985",
+"Visit the {0} website":"Visiter le site web de {0}",
+"Website":"Site web"
 }
 """###
 
@@ -3802,7 +3835,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"ジップ成功！ +{0} サージ",
 "Zipped! Surge Full":"ジップ成功！ サージまんたん",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"うちゅうから本物のまちや歯のれきしにズームイン！歯みがき、フロス、フッそを使って、毎日つるつるできれいな歯を楽しみましょう！",
-"Menu":"メニュー"
+"Menu":"メニュー",
+"🌐 Website ↗":"🌐 ウェブサイト ↗",
+"📅 Find a Free Clinic":"📅 むりょうクリニックをさがす",
+"🤝 Volunteer at a Clinic":"🤝 クリニックでボランティア",
+"🦷 More Free Dental Care Charities":"🦷 むりょうで歯の手あてをする、ほかのチャリティー",
+"Donate to {0}":"{0} にきふする",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"リンクをおすと、それぞれのチャリティーのウェブサイトがひらきます。MouthLife は手数料をとらず、きふをあつかうこともありません。",
+"MORE FREE DENTAL CARE CHARITIES":"むりょうで歯の手あてをする、ほかのチャリティー",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM は、アメリカの各地でむりょうの出張クリニックをひらいています。ボランティアが、歯のクリーニング、つめもの、ばっ歯、レントゲンのほか、目やからだのしんさつもむりょうで行います。ほけんはいりません。",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"アメリカの501(c)(3)ひえいりだんたい • 1985年から",
+"Visit the {0} website":"{0} のウェブサイトを見る",
+"Website":"ウェブサイト"
 }
 """###
 
@@ -4749,7 +4793,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"통과! +{0} 파동",
 "Zipped! Surge Full":"통과! 파동 가득 참",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"우주에서 실제 도시와 치아 역사 속으로 쑥 들어가 봐요. 양치질과 치실, 불소로 매일 매끈하고 깨끗한 치아를 느껴 봐요!",
-"Menu":"메뉴"
+"Menu":"메뉴",
+"🌐 Website ↗":"🌐 웹사이트 ↗",
+"📅 Find a Free Clinic":"📅 무료 진료소 찾기",
+"🤝 Volunteer at a Clinic":"🤝 진료소 봉사 참여하기",
+"🦷 More Free Dental Care Charities":"🦷 무료 치과 진료를 돕는 다른 자선 단체",
+"Donate to {0}":"{0}에 후원하기",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"각 링크는 해당 단체의 공식 웹사이트로 연결돼요. MouthLife는 수수료를 받지 않으며 후원금을 직접 다루지 않아요.",
+"MORE FREE DENTAL CARE CHARITIES":"무료 치과 진료를 돕는 다른 자선 단체",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM은 미국 곳곳에서 무료 이동 진료소를 열어요. 자원봉사자들이 스케일링, 충치 치료, 발치, 치과 엑스레이는 물론 무료 시력 검사와 일반 진료도 해 줘요. 보험이 없어도 돼요.",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"미국 501(c)(3) 비영리 단체 • 1985년부터",
+"Visit the {0} website":"{0} 웹사이트 방문하기",
+"Website":"웹사이트"
 }
 """###
 
@@ -5696,7 +5751,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"Passou! +{0} Pulso",
 "Zipped! Surge Full":"Passou! Pulso Cheio",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Dê zoom do espaço até cidades reais e conheça a história dos dentes. Curta dentes lisos e limpos todo dia escovando, passando fio dental e usando flúor!",
-"Menu":"Menu"
+"Menu":"Menu",
+"🌐 Website ↗":"🌐 Site ↗",
+"📅 Find a Free Clinic":"📅 Encontre uma Clínica Gratuita",
+"🤝 Volunteer at a Clinic":"🤝 Seja Voluntário em uma Clínica",
+"🦷 More Free Dental Care Charities":"🦷 Mais Instituições de Cuidado Dental Gratuito",
+"Donate to {0}":"Doar para {0}",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"Cada link abre o site da própria instituição. O MouthLife não cobra nenhuma taxa e nunca lida com doações.",
+"MORE FREE DENTAL CARE CHARITIES":"MAIS INSTITUIÇÕES DE CUIDADO DENTAL GRATUITO",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"A RAM organiza clínicas temporárias gratuitas por todos os Estados Unidos. Os voluntários fazem limpezas dentais, obturações, extrações e radiografias, além de oferecer atendimento médico e de visão gratuito. Não é preciso ter plano de saúde.",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"Organização sem fins lucrativos 501(c)(3) dos EUA • Desde 1985",
+"Visit the {0} website":"Visite o site de {0}",
+"Website":"Site"
 }
 """###
 
@@ -6643,7 +6709,18 @@ enum L10nCatalogs {
 "Zipped! +{0} Surge":"滑过啦！+{0} 爆发",
 "Zipped! Surge Full":"滑过啦！爆发已满",
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"从太空飞进真实的城市，探索牙齿历史。每天刷牙、用牙线和使用氟化物，享受光滑干净的牙齿吧！",
-"Menu":"菜单"
+"Menu":"菜单",
+"🌐 Website ↗":"🌐 官方网站 ↗",
+"📅 Find a Free Clinic":"📅 查找免费义诊",
+"🤝 Volunteer at a Clinic":"🤝 参加义诊志愿服务",
+"🦷 More Free Dental Care Charities":"🦷 更多免费牙科护理慈善机构",
+"Donate to {0}":"向 {0} 捐赠",
+"Each link opens the charity’s own website. MouthLife takes no fee and never handles donations.":"每个链接都会打开该机构自己的网站。MouthLife 不收取任何费用，也从不经手捐款。",
+"MORE FREE DENTAL CARE CHARITIES":"更多免费牙科护理慈善机构",
+"RAM runs free pop-up clinics across the United States. Volunteers give dental cleanings, fillings, extractions and X-rays, along with free vision and medical care. No insurance is needed.":"RAM 在美国各地举办免费的流动义诊。志愿者提供洗牙、补牙、拔牙和牙科 X 光检查，还提供免费的视力和医疗服务。无需保险。",
+"U.S. 501(c)(3) Nonprofit • Since 1985":"美国 501(c)(3) 非营利机构 • 始于 1985 年",
+"Visit the {0} website":"访问 {0} 的网站",
+"Website":"官方网站"
 }
 """###
 }

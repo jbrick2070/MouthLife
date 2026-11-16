@@ -22,7 +22,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
    - Avoid per-frame heap allocations inside `MouthLifeSceneController.renderer(_:updateAtTime:)` (`120Hz`) and `RealtimeSynthKernel` (`AVAudioSourceNode` real-time audio thread).
    - Keep Metal uniform updates guarded by shadow-state checks in `EnamelShaders.swift` (`EnamelUniformShadow`), and preserve the packed `float4x4 waveMatrix` slot conventions documented in [`native-apple/README.md`](native-apple/README.md).
 4. **Non-Punitive Design & 100% On-Device Privacy:**
-   - Zero streak-loss shaming, `90-day` Saliva Stasis floor (`>= 45%` smoothness, zero offline shield damage), non-punitive `50%` Ca(OH)₂ Pulp Rescue timeout stabilization, `NSPrivacyTracking = false` in `PrivacyInfo.xcprivacy`, and external Safari-only links for `SmileOnU.org` (`CharityInfo.swift`).
+   - Zero streak-loss shaming, `90-day` Saliva Stasis floor (`>= 45%` smoothness, zero offline shield damage), non-punitive `50%` Ca(OH)₂ Pulp Rescue timeout stabilization, `NSPrivacyTracking = false` in `PrivacyInfo.xcprivacy`, and external Safari-only links for `SmileOnU.org` and the further charities in `CharityInfo.moreCharities` (`CharityInfo.swift`; verify every link on the charity's own site before adding one).
 
 ## 3. Verification Checklist Before Committing
 
