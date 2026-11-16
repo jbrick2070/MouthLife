@@ -62,6 +62,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  // Bundled soundtrack (/music/*): streamed with Range requests straight from the network; 70 MB of
+  // audio never belongs in the shell cache.
+  if (url.pathname.includes('/music/')) return;
+
   // Immutable content-hashed Vite bundles (/assets/*): cache-first, populate on miss
   if (url.pathname.includes('/assets/')) {
     event.respondWith(

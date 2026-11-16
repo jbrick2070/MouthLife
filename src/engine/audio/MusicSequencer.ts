@@ -25,6 +25,8 @@ export class MusicSequencer {
   tempoScale = 1;
   currentChord: ChordDef = THEMES.hub.progressionA[0];
   stepsScheduled = 0;
+  /** While a bundled recording plays, chords keep advancing (for in-key SFX) but no notes sound. */
+  notesMuted = false;
   onTempo: ((stepSec: number) => void) | null = null;
 
   constructor(private readonly ctx: AudioContext, private readonly out: VoiceOut) {}
@@ -84,6 +86,7 @@ export class MusicSequencer {
     const res = generateStep(this.theme, this.gs, this.opts);
     this.currentChord = res.chord;
     this.stepsScheduled++;
+    if (this.notesMuted) return;
     const swing = res.step % 2 === 1 ? this.theme.swing * stepSec : 0;
     const base = t0 + swing;
     for (const n of res.notes) {
