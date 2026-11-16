@@ -1,5 +1,7 @@
 import type { AppMode } from '../types';
 import { MusicSequencer } from './MusicSequencer';
+import { MusicTrackDeck } from './MusicTrackDeck';
+import { BUNDLED_MUSIC_FILES } from 'virtual:bundled-music';
 import {
   COSMIC_BEAT_BARS,
   DEFAULT_AUDIO_PREFS,
@@ -28,6 +30,13 @@ import {
 
 const MASTER_GAIN = 0.85;
 const MUSIC_SCALE = 0.55;
+/** Bundled recordings are mastered already; same level the native app gives them. */
+const TRACK_SCALE = 0.72;
+/**
+ * Octave offset for Brush-Along cues, added to the theme key (a full MIDI note, G3 for
+ * Brush-Along), so cues land around G4. Keep in step with `pacerCueOctave` in the native app.
+ */
+const PACER_CUE_OCTAVE = 12;
 const SFX_SCALE = 0.95;
 /** About -8.4 dB, the same music duck the native app uses under spoken cues. */
 const VOICE_DUCK_GAIN = 0.38;
@@ -95,6 +104,10 @@ export class SoundEngine {
 
   private throttles = new Map<string, number>();
 
+  /** Streams the bundled recordings; null until the audio graph exists. */
+  private trackDeck: MusicTrackDeck | null = null;
+  private trackBus: GainNode | null = null;
+
   constructor(storage?: Pick<Storage, 'getItem' | 'setItem'> | null) {
     this.prefs = loadAudioPrefs(storage);
   }
@@ -161,6 +174,8 @@ export class SoundEngine {
         return;
       }
     }
+    // Still inside the tap that got us here, which is what iOS needs to let the decks play later.
+    this.trackDeck?.unlock();
     if (this.isContextSuspendedOrInterrupted(this.ctx)) {
       this.ctx
         .resume()
@@ -201,6 +216,13 @@ export class SoundEngine {
     this.musicBus.gain.value = this.prefs.musicVolume * MUSIC_SCALE;
     this.musicBus.connect(this.musicFilter);
     this.musicFilter.connect(this.masterGain);
+
+    // Recorded tracks share the music filter (pause muffling) but have their own level.
+    this.trackBus = ctx.createGain();
+    this.trackBus.gain.value = 0;
+    this.trackBus.connect(this.musicFilter);
+    this.trackDeck = new MusicTrackDeck(ctx, this.trackBus, `${import.meta.env.BASE_URL}music/`, BUNDLED_MUSIC_FILES);
+    this.trackDeck.onTrackFailed = () => this.applyPlaybackState();
 
     this.sfxBus = ctx.createGain();
     this.sfxBus.gain.value = this.prefs.sfxVolume * SFX_SCALE;
@@ -347,6 +369,8 @@ export class SoundEngine {
     return {
       ctxState: this.ctx?.state ?? 'uninitialized',
       theme: this.seq?.theme.id ?? null,
+      recordedTrack: this.trackDeck?.activeFile() ?? null,
+      bundledTracks: BUNDLED_MUSIC_FILES.length,
       sequencerRunning: this.seq?.isRunning() ?? false,
       stepsScheduled: this.seq?.stepsScheduled ?? 0,
       muted: this.prefs.muted,
@@ -437,12 +461,16 @@ export class SoundEngine {
     const now = this.ctx.currentTime;
     const themeMix = this.seq.theme.mixGain ?? 1;
     const silent = this.prefs.musicVolume <= 0.001;
+    const themeId = this.seq.theme.id;
+    const track = silent ? null : (this.trackDeck?.resolve(themeId) ?? null);
     const base = silent ? 0 : this.prefs.musicVolume * MUSIC_SCALE * themeMix;
     const wetBase = silent ? 0 : (this.prefs.musicVolume / DEFAULT_AUDIO_PREFS.musicVolume) * themeMix;
     if (this.hidden) {
       this.musicBus.gain.setTargetAtTime(FLOOR, now, 0.05);
       this.musicRevSend?.gain.setTargetAtTime(0, now, 0.05);
       this.musicDelSend?.gain.setTargetAtTime(0, now, 0.05);
+      this.trackBus?.gain.setTargetAtTime(FLOOR, now, 0.05);
+      this.trackDeck?.sync(track, false);
       this.seq.stop();
       this.stopScrub();
       return;
@@ -461,7 +489,19 @@ export class SoundEngine {
         ? 2400
         : Math.min(18000, nyquist);
     this.musicFilter.frequency.setTargetAtTime(cutoff, now, 0.15);
-    if (this.ctx.state === 'running' && !this.prefs.muted && !silent) {
+
+    // Bundled recording for this theme: it plays, and the synth only tracks chords for the SFX.
+    const wantMusic = this.ctx.state === 'running' && !this.prefs.muted && !silent;
+    const acidDip = this.acidTension && themeId === 'world_3';
+    const trackBase = track ? this.prefs.musicVolume * TRACK_SCALE : 0;
+    const trackTarget = Math.max(
+      FLOOR,
+      (this.paused ? trackBase * 0.38 : acidDip ? trackBase * 0.82 : trackBase) * voiceDuck
+    );
+    this.trackBus?.gain.setTargetAtTime(trackTarget, now, 0.12);
+    const trackLive = (this.trackDeck?.sync(track, wantMusic) ?? false) && wantMusic;
+    this.seq.notesMuted = trackLive;
+    if (wantMusic) {
       this.seq.start();
     } else if (silent) {
       this.seq.stop();
@@ -858,13 +898,19 @@ export class SoundEngine {
     });
   }
 
-  /** "3… 2… 1…" pickup before each switch: rising steps, a touch higher for the upper teeth. */
+  /**
+   * "3… 2… 1…" pickup before each switch: a rising triad, an octave higher for the upper teeth.
+   * Soft kalimba taps, then one celesta note on "1". The theme key is already a full note
+   * (around G3), so these offsets keep the pips between roughly 200 Hz and 600 Hz.
+   */
   playPacerAnticipationPip(secondsLeft: number, isUpper: boolean): void {
-    const step = 3 - Math.max(1, Math.min(3, Math.round(secondsLeft)));
-    const octave = isUpper ? 72 : 60;
+    const s = Math.max(1, Math.min(3, Math.round(secondsLeft)));
+    const degree = (3 - s) * 2; // 3s -> 0, 2s -> 2, 1s -> 4
+    const octave = isUpper ? PACER_CUE_OCTAVE : PACER_CUE_OCTAVE - 12;
     this.run((o, t) => {
-      this.wood(o, t, this.harmonicMidi(step, octave), 0.42 + step * 0.08);
-      if (step === 2) this.bell(o, t + 0.02, this.harmonicMidi(step + 2, octave), 0.34);
+      const f = midiToFreq(this.harmonicMidi(degree, octave));
+      if (s === 1) celesta(o, t, f, 0.42, 0, 0.45, false);
+      else marimba(o, t, f, 0.32, 0, 0.45, true);
     });
   }
 
@@ -875,17 +921,19 @@ export class SoundEngine {
     const k = Math.max(0, Math.min(1, intensity01));
     this.run((o, t) => {
       this.noiseSweep(o, t, 900, 2600, 0.16, 0.02 + 0.03 * k, 1.0);
-      this.bell(o, t + 0.03, this.harmonicMidi(p > 0 ? 4 : 2, 72), 0.22 + 0.2 * k, p, 0.6);
+      this.bell(o, t + 0.03, this.harmonicMidi(p > 0 ? 4 : 2, PACER_CUE_OCTAVE + 12), 0.22 + 0.2 * k, p, 0.6);
     });
   }
 
   playPacerCue(kind: 'surface' | 'quadrant' | 'complete'): void {
+    // Every Brush-Along cue sits in the music's own register (roughly 400-700 Hz). They used
+    // to be three to five octaves higher, up to 6 kHz, which sounded like a dog whistle.
     if (kind === 'surface') {
-      this.run((o, t) => this.wood(o, t, this.harmonicMidi(3, 48), 0.7));
+      this.run((o, t) => this.wood(o, t, this.harmonicMidi(3, PACER_CUE_OCTAVE), 0.7));
     } else if (kind === 'quadrant') {
       this.run((o, t) => {
-        this.wood(o, t, this.harmonicMidi(2, 48), 0.7);
-        this.bell(o, t + 0.08, this.harmonicMidi(5, 60), 0.6);
+        this.wood(o, t, this.harmonicMidi(2, PACER_CUE_OCTAVE), 0.7);
+        this.bell(o, t + 0.08, this.harmonicMidi(5, PACER_CUE_OCTAVE), 0.55);
       });
     } else {
       this.playDistrictSealed();

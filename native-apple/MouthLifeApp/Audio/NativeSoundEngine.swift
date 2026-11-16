@@ -2964,15 +2964,21 @@ public final class NativeSoundEngine {
         }
     }
 
+    /// Octave offset for Brush-Along cues, added to the theme key (already a full MIDI note, G3 for
+    /// Brush-Along), so cues land around G4. They used to sit three to five octaves higher, up to
+    /// 6 kHz, which sounded like a dog whistle. Keep in step with `PACER_CUE_OCTAVE` on the web.
+    private static let pacerCueOctave = 12
+
     /// 2-Minute Sink Brush-Along Pacer cues: 10s surface soft-tick, 30s quadrant chime, 2:00 fanfare!
     public func playPacerCue(_ kind: PacerAudioCueKind) {
         guard canPlaySfx() else { return }
+        let oct = Self.pacerCueOctave
         switch kind {
         case .surface:
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 3, octaveShift: 48), vel: 0.68, reverb: 0.22)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 3, octaveShift: oct), vel: 0.68, reverb: 0.22)
         case .quadrant:
-            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: 48), vel: 0.72, reverb: 0.30)
-            emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: 60), offsetSec: 0.08, vel: 0.65, reverb: 0.62)
+            emitSfxVoice(.marimba, midi: harmonicMidi(degree: 2, octaveShift: oct), vel: 0.72, reverb: 0.30)
+            emitSfxVoice(.bell, midi: harmonicMidi(degree: 5, octaveShift: oct), offsetSec: 0.08, vel: 0.6, reverb: 0.62)
         case .complete:
             playDistrictSealed()
         }
@@ -2984,7 +2990,7 @@ public final class NativeSoundEngine {
     /// - Distinct timbre per surface: **Outer** = Flowing Glass-Harp Crescent, **Chewing** = Wooden Marimba Double-Tap, **Inner** = Rising Crystal Bell Portal.
     public func playPacerSurfaceMotif(quadrant: BrushQuadrant, surface: BrushSurface, isNewQuadrant: Bool) {
         guard canPlaySfx() else { return }
-        let oct = quadrant.isUpper ? 60 : 48
+        let oct = quadrant.isUpper ? Self.pacerCueOctave + 12 : Self.pacerCueOctave
         let pan: Float = quadrant.isPatientRight ? 0.24 : -0.24
 
         if isNewQuadrant {
@@ -3011,7 +3017,7 @@ public final class NativeSoundEngine {
     public func playPacerAnticipationPip(secondsLeft: Int, isUpper: Bool) {
         guard (1...3).contains(secondsLeft), canPlaySfx() else { return }
         let deg = (3 - secondsLeft) * 2 // 3s -> 0, 2s -> 2, 1s -> 4 (rising triad!)
-        let oct = isUpper ? 60 : 48
+        let oct = isUpper ? Self.pacerCueOctave : Self.pacerCueOctave - 12
         let voice: SynthVoiceKind = (secondsLeft == 1) ? .celesta : .kalimba
         let vel: Float = (secondsLeft == 1) ? 0.42 : 0.32
         emitSfxVoice(
@@ -3050,7 +3056,7 @@ public final class NativeSoundEngine {
             let pan = Float(i - 1) * 0.26
             emitSfxVoice(
                 i == 2 ? .celesta : .glassHarp,
-                midi: harmonicMidi(degree: deg, octaveShift: 60),
+                midi: harmonicMidi(degree: deg, octaveShift: Self.pacerCueOctave + 12),
                 offsetSec: 0.05 + Double(i) * 0.065,
                 durationSec: 0.52,
                 vel: 0.54,
