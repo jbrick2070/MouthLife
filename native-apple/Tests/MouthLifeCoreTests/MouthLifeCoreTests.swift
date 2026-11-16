@@ -812,4 +812,102 @@ final class MouthLifeCoreTests: XCTestCase {
             XCTAssertNotEqual(live, auto)
         }
     }
+
+    // MARK: - How to Play Guide
+
+    func testTutorialGuideCardsAndControls() {
+        XCTAssertEqual(
+            TutorialGuide.pages.map(\.id),
+            [.home, .brush, .dive, .floss, .surge, .scan, .cities, .ready]
+        )
+        XCTAssertEqual(TutorialGuide.pageIndex(of: .surge), 4)
+
+        for page in TutorialGuide.pages {
+            XCTAssertLessThanOrEqual(page.title.count, 18, page.id.rawValue)
+            XCTAssertLessThanOrEqual(page.body.count, 125, page.id.rawValue)
+            for scheme in TutorialInputScheme.allCases {
+                let hints = TutorialGuide.controls(for: page, scheme: scheme)
+                XCTAssertFalse(hints.isEmpty, "\(page.id.rawValue)/\(scheme.rawValue)")
+                for hint in hints {
+                    XCTAssertFalse(hint.label.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+
+        let dive = TutorialGuide.pages[TutorialGuide.pageIndex(of: .dive)]
+        XCTAssertEqual(TutorialGuide.controls(for: dive, scheme: .keys).flatMap(\.keys), ["W", "A", "S", "D", "Space"])
+        XCTAssertEqual(TutorialGuide.controls(for: dive, scheme: .touch).map(\.label), ["Drag on the tooth"])
+
+        XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: true, gamepadConnected: false), .touch)
+        XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: false, gamepadConnected: false), .keys)
+        XCTAssertEqual(TutorialGuide.pickInputScheme(coarsePointer: true, gamepadConnected: true), .pad)
+    }
+
+    func testTutorialOfferShowsOnFirstThreeLaunchesThenStops() {
+        // Three launches offer the guide; the fourth leaves it to the ? button.
+        var saved = TutorialProgress()
+        var seen: [Bool] = []
+        for _ in 0..<5 {
+            var gate = TutorialGate(progress: saved)
+            gate.enterHome()
+            seen.append(gate.isOfferVisible)
+            // Coming back to Home in the same launch never counts twice.
+            XCTAssertFalse(gate.enterHome())
+            saved = gate.progress
+        }
+        XCTAssertEqual(seen, [true, true, true, false, false])
+        XCTAssertEqual(saved, TutorialProgress(offers: TutorialGuide.maxOffers, opened: false))
+
+        // Declining, or starting a game, puts the offer away for that launch.
+        var declined = TutorialGate()
+        declined.enterHome()
+        XCTAssertTrue(declined.isOfferVisible)
+        declined.dismissOffer()
+        declined.enterHome()
+        XCTAssertFalse(declined.isOfferVisible)
+
+        // Opening the guide once (offer or ? button) ends the offers for good.
+        var first = TutorialGate()
+        first.enterHome()
+        XCTAssertTrue(first.markOpened())
+        XCTAssertFalse(first.markOpened())
+        XCTAssertFalse(first.isOfferVisible)
+        var second = TutorialGate(progress: first.progress)
+        XCTAssertFalse(second.enterHome())
+        XCTAssertFalse(second.isOfferVisible)
+
+        // Saved numbers out of range are pulled back in.
+        XCTAssertEqual(TutorialProgress(offers: 99).offers, TutorialGuide.maxOffers)
+        XCTAssertEqual(TutorialProgress(offers: -4).offers, 0)
+    }
+
+    func testTutorialMotionHelpersAreSmoothAndBounded() {
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 0, periodSec: 6), 0, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 9, periodSec: 6), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: -1.5, periodSec: 6), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.loopPhase(elapsedSec: 3, periodSec: 0), 0)
+
+        XCTAssertEqual(TutorialMotion.ramp(0.1, 0.2, 0.4), 0)
+        XCTAssertEqual(TutorialMotion.ramp(0.3, 0.2, 0.4), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.ramp(0.9, 0.2, 0.4), 1)
+        XCTAssertEqual(TutorialMotion.ease(0.5), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.window(0.5, 0.2, 0.3, 0.7, 0.8), 1, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.window(0.9, 0.2, 0.3, 0.7, 0.8), 0, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.twinkle(0.5), 1, accuracy: 1e-9)
+
+        let stops = [
+            TutorialMotion.Stop(at: 0.0, x: 0, y: 0),
+            TutorialMotion.Stop(at: 0.5, x: 10, y: 20),
+            TutorialMotion.Stop(at: 1.0, x: 0, y: 0)
+        ]
+        XCTAssertEqual(TutorialMotion.along(0.5, stops: stops).x, 10, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.along(0.25, stops: stops).y, 10, accuracy: 1e-9)
+        XCTAssertEqual(TutorialMotion.along(2.0, stops: stops).x, 0, accuracy: 1e-9)
+        for step in 0...100 {
+            let p = Double(step) / 100
+            let point = TutorialMotion.along(p, stops: stops)
+            XCTAssertTrue(point.x >= 0 && point.x <= 10)
+            XCTAssertTrue(point.y >= 0 && point.y <= 20)
+        }
+    }
 }

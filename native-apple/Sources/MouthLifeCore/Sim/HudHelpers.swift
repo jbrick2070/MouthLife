@@ -653,14 +653,6 @@ public func encodeSeenHints(_ seen: Set<String>) -> String {
     return str
 }
 
-public func shouldShowHubWelcome(
-    seenHints: Set<String>,
-    totalBrushStamps: Int,
-    world1Completed: Bool
-) -> Bool {
-    !seenHints.contains("hub_welcome") && totalBrushStamps == 0 && !world1Completed
-}
-
 public func shouldShowDiveIntroToast(
     mode: ActivePlayMode,
     worldId: String,

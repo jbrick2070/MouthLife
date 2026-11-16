@@ -1,4 +1,5 @@
 import './styles/main.css';
+import './styles/tutorial.css';
 import { ClockController } from './engine/ClockController';
 import { CompanionArchSim } from './engine/companion/CompanionArchSim';
 import { CompanionTouchSystem } from './engine/companion/CompanionTouchSystem';
@@ -12,6 +13,7 @@ import { SoundEngine } from './engine/audio/SoundEngine';
 import { synergyRankIndex } from './engine/audio/musicTheory';
 import { HOST_CITIES } from './config/hostsAndHistory';
 import { getUpgradeById } from './config/upgrades';
+import { TutorialGate, type TutorialPageId } from './config/tutorial';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { VoiceCoach } from './engine/audio/VoiceCoach';
@@ -114,6 +116,20 @@ function bootstrapMouthLife(): void {
   sceneMgr.attachCompanionTouch(touch);
   let lastNowSec = 0;
   let activeHub: CompanionHubOverlay | null = null;
+
+  // How to Play guide: offered on the first few launches, then kept behind the hub ? button.
+  const tutorialGate = new TutorialGate();
+  /** Tapping a demo in the guide plays the sound that control makes in the game. */
+  function playTutorialDemoSound(pageId: TutorialPageId): void {
+    if (pageId === 'home') sound.playGlassHarpNote(4);
+    else if (pageId === 'brush') sound.playPacerCue('quadrant');
+    else if (pageId === 'dive') sound.playSiteRestored();
+    else if (pageId === 'floss') sound.playFlossSnap(1, false);
+    else if (pageId === 'surge') sound.playIonRinseWave();
+    else if (pageId === 'scan') sound.playDisclosePulse();
+    else if (pageId === 'cities') sound.playSynergyRankUp(2);
+    else sound.playSmoothBaskSparkle();
+  }
 
   let currentMode: AppMode = saveSys.getSave().hasSeenCosmicIntro ? 'HUB' : 'COSMIC_INTRO';
   let activeOverlay: OverlayView | null = null;
@@ -634,6 +650,9 @@ function bootstrapMouthLife(): void {
         onToggleReducedMotion: () => sceneMgr.setReducedMotion(!sceneMgr.isReducedMotion()),
         getLanguage: () => voiceCoach.getLanguage(),
         setLanguage: (language) => voiceCoach.setLanguage(language),
+        tutorialGate,
+        isGamepadConnected: () => input.isGamepadConnected(),
+        onPlayTutorialDemo: (pageId) => playTutorialDemoSound(pageId),
       });
       activeOverlay = activeHub;
     } else if (next === 'ARCADE' || next === 'PULP_RESCUE') {

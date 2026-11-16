@@ -77,6 +77,13 @@ public final class AppCoordinator {
     private var lastAnnouncedSurface: Int = -1
     private var lastCountdownPipKey: String = ""
 
+    // How to Play guide: offered on the first few launches, then kept behind the Home screen's ? button.
+    private static let tutorialOffersDefaultsKey = "mouthlife.tutorial.offers"
+    private static let tutorialOpenedDefaultsKey = "mouthlife.tutorial.opened"
+    public var isTutorialVisible: Bool = false
+    public var showTutorialOffer: Bool = false
+    private var tutorialGate = TutorialGate()
+
     // Companion & Sheet UI State
     public var activeSheet: HubSheetKind?
     public var tappedCrownSummary: CompanionCrownSummary?
@@ -137,6 +144,12 @@ public final class AppCoordinator {
             .flatMap(MouthwashDurationStyle.init(rawValue:)) ?? .totalCare60s
         self.mouthwashDurationStyle = persistedMouthwashStyle
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
+        self.tutorialGate = TutorialGate(
+            progress: TutorialProgress(
+                offers: UserDefaults.standard.integer(forKey: Self.tutorialOffersDefaultsKey),
+                opened: UserDefaults.standard.bool(forKey: Self.tutorialOpenedDefaultsKey)
+            )
+        )
         self.voiceCoachEnabled = NativeSoundEngine.shared.isVoiceCoachEnabled
         self.coachLanguage = NativeSoundEngine.shared.coachLanguage
         // One language for the screens and the spoken coach.
@@ -390,6 +403,9 @@ public final class AppCoordinator {
             } else if arg.hasPrefix("--sheet=") {
                 let s = String(arg.dropFirst("--sheet=".count))
                 activeSheet = HubSheetKind(rawValue: s)
+            } else if arg == "--tutorial" {
+                // For screenshots and testing: open the How to Play guide straight away.
+                isTutorialVisible = true
             }
         }
     }
@@ -509,7 +525,61 @@ public final class AppCoordinator {
         mode = next
         syncSceneMode()
         updateIdleTimerPolicy()
+        if next == .hub {
+            enterHomeForTutorial()
+        } else {
+            // Starting a game puts the offer away for this launch, and the guide never follows you into play.
+            dismissTutorialOffer()
+            isTutorialVisible = false
+        }
         eventBus.emit(.modeChanged(from: prev, to: next))
+    }
+
+    // MARK: - How to Play Guide
+
+    private func saveTutorialProgress() {
+        UserDefaults.standard.set(tutorialGate.progress.offers, forKey: Self.tutorialOffersDefaultsKey)
+        UserDefaults.standard.set(tutorialGate.progress.opened, forKey: Self.tutorialOpenedDefaultsKey)
+    }
+
+    private func enterHomeForTutorial() {
+        if tutorialGate.enterHome() {
+            saveTutorialProgress()
+        }
+        showTutorialOffer = tutorialGate.isOfferVisible
+    }
+
+    public func openTutorial() {
+        NativeSoundEngine.shared.playUiTap()
+        if tutorialGate.markOpened() {
+            saveTutorialProgress()
+        }
+        showTutorialOffer = false
+        isTutorialVisible = true
+    }
+
+    public func closeTutorial() {
+        isTutorialVisible = false
+    }
+
+    public func dismissTutorialOffer() {
+        tutorialGate.dismissOffer()
+        showTutorialOffer = false
+    }
+
+    /// Tapping a demo in the guide plays the sound that control makes in the game.
+    public func playTutorialDemoSound(_ pageId: TutorialPageId) {
+        let sound = NativeSoundEngine.shared
+        switch pageId {
+        case .home: sound.playGlassHarpNote(step: 4)
+        case .brush: sound.playPacerCue(.quadrant)
+        case .dive: sound.playSiteRestored()
+        case .floss: sound.playFlossSnap()
+        case .surge: sound.playIonRinseWave()
+        case .scan: sound.playDisclosePulse()
+        case .cities: sound.playSynergyRankUp(2)
+        case .ready: sound.playSmoothBaskSparkle()
+        }
     }
 
     private func syncSceneMode() {

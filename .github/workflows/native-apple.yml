@@ -89,6 +89,7 @@ jobs:
           shot 05-pulp-rescue 22 --mode=pulpRescue
           shot 06-dental-chart 12 --mode=hub --sheet=dentalChart
           shot 07-settings 12 --mode=hub --sheet=settings
+          shot 08-how-to-play 12 --mode=hub --tutorial
           # The same screens in other languages, to catch text that does not fit.
           shot 10-hub-es 12 --mode=hub --lang=es
           shot 11-brush-de 14 --mode=brushAlong --lang=de
@@ -96,6 +97,7 @@ jobs:
           shot 13-chart-ja 12 --mode=hub --sheet=dentalChart --lang=ja
           shot 14-settings-de 12 --mode=hub --sheet=settings --lang=de
           shot 15-hub-ko 12 --mode=hub --lang=ko
+          shot 16-how-to-play-de 12 --mode=hub --tutorial --lang=de
           xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "MouthLife"' --style compact > ../native-out/app-log.txt 2>/dev/null || true
 
       - name: Summary

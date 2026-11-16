@@ -32,6 +32,10 @@ public struct CompanionHubView: View {
     public let onLaunchPulpRescue: () -> Void
     public let onReplayIntro: () -> Void
     public let onOpenSheet: (HubSheetKind) -> Void
+    /// True on the first few launches, while the How to Play offer is up.
+    public let showTutorialOffer: Bool
+    public let onOpenTutorial: () -> Void
+    public let onDismissTutorialOffer: () -> Void
 
     @State private var showHint = true
 
@@ -53,7 +57,10 @@ public struct CompanionHubView: View {
         onLaunchWorld: @escaping (String) -> Void,
         onLaunchPulpRescue: @escaping () -> Void,
         onReplayIntro: @escaping () -> Void,
-        onOpenSheet: @escaping (HubSheetKind) -> Void
+        onOpenSheet: @escaping (HubSheetKind) -> Void,
+        showTutorialOffer: Bool = false,
+        onOpenTutorial: @escaping () -> Void = {},
+        onDismissTutorialOffer: @escaping () -> Void = {}
     ) {
         self.save = save
         self.selectedWorldId = selectedWorldId
@@ -73,6 +80,9 @@ public struct CompanionHubView: View {
         self.onLaunchPulpRescue = onLaunchPulpRescue
         self.onReplayIntro = onReplayIntro
         self.onOpenSheet = onOpenSheet
+        self.showTutorialOffer = showTutorialOffer
+        self.onOpenTutorial = onOpenTutorial
+        self.onDismissTutorialOffer = onDismissTutorialOffer
     }
 
     public var body: some View {
@@ -194,6 +204,19 @@ public struct CompanionHubView: View {
 
             // Wide-open interactive 3D Arch & Orbital Earth space!
             Spacer(minLength: 0)
+
+            // How to Play: an offer on the first few launches, then a ? that always sits here.
+            if showTutorialOffer {
+                TutorialOfferCard(onAccept: onOpenTutorial, onDecline: onDismissTutorialOffer)
+                    .padding(.horizontal, 12)
+                    .transition(.opacity)
+            } else {
+                HStack {
+                    Spacer(minLength: 0)
+                    TutorialHelpButton(action: onOpenTutorial)
+                }
+                .padding(.horizontal, 14)
+            }
 
             // Bottom Thumb Deck: Shield Health + Campaign Selector + Dive / Brush-Along CTAs
             VStack(alignment: .leading, spacing: 8) {

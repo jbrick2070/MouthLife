@@ -35,7 +35,6 @@ import {
   saveSeenHints,
   selectWayfinderTargets,
   shouldHandleGlobalMuteKey,
-  shouldShowHubWelcome,
 } from '../src/ui/hudHelpers';
 import { buildReportHeadline } from '../src/ui/MissionReportOverlay';
 import { plaqueCityCartridge } from '../src/worlds/plaqueCityCartridge';
@@ -270,13 +269,6 @@ describe('HUD helpers', () => {
     expect(shouldHandleGlobalMuteKey({ key: 'm', repeat: true }, { tagName: 'BODY' })).toBe(false);
     expect(shouldHandleGlobalMuteKey({ key: 'm', ctrlKey: true }, { tagName: 'BODY' })).toBe(false);
     expect(shouldHandleGlobalMuteKey({ key: 'p' }, { tagName: 'BODY' })).toBe(false);
-  });
-
-  it('shows first-run Hub welcome banner only before first stamp, first clear, or dismissal', () => {
-    expect(shouldShowHubWelcome(new Set(), 0, false)).toBe(true);
-    expect(shouldShowHubWelcome(new Set(['hub_welcome']), 0, false)).toBe(false);
-    expect(shouldShowHubWelcome(new Set(), 1, false)).toBe(false);
-    expect(shouldShowHubWelcome(new Set(), 0, true)).toBe(false);
   });
 
   it('every playable world and Pulp Rescue defines an onboarding challengeBlurb', () => {

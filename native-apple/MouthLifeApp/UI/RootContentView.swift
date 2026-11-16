@@ -46,7 +46,10 @@ public struct RootContentView: View {
                     onOpenSheet: { kind in
                         NativeSoundEngine.shared.playUiTap()
                         coordinator.activeSheet = kind
-                    }
+                    },
+                    showTutorialOffer: coordinator.showTutorialOffer,
+                    onOpenTutorial: { coordinator.openTutorial() },
+                    onDismissTutorialOffer: { coordinator.dismissTutorialOffer() }
                 )
                 .transition(.opacity)
 
@@ -124,6 +127,18 @@ public struct RootContentView: View {
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+            }
+
+            // The How to Play guide floats over the Home screen.
+            if coordinator.isTutorialVisible {
+                TutorialView(
+                    reduceMotion: coordinator.reducedMotion,
+                    onDemoSound: { pageId in coordinator.playTutorialDemoSound(pageId) },
+                    onPageTurn: { NativeSoundEngine.shared.playUiTap() },
+                    onClose: { coordinator.closeTutorial() }
+                )
+                .transition(.opacity)
+                .zIndex(10)
             }
         }
         // Rebuild every screen when the language changes, so all text is translated again.

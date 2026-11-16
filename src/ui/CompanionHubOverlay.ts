@@ -15,6 +15,7 @@ import {
   type ToothLayerInfo,
 } from '../config/dentalChart';
 import { SMOOTH_BASK_THRESHOLD, TREAT_ION_REWARD } from '../config/gameConfig';
+import { pickTutorialInputScheme, TUTORIAL_COPY, type TutorialGate, type TutorialPageId } from '../config/tutorial';
 import {
   getHistoryNoteById,
   getHostCityById,
@@ -34,11 +35,9 @@ import {
   countAffordableLockedUpgrades,
   isCampaignWorldUnlocked,
   isCompactViewport,
-  loadSeenHints,
   pickRecommendedDiveWorld,
-  saveSeenHints,
-  shouldShowHubWelcome,
 } from './hudHelpers';
+import { TutorialOverlay } from './TutorialOverlay';
 
 type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync' | 'charity' | 'chart';
 
@@ -61,7 +60,6 @@ export class CompanionHubOverlay implements OverlayView {
   private selectedCityId = 'toronto';
   private activeModal: ActiveModal = 'none';
   private statusBanner = '';
-  private seenHints = loadSeenHints();
   private modalOpenerSelector: string | null = null;
   private chartSystem: ToothNumberingSystem = 'universal';
   private viewOffCenter = false;
@@ -75,6 +73,8 @@ export class CompanionHubOverlay implements OverlayView {
   private lastTouchedCrownIdx: number | null = null;
   private confirmResetPending = false;
   private mobileDrawerOpen = false;
+  private root: HTMLElement | null = null;
+  private tutorial: TutorialOverlay | null = null;
 
   private keyHandler = (e: KeyboardEvent): void => {
     if (this.activeModal === 'none') return;
@@ -131,6 +131,10 @@ export class CompanionHubOverlay implements OverlayView {
       onToggleReducedMotion?: () => void;
       getLanguage?: () => CoachLanguage;
       setLanguage?: (language: CoachLanguage) => void;
+      /** Decides whether this launch offers the How to Play guide. */
+      tutorialGate?: TutorialGate;
+      isGamepadConnected?: () => boolean;
+      onPlayTutorialDemo?: (pageId: TutorialPageId) => void;
     }
   ) {}
 
@@ -138,6 +142,9 @@ export class CompanionHubOverlay implements OverlayView {
     const save = this.saveSys.getSave();
     CompanionArchSim.reconcileOfflineElapsed(save.companion, Date.now());
     this.selectedCityId = save.playerProfile.homeCityId || 'toronto';
+
+    this.root = root;
+    this.actions.tutorialGate?.enterHome();
 
     this.container = document.createElement('div');
     this.container.className = 'hub-shell companion-hub';
@@ -158,10 +165,38 @@ export class CompanionHubOverlay implements OverlayView {
     this.render();
   }
 
-  private dismissWelcome(): void {
-    if (this.seenHints.has('hub_welcome')) return;
-    this.seenHints.add('hub_welcome');
-    saveSeenHints(this.seenHints);
+  /** Starting a game, or answering "Not now", puts the How to Play offer away for this launch. */
+  private dismissTutorialOffer(): void {
+    this.actions.tutorialGate?.dismissOffer();
+  }
+
+  /** Wide screens show a labelled button in the header; phones show a round ? above the deck. */
+  private focusTutorialButton(): void {
+    const buttons = this.container?.querySelectorAll<HTMLElement>('#btn-open-tutorial, #btn-open-tutorial-compact');
+    const shown = Array.from(buttons ?? []).find((b) => b.getClientRects().length > 0);
+    shown?.focus({ preventScroll: true });
+  }
+
+  private openTutorial(): void {
+    if (this.tutorial || !this.root) return;
+    this.actions.onPlayUiTap();
+    this.actions.tutorialGate?.markOpened();
+    this.render();
+    const coarsePointer =
+      typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+    this.tutorial = new TutorialOverlay({
+      scheme: pickTutorialInputScheme({
+        coarsePointer,
+        gamepadConnected: Boolean(this.actions.isGamepadConnected?.()),
+      }),
+      onClose: () => {
+        this.tutorial = null;
+        this.focusTutorialButton();
+      },
+      onDemoSound: (pageId) => this.actions.onPlayTutorialDemo?.(pageId),
+      onUiTap: () => this.actions.onPlayUiTap(),
+    });
+    this.tutorial.mount(this.root);
   }
 
   private syncMuteUi(): void {
@@ -375,17 +410,20 @@ export class CompanionHubOverlay implements OverlayView {
       this.tab === 'globe'
         ? `<div class="splat-hint-pill">🌍 Tap a glowing city on the globe to pick your next dive</div>`
         : '';
+    // On the first few launches the Home screen offers the How to Play guide. It is only an
+    // offer: after that the guide lives behind the ? button in the top bar.
     const welcomeTipHtml =
-      this.tab === 'companion' &&
-      shouldShowHubWelcome(this.seenHints, save.totalBrushStamps, Boolean(save.worlds.world_1?.completed))
+      this.tab === 'companion' && this.actions.tutorialGate?.isOfferVisible()
         ? `
-          <div id="hub-welcome-tip" class="welcome-tip-card ui-interactive" role="region" aria-label="First-Run Guide">
+          <div id="hub-tutorial-offer" class="welcome-tip-card ui-interactive" role="region" aria-label="${TUTORIAL_COPY.buttonLabel}">
             <div class="welcome-tip-copy">
-              <strong style="color:#5eead4;">👋 First Time?</strong>
-              <span class="mob-hide"> Rub the teeth to hear them ring, run a <strong>2-min Brush</strong>, or tap <strong>Dive: Plaque City</strong>!</span>
-              <span class="mob-only"> Rub the teeth, run a 2-min Brush, or Dive!</span>
+              <strong style="color:#5eead4;">${TUTORIAL_COPY.offerTitle}</strong>
+              <span class="mob-hide"> ${TUTORIAL_COPY.offerBody}</span>
             </div>
-            <button type="button" id="btn-dismiss-welcome" class="btn btn-sm btn-primary">Got it ✓</button>
+            <div class="tutorial-offer-actions">
+              <button type="button" id="btn-tutorial-decline" class="btn btn-sm">${TUTORIAL_COPY.offerDecline}</button>
+              <button type="button" id="btn-tutorial-accept" class="btn btn-sm btn-primary">${TUTORIAL_COPY.offerAccept}</button>
+            </div>
           </div>
         `
         : '';
@@ -426,6 +464,15 @@ export class CompanionHubOverlay implements OverlayView {
               title="Mute / Unmute (M)"
             >
               ${muted ? '🔇' : '🔊'}
+            </button>
+            <button
+              type="button"
+              id="btn-open-tutorial"
+              class="btn btn-sm hub-help-btn hub-help-wide"
+              aria-label="${TUTORIAL_COPY.buttonLabel}"
+              title="${TUTORIAL_COPY.buttonLabel}"
+            >
+              <span aria-hidden="true">?</span><span class="mob-hide">${TUTORIAL_COPY.buttonLabel}</span>
             </button>
           </div>
         </div>
@@ -471,6 +518,14 @@ export class CompanionHubOverlay implements OverlayView {
             : ''
         }
       </div>
+
+      <button
+        type="button"
+        id="btn-open-tutorial-compact"
+        class="btn btn-icon hub-help-btn hub-help-fab ui-interactive"
+        aria-label="${TUTORIAL_COPY.buttonLabel}"
+        title="${TUTORIAL_COPY.buttonLabel}"
+      >?</button>
 
       <div class="hub-bottom-deck glass-card ui-interactive${this.mobileDrawerOpen ? ' drawer-open' : ''}">
         ${bottomDeckHtml}
@@ -1352,11 +1407,16 @@ export class CompanionHubOverlay implements OverlayView {
       this.container?.querySelector<HTMLElement>('#btn-toggle-hub-drawer')?.focus({ preventScroll: true });
     });
 
-    this.container.querySelector('#btn-dismiss-welcome')?.addEventListener('click', () => {
-      this.dismissWelcome();
+    this.container.querySelector('#btn-tutorial-decline')?.addEventListener('click', () => {
+      this.dismissTutorialOffer();
       this.actions.onPlayUiTap();
       this.render();
+      this.focusTutorialButton();
     });
+    this.container.querySelector('#btn-tutorial-accept')?.addEventListener('click', () => this.openTutorial());
+    this.container
+      .querySelectorAll('#btn-open-tutorial, #btn-open-tutorial-compact')
+      .forEach((btn) => btn.addEventListener('click', () => this.openTutorial()));
 
     this.container.querySelector('#tab-companion')?.addEventListener('click', () => {
       this.tab = 'companion';
@@ -1366,7 +1426,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#tab-globe')?.addEventListener('click', () => {
-      this.dismissWelcome();
+      this.dismissTutorialOffer();
       this.tab = 'globe';
       this.actions.onPlayUiTap();
       this.actions.onTabChanged('globe', this.selectedCityId);
@@ -1390,18 +1450,18 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#btn-start-brush-along')?.addEventListener('click', () => {
-      this.dismissWelcome();
+      this.dismissTutorialOffer();
       this.actions.onLaunchBrushAlong();
     });
 
     this.container.querySelector<HTMLButtonElement>('#btn-launch-arcade')?.addEventListener('click', (e) => {
-      this.dismissWelcome();
+      this.dismissTutorialOffer();
       const wid = (e.currentTarget as HTMLButtonElement).dataset.worldId ?? 'world_1';
       this.actions.onLaunchArcadeWorld(wid);
     });
 
     this.container.querySelector('#btn-globe-dive')?.addEventListener('click', () => {
-      this.dismissWelcome();
+      this.dismissTutorialOffer();
       const city = getHostCityById(this.selectedCityId);
       const unlocked = isCampaignWorldUnlocked(
         city.worldId,
@@ -1419,7 +1479,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
 
     this.container.querySelector('#btn-feed-treat')?.addEventListener('click', () => {
-      this.dismissWelcome();
+      this.dismissTutorialOffer();
       this.actions.onPlayTreatSfx();
       const homeCity = getHostCityById(save.playerProfile.homeCityId);
       const res = CompanionArchSim.feedRegionalTreat(save.companion, Date.now());
@@ -1799,6 +1859,9 @@ export class CompanionHubOverlay implements OverlayView {
   }
 
   dispose(): void {
+    this.tutorial?.dispose();
+    this.tutorial = null;
+    this.root = null;
     window.removeEventListener('keydown', this.keyHandler);
     this.disposers.disposeAll();
     this.container?.remove();

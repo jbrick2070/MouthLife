@@ -234,15 +234,6 @@ export function shouldHandleGlobalMuteKey(
   return !isEditableEventTarget(target);
 }
 
-/** True when a brand-new player enters the Smooth Bask Hub before any brush stamps or cleared dives. */
-export function shouldShowHubWelcome(
-  seenHints: ReadonlySet<string>,
-  totalBrushStamps: number,
-  world1Completed: boolean
-): boolean {
-  return !seenHints.has('hub_welcome') && totalBrushStamps === 0 && !world1Completed;
-}
-
 /**
  * Progressive onboarding: on a new player's very first dive into World 1, suppress the
  * multi-mechanic intro toast on frame 0 so the single top objective ("Restore 10 colonies —

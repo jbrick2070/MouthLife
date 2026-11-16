@@ -1,0 +1,1016 @@
+/* ---- How to Play guide: one calm card at a time ---- */
+.tutorial-backdrop {
+  z-index: 60;
+  background: rgba(2, 9, 16, 0.74);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.tutorial-sheet {
+  width: 100%;
+  max-width: 400px;
+  max-height: 94dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 20px 18px;
+  background: rgba(8, 26, 40, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  touch-action: pan-y;
+}
+
+.tutorial-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+}
+
+.tutorial-count {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tutorial-skip {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 6px;
+  color: var(--cyan);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tutorial-stage {
+  appearance: none;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  background: radial-gradient(120% 120% at 50% 0%, #10405e 0%, #071d2c 72%);
+}
+
+.tutorial-skip:focus-visible,
+.tutorial-stage:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 2px;
+}
+
+.tutorial-stage svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tutorial-title {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tutorial-body {
+  margin: 6px auto 0;
+  max-width: 33ch;
+  min-height: 4.35em;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: #cfe3ee;
+}
+
+.tutorial-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  margin-top: 8px;
+}
+
+.tutorial-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e0f2fe;
+}
+
+.tutorial-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+
+.tutorial-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+  transition: background 0.2s ease;
+}
+
+.tutorial-dot.active {
+  background: #fff;
+}
+
+.tutorial-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.tutorial-nav .btn {
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: 1rem;
+}
+
+.tutorial-next {
+  flex: 1;
+}
+
+.tutorial-back {
+  flex: 0 0 auto;
+  min-width: 84px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--cyan);
+}
+
+.tutorial-back:disabled {
+  visibility: hidden;
+}
+
+/* The Home screen offer and the ? button */
+.tutorial-offer-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hub-help-btn {
+  font-weight: 800;
+  border-color: rgba(94, 234, 212, 0.55);
+}
+
+.hub-help-wide {
+  gap: 7px;
+}
+
+/* Phones have no room left in the header, so there the ? floats just above the bottom deck. */
+.hub-help-fab {
+  display: none;
+  align-self: flex-end;
+  width: 44px;
+  height: 44px;
+  margin: 0 2px 6px 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  background: rgba(6, 28, 42, 0.88);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 700px), (orientation: landscape) and (max-height: 520px) {
+  .hub-help-wide {
+    display: none;
+  }
+  .hub-help-fab {
+    display: inline-flex;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .companion-hub .hub-help-fab {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: end;
+    justify-self: start;
+    margin: 0 0 2px 2px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .tutorial-sheet {
+    max-width: 700px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'top top' 'stage copy' 'dots nav';
+    align-items: center;
+    column-gap: 18px;
+    row-gap: 6px;
+    padding: 6px 16px 12px;
+  }
+  .tutorial-top {
+    grid-area: top;
+    min-height: 32px;
+  }
+  .tutorial-stage {
+    grid-area: stage;
+  }
+  .tutorial-copy {
+    grid-area: copy;
+  }
+  .tutorial-dots {
+    grid-area: dots;
+  }
+  .tutorial-nav {
+    grid-area: nav;
+  }
+  .tutorial-title {
+    font-size: 1.2rem;
+  }
+  .tutorial-body {
+    min-height: 0;
+    font-size: 0.88rem;
+  }
+  .tutorial-nav .btn {
+    min-height: 42px;
+  }
+}
+
+/* Demo drawings. Each resting style below is a still picture that already explains the card;
+   the animations only add the motion, so Reduced Motion loses nothing. */
+.tut-tooth {
+  fill: #f4fbff;
+}
+.tut-gum {
+  fill: #f28ba8;
+}
+.tut-mouth {
+  fill: #4a1a2e;
+}
+.tut-groove {
+  fill: none;
+  stroke: rgba(4, 30, 46, 0.14);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.tut-plaque {
+  fill: #d9e35b;
+}
+.tut-robot-glow {
+  fill: rgba(56, 189, 248, 0.3);
+}
+.tut-robot-body {
+  fill: #38bdf8;
+  stroke: #e0f2fe;
+  stroke-width: 2.5;
+}
+.tut-sparkle {
+  fill: #fde68a;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tut-twinkle 1.8s ease-in-out infinite;
+}
+.tut-sparkle-2 {
+  animation-delay: 0.6s;
+}
+.tut-sparkle-3 {
+  animation-delay: 1.2s;
+}
+.tut-meter-track {
+  fill: rgba(255, 255, 255, 0.16);
+}
+.tut-meter-fill {
+  fill: #2dd4bf;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+.tut-goal {
+  fill: #fbbf24;
+  font-size: 12px;
+  font-weight: 700;
+}
+.tut-emoji {
+  font-size: 34px;
+}
+
+/* Home: a finger rubs the teeth; the two games wait at the bottom */
+.tut-finger {
+  fill: rgba(56, 189, 248, 0.42);
+  stroke: #0284c7;
+  stroke-width: 2.5;
+  transform: translate(160px, 72px);
+  animation: tut-rub 2.8s ease-in-out infinite alternate;
+}
+.tut-pill rect {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.5;
+}
+.tut-pill text {
+  font-size: 18px;
+}
+.tut-pill {
+  animation: tut-pill-pulse 2.6s ease-in-out infinite;
+}
+.tut-pill-b {
+  animation-delay: 1.3s;
+}
+
+/* 2-Min Brush: the glow moves round the mouth, a chime marks each move */
+.tut-q {
+  fill: #8fa9b8;
+  stroke: transparent;
+  stroke-width: 0;
+  animation: tut-quad 6s linear infinite;
+}
+.tut-q2 {
+  animation-delay: 1.5s;
+}
+.tut-q3 {
+  animation-delay: 3s;
+}
+.tut-q4 {
+  animation-delay: 4.5s;
+}
+.tut-note {
+  fill: #fde68a;
+  font-size: 24px;
+  font-weight: 700;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tut-note-pop 1.5s ease-out infinite;
+}
+
+/* Dive: the robot scrubs each patch of plaque, and the bar climbs to 90% */
+.tut-dive-robot {
+  transform: translate(156px, 42px);
+  animation: tut-dive-path 6s ease-in-out infinite;
+}
+.tut-dive-blob-1 {
+  animation: tut-dive-b1 6s linear infinite;
+}
+.tut-dive-blob-2 {
+  animation: tut-dive-b2 6s linear infinite;
+}
+.tut-dive-blob-3 {
+  animation: tut-dive-b3 6s linear infinite;
+}
+.tut-dive-blob-4 {
+  animation: tut-dive-b4 6s linear infinite;
+}
+.tut-dive-blob-5 {
+  animation: tut-dive-b5 6s linear infinite;
+}
+.tut-dive-progress {
+  transform: scaleX(0.48);
+  animation: tut-dive-progress 6s linear infinite;
+}
+
+/* Floss: a thread shoots through the gap and clears it */
+.tut-floss-robot {
+  transform: translate(160px, 158px);
+  animation: tut-floss-kick 3.6s ease-out infinite;
+}
+.tut-floss-line {
+  fill: #67e8f9;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: tut-floss-line 3.6s ease-out infinite;
+}
+.tut-floss-dot-1 {
+  animation: tut-floss-d1 3.6s linear infinite;
+}
+.tut-floss-dot-2 {
+  animation: tut-floss-d2 3.6s linear infinite;
+}
+.tut-floss-dot-3 {
+  animation: tut-floss-d3 3.6s linear infinite;
+}
+.tut-scene-floss .tut-sparkle {
+  animation: tut-floss-spark 3.6s ease-out infinite;
+}
+
+/* Surge: the meter fills, then a wave washes the tooth clean */
+.tut-surge-meter {
+  transform: scaleX(1);
+  fill: #fbbf24;
+  animation: tut-surge-meter 4.8s linear infinite;
+}
+.tut-surge-ring {
+  fill: rgba(45, 212, 191, 0.16);
+  stroke: #2dd4bf;
+  stroke-width: 1px;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(4.5);
+  opacity: 0.7;
+  animation: tut-surge-ring 4.8s ease-out infinite;
+}
+.tut-surge-blob {
+  animation: tut-surge-blob 4.8s linear infinite;
+}
+
+/* Dye Scan: a pink wave shows plaque that was hard to see */
+.tut-scan-ring {
+  fill: rgba(244, 114, 182, 0.12);
+  stroke: #f472b6;
+  stroke-width: 1px;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(4.5);
+  opacity: 0.6;
+  animation: tut-scan-ring 4.4s ease-out infinite;
+}
+.tut-scan-blob {
+  fill: #f472b6;
+  animation: tut-scan-blob 4.4s linear infinite;
+}
+.tut-scan-blob-2,
+.tut-scan-blob-5 {
+  animation-delay: 0.12s;
+}
+.tut-scan-blob-3,
+.tut-scan-blob-4 {
+  animation-delay: 0.24s;
+}
+
+/* Cities: the route reaches one city after another, and each lights up as it unlocks */
+.tut-globe {
+  fill: #0b5d8a;
+  stroke: rgba(224, 242, 254, 0.35);
+  stroke-width: 2;
+}
+.tut-land {
+  fill: #2f9e6e;
+}
+.tut-route {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 42;
+  animation: tut-route 6.4s linear infinite;
+}
+.tut-city {
+  fill: #8fa9b8;
+  stroke: #0b2a3d;
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.tut-city-1 {
+  fill: #fbbf24;
+}
+.tut-city-2 {
+  animation: tut-city-2 6.4s linear infinite;
+}
+.tut-city-3 {
+  animation: tut-city-3 6.4s linear infinite;
+}
+.tut-city-4 {
+  animation: tut-city-4 6.4s linear infinite;
+}
+.tut-city-5 {
+  animation: tut-city-5 6.4s linear infinite;
+}
+
+/* Ready: a happy tooth, and where to find the guide again */
+.tut-eye {
+  fill: #0b2a3d;
+}
+.tut-smile {
+  fill: none;
+  stroke: #0b2a3d;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+.tut-help-badge {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tut-badge-pulse 1.8s ease-in-out infinite;
+}
+.tut-help-badge circle {
+  fill: #0284c7;
+  stroke: #e0f2fe;
+  stroke-width: 2;
+}
+.tut-help-badge text {
+  fill: #fff;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+@keyframes tut-twinkle {
+  0%,
+  100% {
+    transform: scale(0.45);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+@keyframes tut-rub {
+  from {
+    transform: translate(72px, 72px);
+  }
+  to {
+    transform: translate(248px, 72px);
+  }
+}
+@keyframes tut-pill-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.55;
+  }
+  25% {
+    opacity: 1;
+  }
+}
+@keyframes tut-quad {
+  0%,
+  23% {
+    fill: #ffffff;
+    stroke: #5eead4;
+    stroke-width: 4px;
+  }
+  25%,
+  100% {
+    fill: #8fa9b8;
+    stroke: transparent;
+    stroke-width: 0;
+  }
+}
+@keyframes tut-note-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  14% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  45% {
+    transform: scale(1) translateY(-4px);
+    opacity: 1;
+  }
+  75%,
+  100% {
+    transform: scale(1) translateY(-12px);
+    opacity: 0;
+  }
+}
+@keyframes tut-dive-path {
+  0% {
+    transform: translate(92px, 118px);
+  }
+  14% {
+    transform: translate(108px, 50px);
+  }
+  28% {
+    transform: translate(156px, 42px);
+  }
+  42% {
+    transform: translate(206px, 56px);
+  }
+  56% {
+    transform: translate(192px, 98px);
+  }
+  70%,
+  86% {
+    transform: translate(124px, 96px);
+  }
+  100% {
+    transform: translate(92px, 118px);
+  }
+}
+@keyframes tut-dive-b1 {
+  0%,
+  12% {
+    opacity: 1;
+  }
+  17%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-dive-b2 {
+  0%,
+  26% {
+    opacity: 1;
+  }
+  31%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-dive-b3 {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  45%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-dive-b4 {
+  0%,
+  54% {
+    opacity: 1;
+  }
+  59%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-dive-b5 {
+  0%,
+  68% {
+    opacity: 1;
+  }
+  73%,
+  94% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-dive-progress {
+  0%,
+  12% {
+    transform: scaleX(0.1);
+    fill: #2dd4bf;
+  }
+  72% {
+    transform: scaleX(0.98);
+    fill: #2dd4bf;
+  }
+  74%,
+  94% {
+    transform: scaleX(1);
+    fill: #fbbf24;
+  }
+  100% {
+    transform: scaleX(0.1);
+    fill: #2dd4bf;
+  }
+}
+@keyframes tut-floss-kick {
+  0%,
+  26% {
+    transform: translate(160px, 158px);
+  }
+  31% {
+    transform: translate(160px, 163px);
+  }
+  42%,
+  100% {
+    transform: translate(160px, 158px);
+  }
+}
+@keyframes tut-floss-line {
+  0%,
+  26% {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+  36%,
+  60% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  76%,
+  100% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+}
+@keyframes tut-floss-d1 {
+  0%,
+  29% {
+    opacity: 1;
+  }
+  32%,
+  92% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-floss-d2 {
+  0%,
+  31% {
+    opacity: 1;
+  }
+  34%,
+  92% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-floss-d3 {
+  0%,
+  33% {
+    opacity: 1;
+  }
+  36%,
+  92% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-floss-spark {
+  0%,
+  36% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  46% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+  66%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+@keyframes tut-surge-meter {
+  0% {
+    transform: scaleX(0.04);
+    fill: #2dd4bf;
+  }
+  42% {
+    transform: scaleX(0.96);
+    fill: #2dd4bf;
+  }
+  45%,
+  50% {
+    transform: scaleX(1);
+    fill: #fbbf24;
+  }
+  54%,
+  100% {
+    transform: scaleX(0.04);
+    fill: #2dd4bf;
+  }
+}
+@keyframes tut-surge-ring {
+  0%,
+  49% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  51% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  78%,
+  100% {
+    transform: scale(8.5);
+    opacity: 0;
+  }
+}
+@keyframes tut-surge-blob {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  66%,
+  93% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tut-scan-ring {
+  0%,
+  10% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  13% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  56%,
+  100% {
+    transform: scale(8.5);
+    opacity: 0;
+  }
+}
+@keyframes tut-scan-blob {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  36%,
+  84% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes tut-route {
+  0%,
+  8% {
+    stroke-dashoffset: 100;
+  }
+  72%,
+  94% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 100;
+  }
+}
+@keyframes tut-city-2 {
+  0%,
+  19% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+  21% {
+    fill: #fbbf24;
+    transform: scale(1.5);
+  }
+  27%,
+  95% {
+    fill: #fbbf24;
+    transform: scale(1);
+  }
+  100% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+}
+@keyframes tut-city-3 {
+  0%,
+  33% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+  35% {
+    fill: #fbbf24;
+    transform: scale(1.5);
+  }
+  41%,
+  95% {
+    fill: #fbbf24;
+    transform: scale(1);
+  }
+  100% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+}
+@keyframes tut-city-4 {
+  0%,
+  44% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+  46% {
+    fill: #fbbf24;
+    transform: scale(1.5);
+  }
+  52%,
+  95% {
+    fill: #fbbf24;
+    transform: scale(1);
+  }
+  100% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+}
+@keyframes tut-city-5 {
+  0%,
+  71% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+  73% {
+    fill: #fbbf24;
+    transform: scale(1.5);
+  }
+  79%,
+  95% {
+    fill: #fbbf24;
+    transform: scale(1);
+  }
+  100% {
+    fill: #8fa9b8;
+    transform: scale(1);
+  }
+}
+@keyframes tut-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+/* Reduced Motion (the in-game switch, or the device setting): hold each demo still. */
+.reduced-motion .tutorial-stage *,
+.reduced-motion .tutorial-dot {
+  animation: none !important;
+  transition: none;
+}
+.reduced-motion .tut-q1 {
+  fill: #ffffff;
+  stroke: #5eead4;
+  stroke-width: 4px;
+}
+.reduced-motion .tut-city-2,
+.reduced-motion .tut-city-3,
+.reduced-motion .tut-city-4 {
+  fill: #fbbf24;
+}
+.reduced-motion .tut-dive-blob-1,
+.reduced-motion .tut-dive-blob-2,
+.reduced-motion .tut-floss-dot-1,
+.reduced-motion .tut-floss-dot-2,
+.reduced-motion .tut-floss-dot-3 {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-stage *,
+  .tutorial-dot {
+    animation: none !important;
+    transition: none;
+  }
+  .tut-q1 {
+    fill: #ffffff;
+    stroke: #5eead4;
+    stroke-width: 4px;
+  }
+  .tut-city-2,
+  .tut-city-3,
+  .tut-city-4 {
+    fill: #fbbf24;
+  }
+  .tut-dive-blob-1,
+  .tut-dive-blob-2,
+  .tut-floss-dot-1,
+  .tut-floss-dot-2,
+  .tut-floss-dot-3 {
+    opacity: 0;
+  }
+}
