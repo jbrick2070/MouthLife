@@ -1092,7 +1092,7 @@ private final class RealtimeSynthKernel {
                 scrubSvfBand += fcMain * highMain
 
                 // Layer B: Soft silky bristle tuft air on stroke flex (never harsh)
-                let silkHz = min(nyquistSafe, 1550.0 + smoothScrubSpeed * 950.0 + bristleFlex * 500.0)
+                let silkHz = min(nyquistSafe, 1200.0 + smoothScrubSpeed * 600.0 + bristleFlex * 300.0)
                 let fcShim = min(0.68, 2.0 * sin(.pi * silkHz * invSampleRate))
                 scrubShimLow += fcShim * scrubShimBand
                 let highShim = pink - scrubShimLow - 1.35 * scrubShimBand
@@ -1252,6 +1252,13 @@ private final class SunoStreamDeck {
 
     private let lock = NSLock()
     private var resolvedURLCache: [MusicThemeId: URL?] = [:]
+    private var resolvedStemCache: [String: URL?] = [:]
+
+    /// Tried first during the floss and rinse stages of Brush-Along. A dedicated `floss` or `rinse`
+    /// file wins; until one is added, Accra carries the floss and Aurora the fluoride rinse.
+    /// Same list as `BRUSH_STAGE_TRACK_CANDIDATES` on the web.
+    static let flossStageStems = ["floss", "brush_floss", "accra"]
+    static let rinseStageStems = ["rinse", "fluoride", "mouthwash", "brush_rinse", "aurora"]
     private var envelopeCache: [URL: SunoEnvelopeTrack] = [:]
     private var analyzingURLs: Set<URL> = []
     private var activePlayer: AVAudioPlayer?
@@ -1293,12 +1300,18 @@ private final class SunoStreamDeck {
         return AudioReactiveBands(bass: scaled.x, mid: scaled.y, high: scaled.z, beatPulse: scaled.w)
     }
 
-    func sync(themeId: MusicThemeId, targetVolume: Float, muted: Bool, interrupted: Bool) {
+    func sync(
+        themeId: MusicThemeId,
+        targetVolume: Float,
+        muted: Bool,
+        interrupted: Bool,
+        preferredStems: [String] = []
+    ) {
         lock.lock()
         defer { lock.unlock() }
 
         reapFinishedFadesLocked()
-        let nextURL = resolveTrackURLLocked(for: themeId)
+        let nextURL = resolvePreferredStemsLocked(preferredStems) ?? resolveTrackURLLocked(for: themeId)
         if let url = nextURL {
             triggerEnvelopeAnalysisIfNeededLocked(for: url)
         }
@@ -1403,6 +1416,32 @@ private final class SunoStreamDeck {
             self.reapFinishedFadesLocked()
             self.lock.unlock()
         }
+    }
+
+    private func resolvePreferredStemsLocked(_ stems: [String]) -> URL? {
+        guard !stems.isEmpty else { return nil }
+        let key = stems.joined(separator: "|")
+        if let cached = resolvedStemCache[key] {
+            return cached
+        }
+        let found = findBundledTrack(stems: stems)
+        resolvedStemCache[key] = found
+        return found
+    }
+
+    private func findBundledTrack(stems: [String]) -> URL? {
+        let bundle = Bundle.main
+        for stem in stems {
+            for ext in Self.supportedExtensions {
+                if let url = bundle.url(forResource: stem, withExtension: ext, subdirectory: "Music") {
+                    return url
+                }
+                if let url = bundle.url(forResource: stem, withExtension: ext) {
+                    return url
+                }
+            }
+        }
+        return nil
     }
 
     private func resolveTrackURLLocked(for themeId: MusicThemeId) -> URL? {
@@ -1730,6 +1769,7 @@ public final class NativeSoundEngine {
     private var acidTensionActive: Bool = false
     private var pacerQuadrant: Int = 0
     private var pacerInFlossBonus: Bool = false
+    private var pacerInRinse: Bool = false
     private var cosmicBeatIndex: Int = 0
 
     private var activeTheme: MusicThemeDef = MusicCatalog.themes[.cosmic]!
@@ -2071,11 +2111,20 @@ public final class NativeSoundEngine {
         } else {
             effectiveSuno = baseSuno * sunoDuckScale
         }
+        let brushStageStems: [String]
+        if activeTheme.id == .brushAlong && pacerInRinse {
+            brushStageStems = SunoStreamDeck.rinseStageStems
+        } else if activeTheme.id == .brushAlong && pacerInFlossBonus {
+            brushStageStems = SunoStreamDeck.flossStageStems
+        } else {
+            brushStageStems = []
+        }
         sunoDeck.sync(
             themeId: activeTheme.id,
             targetVolume: effectiveSuno,
             muted: isMuted,
-            interrupted: isInterrupted
+            interrupted: isInterrupted,
+            preferredStems: brushStageStems
         )
     }
 
@@ -2182,11 +2231,13 @@ public final class NativeSoundEngine {
         }
     }
 
-    public func setPacerState(quadrantIdx: Int, inFlossBonus: Bool) {
+    /// `inRinse` marks the fluoride rinse stage, so floss and rinse each get their own track.
+    public func setPacerState(quadrantIdx: Int, inFlossBonus: Bool, inRinse: Bool = false) {
         sequencerQueue.async { [weak self] in
             guard let self else { return }
             self.pacerQuadrant = min(3, max(0, quadrantIdx))
             self.pacerInFlossBonus = inFlossBonus
+            self.pacerInRinse = inRinse
             self.pushMixStateToKernel()
         }
     }
@@ -2489,8 +2540,19 @@ public final class NativeSoundEngine {
         return true
     }
 
+    /// Theme keys are full MIDI notes (around G3), but the effect code was written as if they were
+    /// pitch classes, so every effect played three octaves too high (3-12 kHz, a hearing-test whine).
+    /// This takes it back off, so `48` lands near G4 and `60` near G5. Keep in step with
+    /// `SFX_OCTAVE_DROP` on the web.
+    private static let sfxOctaveDrop = 36
+
     private func harmonicMidi(degree: Int, octaveShift: Int = 36) -> Int {
-        MusicCatalog.harmonicSfxMidi(theme: activeTheme, chord: currentChord, degree: degree, octaveShift: octaveShift)
+        MusicCatalog.harmonicSfxMidi(
+            theme: activeTheme,
+            chord: currentChord,
+            degree: degree,
+            octaveShift: octaveShift - Self.sfxOctaveDrop
+        )
     }
 
     private func emitSfxVoice(
@@ -2510,11 +2572,12 @@ public final class NativeSoundEngine {
                 voice: kind.rawValue,
                 freq0: hz,
                 freq1: hz,
-                durationSec: durationSec,
+                // Effects stay short and clear: shorter hold, less room, no echo.
+                durationSec: durationSec * 0.6,
                 velocity: vel,
                 pan: pan,
-                reverbSend: reverb,
-                delaySend: delay,
+                reverbSend: reverb * 0.6,
+                delaySend: 0,
                 filterQ: 1.0,
                 isMusicBus: 0,
                 delaySamples: Int32(max(0.0, offsetSec * Double(kernel.sampleRate)))
@@ -2689,7 +2752,7 @@ public final class NativeSoundEngine {
             emitNoiseSweep(f0: 2400, f1: 1000, durSec: 0.16, peak: 0.07, q: 1.5)
         }
         if zipped {
-            emitNoiseSweep(f0: 1650, f1: 6800, durSec: 0.26, peak: 0.09, q: 1.4)
+            emitNoiseSweep(f0: 1200, f1: 3200, durSec: 0.22, peak: 0.08, q: 1.0)
             emitSfxVoice(.bell, midi: harmonicMidi(degree: 6, octaveShift: 48), offsetSec: 0.095, vel: 0.58, reverb: 0.55)
         }
     }
@@ -2707,7 +2770,7 @@ public final class NativeSoundEngine {
                 reverb: 0.65
             )
         }
-        emitNoiseSweep(f0: 1200, f1: 5200, durSec: 0.55, peak: 0.08, q: 0.85)
+        emitNoiseSweep(f0: 900, f1: 2800, durSec: 0.40, peak: 0.07, q: 0.85)
         if buffered {
             emitNoiseSweep(f0: 2800, f1: 720, offsetSec: 0.14, durSec: 0.40, peak: 0.09, q: 1.2)
         }
@@ -2775,7 +2838,7 @@ public final class NativeSoundEngine {
                 reverb: 0.60
             )
         }
-        emitNoiseSweep(f0: 7000, f1: 3500, durSec: 0.13, peak: 0.06, q: 0.75)
+        emitNoiseSweep(f0: 3200, f1: 1800, durSec: 0.10, peak: 0.05, q: 0.75)
     }
 
     public func playCrystalShatter() {
@@ -2785,8 +2848,8 @@ public final class NativeSoundEngine {
     /// S. mutans pop & playful jelly bump boing.
     public func playMutansPop() {
         guard throttle("mutans-pop", minGapSec: 0.055), canPlaySfx() else { return }
-        let startHz = Float.random(in: 700...1000)
-        emitBlip(f0: startHz, f1: 1620, durSec: 0.065, peak: 0.14)
+        let startHz = Float.random(in: 450...650)
+        emitBlip(f0: startHz, f1: 900, durSec: 0.065, peak: 0.14)
     }
 
     public func playMutansBoing() {
@@ -2810,19 +2873,19 @@ public final class NativeSoundEngine {
     /// Saliva Spring bubbly aqua harp glissando.
     public func playSalivaSpring() {
         guard canPlaySfx() else { return }
-        for i in 0..<8 {
+        for i in 0..<5 {
             emitSfxVoice(
                 .bell,
                 midi: harmonicMidi(degree: i, octaveShift: 48),
                 offsetSec: Double(i) * 0.045,
                 vel: 0.46,
-                pan: Float(i - 4) * 0.10,
+                pan: Float(i - 2) * 0.15,
                 reverb: 0.70
             )
         }
-        for i in 0..<4 {
-            let base = Float(700 + i * 180)
-            emitBlip(f0: base, f1: base + 620, offsetSec: Double(i) * 0.07, durSec: 0.05, peak: 0.045)
+        for i in 0..<3 {
+            let base = Float(400 + i * 120)
+            emitBlip(f0: base, f1: base + 300, offsetSec: Double(i) * 0.07, durSec: 0.05, peak: 0.045)
         }
     }
 
@@ -2856,7 +2919,7 @@ public final class NativeSoundEngine {
     /// Gentle non-punitive Acid / Gum warnings.
     public func playAcidWarning() {
         guard throttle("acid-warn", minGapSec: 0.68), canPlaySfx() else { return }
-        emitNoiseSweep(f0: 5200, f1: 8200, durSec: 0.14, peak: 0.055, q: 1.0)
+        emitNoiseSweep(f0: 2000, f1: 3400, durSec: 0.12, peak: 0.045, q: 1.0)
         let m = harmonicMidi(degree: 0, octaveShift: 36)
         emitSfxVoice(.marimba, midi: m, vel: 0.46, pan: -0.1, reverb: 0.12)
         emitSfxVoice(.marimba, midi: m, offsetSec: 0.09, vel: 0.38, pan: 0.1, reverb: 0.12)
@@ -2870,7 +2933,7 @@ public final class NativeSoundEngine {
 
     public func playAcidSip() {
         guard canPlaySfx() else { return }
-        emitNoiseSweep(f0: 3000, f1: 7500, durSec: 0.30, peak: 0.07, q: 0.9)
+        emitNoiseSweep(f0: 1400, f1: 3200, durSec: 0.22, peak: 0.06, q: 0.9)
         emitSfxVoice(.marimba, midi: harmonicMidi(degree: 4, octaveShift: 48), vel: 0.58)
         emitSfxVoice(.marimba, midi: harmonicMidi(degree: 1, octaveShift: 48), offsetSec: 0.11, vel: 0.52)
     }
@@ -2947,7 +3010,7 @@ public final class NativeSoundEngine {
         emitSfxVoice(.marimba, midi: harmonicMidi(degree: 3, octaveShift: 48), vel: 0.68, pan: -0.20)
         emitSfxVoice(.marimba, midi: harmonicMidi(degree: 5, octaveShift: 48), offsetSec: 0.09, vel: 0.64, pan: 0.10)
         emitSfxVoice(.kalimba, midi: harmonicMidi(degree: 2, octaveShift: 60), offsetSec: 0.18, vel: 0.60, pan: 0.25)
-        emitNoiseSweep(f0: 4200, f1: 7200, durSec: 0.22, peak: 0.055, q: 0.85)
+        emitNoiseSweep(f0: 1800, f1: 3200, durSec: 0.18, peak: 0.045, q: 0.85)
     }
 
     public func playSugarSplat() {
@@ -2964,10 +3027,9 @@ public final class NativeSoundEngine {
         }
     }
 
-    /// Octave offset for Brush-Along cues, added to the theme key (already a full MIDI note, G3 for
-    /// Brush-Along), so cues land around G4. They used to sit three to five octaves higher, up to
-    /// 6 kHz, which sounded like a dog whistle. Keep in step with `PACER_CUE_OCTAVE` on the web.
-    private static let pacerCueOctave = 12
+    /// Brush-Along cue register: G4 once `harmonicMidi` applies `sfxOctaveDrop`.
+    /// Keep in step with `PACER_CUE_OCTAVE` on the web.
+    private static let pacerCueOctave = 48
 
     /// 2-Minute Sink Brush-Along Pacer cues: 10s surface soft-tick, 30s quadrant chime, 2:00 fanfare!
     public func playPacerCue(_ kind: PacerAudioCueKind) {
@@ -3038,14 +3100,14 @@ public final class NativeSoundEngine {
         let clampedStep = min(2, max(0, stepIndex))
         emitNoiseSweep(
             f0: 950 + Float(clampedStep) * 320,
-            f1: 2800 + Float(clampedStep) * 450,
+            f1: 2000 + Float(clampedStep) * 300,
             durSec: 0.42,
             peak: 0.055,
             q: 0.85
         )
         for b in 0..<3 {
-            let baseHz = Float(640 + clampedStep * 140 + b * 190)
-            emitBlip(f0: baseHz, f1: baseHz + 520, offsetSec: Double(b) * 0.055, durSec: 0.045, peak: 0.042)
+            let baseHz = Float(420 + clampedStep * 90 + b * 120)
+            emitBlip(f0: baseHz, f1: baseHz + 260, offsetSec: Double(b) * 0.055, durSec: 0.045, peak: 0.042)
         }
         let degrees: [[Int]] = [
             [0, 4, 7],
@@ -3075,14 +3137,14 @@ public final class NativeSoundEngine {
         let gain = max(0.25, min(1.0, intensity))
         emitNoiseSweep(
             f0: p >= 0 ? 1100 : 980,
-            f1: 2450 + gain * 650,
+            f1: 1900 + gain * 500,
             durSec: 0.24,
             peak: 0.042 * gain,
             q: 0.90
         )
         emitBlip(
-            f0: p >= 0 ? 740 : 660,
-            f1: 1220,
+            f0: p >= 0 ? 520 : 460,
+            f1: 760,
             offsetSec: 0.025,
             durSec: 0.04,
             peak: 0.034 * gain
@@ -3105,7 +3167,7 @@ public final class NativeSoundEngine {
         for i in 0..<7 {
             emitSfxVoice(.bell, midi: harmonicMidi(degree: i, octaveShift: 48), offsetSec: Double(i) * 0.07, vel: 0.52, pan: Float(i - 3) * 0.12, reverb: 0.65)
         }
-        emitNoiseSweep(f0: 600, f1: 3600, durSec: 0.70, peak: 0.08, q: 0.75)
+        emitNoiseSweep(f0: 500, f1: 2400, durSec: 0.45, peak: 0.07, q: 0.75)
     }
 
     public func playCosmicBeatChime(_ beatIdx: Int) {
@@ -3160,7 +3222,7 @@ public final class NativeSoundEngine {
                 }
             }
             for (i, iv) in [12, 16, 19, 24].enumerated() {
-                emitSfxVoice(.bell, midi: key + iv + 12, offsetSec: 0.84 + Double(i) * 0.07, vel: 0.56, pan: (Float(i) - 1.5) * 0.20, reverb: 0.75)
+                emitSfxVoice(.bell, midi: key + iv, offsetSec: 0.84 + Double(i) * 0.07, vel: 0.56, pan: (Float(i) - 1.5) * 0.20, reverb: 0.75)
             }
         } else {
             let prog = [[5, 9, 12, 16], [0, 4, 7, 11, 14]]

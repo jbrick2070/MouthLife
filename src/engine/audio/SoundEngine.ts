@@ -1,6 +1,7 @@
 import type { AppMode } from '../types';
 import { MusicSequencer } from './MusicSequencer';
 import { MusicTrackDeck } from './MusicTrackDeck';
+import type { BrushMusicStage } from './musicTracks';
 import { BUNDLED_MUSIC_FILES } from 'virtual:bundled-music';
 import {
   COSMIC_BEAT_BARS,
@@ -33,10 +34,16 @@ const MUSIC_SCALE = 0.55;
 /** Bundled recordings are mastered already; same level the native app gives them. */
 const TRACK_SCALE = 0.72;
 /**
- * Octave offset for Brush-Along cues, added to the theme key (a full MIDI note, G3 for
- * Brush-Along), so cues land around G4. Keep in step with `pacerCueOctave` in the native app.
+ * Theme keys are full MIDI notes (around G3), but the effect code was written as if they were
+ * pitch classes, so every effect played three octaves too high (3-12 kHz, a hearing-test whine).
+ * The shared pitch helper takes this back off, so "48" lands near G4 and "60" near G5.
+ * Keep in step with `sfxOctaveDrop` in the native app.
  */
-const PACER_CUE_OCTAVE = 12;
+const SFX_OCTAVE_DROP = 36;
+/** Brush-Along cue register (G4 after the drop). Keep in step with `pacerCueOctave` natively. */
+const PACER_CUE_OCTAVE = 48;
+/** Effects ring with less room sound than the music, so they stay short and clear. */
+const SFX_REVERB_SCALE = 0.6;
 const SFX_SCALE = 0.95;
 /** About -8.4 dB, the same music duck the native app uses under spoken cues. */
 const VOICE_DUCK_GAIN = 0.38;
@@ -107,6 +114,8 @@ export class SoundEngine {
   /** Streams the bundled recordings; null until the audio graph exists. */
   private trackDeck: MusicTrackDeck | null = null;
   private trackBus: GainNode | null = null;
+  /** Floss and rinse play their own recordings during Brush-Along. */
+  private brushMusicStage: BrushMusicStage | null = null;
 
   constructor(storage?: Pick<Storage, 'getItem' | 'setItem'> | null) {
     this.prefs = loadAudioPrefs(storage);
@@ -330,7 +339,7 @@ export class SoundEngine {
     this.scrubBp.Q.value = 0.9;
     this.scrubShimBp = ctx.createBiquadFilter();
     this.scrubShimBp.type = 'bandpass';
-    this.scrubShimBp.frequency.value = 5200;
+    this.scrubShimBp.frequency.value = 2600;
     this.scrubShimBp.Q.value = 0.8;
     this.scrubShimGain = ctx.createGain();
     this.scrubShimGain.gain.value = 0.15;
@@ -462,7 +471,7 @@ export class SoundEngine {
     const themeMix = this.seq.theme.mixGain ?? 1;
     const silent = this.prefs.musicVolume <= 0.001;
     const themeId = this.seq.theme.id;
-    const track = silent ? null : (this.trackDeck?.resolve(themeId) ?? null);
+    const track = silent ? null : (this.trackDeck?.resolve(themeId, this.brushMusicStage) ?? null);
     const base = silent ? 0 : this.prefs.musicVolume * MUSIC_SCALE * themeMix;
     const wetBase = silent ? 0 : (this.prefs.musicVolume / DEFAULT_AUDIO_PREFS.musicVolume) * themeMix;
     if (this.hidden) {
@@ -515,6 +524,7 @@ export class SoundEngine {
     if (mode !== 'BRUSH_ALONG') {
       this.pacerQuadrant = 0;
       this.coda = false;
+      this.brushMusicStage = null;
     }
     if (mode !== 'ARCADE' && mode !== 'PULP_RESCUE') {
       this.urgency = false;
@@ -547,10 +557,14 @@ export class SoundEngine {
     this.refreshOptions();
   }
 
-  setPacerState(quadrantIdx: number, inFlossBonus: boolean): void {
+  setPacerState(quadrantIdx: number, inFlossBonus: boolean, stage: BrushMusicStage | null = null): void {
     this.pacerQuadrant = Math.max(0, Math.min(3, quadrantIdx));
     this.coda = inFlossBonus;
     this.refreshOptions();
+    if (stage !== this.brushMusicStage) {
+      this.brushMusicStage = stage;
+      this.applyPlaybackState();
+    }
   }
 
   /** Last-20s Pulp Rescue urgency (gentle tempo/hat step-up, never shrill). */
@@ -605,10 +619,10 @@ export class SoundEngine {
     return { theme, chord: this.seq?.currentChord ?? theme.progressionA[0] };
   }
 
-  /** In-key note for SFX: scale degree snapped to the current chord. */
+  /** In-key note for SFX: scale degree snapped to the current chord, in a comfortable register. */
   harmonicMidi(degree: number, octaveShift = 36): number {
     const { theme, chord } = this.getHarmony();
-    return harmonicSfxMidi(theme, chord, degree, octaveShift);
+    return harmonicSfxMidi(theme, chord, degree, octaveShift - SFX_OCTAVE_DROP);
   }
 
   private throttle(key: string, gapSec: number): boolean {
@@ -635,11 +649,11 @@ export class SoundEngine {
   // Low-level SFX primitives -------------------------------------------------
 
   private bell(out: VoiceOut, t: number, midi: number, vel = 0.7, pan = 0, send = 0.55): void {
-    celesta(out, t, midiToFreq(midi), vel, pan, send, false);
+    celesta(out, t, midiToFreq(midi), vel, pan, send * SFX_REVERB_SCALE, false, true);
   }
 
   private wood(out: VoiceOut, t: number, midi: number, vel = 0.7, pan = 0, send = 0.2): void {
-    marimba(out, t, midiToFreq(midi), vel, pan, send, false);
+    marimba(out, t, midiToFreq(midi), vel, pan, send * SFX_REVERB_SCALE, false, true);
   }
 
   private blip(out: VoiceOut, t: number, f0: number, f1: number, dur: number, peak: number, type: OscillatorType = 'sine', lpHz = 4000): void {
@@ -715,17 +729,17 @@ export class SoundEngine {
       this.wood(o, t, this.harmonicMidi(3, 48), 0.7, -0.2);
       this.wood(o, t + 0.09, this.harmonicMidi(5, 48), 0.65, 0.1);
       this.wood(o, t + 0.18, this.harmonicMidi(2, 60), 0.6, 0.25);
-      this.noiseSweep(o, t, 4200, 7200, 0.22, 0.03, 0.8);
+      this.noiseSweep(o, t, 1800, 3200, 0.18, 0.025, 0.8);
     });
   }
 
   playOrbitalDive(): void {
     this.run((o, t) => {
       // harp-like pentatonic sweep + soft air whoosh
-      for (let i = 0; i < 7; i++) {
-        this.bell(o, t + i * 0.07, this.harmonicMidi(i, 48), 0.5, (i - 3) * 0.12, 0.6);
+      for (let i = 0; i < 5; i++) {
+        this.bell(o, t + i * 0.07, this.harmonicMidi(i, 48), 0.5, (i - 2) * 0.15, 0.6);
       }
-      this.noiseSweep(o, t, 600, 3600, 0.7, 0.05, 0.7);
+      this.noiseSweep(o, t, 500, 2400, 0.45, 0.04, 0.7);
     });
   }
 
@@ -745,7 +759,7 @@ export class SoundEngine {
       this.wood(o, t + 0.035, m + 7, 0.45);
       if (ribbon) this.noiseSweep(o, t, 2400, 1000, 0.16, 0.035, 1.5);
       if (zipped) {
-        this.noiseSweep(o, t, 1800, 6500, 0.28, 0.04, 1.4);
+        this.noiseSweep(o, t, 1200, 3200, 0.22, 0.035, 1.0);
         this.bell(o, t + 0.1, this.harmonicMidi(6, 48), 0.55);
       }
     });
@@ -753,8 +767,8 @@ export class SoundEngine {
 
   playIonRinseWave(buffered = false): void {
     this.run((o, t) => {
-      for (let i = 0; i < 7; i++) this.bell(o, t + i * 0.055, this.harmonicMidi(i, 48), 0.55, (i - 3) * 0.1, 0.65);
-      this.noiseSweep(o, t, 1200, 5200, 0.55, 0.04, 0.8);
+      for (let i = 0; i < 5; i++) this.bell(o, t + i * 0.055, this.harmonicMidi(i, 48), 0.55, (i - 2) * 0.12, 0.65);
+      this.noiseSweep(o, t, 900, 2800, 0.4, 0.035, 0.8);
       if (buffered) this.noiseSweep(o, t + 0.14, 2800, 720, 0.4, 0.055, 1.2);
     });
   }
@@ -774,8 +788,8 @@ export class SoundEngine {
 
   playDistrictSealed(): void {
     this.run((o, t) => {
-      [0, 1, 2, 3, 4].forEach((d, i) => {
-        this.bell(o, t + i * 0.07, this.harmonicMidi(d, 60), 0.6, (i - 2) * 0.15, 0.7);
+      [0, 2, 4, 7].forEach((d, i) => {
+        this.bell(o, t + i * 0.07, this.harmonicMidi(d, 60), 0.6, (i - 1.5) * 0.15, 0.7);
       });
       const { theme, chord } = this.getHarmony();
       chordMidis(theme, chord, 0, 12).slice(0, 3).forEach((m) => rhodes(o, t + 0.2, midiToFreq(m), 0.9, 0.55, 0, 0.5));
@@ -793,7 +807,7 @@ export class SoundEngine {
     this.run((o, t) => {
       const deg = Math.max(0, Math.min(11, step));
       const m = this.harmonicMidi(deg, 60);
-      celesta(o, t, midiToFreq(m), 0.7, 0, 0.7, true);
+      celesta(o, t, midiToFreq(m), 0.7, 0, 0.7 * SFX_REVERB_SCALE, true, true);
     });
   }
 
@@ -814,14 +828,14 @@ export class SoundEngine {
   playCrystalShatter(): void {
     this.run((o, t) => {
       [7, 9, 6, 11].forEach((d, i) => this.bell(o, t + i * 0.028, this.harmonicMidi(d, 60), 0.45, (i - 1.5) * 0.3, 0.6));
-      this.noiseSweep(o, t, 7000, 3500, 0.12, 0.025, 0.7);
+      this.noiseSweep(o, t, 3200, 1800, 0.1, 0.022, 0.7);
     });
   }
 
   /** Fizzy sweet-sip drop: the Stephan clock restarts. */
   playAcidSip(): void {
     this.run((o, t) => {
-      this.noiseSweep(o, t, 3000, 7500, 0.3, 0.04, 0.9);
+      this.noiseSweep(o, t, 1400, 3200, 0.22, 0.035, 0.9);
       this.wood(o, t, this.harmonicMidi(4, 48), 0.6);
       this.wood(o, t + 0.11, this.harmonicMidi(1, 48), 0.55);
     });
@@ -909,8 +923,8 @@ export class SoundEngine {
     const octave = isUpper ? PACER_CUE_OCTAVE : PACER_CUE_OCTAVE - 12;
     this.run((o, t) => {
       const f = midiToFreq(this.harmonicMidi(degree, octave));
-      if (s === 1) celesta(o, t, f, 0.42, 0, 0.45, false);
-      else marimba(o, t, f, 0.32, 0, 0.45, true);
+      if (s === 1) celesta(o, t, f, 0.42, 0, 0.45 * SFX_REVERB_SCALE, false, true);
+      else marimba(o, t, f, 0.32, 0, 0.45 * SFX_REVERB_SCALE, true, true);
     });
   }
 
@@ -946,18 +960,18 @@ export class SoundEngine {
   playAcidWarn(): void {
     if (!this.throttle('acid', 0.7)) return;
     this.run((o, t) => {
-      this.noiseSweep(o, t, 5200, 8200, 0.14, 0.03, 1.0);
-      const m = this.harmonicMidi(0, 36);
-      marimba(o, t, midiToFreq(m), 0.45, -0.1, 0.1, false);
-      marimba(o, t + 0.09, midiToFreq(m), 0.38, 0.1, 0.1, false);
+      this.noiseSweep(o, t, 2000, 3400, 0.12, 0.025, 1.0);
+      const m = this.harmonicMidi(0, 48);
+      marimba(o, t, midiToFreq(m), 0.45, -0.1, 0.1, false, true);
+      marimba(o, t + 0.09, midiToFreq(m), 0.38, 0.1, 0.1, false, true);
     });
   }
 
   /** Bubbly aqua harp glissando when a Saliva Spring bursts. */
   playSalivaSpring(): void {
     this.run((o, t) => {
-      for (let i = 0; i < 8; i++) this.bell(o, t + i * 0.045, this.harmonicMidi(i, 48), 0.45, (i - 4) * 0.1, 0.7);
-      for (let i = 0; i < 4; i++) this.blip(o, t + i * 0.07, 700 + i * 180, 1300 + i * 220, 0.05, 0.03);
+      for (let i = 0; i < 5; i++) this.bell(o, t + i * 0.045, this.harmonicMidi(i, 48), 0.45, (i - 2) * 0.15, 0.7);
+      for (let i = 0; i < 3; i++) this.blip(o, t + i * 0.07, 400 + i * 120, 700 + i * 150, 0.05, 0.03);
     });
   }
 
@@ -969,7 +983,7 @@ export class SoundEngine {
 
   playMutansPop(): void {
     if (!this.throttle('mutans-pop', 0.06)) return;
-    this.run((o, t) => this.blip(o, t, 700 + Math.random() * 300, 1600, 0.06, 0.1, 'sine', 5000));
+    this.run((o, t) => this.blip(o, t, 450 + Math.random() * 200, 900, 0.06, 0.1, 'sine', 2500));
   }
 
   /** Edge-triggered uplifting chime at 100% Fluoride Surge. */
@@ -1005,7 +1019,7 @@ export class SoundEngine {
         prog.forEach((c, bi) => {
           c.forEach((iv, i) => rhodes(o, t + bi * 0.28, midiToFreq(key + iv), 0.7, 0.6, (i - 2) * 0.12, 0.5));
         });
-        [12, 16, 19, 24].forEach((iv, i) => this.bell(o, t + 0.84 + i * 0.07, key + iv + 12, 0.55, (i - 1.5) * 0.2, 0.75));
+        [12, 16, 19, 24].forEach((iv, i) => this.bell(o, t + 0.84 + i * 0.07, key + iv, 0.55, (i - 1.5) * 0.2, 0.75));
       } else {
         const prog: number[][] = [
           [5, 9, 12, 16],
@@ -1047,7 +1061,7 @@ export class SoundEngine {
     const brushTone = state.brush === 'bass' ? 720 : hydroSonic ? 1550 : 1000;
     this.scrubLfo.frequency.setTargetAtTime((hydroSonic ? 4.2 : 1.6) + speed01 * 5.5, now, 0.08);
     this.scrubBp.frequency.setTargetAtTime(brushTone + speed01 * 800 + state.cleanRatio * 500, now, 0.08);
-    this.scrubShimGain.gain.setTargetAtTime(0.1 + speed01 * 0.32, now, 0.08);
+    this.scrubShimGain.gain.setTargetAtTime(0.06 + speed01 * 0.18, now, 0.08);
     this.scrubGain.gain.setTargetAtTime(0.32 + speed01 * 0.38, now, 0.05);
 
     if (this.sfxOut) {
@@ -1055,8 +1069,8 @@ export class SoundEngine {
       const rate = 3 + speed01 * 9;
       if (Math.random() < rate / 60) {
         const o = this.sfxOut;
-        const f = 520 + Math.random() * 900;
-        this.blip(o, now + 0.005, f, f * 1.7, 0.035, 0.018 + Math.random() * 0.012);
+        const f = 380 + Math.random() * 500;
+        this.blip(o, now + 0.005, f, f * 1.4, 0.035, 0.018 + Math.random() * 0.012);
       }
       if (state.newlyCleaned > 0 && this.throttle('scrub-chime', 0.22)) {
         const deg = Math.floor(Math.random() * 10);

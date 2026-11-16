@@ -23,6 +23,19 @@ export const MUSIC_TRACK_CANDIDATES: Record<ThemeId, readonly string[]> = {
   report: ['report', 'victory'],
 };
 
+/** Brush-Along stages after the two minutes of brushing, which get music of their own. */
+export type BrushMusicStage = 'floss' | 'rinse';
+
+/**
+ * Tried first during the floss and rinse stages of Brush-Along. A dedicated `floss.*` or
+ * `rinse.*` file wins; until one is added, Accra (bright highlife) carries the floss and Aurora
+ * (calm sunrise) the fluoride rinse. Same list as the native SunoStreamDeck.
+ */
+export const BRUSH_STAGE_TRACK_CANDIDATES: Record<BrushMusicStage, readonly string[]> = {
+  floss: ['floss', 'brush_floss', 'accra'],
+  rinse: ['rinse', 'fluoride', 'mouthwash', 'brush_rinse', 'aurora'],
+};
+
 /** A `background.*` file covers any theme that has no file of its own, like the native app. */
 export const MUSIC_FALLBACK_STEM = 'background';
 
@@ -36,7 +49,11 @@ function extensionRank(file: string): number {
  * Picks the bundled recording for `themeId` out of `files` (bare file names), or null when the
  * procedural synth should play instead. Matching is by stem, case-insensitive.
  */
-export function resolveMusicTrack(themeId: ThemeId, files: readonly string[]): string | null {
+export function resolveMusicTrack(
+  themeId: ThemeId,
+  files: readonly string[],
+  brushStage: BrushMusicStage | null = null
+): string | null {
   if (files.length === 0) return null;
   const byStem = new Map<string, string>();
   for (const file of files) {
@@ -46,7 +63,8 @@ export function resolveMusicTrack(themeId: ThemeId, files: readonly string[]): s
     const prev = byStem.get(stem);
     if (!prev || rank < extensionRank(prev)) byStem.set(stem, file);
   }
-  for (const stem of [...(MUSIC_TRACK_CANDIDATES[themeId] ?? []), MUSIC_FALLBACK_STEM]) {
+  const stageStems = themeId === 'brush_along' && brushStage ? BRUSH_STAGE_TRACK_CANDIDATES[brushStage] : [];
+  for (const stem of [...stageStems, ...(MUSIC_TRACK_CANDIDATES[themeId] ?? []), MUSIC_FALLBACK_STEM]) {
     const hit = byStem.get(stem);
     if (hit) return hit;
   }

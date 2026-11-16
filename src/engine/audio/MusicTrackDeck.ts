@@ -6,7 +6,7 @@
  * takes over for that theme, exactly as on a device without the track.
  */
 import type { ThemeId } from './musicTheory';
-import { resolveMusicTrack } from './musicTracks';
+import { resolveMusicTrack, type BrushMusicStage } from './musicTracks';
 
 export const TRACK_CROSSFADE_SEC = 0.85;
 
@@ -60,11 +60,12 @@ export class MusicTrackDeck {
   }
 
   /** The recording that should play for this theme, or null when the synth should. */
-  resolve(themeId: ThemeId): string | null {
+  resolve(themeId: ThemeId, brushStage: BrushMusicStage | null = null): string | null {
     if (!this.hasTracks()) return null;
     return resolveMusicTrack(
       themeId,
-      this.files.filter((f) => !this.failed.has(f))
+      this.files.filter((f) => !this.failed.has(f)),
+      brushStage
     );
   }
 

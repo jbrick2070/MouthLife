@@ -455,8 +455,13 @@ function bootstrapMouthLife(): void {
 
   // Brush-Along & winning dives clear Regional Treat sugar splats from the Companion teeth
   bus.on('pacer:tick', ({ elapsedSec, quadrantIdx, stage }) => {
-    // Floss and rinse both play the calmer closing section of the pacer music.
-    sound.setPacerState(quadrantIdx, stage !== 'brushing');
+    // Floss and rinse each switch to their own recording (the synth plays its calmer closing
+    // section when no recording is available).
+    sound.setPacerState(
+      quadrantIdx,
+      stage !== 'brushing',
+      stage === 'flossBonus' ? 'floss' : stage === 'mouthwashBonus' ? 'rinse' : null
+    );
     const cap = Math.max(0, 1 - elapsedSec / 40);
     for (const sp of touch.splats) sp.amount = Math.min(sp.amount, cap);
   });

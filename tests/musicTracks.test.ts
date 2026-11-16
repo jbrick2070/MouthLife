@@ -44,6 +44,17 @@ describe('bundled soundtrack resolution (matches the native SunoStreamDeck)', ()
     expect(resolveMusicTrack('brush_along', ['Brush.MP3'])).toBe('Brush.MP3');
   });
 
+  it('gives floss and rinse their own music, preferring a dedicated file', () => {
+    expect(resolveMusicTrack('brush_along', SHIPPED, 'floss')).toBe('accra.m4a');
+    expect(resolveMusicTrack('brush_along', SHIPPED, 'rinse')).toBe('aurora.m4a');
+    expect(resolveMusicTrack('brush_along', [...SHIPPED, 'floss.mp3'], 'floss')).toBe('floss.mp3');
+    expect(resolveMusicTrack('brush_along', [...SHIPPED, 'rinse.m4a'], 'rinse')).toBe('rinse.m4a');
+    // The stage only matters during Brush-Along.
+    expect(resolveMusicTrack('hub', SHIPPED, 'floss')).toBe('sanctuary.m4a');
+    // Without any stage track, the brushing track keeps playing.
+    expect(resolveMusicTrack('brush_along', ['brush_along.m4a'], 'rinse')).toBe('brush_along.m4a');
+  });
+
   it('falls back to background.* and otherwise hands the theme to the synth', () => {
     expect(resolveMusicTrack('pulp', ['background.m4a', 'toronto.m4a'])).toBe('background.m4a');
     expect(resolveMusicTrack('pulp', ['toronto.m4a'])).toBeNull();

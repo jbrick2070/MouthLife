@@ -110,9 +110,10 @@ export function rhodes(out: VoiceOut, t: number, freq: number, dur: number, vel:
   }
 }
 
-export function marimba(out: VoiceOut, t: number, freq: number, vel: number, pan: number, send: number, kalimba = false): void {
-  const g = stage(out, t, pan, send, kalimba ? 0.12 : 0.06);
-  const decay = kalimba ? 0.9 : 0.42;
+/** `short` is for sound effects: a quicker ring and no echo, so cues stay brief. */
+export function marimba(out: VoiceOut, t: number, freq: number, vel: number, pan: number, send: number, kalimba = false, short = false): void {
+  const g = stage(out, t, pan, send, short ? 0 : kalimba ? 0.12 : 0.06);
+  const decay = (kalimba ? 0.9 : 0.42) * (short ? 0.6 : 1);
   const end = env(g.gain, t, 0.2 * vel, 0.004, 0.02, decay, 0, 0.12);
   const f = osc(out, kalimba ? 'triangle' : 'sine', freq, t);
   f.connect(g);
@@ -143,9 +144,11 @@ export function marimba(out: VoiceOut, t: number, freq: number, vel: number, pan
   f.stop(end + 0.05);
 }
 
-export function celesta(out: VoiceOut, t: number, freq: number, vel: number, pan: number, send: number, bellLike = false): void {
-  const g = stage(out, t, pan, send, 0.2);
-  const end = env(g.gain, t, 0.14 * vel, 0.005, 0.03, bellLike ? 1.4 : 0.9, 0, 0.35);
+/** `short` is for sound effects: a quicker ring and no echo, so cues stay brief. */
+export function celesta(out: VoiceOut, t: number, freq: number, vel: number, pan: number, send: number, bellLike = false, short = false): void {
+  const g = stage(out, t, pan, send, short ? 0 : 0.2);
+  const ring = (bellLike ? 1.4 : 0.9) * (short ? 0.45 : 1);
+  const end = env(g.gain, t, 0.14 * vel, 0.005, 0.03, ring, 0, short ? 0.15 : 0.35);
   const nyquist = out.ctx.sampleRate * 0.5 - 200;
   const parts: Array<[number, number]> = bellLike
     ? [

@@ -699,7 +699,7 @@ public final class AppCoordinator {
         sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
         lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
         NativeSoundEngine.shared.setPaused(false)
-        NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
+        NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true, inRinse: true)
         NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: 0)
         NativeSoundEngine.shared.speakCoachingPhrase(
             BrushCoachCopy.spokenStageWord(.rinse, lang: coachLanguage)

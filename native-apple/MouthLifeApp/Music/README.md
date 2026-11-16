@@ -4,6 +4,8 @@ Drop any `.m4a` (recommended AAC `160–256 kbps` for hardware-decoded zero-CPU 
 
 The web edition plays this same folder: `vite.config.ts` serves it as `music/` in dev and copies it into `dist/music/` on build, and `src/engine/audio/musicTracks.ts` resolves the same stems in the same order (browsers skip `.caf`). A theme with no file falls back to the procedural synth in both editions.
 
+Brush-Along's floss and fluoride-rinse stages switch tracks: drop in `floss.m4a` and `rinse.m4a` (or `fluoride.m4a` / `mouthwash.m4a`) to give them dedicated music. Until then the floss plays `accra.m4a` and the rinse `aurora.m4a`.
+
 `NativeSoundEngine` (`SunoStreamDeck`) automatically:
 1. **Detects bundled tracks at runtime** using either friendly city names (`toronto.m4a`, `new_orleans.m4a`, `tokyo.m4a`, `accra.m4a`, `aurora.m4a`, `sanctuary.m4a`) or canonical IDs (`world_1.m4a`..`world_5.m4a`, `hub.m4a`).
 2. **Powers Live Earth Radio**: tapping any unlocked city pill in the Hub (`Toronto`, `New Orleans`, `Tokyo & Chicago`, `Accra & Colorado Springs`, `Station Aurora`) spins 3D Earth to that city and crossfades (`850ms`) into its song — and keeps playing seamlessly without restarting when you launch **2-Min Brush** or **Dive Arch**! (Tap **Sanctuary** anytime to return to calm ambient, or tap the top **FM pill** mid-brush to flip stations with one wet thumb.)
