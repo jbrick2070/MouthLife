@@ -8,6 +8,9 @@ public enum CitySkylineArt {
         public let lightPieces: Int
         public let triangles: Int
         public let checksum: Double
+        public let shadedPieces: Int
+        public let movingPieces: Int
+        public let motions: Int
     }
 
     public static let hostIds: [String] = ["accra", "new_orleans", "orbit_aurora", "tokyo", "toronto"]
@@ -26,139 +29,191 @@ public enum CitySkylineArt {
 
     public static func expectedSkyline(forHost hostId: String) -> Expected? {
         switch hostId {
-        case "accra": return Expected(pieces: 107, lightPieces: 31, triangles: 691, checksum: 54063.334)
-        case "new_orleans": return Expected(pieces: 164, lightPieces: 104, triangles: 568, checksum: 67796.271)
-        case "orbit_aurora": return Expected(pieces: 81, lightPieces: 50, triangles: 509, checksum: 60062.038)
-        case "tokyo": return Expected(pieces: 162, lightPieces: 107, triangles: 545, checksum: 69753.574)
-        case "toronto": return Expected(pieces: 249, lightPieces: 202, triangles: 673, checksum: 65566.311)
+        case "accra": return Expected(pieces: 134, lightPieces: 50, triangles: 894, checksum: 89887.973, shadedPieces: 9, movingPieces: 42, motions: 9)
+        case "new_orleans": return Expected(pieces: 253, lightPieces: 154, triangles: 1086, checksum: 133053.135, shadedPieces: 9, movingPieces: 22, motions: 6)
+        case "orbit_aurora": return Expected(pieces: 162, lightPieces: 105, triangles: 823, checksum: 92541.542, shadedPieces: 0, movingPieces: 44, motions: 11)
+        case "tokyo": return Expected(pieces: 280, lightPieces: 162, triangles: 980, checksum: 109346.943, shadedPieces: 9, movingPieces: 22, motions: 11)
+        case "toronto": return Expected(pieces: 236, lightPieces: 165, triangles: 674, checksum: 70957.198, shadedPieces: 9, movingPieces: 16, motions: 5)
         default: return nil
         }
     }
 
     public static func expectedProp(forHost hostId: String) -> Expected? {
         switch hostId {
-        case "accra": return Expected(pieces: 8, lightPieces: 1, triangles: 124, checksum: 1352.889)
-        case "new_orleans": return Expected(pieces: 5, lightPieces: 1, triangles: 9, checksum: 64.252)
-        case "orbit_aurora": return Expected(pieces: 9, lightPieces: 4, triangles: 54, checksum: 504.379)
-        case "tokyo": return Expected(pieces: 7, lightPieces: 1, triangles: 32, checksum: 185.109)
-        case "toronto": return Expected(pieces: 7, lightPieces: 1, triangles: 86, checksum: 410.715)
+        case "accra": return Expected(pieces: 8, lightPieces: 1, triangles: 124, checksum: 1352.889, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "new_orleans": return Expected(pieces: 5, lightPieces: 1, triangles: 9, checksum: 64.252, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "orbit_aurora": return Expected(pieces: 9, lightPieces: 4, triangles: 54, checksum: 504.379, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "tokyo": return Expected(pieces: 10, lightPieces: 1, triangles: 38, checksum: 204.91, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "toronto": return Expected(pieces: 7, lightPieces: 1, triangles: 86, checksum: 410.715, shadedPieces: 0, movingPieces: 0, motions: 0)
         default: return nil
         }
     }
 
     static let accra = #"""
-; Accra's coast on the west, Colorado's Rockies on the east: sunset over Labadi Beach, palms and a
-; fishing canoe, Jamestown Lighthouse, a banner in Ghana's colours, Black Star Gate, chewing-stick
-; trees, then Pikes Peak with pines and a cabin.
+; Accra's coast on the west, Colorado's Rockies on the east: sunset over Labadi Beach, swaying
+; palms and a fishing canoe, Jamestown Lighthouse sweeping its beam, the Nkrumah Mausoleum, Ghana's
+; flag, Black Star Gate, a miswak tree in blossom; then the red rocks of the Garden of the Gods,
+; Pikes Peak with its summit house and cog railway, a lodge, and a hot-air balloon drifting over.
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
-; sunset over Labadi Beach
-h 4 0.3 3.7 #f97316
-h 4 0.3 2.7 #fdba74
-R -7 0 21 0.45 #0e7490
+; sunset sky: one strip per district, so the sky over each part brightens as it gets clean
+g -34 0 56 1.8 #fde047 #f97316
+g -34 1.8 56 2.4 #f97316 #9d174d
+g -34 4.2 56 3.4 #9d174d #000000
+g 22 0 20 1.8 #fde047 #f97316
+g 22 1.8 20 2.4 #f97316 #9d174d
+g 22 4.2 20 3.4 #9d174d #000000
+g 42 0 56 1.8 #fde047 #f97316
+g 42 1.8 56 2.4 #f97316 #9d174d
+g 42 4.2 56 3.4 #9d174d #000000
+; the sun going down over Labadi Beach, with its light on the water
+h 4 0.3 3.7 #fef08a
+h 4 0.3 2.7 #fffbeb
+R -7 0 21 0.48 #0e7490
+r 2.2 0.34 3.6 0.09 #fdba74
+r 2.9 0.18 2.2 0.08 #fde047
 l -5.5 0.3 -1 0.3 0.08 #67e8f9
-l 1.5 0.2 6.5 0.2 0.08 #67e8f9
 l 8 0.32 12.5 0.32 0.08 #67e8f9
-; fishing canoe
+; fishing canoe, bobbing
+~sway 9.5 0.4 3 4.5
 P 6.8 0.95 12.2 0.95 11.4 0.4 7.6 0.4 #f8fafc
 R 7.1 0.8 4.8 0.1 #dc2626
 R 7.3 0.68 4.4 0.1 #fbbf24
 R 7.45 0.56 4.1 0.1 #16a34a
-L 9.5 0.95 9.5 2.3 0.07 #8b5e34
+L 9.5 0.95 9.5 2.3 0.07 #5b3a29
 P 9.6 1.3 10.9 1.5 9.6 2.25 #fbbf24
-; palms
-L -3.2 0.3 -2.7 2.9 0.16 #8b5e34
-A -1.85 2.35 0.95 0.17 30 150 #16a34a
-A -3.55 2.35 0.95 0.17 30 150 #16a34a
-A -2.1 2.75 0.6 0.15 40 160 #15803d
-A -3.3 2.75 0.6 0.15 20 140 #15803d
-C -2.7 2.85 0.22 #8b5e34
-L 0.7 0.3 1.2 2.9 0.16 #8b5e34
-A 2.05 2.35 0.95 0.17 30 150 #16a34a
-A 0.35 2.35 0.95 0.17 30 150 #16a34a
-A 1.8 2.75 0.6 0.15 40 160 #15803d
-A 0.6 2.75 0.6 0.15 20 140 #15803d
-C 1.2 2.85 0.22 #8b5e34
-L 13.1 0.3 13.6 2.9 0.16 #8b5e34
-A 14.45 2.35 0.95 0.17 30 150 #16a34a
-A 12.75 2.35 0.95 0.17 30 150 #16a34a
-A 14.2 2.75 0.6 0.15 40 160 #15803d
-A 13 2.75 0.6 0.15 20 140 #15803d
-C 13.6 2.85 0.22 #8b5e34
-; Jamestown Lighthouse
-p 17.3 3.65 20.6 4.05 20.6 3.45 #fde68a
-p 16.7 3.65 13.4 4.05 13.4 3.45 #fde68a
-P 16.2 0 17.8 0 17.5 3.2 16.5 3.2 #f8fafc
-P 16.28 0.8 17.72 0.8 17.68 1.3 16.32 1.3 #dc2626
-P 16.38 1.9 17.62 1.9 17.58 2.4 16.42 2.4 #dc2626
-R 16.3 3.2 1.4 0.15 #475569
-R 16.6 3.35 0.8 0.6 #475569
-r 16.7 3.42 0.6 0.46 #fde68a
-P 16.5 3.95 17.5 3.95 17 4.45 #dc2626
-; market umbrellas under a banner in Ghana's colours
-L 21.2 0 21.2 2.5 0.1 #8b5e34
-L 27.2 0 27.2 2.5 0.1 #8b5e34
-R 21.2 2.35 6 0.1 #475569
-w 21.5 1.5 4 1 0.45 0.85 0.9 0 #fbbf24
-w 21.95 1.5 4 1 0.45 0.85 0.9 0 #16a34a
-w 22.4 1.5 4 1 0.45 0.85 0.9 0 #ef4444
-L 23 0 23 0.85 0.07 #8b5e34
-H 23 0.85 0.85 #fbbf24
-L 25.3 0 25.3 0.85 0.07 #8b5e34
-H 25.3 0.85 0.85 #38bdf8
+~end
+; palms, swaying
+~sway -3.2 0.3 2.5 6
+L -3.2 0.3 -2.7 2.9 0.16 #5b3a29
+A -1.85 2.35 0.95 0.17 30 150 #166534
+A -3.55 2.35 0.95 0.17 30 150 #166534
+A -2.1 2.75 0.6 0.15 40 160 #14532d
+A -3.3 2.75 0.6 0.15 20 140 #14532d
+C -2.7 2.85 0.22 #5b3a29
+~end
+~sway 0.7 0.3 -2.5 7
+L 0.7 0.3 1.2 2.9 0.16 #5b3a29
+A 2.05 2.35 0.95 0.17 30 150 #166534
+A 0.35 2.35 0.95 0.17 30 150 #166534
+A 1.8 2.75 0.6 0.15 40 160 #14532d
+A 0.6 2.75 0.6 0.15 20 140 #14532d
+C 1.2 2.85 0.22 #5b3a29
+~end
+~sway 13.1 0.3 2.5 6.5
+L 13.1 0.3 13.6 2.9 0.16 #5b3a29
+A 14.45 2.35 0.95 0.17 30 150 #166534
+A 12.75 2.35 0.95 0.17 30 150 #166534
+A 14.2 2.75 0.6 0.15 40 160 #14532d
+A 13 2.75 0.6 0.15 20 140 #14532d
+C 13.6 2.85 0.22 #5b3a29
+~end
+; Jamestown Lighthouse in broad red and white bands, sweeping its beam
+~sway 17 3.67 9 5
+p 17.3 3.67 20.6 4.07 20.6 3.47 #fef9c3
+p 16.7 3.67 13.4 4.07 13.4 3.47 #fef9c3
+~end
+P 16.2 0 17.8 0 17.71 0.8 16.29 0.8 #dc2626
+P 16.29 0.8 17.71 0.8 17.62 1.6 16.38 1.6 #f8fafc
+P 16.38 1.6 17.62 1.6 17.53 2.4 16.47 2.4 #dc2626
+P 16.47 2.4 17.53 2.4 17.45 3.2 16.55 3.2 #f8fafc
+R 16.25 3.2 1.5 0.18 #f8fafc
+R 16.58 3.38 0.84 0.58 #334155
+r 16.68 3.44 0.64 0.46 #fde68a
+P 16.45 3.96 17.55 3.96 17 4.48 #dc2626
+; the Nkrumah Mausoleum, by its pools
+R 20.4 0 5 0.32 #0891b2
+l 21.1 0.32 21.1 0.95 0.08 #67e8f9
+l 24.7 0.32 24.7 0.95 0.08 #67e8f9
+P 21 0.32 22.1 0.32 22.75 3.45 22.35 3.65 #e7e0d0
+P 23.7 0.32 24.8 0.32 23.45 3.65 23.05 3.45 #e7e0d0
+R 22.55 0.32 0.7 0.85 #44403c
+c 22.9 1.45 0.24 #fbbf24
+; Ghana's flag
+L 26.1 0 26.1 3.15 0.09 #cbd5e1
+R 26.15 2.73 1.95 0.36 #dc2626
+R 26.15 2.37 1.95 0.36 #fbbf24
+R 26.15 2.01 1.95 0.36 #16a34a
+S 27.12 2.55 0.17 #0f172a
 ; Black Star Gate
-R 29.1 0 1.4 3 #f5efe0
-R 33.5 0 1.4 3 #f5efe0
-R 28.7 3 6.6 0.85 #f5efe0
-A 32 2.05 1.5 0.55 0 180 #f5efe0
-R 31.1 3.85 1.8 0.22 #f5efe0
-l 28.7 3.42 35.3 3.42 0.08 #fbbf24
-s 32 4.85 0.98 #fbbf24
-S 32 4.85 0.72 #111827
-; chewing-stick trees
-L 36.6 0 36.6 1.9 0.14 #d6b98c
-l 36.6 1.9 36.35 2.3 0.05 #fef3c7
-l 36.6 1.9 36.6 2.35 0.05 #fef3c7
-l 36.6 1.9 36.85 2.3 0.05 #fef3c7
-L 39.3 0 39.3 0.6 0.16 #8b5e34
-C 38 0.9 0.95 #15803d
-C 39.3 1.2 1.1 #16a34a
-C 40.6 0.85 0.9 #15803d
-; the Rockies: Pikes Peak
-P 46 0 59 0 52.4 5.5 #5b6ea8
-P 51.59 4.8 53.24 4.8 52.4 5.5 #f8fafc
-P 62 0 72 0 67.2 3.3 #5b6ea8
-P 41.5 0 53 0 47.2 3.6 #7184c0
-P 46.25 3 48.17 3 47.2 3.6 #f8fafc
-P 55 0 66 0 60.4 4.1 #7184c0
-P 59.61 3.5 61.22 3.5 60.4 4.1 #f8fafc
-c 56.2 5.2 0.08 #fef9c3
-c 61.8 5.8 0.08 #fef9c3
-c 65.6 4.7 0.08 #fef9c3
-c 48.2 5.1 0.08 #fef9c3
-c 43.4 4.3 0.08 #fef9c3
-; pines and a cabin
-L 43 0 43 0.3 0.1 #5b3a29
-P 42.5 0.3 43.5 0.3 43 1.5 #166534
-L 44.3 0 44.3 0.3 0.1 #5b3a29
-P 43.8 0.3 44.8 0.3 44.3 1.7 #15803d
-R 45.6 0 2 0.9 #8b5e34
-P 45.3 0.9 47.9 0.9 46.6 1.6 #5b3a29
-r 46.3 0.3 0.5 0.4 #fde68a
-L 49.5 0 49.5 0.3 0.1 #5b3a29
-P 49 0.3 50 0.3 49.5 1.6 #166534
-L 50.6 0 50.6 0.3 0.1 #5b3a29
-P 50.1 0.3 51.1 0.3 50.6 1.4 #15803d
-L 55.5 0 55.5 0.3 0.1 #5b3a29
-P 55 0.3 56 0.3 55.5 1.7 #166534
-L 57 0 57 0.3 0.1 #5b3a29
-P 56.5 0.3 57.5 0.3 57 1.4 #15803d
-L 63 0 63 0.3 0.1 #5b3a29
-P 62.5 0.3 63.5 0.3 63 1.6 #166534
-L 64.4 0 64.4 0.3 0.1 #5b3a29
-P 63.9 0.3 64.9 0.3 64.4 1.4 #15803d
-L 69 0 69 0.3 0.1 #5b3a29
-P 68.5 0.3 69.5 0.3 69 1.7 #166534
+R 29 0 6 3.55 #f5efe0
+R 30.65 0 2.7 1.85 #1e293b
+H 32 1.85 1.35 #1e293b
+R 28.65 3.35 6.7 0.5 #e7e0d0
+R 30.6 3.85 2.8 0.42 #f5efe0
+l 28.75 3.6 35.25 3.6 0.09 #fbbf24
+s 32 5.25 1.32 #fde047
+C 32 5.25 0.92 #eab308
+S 32 5.25 0.78 #0f172a
+; a miswak tree (the chewing-stick tree) in blossom
+L 37.8 0 37.4 0.85 0.16 #8b5e34
+L 37.8 0 38.4 0.9 0.16 #8b5e34
+C 37 1.25 0.85 #166534
+C 38 1.48 1.02 #15803d
+C 39.05 1.18 0.82 #166534
+c 37.1 1.45 0.14 #fde68a
+c 38.1 1.85 0.15 #fde68a
+c 38.9 1.32 0.14 #fde68a
+; Pikes Peak: a broad granite mountain with a summit house and beacon
+P 44.5 0 61.5 0 53 5.65 #5b6ea8
+P 53 0 61.5 0 53 5.65 #475569
+P 50.9 4.25 55.1 4.25 53 5.65 #f8fafc
+P 50.9 4.25 52.3 4.25 51.5 3.72 #f8fafc
+P 53.7 4.25 55.1 4.25 54.4 3.78 #e2e8f0
+R 52.35 5.58 1.3 0.36 #cbd5e1
+r 52.52 5.66 0.96 0.2 #fde047
+L 53 5.94 53 6.55 0.06 #e2e8f0
+~blink 2.8 0.5
+c 53 6.62 0.15 #f87171
+~end
+P 40.5 0 50.5 0 46.2 3.55 #7184c0
+P 45.1 2.65 47.55 2.65 46.2 3.55 #f8fafc
+P 57.5 0 69.8 0 63.8 4.15 #6366f1
+P 62.6 3.35 65.05 3.35 63.8 4.15 #f8fafc
+; the Garden of the Gods: fins of red rock
+P 41.2 0 44.2 0 42.3 2.45 #b91c1c
+P 42.3 2.45 44.2 0 43.6 0 #7f1d1d
+P 43.6 0 46.8 0 44.7 2.85 #991b1b
+P 46.2 0 48.8 0 47.1 2.15 #b91c1c
+; first stars
+~blink 3.3 0.7
+c 48.2 5.9 0.09 #fef9c3
+c 66.8 5.2 0.09 #fef9c3
+c 43.4 5.6 0.09 #fef9c3
+~end
+~blink 4.1 0.6
+c 61.8 6.6 0.09 #fef9c3
+c 57.8 6.9 0.09 #fef9c3
+c 69 6.1 0.09 #fef9c3
+~end
+; a hot-air balloon drifting over the mountains
+~slide 5 26
+C 58 6 0.85 #f43f5e
+P 57.72 5.2 58.28 5.2 58.28 6.84 57.72 6.84 #fde047
+P 57.2 5.72 57.72 5.2 57.72 6.8 57.2 6.3 #38bdf8
+P 58.28 5.2 58.8 5.72 58.8 6.3 58.28 6.8 #38bdf8
+P 57.5 5.24 58.5 5.24 58.25 4.82 57.75 4.82 #f43f5e
+L 57.78 4.82 57.82 4.58 0.04 #e2e8f0
+L 58.22 4.82 58.18 4.58 0.04 #e2e8f0
+R 57.76 4.32 0.48 0.28 #8b5e34
+c 58 4.72 0.1 #fde047
+~end
+; the cog railway climbing Pikes Peak, and a lodge at its foot
+L 54.2 1.75 59.2 3.42 0.1 #94a3b8
+P 54.8 2.02 58.4 3.22 58.18 3.72 54.58 2.52 #dc2626
+p 55.05 2.22 55.65 2.42 55.54 2.7 54.94 2.5 #fde047
+p 55.9 2.5 56.5 2.7 56.39 2.98 55.79 2.78 #fde047
+p 56.75 2.78 57.35 2.98 57.24 3.26 56.64 3.06 #fde047
+p 57.6 3.06 58.1 3.23 57.99 3.51 57.49 3.34 #fde047
+R 59.8 0 5.4 1.45 #78350f
+P 59.4 1.45 65.6 1.45 62.5 2.55 #451a03
+w 60.25 0.3 5 2 0.55 0.36 0.42 0.2 #fde68a
+c 62.5 1.88 0.24 #fde047
+; pines
+P 48.8 0 50.1 0 49.45 1.75 #14532d
+P 50.3 0 51.5 0 50.9 1.55 #166534
+P 66 0 67.3 0 66.65 1.8 #14532d
+P 67.6 0 68.9 0 68.25 1.55 #166534
 @prop
 ; palm with a hanging lantern
 L -0.3 0 0 2.6 0.16 #8b5e34
@@ -172,126 +227,209 @@ c 0.95 1.55 0.22 #fde68a
 """#
 
     static let newOrleans = #"""
-; New Orleans at dusk: a crescent moon, St. Louis Cathedral, French Quarter balconies, a streetcar,
-; a riverboat and the river bridge.
+; New Orleans at dusk: a crescent moon, St. Louis Cathedral between its two arcaded halls, French
+; Quarter houses with dark iron galleries, lanterns and Mardi Gras beads, the Superdome behind
+; them, a green streetcar, a jazz club's neon trumpet, the riverboat and the river bridge.
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
+; dusk sky: one strip per district, so the sky over each part of town brightens as it gets clean
+g -34 0 56 2.2 #fdba74 #c026d3
+g -34 2.2 56 2.4 #c026d3 #312e81
+g -34 4.6 56 3 #312e81 #000000
+g 22 0 20 2.2 #fdba74 #c026d3
+g 22 2.2 20 2.4 #c026d3 #312e81
+g 22 4.6 20 3 #312e81 #000000
+g 42 0 56 2.2 #fdba74 #c026d3
+g 42 2.2 56 2.4 #c026d3 #312e81
+g 42 4.6 56 3 #312e81 #000000
 ; crescent moon over the Crescent City
 n 18.5 5.6 1.05 0.45 -25 #fef3c7
-; the river
-R 49 0 22 0.45 #1e40af
-l 50 0.3 54 0.3 0.08 #93c5fd
-l 60.5 0.18 66 0.18 0.08 #93c5fd
-; river bridge
-R 62.8 0 0.4 3.2 #94a3b8
-R 67.8 0 0.4 3.2 #94a3b8
-L 60 1.5 71 1.5 0.14 #94a3b8
-L 63 3.2 60.3 1.5 0.07 #94a3b8
-L 63 3.2 65.5 1.5 0.07 #94a3b8
-L 68 3.2 65.5 1.5 0.07 #94a3b8
-L 68 3.2 70.7 1.5 0.07 #94a3b8
-w 60.6 1.62 9 1 0.16 0.16 1 0 #fde68a
-c 63 3.32 0.12 #f87171
-c 68 3.32 0.12 #f87171
+; the Superdome, behind the Quarter
+R 13.4 0 8.2 2.85 #312e81
+P 13.4 2.85 21.6 2.85 20.6 3.55 18.8 3.85 16.2 3.85 14.4 3.55 #4c1d95
+l 13.5 2.92 21.5 2.92 0.09 #fbbf24
+; the Mississippi, with the boat's lights on the water
+R 48.8 0 21.2 0.5 #1e3a8a
+r 51.8 0.32 6 0.09 #fde68a
+r 52.8 0.16 4.2 0.08 #fbbf24
+l 61.2 0.24 68.5 0.24 0.07 #93c5fd
+; the river bridge: twin steel cantilevers
+R 62.6 0 0.5 2.1 #64748b
+R 67.2 0 0.5 2.1 #64748b
+L 60.4 1.45 69.9 1.45 0.14 #cbd5e1
+L 60.5 1.45 62.85 3.15 0.08 #94a3b8
+L 62.85 3.15 65.15 2.05 0.08 #94a3b8
+L 65.15 2.05 67.45 3.15 0.08 #94a3b8
+L 67.45 3.15 69.85 1.45 0.08 #94a3b8
+L 62.85 1.45 62.85 3.15 0.07 #94a3b8
+L 65.15 1.45 65.15 2.05 0.06 #94a3b8
+L 67.45 1.45 67.45 3.15 0.07 #94a3b8
+c 61.6 2.25 0.1 #fde68a
+c 64 2.6 0.1 #fde68a
+c 65.15 2.15 0.1 #fde68a
+c 66.3 2.6 0.1 #fde68a
+c 68.7 2.25 0.1 #fde68a
+~blink 2.6 0.5
+c 62.85 3.26 0.13 #f87171
+c 67.45 3.26 0.13 #f87171
+~end
 ; shotgun houses
 R -6 0 2.6 1.3 #2a9d8f
-P -6.3 1.3 -3.1 1.3 -4.7 2.2 #6d4b96
+P -6.3 1.3 -3.1 1.3 -4.7 2.2 #4a2f66
 R -3 0 2.6 1.3 #d9a441
-P -3.3 1.3 -0.1 1.3 -1.7 2.2 #6d4b96
+P -3.3 1.3 -0.1 1.3 -1.7 2.2 #4a2f66
 R 0.2 0 2.6 1.3 #9b7ede
-P -0.1 1.3 3.1 1.3 1.5 2.2 #6d4b96
+P -0.1 1.3 3.1 1.3 1.5 2.2 #4a2f66
 w -5.5 0.3 2 1 0.5 0.6 0.6 0 #fde68a
 w -2.5 0.3 2 1 0.5 0.6 0.6 0 #fef3c7
 w 0.7 0.3 2 1 0.5 0.6 0.6 0 #fde68a
-; live oak and the streetcar
+; live oak and the streetcar, gliding along St. Charles
 L 4.2 0 4.2 1.3 0.2 #5b3a29
 C 4.2 1.9 1 #3f6212
 C 3.4 1.5 0.7 #4d7c0f
 C 5 1.55 0.7 #4d7c0f
-L 5.5 0.1 12 0.1 0.08 #94a3b8
+L 2.8 0.1 12 0.1 0.08 #94a3b8
+L 2.8 1.9 12 1.9 0.05 #64748b
+~slide -2.8 20
 R 6.3 0.2 4.6 1 #4d7c0f
 R 6.3 0.2 4.6 0.2 #7f1d1d
 R 6.1 1.2 5 0.14 #7f1d1d
 w 6.6 0.62 5 1 0.55 0.4 0.3 0 #fde68a
 L 8.6 1.34 9.4 1.9 0.06 #94a3b8
-L 5.5 1.9 12 1.9 0.05 #64748b
-; French Quarter townhouses with iron balconies
+~end
+; French Quarter townhouses
 R 12.3 0 3.4 2.6 #9b7ede
 R 15.9 0 3.2 3 #2a9d8f
 R 19.3 0 3.6 2.4 #5b7fb5
-R 12.1 2.6 3.8 0.18 #6d4b96
-R 15.7 3 3.6 0.18 #6d4b96
-R 19.1 2.4 4 0.18 #6d4b96
-l 12.1 1.25 15.9 1.25 0.07 #fbbf24
-l 12.1 1.55 15.9 1.55 0.04 #fbbf24
-l 15.7 1.45 19.3 1.45 0.07 #fbbf24
-l 15.7 1.75 19.3 1.75 0.04 #fbbf24
-l 19.1 1.15 23.1 1.15 0.07 #fbbf24
-l 19.1 1.45 23.1 1.45 0.04 #fbbf24
-w 12.8 1.65 3 1 0.5 0.7 0.45 0 #fde68a
-w 12.8 0.25 3 1 0.5 0.75 0.45 0 #fde68a
-w 16.3 1.9 3 1 0.5 0.8 0.42 0 #fde68a
-w 16.3 0.3 3 1 0.5 0.85 0.42 0 #fde68a
-w 19.8 1.55 3 1 0.55 0.65 0.5 0 #fde68a
+R 12.1 2.6 3.8 0.18 #4a2f66
+R 15.7 3 3.6 0.18 #4a2f66
+R 19.1 2.4 4 0.18 #4a2f66
+w 12.8 1.7 3 1 0.5 0.65 0.45 0 #fde68a
+w 12.8 0.25 3 1 0.5 0.7 0.45 0 #fde68a
+w 16.3 1.75 3 1 0.5 0.9 0.42 0 #fde68a
+w 16.3 0.25 3 1 0.5 0.7 0.42 0 #fde68a
+w 19.8 1.7 3 1 0.55 0.55 0.5 0 #fde68a
 w 19.8 0.25 3 1 0.55 0.7 0.5 0 #fde68a
-; the square: two civic halls either side of the cathedral
-R 24 0 3.6 2.2 #cbbfa8
-P 24 2.2 27.6 2.2 27.1 2.9 24.5 2.9 #64748b
-R 36.4 0 3.6 2.2 #cbbfa8
-P 36.4 2.2 40 2.2 39.5 2.9 36.9 2.9 #64748b
-w 24.4 0.3 4 2 0.45 0.6 0.35 0.35 #fde68a
-w 36.8 0.3 4 2 0.45 0.6 0.35 0.35 #fde68a
-; St. Louis Cathedral
-R 28.6 0 6.8 3.1 #e7e0d0
-R 28.6 3.1 1.5 0.9 #e7e0d0
-R 33.9 3.1 1.5 0.9 #e7e0d0
-R 31.1 3.1 1.8 1.5 #e7e0d0
-P 28.5 4 30.2 4 29.35 5.3 #64748b
-P 33.8 4 35.5 4 34.65 5.3 #64748b
-P 31 4.6 33 4.6 32 6.6 #64748b
-L 32 6.6 32 7.05 0.06 #e7e0d0
-L 31.8 6.87 32.2 6.87 0.06 #e7e0d0
-c 32 3.75 0.42 #fde68a
-R 31.5 0 1 1.5 #7c5c3e
-w 29.1 0.9 1 1 0.5 1.3 0 0 #fbbf24
-w 34.4 0.9 1 1 0.5 1.3 0 0 #fbbf24
-w 29.1 3.25 1 1 0.5 0.5 0 0 #fde68a
-w 34.4 3.25 1 1 0.5 0.5 0 0 #fde68a
+; their dark iron galleries on slender posts, with carriage lanterns
+R 12.1 1.2 11 0.32 #334155
+L 12.1 1.52 23.1 1.52 0.05 #94a3b8
+L 12.4 0 12.4 1.5 0.06 #1e293b
+L 15.8 0 15.8 1.5 0.06 #1e293b
+L 19.2 0 19.2 1.5 0.06 #1e293b
+L 22.8 0 22.8 1.5 0.06 #1e293b
+c 14.1 1.36 0.16 #fbbf24
+c 17.5 1.36 0.16 #fbbf24
+c 21.1 1.36 0.16 #fbbf24
+; Mardi Gras beads strung under the galleries: purple, green and gold
+w 12.6 1 9 1 0.14 0.14 1.06 0 #c084fc
+w 13 0.96 9 1 0.14 0.14 1.06 0 #4ade80
+w 13.4 1 9 1 0.14 0.14 1.06 0 #fde047
+; the square: two halls with Spanish arcades, either side of the cathedral
+R 24 0 3.6 2.2 #d6cfc2
+P 24 2.2 27.6 2.2 27.1 2.85 24.5 2.85 #475569
+R 24.35 0 0.7 0.75 #334155
+H 24.7 0.75 0.35 #334155
+R 25.45 0 0.7 0.75 #334155
+H 25.8 0.75 0.35 #334155
+R 26.55 0 0.7 0.75 #334155
+H 26.9 0.75 0.35 #334155
+w 24.35 1.25 3 1 0.55 0.68 0.62 0 #fde68a
+R 36.4 0 3.6 2.2 #d6cfc2
+P 36.4 2.2 40 2.2 39.5 2.85 36.9 2.85 #475569
+R 36.75 0 0.7 0.75 #334155
+H 37.1 0.75 0.35 #334155
+R 37.85 0 0.7 0.75 #334155
+H 38.2 0.75 0.35 #334155
+R 38.95 0 0.7 0.75 #334155
+H 39.3 0.75 0.35 #334155
+w 36.75 1.25 3 1 0.55 0.68 0.62 0 #fde68a
+; St. Louis Cathedral: three arched doors, a clock, and three spires lit from below
+R 28.6 0 6.8 3.1 #d6cfc2
+R 30.3 0 3.4 3.25 #f5f0e6
+P 30.3 3.25 33.7 3.25 32 4.05 #f5f0e6
+R 28.7 3.1 1.4 1 #e7e0d0
+R 33.9 3.1 1.4 1 #e7e0d0
+R 31.15 3.9 1.7 0.85 #e7e0d0
+P 28.55 4.1 30.25 4.1 29.4 5.45 #334155
+P 33.75 4.1 35.45 4.1 34.6 5.45 #334155
+P 31 4.75 33 4.75 32 6.65 #334155
+p 28.8 4.1 30 4.1 29.4 5.2 #fde68a
+p 34 4.1 35.2 4.1 34.6 5.2 #fde68a
+p 31.25 4.75 32.75 4.75 32 6.35 #fde68a
+L 32 6.65 32 7.15 0.06 #f5f0e6
+L 31.8 6.96 32.2 6.96 0.06 #f5f0e6
+C 32 3.55 0.34 #334155
+c 32 3.55 0.25 #fef3c7
+R 30.65 0 0.65 1.15 #44403c
+H 30.975 1.15 0.325 #44403c
+R 31.6 0 0.8 1.35 #44403c
+H 32 1.35 0.4 #44403c
+R 32.7 0 0.65 1.15 #44403c
+H 33.025 1.15 0.325 #44403c
+r 31.72 0.15 0.56 1 #fbbf24
+w 29.1 1.55 1 1 0.55 1.1 0 0 #fde68a
+w 34.35 1.55 1 1 0.55 1.1 0 0 #fde68a
+w 29.15 3.3 1 1 0.48 0.52 0 0 #fde68a
+w 34.37 3.3 1 1 0.48 0.52 0 0 #fde68a
 ; more townhouses and a jazz club
 R 40.6 0 3.4 2.7 #9b7ede
 R 44.2 0 3.6 2.3 #2a9d8f
-R 40.4 2.7 3.8 0.18 #6d4b96
-R 44 2.3 4 0.18 #6d4b96
-l 40.4 1.3 44.2 1.3 0.07 #fbbf24
-l 40.4 1.6 44.2 1.6 0.04 #fbbf24
-l 44 1.15 48 1.15 0.07 #fbbf24
-l 44 1.45 48 1.45 0.04 #fbbf24
-w 41 1.7 3 1 0.5 0.7 0.45 0 #fde68a
-w 41 0.25 3 1 0.5 0.8 0.45 0 #fde68a
-w 44.7 1.55 3 1 0.55 0.55 0.5 0 #fde68a
+R 40.4 2.7 3.8 0.18 #4a2f66
+R 44 2.3 4 0.18 #4a2f66
+w 41 1.75 3 1 0.5 0.7 0.45 0 #fde68a
+w 41 0.25 3 1 0.5 0.7 0.45 0 #fde68a
+w 44.7 1.7 3 1 0.55 0.45 0.5 0 #fde68a
 w 44.7 0.25 3 1 0.55 0.7 0.5 0 #fde68a
+R 40.4 1.2 7.6 0.3 #334155
+L 40.4 1.5 48 1.5 0.05 #94a3b8
+L 40.6 0 40.6 1.5 0.06 #1e293b
+L 44.1 0 44.1 1.5 0.06 #1e293b
+L 47.8 0 47.8 1.5 0.06 #1e293b
+c 42.3 1.35 0.16 #fbbf24
+c 46 1.35 0.16 #fbbf24
+w 40.9 1 7 1 0.14 0.14 0.92 0 #c084fc
+w 41.25 0.96 7 1 0.14 0.14 0.92 0 #4ade80
+w 41.6 1 7 1 0.14 0.14 0.92 0 #fde047
+; the club's neon trumpet
+l 44.5 3.1 46.4 3.1 0.12 #fde047
+p 46.4 2.88 47.05 2.65 47.05 3.55 46.4 3.32 #fde047
+w 45 3.16 3 1 0.13 0.3 0.22 0 #fde047
+l 44.5 2.95 44.5 3.25 0.14 #fde047
 ; music drifting up
-c 46.3 3.3 0.2 #f0abfc
-l 46.48 3.3 46.48 4.1 0.06 #f0abfc
-l 46.48 4.1 47 3.95 0.1 #f0abfc
-c 47.5 3.9 0.2 #67e8f9
-l 47.68 3.9 47.68 4.7 0.06 #67e8f9
-l 47.68 4.7 48.2 4.55 0.1 #67e8f9
-; riverboat
-P 50.8 0.75 59.6 0.75 59 0.3 51.4 0.3 #f8fafc
-R 51.8 0.75 6.2 0.7 #e2e8f0
-R 52.6 1.45 4.4 0.6 #f8fafc
-R 53.6 2.05 1.6 0.5 #e2e8f0
-R 55.9 2.05 0.3 1.5 #475569
-R 56.6 2.05 0.3 1.5 #475569
-R 55.8 3.45 0.5 0.15 #dc2626
-R 56.5 3.45 0.5 0.15 #dc2626
-C 59.6 0.85 0.75 #dc2626
-A 59.6 0.85 0.75 0.09 0 360 #7f1d1d
-L 58.85 0.85 60.35 0.85 0.06 #7f1d1d
-L 59.6 0.1 59.6 1.6 0.06 #7f1d1d
-w 52.2 0.9 7 1 0.5 0.35 0.3 0 #fde68a
-w 53 1.6 5 1 0.45 0.3 0.3 0 #fde68a
+~sway 47.6 3 5 3.2
+c 47.9 4.1 0.2 #f0abfc
+l 48.08 4.1 48.08 4.9 0.06 #f0abfc
+l 48.08 4.9 48.6 4.75 0.1 #f0abfc
+~end
+~sway 48.6 3.6 -6 4.1
+c 49.2 5 0.2 #67e8f9
+l 49.38 5 49.38 5.8 0.06 #67e8f9
+l 49.38 5.8 49.9 5.65 0.1 #67e8f9
+~end
+; the riverboat: stacks forward, red paddle wheel aft
+P 50.8 0.78 59.4 0.78 58.8 0.32 51.4 0.32 #f8fafc
+R 51.6 0.78 6.4 0.68 #e2e8f0
+R 52.4 1.46 4.6 0.58 #f8fafc
+R 53.8 2.04 1.6 0.5 #e2e8f0
+R 52.2 2.04 0.28 1.55 #334155
+R 52.9 2.04 0.28 1.55 #334155
+R 52.1 3.52 0.48 0.16 #dc2626
+R 52.8 3.52 0.48 0.16 #dc2626
+w 52 0.92 7 1 0.5 0.36 0.32 0 #fde68a
+w 52.8 1.6 5 1 0.46 0.3 0.32 0 #fde68a
+; steam drifting off the stacks
+~sway 52.6 3.7 7 6
+C 52.5 4.05 0.3 #e2e8f0
+C 53 4.5 0.38 #cbd5e1
+C 53.7 4.95 0.46 #94a3b8
+~end
+; the paddle wheel, turning
+C 59.4 0.88 0.75 #dc2626
+A 59.4 0.88 0.75 0.09 0 360 #7f1d1d
+~spin 59.4 0.88 -5
+L 58.65 0.88 60.15 0.88 0.07 #fde68a
+L 59.4 0.13 59.4 1.63 0.07 #fde68a
+~end
 @prop
 ; French Quarter gas lamp
 R -0.28 0 0.56 0.18 #475569
@@ -302,35 +440,92 @@ P -0.42 2.9 0.42 2.9 0 3.25 #475569
 """#
 
     static let orbitAurora = #"""
-; Station Aurora in orbit: the curve of the Earth, aurora ribbons, the station with its cupola and
-; airlock, and Skylab with its windmill of solar panels.
+; Station Aurora in orbit: the curve of the Earth with city lights on its continents, aurora
+; curtains, the Moon, a tooth-shaped constellation, the station with its copper-gold solar wings,
+; cupola, robot arm, airlock and an astronaut on a spacewalk; and 1973's Skylab in its gold foil,
+; with its parasol, its one surviving wing, its windmill of solar panels turning, and an Apollo
+; capsule docked.
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
-; aurora ribbons
-a 20 -3 8.5 0.35 62 118 #34d399
-a 20 -3 9.3 0.25 66 114 #5eead4
-a 46 -4 10 0.35 64 116 #34d399
-a 46 -4 10.9 0.25 68 112 #a78bfa
-; stars
-c -4 4.8 0.08 #f8fafc
-c 3 4.2 0.08 #f8fafc
-c 8 5.5 0.08 #f8fafc
-c 11 3.6 0.08 #f8fafc
-c 24 5.9 0.08 #f8fafc
-c 38 5.6 0.08 #f8fafc
-c 42 4.6 0.08 #f8fafc
-c 62 5.2 0.08 #f8fafc
-c 66 3.9 0.08 #f8fafc
-c 69 5.8 0.08 #f8fafc
-; the Earth
+; aurora ribbons and curtain rays, drifting
+~sway 13 -2.2 2.5 9
+a 13 -2.2 8.2 0.32 64 116 #34d399
+a 13 -2.2 8.9 0.22 68 112 #5eead4
+l 10.5 5.9 10.7 6.95 0.12 #5eead4
+l 13 6.1 13 7.25 0.14 #34d399
+l 15.5 5.9 15.3 6.9 0.12 #a78bfa
+~end
+~sway 32 -2.6 -2 12
+a 32 -2.6 8.8 0.32 68 112 #2dd4bf
+l 30.2 6.05 30.3 7.15 0.12 #34d399
+l 33.8 6.05 33.7 7.1 0.12 #a78bfa
+~end
+~sway 50 -3.2 2 10
+a 50 -3.2 9.4 0.34 65 115 #34d399
+a 50 -3.2 10.2 0.24 69 111 #a78bfa
+l 47.8 6.1 48 7.2 0.12 #5eead4
+l 52.2 6.1 52 7.2 0.12 #a78bfa
+~end
+; the Moon
+C 4.5 6.5 0.85 #cbd5e1
+C 4.25 6.72 0.2 #94a3b8
+C 4.9 6.3 0.15 #94a3b8
+C 4.35 6.15 0.11 #94a3b8
+; stars, twinkling in turn
+~blink 2.9 0.75
+r -4.072 4.728 0.144 0.144 #f8fafc
+r 21.928 6.828 0.144 0.144 #f8fafc
+r 37.928 6.928 0.144 0.144 #f8fafc
+r 61.428 6.128 0.144 0.144 #f8fafc
+~end
+~blink 3.7 0.7
+r 0.928 5.128 0.144 0.144 #f8fafc
+r 24.428 5.328 0.144 0.144 #f8fafc
+r 43.928 6.928 0.144 0.144 #f8fafc
+r 68.928 4.328 0.144 0.144 #f8fafc
+~end
+~blink 4.3 0.8
+r 7.728 5.228 0.144 0.144 #f8fafc
+r 27.428 7.028 0.144 0.144 #f8fafc
+r 40.928 5.828 0.144 0.144 #f8fafc
+r 67.428 6.828 0.144 0.144 #f8fafc
+~end
+; the Great Molar: a constellation shaped like a tooth
+l 63.4 6.4 63.75 6.65 0.035 #93c5fd
+l 63.75 6.65 64 6.45 0.035 #93c5fd
+l 64 6.45 64.25 6.65 0.035 #93c5fd
+l 64.25 6.65 64.6 6.4 0.035 #93c5fd
+l 64.6 6.4 64.45 5.75 0.035 #93c5fd
+l 64.45 5.75 64.3 5.1 0.035 #93c5fd
+l 64.3 5.1 64 5.7 0.035 #93c5fd
+l 64 5.7 63.7 5.1 0.035 #93c5fd
+l 63.7 5.1 63.55 5.75 0.035 #93c5fd
+l 63.55 5.75 63.4 6.4 0.035 #93c5fd
+r 63.328 6.328 0.144 0.144 #f8fafc
+r 63.687 6.587 0.126 0.126 #f8fafc
+r 63.937 6.387 0.126 0.126 #f8fafc
+r 64.187 6.587 0.126 0.126 #f8fafc
+r 64.528 6.328 0.144 0.144 #f8fafc
+r 64.387 5.687 0.126 0.126 #f8fafc
+r 64.228 5.028 0.144 0.144 #f8fafc
+r 63.937 5.637 0.126 0.126 #f8fafc
+r 63.628 5.028 0.144 0.144 #f8fafc
+r 63.487 5.687 0.126 0.126 #f8fafc
+; a small satellite crossing the sky
+~slide 14 44
+R 19.8 7.05 0.4 0.3 #e2e8f0
+R 19.1 7.12 0.6 0.16 #d97706
+R 20.3 7.12 0.6 0.16 #d97706
+c 20 7.2 0.07 #f87171
+~end
+; the Earth, with city lights strung across its continents
 P -24 -6 88 -6 88 -3.5 80 -1.87 72 -0.5 64 0.62 56 1.49 48 2.11 40 2.48 32 2.6 24 2.48 16 2.11 8 1.49 0 0.62 -8 -0.5 -16 -1.87 -24 -3.5 #1d4ed8
-P 19.5 0 27 0 26 1.6 22.5 1.9 #15803d
-P 38 0 44.5 0 43.2 1.3 40 1.75 #15803d
-P 2 0 7 0 6 0.9 3.5 1 #15803d
-P 55 0 61 0 60 0.8 57 1.1 #15803d
-A 30.5 0.6 2 0.12 25 100 #e0f2fe
-A 49 0.2 1.8 0.12 40 120 #e0f2fe
-A 13 0.1 1.6 0.12 30 110 #e0f2fe
+P 2.5 0 15.5 0 13.8 1.55 5.5 1.15 #14532d
+P 21.5 0 36.5 0 34.8 2.15 24 1.95 #14532d
+P 44.5 0 58.5 0 56.2 1.35 46.8 1.85 #14532d
+A 18 0.35 2.1 0.14 25 105 #e0f2fe
+A 39.5 0.55 2.2 0.14 30 115 #e0f2fe
+A 61.5 0.15 1.7 0.13 40 120 #e0f2fe
 l -24 -3.5 -16 -1.87 0.14 #67e8f9
 l -16 -1.87 -8 -0.5 0.14 #67e8f9
 l -8 -0.5 0 0.62 0.14 #67e8f9
@@ -345,208 +540,395 @@ l 56 1.49 64 0.62 0.14 #67e8f9
 l 64 0.62 72 -0.5 0.14 #67e8f9
 l 72 -0.5 80 -1.87 0.14 #67e8f9
 l 80 -1.87 88 -3.5 0.14 #67e8f9
-; Station Aurora: truss and solar arrays
-R 14 3.55 28 0.14 #cbd5e1
-R 14.4 2.45 1.6 1 #1e40af
-R 14.4 3.8 1.6 1 #1e40af
-R 16.4 2.45 1.6 1 #1e40af
-R 16.4 3.8 1.6 1 #1e40af
-l 14.4 2.95 16 2.95 0.04 #93c5fd
-l 14.4 4.3 16 4.3 0.04 #93c5fd
-l 16.4 2.95 18 2.95 0.04 #93c5fd
-l 16.4 4.3 18 4.3 0.04 #93c5fd
-R 38.4 2.45 1.6 1 #1e40af
-R 38.4 3.8 1.6 1 #1e40af
-R 40.4 2.45 1.6 1 #1e40af
-R 40.4 3.8 1.6 1 #1e40af
-l 38.4 2.95 40 2.95 0.04 #93c5fd
-l 38.4 4.3 40 4.3 0.04 #93c5fd
-l 40.4 2.95 42 2.95 0.04 #93c5fd
-l 40.4 4.3 42 4.3 0.04 #93c5fd
-; cupola module
-R 19.6 3.2 3 0.85 #e2e8f0
-P 20.3 3.2 21.9 3.2 21.6 2.72 20.6 2.72 #94a3b8
-p 20.5 3.12 21.7 3.12 21.48 2.82 20.72 2.82 #67e8f9
-; crew module and airlock
-C 27.9 3.62 0.5 #cbd5e1
-C 36.1 3.62 0.5 #cbd5e1
-R 28 3.2 8 0.85 #e2e8f0
-w 28.6 3.45 6 1 0.35 0.35 0.9 0 #fde68a
-R 31.2 2.3 1.6 0.9 #cbd5e1
-c 32 2.75 0.28 #4ade80
-; Skylab
-R 50.5 3 5 1.3 #e2e8f0
-R 55.5 3.25 1.6 0.8 #cbd5e1
-R 51.5 4.3 3.4 0.9 #1e40af
-l 51.5 4.75 54.9 4.75 0.04 #93c5fd
-w 51 3.45 4 1 0.4 0.4 0.7 0 #fde68a
-L 58.1 3.65 59.5 5 0.42 #1e40af
-L 58.1 3.65 59.5 2.3 0.42 #1e40af
-L 58.1 3.65 56.9 4.9 0.42 #1e40af
-L 58.1 3.65 56.9 2.4 0.42 #1e40af
-C 58.1 3.65 0.42 #cbd5e1
-c 58.1 3.65 0.16 #f87171
+l 6.5 0.45 10.2 0.85 0.05 #fbbf24
+l 10.2 0.85 12.8 0.62 0.05 #fbbf24
+c 6.5 0.45 0.14 #fde047
+c 10.2 0.85 0.18 #fde047
+c 12.8 0.62 0.14 #fde047
+l 25.2 0.75 29.8 1.35 0.05 #fbbf24
+l 29.8 1.35 33.4 1.05 0.05 #fbbf24
+c 25.2 0.75 0.15 #fde047
+c 29.8 1.35 0.2 #fde047
+c 33.4 1.05 0.16 #fde047
+l 47.5 0.85 51.6 1.15 0.05 #fbbf24
+l 51.6 1.15 54.8 0.68 0.05 #fbbf24
+c 47.5 0.85 0.16 #fde047
+c 51.6 1.15 0.19 #fde047
+c 54.8 0.68 0.14 #fde047
+; Station Aurora: one long truss, copper-gold solar wings at each end
+R 11.2 3.55 32.6 0.16 #cbd5e1
+R 11.6 2.1 1.7 1.35 #d97706
+R 11.6 3.8 1.7 1.45 #d97706
+R 13.8 2.1 1.7 1.35 #d97706
+R 13.8 3.8 1.7 1.45 #d97706
+R 16 2.1 1.7 1.35 #d97706
+R 16 3.8 1.7 1.45 #d97706
+l 12.45 2.18 12.45 3.38 0.06 #fef08a
+l 12.45 3.88 12.45 5.18 0.06 #fef08a
+l 14.65 2.18 14.65 3.38 0.06 #fef08a
+l 14.65 3.88 14.65 5.18 0.06 #fef08a
+l 16.85 2.18 16.85 3.38 0.06 #fef08a
+l 16.85 3.88 16.85 5.18 0.06 #fef08a
+R 37.4 2.1 1.7 1.35 #d97706
+R 37.4 3.8 1.7 1.45 #d97706
+R 39.6 2.1 1.7 1.35 #d97706
+R 39.6 3.8 1.7 1.45 #d97706
+R 41.8 2.1 1.7 1.35 #d97706
+R 41.8 3.8 1.7 1.45 #d97706
+l 38.25 2.18 38.25 3.38 0.06 #fef08a
+l 38.25 3.88 38.25 5.18 0.06 #fef08a
+l 40.45 2.18 40.45 3.38 0.06 #fef08a
+l 40.45 3.88 40.45 5.18 0.06 #fef08a
+l 42.65 2.18 42.65 3.38 0.06 #fef08a
+l 42.65 3.88 42.65 5.18 0.06 #fef08a
+; running lights at each end of the truss
+~blink 1.8 0.5
+c 11.2 3.63 0.12 #f87171
+~end
+~blink 1.8 0.45
+c 43.8 3.63 0.12 #4ade80
+~end
+; the crew modules in one long hull, the cupola underneath, the robot arm on top
+R 18.6 3.22 18 0.82 #e2e8f0
+R 23.2 3.15 1.2 0.96 #94a3b8
+R 30.8 3.15 1.2 0.96 #94a3b8
+P 20.1 3.22 21.9 3.22 21.55 2.7 20.45 2.7 #94a3b8
+p 20.32 3.14 21.68 3.14 21.42 2.8 20.58 2.8 #67e8f9
+w 25 3.45 5 1 0.36 0.36 0.78 0 #fde68a
+L 26.2 4.04 27.6 4.95 0.09 #f8fafc
+L 27.6 4.95 29.5 4.45 0.08 #f8fafc
+c 29.55 4.45 0.13 #67e8f9
+; the airlock, and an astronaut on a spacewalk, floating on a tether
+R 32.4 2.28 1.6 0.94 #cbd5e1
+c 33.2 2.72 0.26 #4ade80
+L 34 2.6 35.45 2.05 0.04 #fbbf24
+~sway 35.8 2 7 7
+R 35.5 1.55 0.6 0.75 #f8fafc
+R 35.35 1.65 0.18 0.5 #cbd5e1
+C 35.8 2.5 0.3 #f8fafc
+c 35.86 2.5 0.17 #fbbf24
+L 36.1 2.15 36.45 2.4 0.13 #f8fafc
+L 35.5 2.1 35.2 1.85 0.13 #f8fafc
+L 35.65 1.55 35.55 1.1 0.14 #f8fafc
+L 35.95 1.55 36.1 1.1 0.14 #f8fafc
+~end
+; Skylab: gold foil workshop, parasol, one wing, and a docked Apollo capsule
+R 49.4 3.1 1.4 1.24 #f8fafc
+R 50.8 3.05 5.2 1.34 #d97706
+R 56 3.16 0.55 1.12 #334155
+R 56.55 3.3 2.05 0.84 #e2e8f0
+P 51.8 4.39 54.8 4.39 54.35 4.72 52.25 4.72 #f59e0b
+R 52.5 1.85 1.45 1.2 #eab308
+l 53.22 1.92 53.22 2.98 0.07 #fef08a
+w 51.3 3.52 3 1 0.38 0.38 0.85 0 #fde68a
+P 58.6 3.52 60 3.32 60 4.12 58.6 3.92 #e2e8f0
+R 60 3.44 1.4 0.56 #94a3b8
+P 61.4 3.58 61.95 3.42 61.95 4.02 61.4 3.86 #64748b
+c 58.6 4.22 0.13 #f87171
+; its windmill of solar panels, turning
+L 57.55 4.14 57.55 4.75 0.14 #cbd5e1
+~spin 57.55 4.75 36
+L 57.55 4.75 58.85 5.95 0.38 #2563eb
+L 57.55 4.75 58.85 3.55 0.38 #2563eb
+L 57.55 4.75 56.25 5.95 0.38 #2563eb
+L 57.55 4.75 56.25 3.55 0.38 #2563eb
+l 56.35 3.65 58.75 5.85 0.06 #67e8f9
+l 56.35 5.85 58.75 3.65 0.06 #67e8f9
+~end
+C 57.55 4.75 0.38 #e2e8f0
+c 57.55 4.75 0.16 #fde047
 @prop
 ; little satellite on a mast
 L 0 0 0 1.6 0.1 #94a3b8
 R -0.38 1.6 0.76 0.72 #e2e8f0
-R -1.6 1.76 1.1 0.4 #1e40af
-R 0.5 1.76 1.1 0.4 #1e40af
-l -1.6 1.96 -0.5 1.96 0.04 #93c5fd
-l 0.5 1.96 1.6 1.96 0.04 #93c5fd
+R -1.6 1.76 1.1 0.4 #d97706
+R 0.5 1.76 1.1 0.4 #d97706
+l -1.6 1.96 -0.5 1.96 0.04 #fef08a
+l 0.5 1.96 1.6 1.96 0.04 #fef08a
 L 0 2.32 0 2.8 0.05 #94a3b8
 c 0 2.86 0.13 #f87171
 c 0 1.96 0.16 #67e8f9
 """#
 
     static let tokyo = #"""
-; Tokyo by night, with 1940 Chicago on the east side: Mount Fuji, a pagoda, neon signs, Tokyo Tower,
-; the giant neon acid clock, a music studio's level meters, then Chicago's towers and the "L" train.
+; Tokyo by night, with 1940 Chicago on the east side: Mount Fuji and the bullet train, a
+; five-storey pagoda under cherry blossom, Shibuya's neon, Tokyo Tower in its orange and white
+; bands, the giant neon acid clock with turning hands, a music studio's bouncing level meters and
+; the Skytree; then Chicago as it stood in 1940: the Board of Trade, the Wrigley clock tower, the
+; Palmolive beacon sweeping the sky, a raised river bridge and a red "L" train, under an amber sky.
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
-; Mount Fuji
+; neon night over Tokyo (west and middle), a warm sodium glow over 1940 Chicago (east)
+g -34 0 56 2 #db2777 #6b21a8
+g -34 2 56 2.5 #6b21a8 #1e1b4b
+g -34 4.5 56 3.1 #1e1b4b #000000
+g 22 0 20 2 #db2777 #6b21a8
+g 22 2 20 2.5 #6b21a8 #1e1b4b
+g 22 4.5 20 3.1 #1e1b4b #000000
+g 42 0 56 2 #fbbf24 #b45309
+g 42 2 56 2.5 #b45309 #451a03
+g 42 4.5 56 3.1 #451a03 #000000
+; full moon
+c 12.5 6.1 0.8 #fef3c7
+; Mount Fuji, snow running down its gullies
 P -6 0 14 0 6 3.8 3 3.8 #4c5fa8
 P 1.82 3.3 7.05 3.3 6 3.8 3 3.8 #f1f5f9
+P 1.82 3.3 3.3 3.3 2.55 2.78 #f1f5f9
+P 3.3 3.3 5.2 3.3 4.25 2.65 #f1f5f9
+P 5.2 3.3 7.05 3.3 6.15 2.82 #f1f5f9
 ; neon side street
-R -6 0 2.4 1.7 #4a42a8
-R -3.4 0 2.2 2.4 #4338ca
+R -6 0 2.4 1.7 #312e81
+R -3.4 0 2.2 2.4 #3730a3
+R -5.67 0.43 0.54 1.14 #1e1b4b
 r -5.6 0.5 0.4 1 #f472b6
+R -4.67 0.63 0.94 0.44 #1e1b4b
 r -4.6 0.7 0.8 0.3 #22d3ee
+R -3.07 0.53 0.54 1.64 #1e1b4b
 r -3 0.6 0.4 1.5 #fde047
+R -2.27 1.33 0.84 0.44 #1e1b4b
 r -2.2 1.4 0.7 0.3 #4ade80
 w -2.3 0.4 1 2 0.6 0.3 0 0.2 #a5b4fc
-; pagoda
-R 9.5 0 1.6 0.7 #e7e0d0
-P 8.7 0.7 11.9 0.7 11.2 1.05 9.4 1.05 #0d9488
-R 9.7 1.05 1.2 0.5 #e7e0d0
-P 9 1.55 11.6 1.55 11 1.9 9.6 1.9 #0d9488
-R 9.85 1.9 0.9 0.45 #e7e0d0
-P 9.25 2.35 11.35 2.35 10.8 2.7 9.8 2.7 #0d9488
-L 10.3 2.7 10.3 3.4 0.07 #fbbf24
-r 10.05 0.15 0.5 0.4 #fde68a
-; Shibuya
-R 13.4 0 2.2 2.9 #4a42a8
-R 15.8 0 1.9 3.6 #4338ca
-H 16.75 3.6 0.95 #4338ca
-r 16.1 2.6 1.3 0.55 #f472b6
-r 16.1 1.9 1.3 0.3 #fde047
-R 17.9 0 2.4 2.5 #4f46e5
-r 13.7 1 0.4 1.5 #22d3ee
-r 14.4 0.5 0.9 0.35 #fb923c
-r 14.4 2.1 0.9 0.4 #f472b6
-r 18.2 0.5 0.4 1.6 #4ade80
-r 19 1.5 1 0.5 #22d3ee
-r 19 0.5 1 0.35 #fde047
-; Tokyo Tower
-L 21.2 0 22.75 3.3 0.16 #f97316
-L 24.8 0 23.25 3.3 0.16 #f97316
-A 23 0 1.25 0.12 0 180 #f97316
-L 21.7 1 24.3 1 0.07 #f97316
-L 22.1 2.2 23.9 2.2 0.07 #f97316
-R 21.95 1.45 2.1 0.3 #f8fafc
-R 22.55 3.2 0.9 0.28 #f8fafc
-P 22.72 3.48 23.28 3.48 23.08 5.6 22.92 5.6 #f97316
-R 22.82 4.5 0.36 0.2 #f8fafc
-L 23 5.6 23 6.9 0.07 #f8fafc
-l 22 1.6 24 1.6 0.1 #fde047
-l 22.6 3.34 23.4 3.34 0.08 #fde047
-c 23 6.95 0.13 #f87171
-; the neon acid clock
-R 27 0 2.6 2.6 #4a42a8
-r 27.3 0.5 0.4 1.6 #4ade80
-r 28 1.6 1.3 0.4 #fb923c
-r 28 0.5 1.3 0.35 #22d3ee
-R 29.6 0 5.8 3.4 #4338ca
-R 31.7 3.4 1.6 1 #4a42a8
-P 31.5 4.4 33.5 4.4 32.5 5.1 #4f46e5
-C 32.5 1.9 1.4 #1e1b4b
-a 32.5 1.9 1.4 0.14 0 360 #f472b6
-l 32.5 3 32.5 3.2 0.1 #fde047
-l 33.6 1.9 33.8 1.9 0.1 #fde047
-l 32.5 0.8 32.5 0.6 0.1 #fde047
-l 31.4 1.9 31.2 1.9 0.1 #fde047
-l 32.5 1.9 32.5 2.85 0.1 #22d3ee
-l 32.5 1.9 33.15 1.5 0.12 #22d3ee
-c 32.5 1.9 0.13 #fde047
-R 35.4 0 2.6 2.2 #4f46e5
-r 35.7 1.2 2 0.45 #fde047
-r 35.7 0.4 0.4 0.6 #f472b6
-r 36.5 0.4 1.2 0.5 #a5b4fc
-; music studio with level meters
-R 38.2 0 5.4 3 #4a42a8
-r 38.7 0.4 0.5 1 #4ade80
-r 39.4 0.4 0.5 1.7 #4ade80
-r 40.1 0.4 0.5 2.3 #fde047
-r 40.8 0.4 0.5 1.4 #4ade80
-r 41.5 0.4 0.5 2 #fde047
-r 42.2 0.4 0.5 2.45 #f472b6
-r 42.9 0.4 0.4 0.9 #4ade80
-; Chicago, 1940
-R 44.2 0 2.2 2.4 #56648f
-R 46.6 0 2 3.1 #44527a
-w 44.5 0.4 2 4 0.55 0.3 0.5 0.18 #fde68a
-w 46.9 0.4 2 6 0.5 0.28 0.4 0.15 #fde68a
-P 49 0 52.2 0 51.7 4.6 49.5 4.6 #44527a
-L 49.1 0 51.9 1.5 0.06 #94a3b8
-L 52.1 0 49.3 1.5 0.06 #94a3b8
-L 49.25 1.5 51.8 3 0.06 #94a3b8
-L 51.95 1.5 49.4 3 0.06 #94a3b8
-L 50.1 4.6 50.1 5.7 0.06 #e2e8f0
-L 51.1 4.6 51.1 5.7 0.06 #e2e8f0
-c 50.1 5.75 0.1 #f87171
-c 51.1 5.75 0.1 #f87171
-R 54 0 3.4 3.2 #44527a
-R 54.6 3.2 2.2 1.1 #44527a
-R 55.1 4.3 1.2 0.9 #44527a
-L 55.4 5.2 55.4 6.4 0.06 #e2e8f0
-L 56 5.2 56 6.4 0.06 #e2e8f0
-c 55.4 6.45 0.1 #f87171
-c 56 6.45 0.1 #f87171
-w 54.3 0.4 4 7 0.45 0.25 0.33 0.14 #fde68a
-R 63.5 0 2.6 2.9 #56648f
-R 66.4 0 2.6 2.3 #44527a
-R 69.2 0 1.8 3 #56648f
-w 63.8 2 3 2 0.5 0.28 0.3 0.15 #fde68a
-w 69.45 2 2 2 0.45 0.28 0.4 0.15 #fde68a
-; the "L" train
-L 57.8 1 70.8 1 0.12 #94a3b8
-R 59 0 0.2 1 #94a3b8
-R 62.5 0 0.2 1 #94a3b8
-R 66 0 0.2 1 #94a3b8
-R 69.5 0 0.2 1 #94a3b8
-R 60 1.06 4.4 0.75 #cbd5e1
-w 60.3 1.3 6 1 0.45 0.32 0.22 0 #fde68a
+; the bullet train passing Fuji
+L -1 0.42 9 0.42 0.07 #94a3b8
+R -0.6 0.48 5.6 0.56 #f8fafc
+P 5 0.48 6.5 0.48 5 1.04 #f8fafc
+R -0.6 0.62 5.9 0.1 #2563eb
+w -0.2 0.8 8 1 0.38 0.16 0.24 0 #a5f3fc
+; five-storey pagoda under cherry blossom
+L 7.6 0 7.6 1 0.14 #5b3a29
+C 7.6 1.4 0.7 #f9a8d4
+C 7.05 1.1 0.48 #f472b6
+C 8.1 1.05 0.42 #fbcfe8
+R 9.55 0 1.5 0.52 #dc2626
+r 10.05 0.08 0.5 0.38 #fde68a
+P 8.75 0.52 11.85 0.52 11.35 0.78 9.25 0.78 #1e293b
+R 9.65 0.78 1.3 0.42 #dc2626
+P 8.95 1.2 11.65 1.2 11.2 1.44 9.4 1.44 #1e293b
+R 9.75 1.44 1.1 0.4 #dc2626
+P 9.12 1.84 11.48 1.84 11.05 2.06 9.55 2.06 #1e293b
+R 9.85 2.06 0.9 0.36 #dc2626
+P 9.28 2.42 11.32 2.42 10.92 2.62 9.68 2.62 #1e293b
+R 9.95 2.62 0.7 0.34 #dc2626
+P 9.45 2.96 11.15 2.96 10.8 3.16 9.8 3.16 #1e293b
+L 10.3 3.16 10.3 3.95 0.07 #fbbf24
+L 12.3 0 12.3 0.8 0.12 #5b3a29
+C 12.3 1.15 0.5 #f9a8d4
+C 11.95 0.9 0.34 #fbcfe8
+; Shibuya: the silver cylinder, and neon signs in dark casings
+R 13.3 0 2.2 3.1 #312e81
+R 12.82 1.1 0.44 1.65 #1e1b4b
+r 12.88 1.16 0.32 1.53 #22d3ee
+R 13.55 0.45 1.7 0.48 #1e1b4b
+r 13.62 0.52 1.56 0.34 #fb923c
+R 15.8 0 1.9 3.75 #cbd5e1
+H 16.75 3.75 0.95 #e2e8f0
+R 15.95 1.65 1.6 0.44 #1e1b4b
+r 16.03 1.72 1.44 0.3 #fde047
+w 16.05 0.35 2 3 0.55 0.28 0.3 0.14 #38bdf8
+R 18 0 2.3 2.75 #3730a3
+R 20.34 0.8 0.42 1.55 #1e1b4b
+r 20.4 0.86 0.3 1.43 #4ade80
+R 18.25 1.55 1.8 0.62 #1e1b4b
+r 18.32 1.62 1.66 0.48 #22d3ee
+R 18.25 0.45 1.8 0.5 #1e1b4b
+r 18.32 0.52 1.66 0.36 #fde047
+; two signs that flicker
+R 13.55 1.95 1.7 0.58 #1e1b4b
+~blink 2.3 0.8
+r 13.62 2.02 1.56 0.44 #f472b6
+~end
+R 15.95 2.45 1.6 0.72 #1e1b4b
+~blink 3.7 0.88
+r 16.03 2.53 1.44 0.56 #f472b6
+~end
+; Tokyo Tower: flared legs and seven orange and white bands
+P 21.1 0 22.1 0 22.65 1.45 22.05 1.45 #f97316
+P 23.9 0 24.9 0 23.95 1.45 23.35 1.45 #f97316
+A 23 0 1.15 0.14 0 180 #f97316
+R 21.85 1.45 2.3 0.36 #f8fafc
+w 22.02 1.52 4 1 0.38 0.22 0.14 0 #fde047
+P 22.22 1.81 23.78 1.81 23.58 2.65 22.42 2.65 #f97316
+P 22.42 2.65 23.58 2.65 23.42 3.35 22.58 3.35 #f8fafc
+R 22.42 3.35 1.16 0.3 #e2e8f0
+l 22.48 3.5 23.52 3.5 0.1 #fde047
+P 22.68 3.65 23.32 3.65 23.22 4.45 22.78 4.45 #f97316
+P 22.78 4.45 23.22 4.45 23.14 5.15 22.86 5.15 #f8fafc
+P 22.86 5.15 23.14 5.15 23.08 5.85 22.92 5.85 #f97316
+L 23 5.85 23 6.5 0.09 #f8fafc
+L 23 6.5 23 7.15 0.07 #f97316
+~blink 2.2 0.5
+c 23 7.22 0.15 #f87171
+~end
+; the neon acid clock: a dial with a safe side and an acid side
+R 26.8 0 2.7 2.7 #312e81
+R 27.05 0.45 0.52 1.75 #1e1b4b
+r 27.12 0.52 0.38 1.61 #4ade80
+R 27.75 1.55 1.5 0.52 #1e1b4b
+r 27.82 1.62 1.36 0.38 #fb923c
+R 29.5 0 6 3.75 #3730a3
+R 31.3 3.75 2.4 0.85 #312e81
+P 31.1 4.6 33.9 4.6 32.5 5.45 #4f46e5
+l 29.8 3.92 31.1 3.92 0.12 #22d3ee
+l 33.9 3.92 35.2 3.92 0.12 #f472b6
+C 32.5 2.05 1.68 #0f172a
+A 32.5 2.05 1.68 0.1 0 360 #94a3b8
+a 32.5 2.05 1.5 0.18 0 205 #22d3ee
+a 32.5 2.05 1.5 0.22 205 360 #f43f5e
+l 32.5 3.18 32.5 3.42 0.1 #fde047
+l 33.63 2.05 33.87 2.05 0.1 #fde047
+l 32.5 0.92 32.5 0.68 0.1 #fde047
+l 31.37 2.05 31.13 2.05 0.1 #fde047
+; its hands turn: the long one once a minute
+~spin 32.5 2.05 -60
+l 32.5 2.05 32.5 3.08 0.11 #67e8f9
+~end
+~spin 32.5 2.05 -720
+l 32.5 2.05 33.32 1.48 0.13 #f472b6
+~end
+c 32.5 2.05 0.16 #fde047
+R 35.6 0 2.4 2.2 #3730a3
+R 35.83 1.13 1.94 0.59 #1e1b4b
+r 35.9 1.2 1.8 0.45 #fde047
+R 35.83 0.33 0.54 0.74 #1e1b4b
+r 35.9 0.4 0.4 0.6 #f472b6
+R 36.53 0.33 1.24 0.64 #1e1b4b
+r 36.6 0.4 1.1 0.5 #a5b4fc
+; the Skytree, lit in rings
+P 41.45 0 42.55 0 42.2 5.5 41.8 5.5 #cbd5e1
+P 41.55 4.5 42.45 4.5 42.6 4.8 42.45 5.05 41.55 5.05 41.4 4.8 #e2e8f0
+P 41.68 5.3 42.32 5.3 42.42 5.5 42.32 5.68 41.68 5.68 41.58 5.5 #e2e8f0
+L 42 5.68 42 7.3 0.08 #e2e8f0
+l 41.52 1.2 42.48 1.2 0.08 #a78bfa
+l 41.6 2.4 42.4 2.4 0.08 #22d3ee
+l 41.68 3.6 42.32 3.6 0.08 #a78bfa
+l 41.5 4.78 42.5 4.78 0.1 #22d3ee
+~blink 2.9 0.5
+c 42 7.34 0.12 #f87171
+~end
+; music studio: the level meters bounce
+R 38.2 0 5.4 3 #312e81
+r 38.7 0.4 0.5 0.6 #4ade80
+r 39.4 0.4 0.5 0.9 #4ade80
+r 40.1 0.4 0.5 1.1 #fde047
+r 40.8 0.4 0.5 0.7 #4ade80
+r 41.5 0.4 0.5 1 #fde047
+r 42.2 0.4 0.5 1.2 #f472b6
+r 42.9 0.4 0.4 0.5 #4ade80
+~blink 0.9 0.6
+r 38.7 1.05 0.5 0.35 #4ade80
+r 40.8 1.15 0.5 0.25 #4ade80
+r 42.2 1.65 0.5 0.8 #f472b6
+~end
+~blink 1.3 0.55
+r 39.4 1.35 0.5 0.75 #4ade80
+r 41.5 1.45 0.5 0.95 #fde047
+~end
+~blink 0.7 0.5
+r 40.1 1.55 0.5 1.15 #fde047
+r 42.9 0.95 0.4 0.35 #4ade80
+~end
+; Chicago, 1940: a stone block, then the Board of Trade's stepped tower
+R 44.2 0 3.6 2.8 #475569
+R 44.6 2.8 2.8 0.65 #64748b
+w 44.55 0.4 4 5 0.52 0.3 0.28 0.16 #fde68a
+R 48.4 0 4.2 3.1 #64748b
+R 49 3.1 3 1.05 #94a3b8
+R 49.55 4.15 1.9 0.7 #cbd5e1
+P 49.55 4.85 51.45 4.85 50.5 5.65 #0d9488
+c 50.5 5.82 0.17 #fde047
+w 48.75 0.4 4 6 0.55 0.28 0.43 0.14 #fde68a
+w 49.4 3.25 3 2 0.55 0.28 0.28 0.14 #fde68a
+; the white Wrigley clock tower
+R 53.1 0 2.8 3.35 #cbd5e1
+R 53.55 3.35 1.9 1.35 #e2e8f0
+P 53.55 4.7 55.45 4.7 54.5 5.6 #f8fafc
+L 54.5 5.6 54.5 6.3 0.06 #f8fafc
+C 54.5 4.02 0.42 #1e293b
+c 54.5 4.02 0.31 #fef08a
+W 53.4 0.4 3 6 0.52 0.28 0.32 0.16 #94a3b8
+; the Palmolive Building and its beacon, sweeping the sky
+R 56.2 0 2.2 4.1 #334155
+R 56.55 4.1 1.5 1.05 #475569
+L 57.3 5.15 57.3 5.75 0.08 #cbd5e1
+w 56.5 0.4 2 8 0.55 0.28 0.5 0.16 #fde68a
+~sway 57.3 5.75 13 7
+p 57.3 5.72 64.6 6.95 64.6 6.2 #fef08a
+~end
+c 57.3 5.75 0.16 #fef08a
+; the river, a bascule bridge raised, and the "L" train shuttling along its track
+R 58.6 0 11.4 0.42 #1e3a8a
+R 58.7 0.42 0.55 0.7 #94a3b8
+P 59.1 0.95 59.35 0.75 61.55 2.55 61.3 2.75 #b91c1c
+L 59.2 0.85 61.4 2.65 0.07 #fca5a5
+c 61.45 2.72 0.12 #f87171
+R 64.4 0 2.6 2.6 #475569
+R 67.3 0 2.5 2.2 #334155
+w 64.7 1.9 3 1 0.5 0.28 0.25 0 #fde68a
+w 67.6 1.55 2 1 0.65 0.28 0.6 0 #fde68a
+L 61.8 1.05 69.9 1.05 0.13 #94a3b8
+R 62.6 0 0.22 1.05 #64748b
+R 65.8 0 0.22 1.05 #64748b
+R 69 0 0.22 1.05 #64748b
+~slide 2.4 13
+R 62.4 1.12 5 0.72 #9a3412
+R 62.4 1.72 5 0.16 #14532d
+w 62.7 1.28 6 1 0.52 0.34 0.26 0 #fde68a
+~end
 @prop
 ; torii gate with a paper lantern
-R -1.05 0 0.22 2.2 #f97316
-R 0.83 0 0.22 2.2 #f97316
-R -1.25 1.7 2.5 0.16 #f97316
-R -1.45 2.2 2.9 0.24 #f97316
-P -1.7 2.44 1.7 2.44 1.9 2.75 -1.9 2.75 #4a42a8
+R -1.05 0 0.22 0.2 #1e293b
+R 0.83 0 0.22 0.2 #1e293b
+R -1.05 0.2 0.22 2 #f97316
+R 0.83 0.2 0.22 2 #f97316
+R -1.2 1.7 2.4 0.16 #f97316
+R -0.1 1.86 0.2 0.34 #f97316
+R -1.35 2.2 2.7 0.24 #f97316
+P -1.5 2.44 1.5 2.44 1.65 2.72 -1.65 2.72 #1e293b
 L 0 1.5 0 1.7 0.05 #94a3b8
 c 0 1.2 0.3 #fde047
 """#
 
     static let toronto = #"""
-; Toronto at sunrise: the CN Tower, the stadium dome, downtown towers, a red streetcar and the lake.
+; Toronto at sunrise: the CN Tower, City Hall's curved towers, the low stadium dome, the bank
+; towers, a red streetcar, and Lake Ontario out to the islands and their lighthouse.
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
-; sunrise over the lake
-h 53 0.2 4.4 #f59e0b
-h 53 0.2 3.3 #fcd34d
-R 45.5 0 19 0.5 #1d4ed8
-l 46.5 0.34 51 0.34 0.08 #7dd3fc
-l 54 0.24 60 0.24 0.08 #7dd3fc
-l 49 0.12 56.5 0.12 0.08 #7dd3fc
-; sailboat
-P 57.2 0.5 59.4 0.5 59 0.2 57.6 0.2 #e2e8f0
-L 58.3 0.5 58.3 2.1 0.07 #e2e8f0
-P 58.42 0.7 59.6 0.7 58.42 2.0 #f8fafc
-P 58.18 0.7 57.3 0.7 58.18 1.7 #cbd5e1
-; island
-P 60.5 0.5 64.5 0.5 63.6 0.95 61.6 0.95 #166534
-L 62.2 0.95 62.2 1.7 0.1 #5b3a29
-C 62.2 1.95 0.55 #16a34a
+; dawn sky: one strip per district, so the sky over each part of town brightens as it gets clean
+g -34 0 56 1.8 #fde68a #fb923c
+g -34 1.8 56 2.2 #fb923c #1e3a8a
+g -34 4 56 3.6 #1e3a8a #000000
+g 22 0 20 1.8 #fde68a #fb923c
+g 22 1.8 20 2.2 #fb923c #1e3a8a
+g 22 4 20 3.6 #1e3a8a #000000
+g 42 0 56 1.8 #fde68a #fb923c
+g 42 1.8 56 2.2 #fb923c #1e3a8a
+g 42 4 56 3.6 #1e3a8a #000000
+; sunrise over Lake Ontario, with its light on the water
+h 53 0.2 4.4 #fde68a
+h 53 0.2 3.3 #fef9c3
+R 45.5 0 24.5 0.55 #1d4ed8
+r 50.8 0.38 4.4 0.1 #fde047
+r 51.5 0.22 3 0.09 #fb923c
+r 52.2 0.08 1.6 0.08 #fef08a
+l 46.5 0.38 50.3 0.38 0.07 #7dd3fc
+l 56.5 0.25 60.4 0.25 0.07 #7dd3fc
+; sailboat, rocking
+~sway 58.3 0.35 3 5
+P 57.2 0.55 59.4 0.55 59 0.25 57.6 0.25 #e2e8f0
+L 58.3 0.55 58.3 2.1 0.07 #e2e8f0
+P 58.42 0.75 59.6 0.75 58.42 2.0 #f8fafc
+P 58.18 0.75 57.3 0.75 58.18 1.7 #cbd5e1
+~end
+; Toronto Islands and the Gibraltar Point Lighthouse
+P 60.8 0.5 69.8 0.5 68.8 0.92 61.8 0.92 #15803d
+C 63.2 1.15 0.48 #16a34a
+C 64.1 1.25 0.56 #22c55e
+C 67.8 1.12 0.46 #16a34a
+P 65.8 0.85 66.5 0.85 66.35 2.15 65.95 2.15 #f8fafc
+R 65.9 2.15 0.5 0.28 #dc2626
+~blink 4 0.35
+c 66.15 2.29 0.17 #fde047
+~end
 ; houses and maple trees on the west side
 R -6 0 2.2 1.1 #3d5a80
 P -6.2 1.1 -3.6 1.1 -4.9 1.9 #2f4a6d
@@ -555,62 +937,93 @@ P -3.4 1.4 -0.6 1.4 -2 2.3 #2f4a6d
 w -5.6 0.35 2 1 0.45 0.45 0.5 0 #fde68a
 w -2.8 0.4 2 2 0.45 0.35 0.6 0.2 #fde68a
 L 1 0 1 1.1 0.14 #5b3a29
-C 1 1.5 0.75 #ea580c
-C 0.55 1.2 0.5 #f59e0b
+C 1 1.5 0.75 #dc2626
+C 0.55 1.2 0.5 #ea580c
 L 3.2 0 3.2 0.9 0.14 #5b3a29
-C 3.2 1.3 0.65 #f59e0b
+C 3.2 1.3 0.65 #b91c1c
+; the maple leaf flag
+L -0.3 0 -0.3 3.45 0.07 #cbd5e1
+R -0.25 2.65 0.4 0.75 #dc2626
+R 0.15 2.65 0.8 0.75 #f8fafc
+R 0.95 2.65 0.4 0.75 #dc2626
+P 0.37 2.95 0.73 2.95 0.55 3.3 #dc2626
+P 0.3 3.1 0.8 3.1 0.55 2.77 #dc2626
 R 4.3 0 2 1.7 #3d5a80
 R 6.5 0 1.7 2.4 #46678f
 w 4.6 0.35 3 3 0.3 0.28 0.25 0.18 #fde68a
 w 6.8 0.4 2 4 0.35 0.3 0.3 0.2 #a5f3fc
-; streetcar
-L 8.5 0.1 14.5 0.1 0.08 #94a3b8
-R 9.2 0.2 4.2 0.95 #dc2626
-R 9.2 0.2 4.2 0.22 #f8fafc
-w 9.5 0.62 5 1 0.5 0.36 0.25 0 #fde68a
+; streetcar, gliding along King Street
+L 5 0.1 14.5 0.1 0.08 #94a3b8
+L 5 1.75 14.5 1.75 0.05 #64748b
+~slide -3.4 18
+R 9.2 0.2 4.2 0.18 #334155
+R 9.2 0.38 4.2 0.55 #dc2626
+R 9.2 0.93 4.2 0.22 #f8fafc
+w 9.5 0.5 5 1 0.5 0.34 0.25 0 #fde68a
 L 11.3 1.15 12 1.75 0.06 #94a3b8
-L 8.5 1.75 14.5 1.75 0.05 #64748b
-; mid-rise blocks
-R 15 0 2.2 2.8 #2f4a6d
-R 17.4 0 1.8 3.5 #3d5a80
-R 19.4 0 2.4 2.2 #46678f
-w 15.3 0.4 3 5 0.35 0.3 0.28 0.16 #fde68a
-w 17.7 0.4 2 7 0.4 0.28 0.3 0.15 #a5f3fc
-w 19.7 0.4 3 4 0.4 0.28 0.3 0.15 #fde68a
-; stadium dome
-R 23.2 0 4.6 0.5 #94a3b8
-H 25.5 0.5 2.3 #e2e8f0
-A 25.5 0.5 2.3 0.07 0 180 #64748b
-A 25.5 0.5 1.55 0.05 0 180 #94a3b8
-L 25.5 0.5 25.5 2.8 0.05 #94a3b8
-l 23.5 0.25 27.5 0.25 0.1 #fde68a
-; CN Tower
-P 29.45 0 30.55 0 30.22 4.5 29.78 4.5 #cbd5e1
-P 29.25 4.5 30.75 4.5 30.95 4.85 30.75 5.25 29.25 5.25 29.05 4.85 #94a3b8
-l 29.15 4.88 30.85 4.88 0.12 #fde68a
-P 29.82 5.25 30.18 5.25 30.1 6.3 29.9 6.3 #cbd5e1
-L 30 6.3 30 7.5 0.07 #e2e8f0
-c 30 7.5 0.14 #f87171
-; downtown towers
-R 32 0 2.4 3.9 #2f4a6d
-R 34.6 0 2 4.7 #3d5a80
-P 34.6 4.7 36.6 4.7 36.6 5.1 35.6 5.4 34.6 5.1 #3d5a80
-R 36.9 0 2.6 3.2 #46678f
-R 39.8 0 2.2 4.3 #2f4a6d
-R 40.3 4.3 1.2 0.5 #2f4a6d
-L 40.9 4.8 40.9 5.6 0.06 #94a3b8
-R 42.3 0 2.6 2.6 #46678f
-R 45.1 0 1.4 1.8 #3d5a80
-w 32.3 0.4 3 9 0.42 0.26 0.27 0.12 #fde68a
-w 34.9 0.4 2 11 0.5 0.26 0.4 0.12 #a5f3fc
-w 37.2 0.4 4 6 0.36 0.3 0.2 0.15 #fde68a
-w 40.1 0.4 2 9 0.55 0.28 0.5 0.14 #fde68a
-w 42.6 0.4 3 5 0.5 0.28 0.25 0.14 #a5f3fc
-; east side
-R 65 0 2.4 2 #2f4a6d
-R 67.6 0 2.2 2.9 #3d5a80
-w 65.3 0.4 3 3 0.4 0.3 0.3 0.2 #fde68a
-w 67.9 0.4 2 5 0.5 0.3 0.4 0.18 #fde68a
+~end
+; far-off towers, for depth
+R 14.8 0 2.4 2.6 #1e3a5f
+R 21.4 0 2 3.1 #1e3a5f
+R 31.2 0 1.6 3.8 #1e3a5f
+R 39.2 0 1.8 3.6 #1e3a5f
+; City Hall: two curved towers round a flying-saucer chamber
+P 15.4 0 17 0 16.8 3.2 15.8 3.4 #cbd5e1
+P 19.4 0 21 0 20.6 3.8 19.6 3.6 #cbd5e1
+R 16.55 0.4 0.22 2.7 #334155
+R 19.63 0.4 0.22 3.1 #334155
+w 15.75 0.45 1 6 0.55 0.26 0 0.16 #a5f3fc
+w 19.95 0.45 1 7 0.55 0.26 0 0.16 #a5f3fc
+R 17.8 0 0.8 0.75 #94a3b8
+P 16.7 0.95 17.3 0.72 19.1 0.72 19.7 0.95 19 1.28 17.4 1.28 #f8fafc
+l 16.95 0.98 19.45 0.98 0.1 #67e8f9
+; the stadium's low dome
+R 22.6 0 5.6 0.65 #94a3b8
+P 22.7 0.65 28.1 0.65 27.4 1.32 26.3 1.72 24.5 1.72 23.4 1.32 #f1f5f9
+L 24.5 0.65 24.8 1.72 0.05 #94a3b8
+L 26.3 0.65 26 1.72 0.05 #94a3b8
+l 23.1 0.34 27.7 0.34 0.12 #fde68a
+; CN Tower: flared base, main pod, SkyPod, and lights up its spine
+P 28.95 0 31.05 0 30.32 2.4 29.68 2.4 #cbd5e1
+P 29.68 2.4 30.32 2.4 30.18 4.45 29.82 4.45 #e2e8f0
+P 29.86 0 30.14 0 30.08 4.45 29.92 4.45 #94a3b8
+l 30 0.55 30 4.42 0.08 #f43f5e
+P 29.25 4.45 30.75 4.45 30.98 4.82 30.72 5.2 29.28 5.2 29.02 4.82 #cbd5e1
+R 29.15 4.72 1.7 0.24 #1e293b
+l 29.12 4.84 30.88 4.84 0.1 #fde68a
+l 29.32 5.12 30.68 5.12 0.08 #38bdf8
+P 29.82 5.2 30.18 5.2 30.1 6.35 29.9 6.35 #e2e8f0
+P 29.62 5.88 30.38 5.88 30.32 6.14 29.68 6.14 #94a3b8
+l 29.66 6.01 30.34 6.01 0.08 #fde68a
+L 30 6.35 30 7.36 0.07 #f8fafc
+~blink 2.4 0.55
+c 30 7.36 0.16 #f87171
+~end
+; the bank towers: one black, one white, one gold, one braced
+R 32 0 2.3 4.1 #1e293b
+L 32 4.1 34.3 4.1 0.07 #64748b
+w 32.28 0.38 3 8 0.42 0.28 0.24 0.15 #fde68a
+R 34.6 0 2.4 5.1 #e2e8f0
+R 34.9 5.1 1.8 0.35 #f8fafc
+L 35.5 5.45 35.5 6.35 0.06 #dc2626
+L 36.1 5.45 36.1 6.1 0.05 #cbd5e1
+w 34.88 0.4 3 10 0.44 0.28 0.26 0.16 #38bdf8
+~blink 3.1 0.5
+c 35.5 6.4 0.11 #f87171
+~end
+R 37.3 0 2.3 4.4 #b45309
+P 37.3 4.4 39.6 4.4 39.1 4.85 37.8 4.85 #d97706
+H 38.45 0 1.05 #e2e8f0
+h 38.45 0.08 0.82 #67e8f9
+w 37.6 1.35 3 6 0.4 0.28 0.25 0.16 #fde68a
+R 40 0 2.4 3.7 #335c67
+L 40.1 1.2 42.3 2.4 0.05 #94a3b8
+L 42.3 1.2 40.1 2.4 0.05 #94a3b8
+L 40.1 2.4 42.3 3.6 0.05 #94a3b8
+L 42.3 2.4 40.1 3.6 0.05 #94a3b8
+w 40.3 0.35 2 7 0.65 0.28 0.5 0.16 #a5f3fc
+R 42.7 0 2.5 2.5 #3d5a80
+w 43 0.35 3 4 0.48 0.3 0.24 0.18 #fde68a
 @prop
 ; street lamp beside a maple tree
 L 0 0 0 2.5 0.12 #475569

@@ -1011,7 +1011,12 @@ final class MouthLifeCoreTests: XCTestCase {
                 XCTAssertEqual(pieces.filter { $0.isLight }.count, want.lightPieces, "\(host) \(label) lights")
                 XCTAssertEqual(pieces.reduce(0) { $0 + $1.triangles.count / 6 }, want.triangles, "\(host) \(label) triangles")
                 XCTAssertEqual(CitySkyline.checksum(pieces), want.checksum, accuracy: 0.01, "\(host) \(label) checksum")
+                XCTAssertEqual(pieces.filter { $0.topColorHex != nil }.count, want.shadedPieces, "\(host) \(label) shaded")
+                XCTAssertEqual(pieces.filter { $0.group > 0 }.count, want.movingPieces, "\(host) \(label) moving")
             }
+            XCTAssertEqual(art.motions.count, wantSkyline.motions, "\(host) motions")
+            // Every moving piece points at a motion that exists.
+            XCTAssertTrue(art.skyline.allSatisfy { $0.group >= 0 && $0.group <= art.motions.count }, "\(host) groups")
         }
         XCTAssertNil(CitySkyline.art(forHost: "atlantis"))
 
@@ -1077,8 +1082,10 @@ final class MouthLifeCoreTests: XCTestCase {
 
         let anchors = CitySkyline.propAnchors(worldWidth: 64, worldDepth: 32)
         XCTAssertEqual(anchors.count, 8)
-        XCTAssertEqual(anchors[0], Vec2(x: 0.6, z: 32 * 0.3))
+        XCTAssertEqual(anchors[0], SkylinePropAnchor(x: 0.6, z: 32 * 0.3, mirrored: false))
         XCTAssertEqual(anchors[1].x, 63.4, accuracy: 1e-9)
+        // The east row is drawn flipped, so both rows face the stage.
+        XCTAssertEqual(anchors.map(\.mirrored), [false, true, false, true, false, true, false, true])
 
         // Lights follow the district in front of them and stay dim until it is sealed.
         let districts = world1AnteriorIncisors.districts
@@ -1092,5 +1099,88 @@ final class MouthLifeCoreTests: XCTestCase {
         )
         XCTAssertLessThan(CitySkyline.lightLevel(cleanRatio: 1, sealed: false), 0.7)
         XCTAssertEqual(CitySkyline.lightLevel(cleanRatio: 0.1, sealed: true), 1)
+
+        // Windows come on a few at a time, then blaze when the district is sealed.
+        XCTAssertEqual((0..<6).map { CitySkyline.lightStep(pieceIndex: $0) }, [0, 1, 2, 3, 0, 1])
+        XCTAssertEqual((0..<8).map { CitySkyline.propStep(anchorIndex: $0) }, [0, 0, 1, 1, 2, 2, 3, 3])
+        func lit(_ ratio: Double) -> Int {
+            (0..<CitySkyline.lightSteps).filter {
+                CitySkyline.stepLevel(cleanRatio: ratio, sealed: false, step: $0) == CitySkyline.stepOn
+            }.count
+        }
+        XCTAssertEqual([lit(0), lit(0.2), lit(0.4), lit(0.6), lit(CitySkyline.stepSpan)], [0, 1, 2, 3, 4])
+        XCTAssertEqual(CitySkyline.stepLevel(cleanRatio: 0, sealed: false, step: 0), CitySkyline.stepOff)
+        for step in 0..<CitySkyline.lightSteps {
+            XCTAssertEqual(CitySkyline.stepLevel(cleanRatio: 0.1, sealed: true, step: step), 1)
+        }
+    }
+
+    func testCitySkylineSkiesAndMotion() {
+        let art = CitySkyline.parse("""
+        @skyline
+        g 0 1 10 4 #ff8800 #000000
+        ~slide 3 14
+        R 5 0 2 1 #000002
+        w 5.2 0.2 2 1 0.5 0.4 0.2 0 #ffee00
+        ~end
+        ~spin 10 2 -60
+        l 10 2 10 3 0.1 #00ffff
+        ~end
+        ~sway 20 0 4 5
+        L 20 0 20 2 0.1 #000003
+        ~end
+        ~blink 2 0.5
+        c 30 6 0.1 #ff0000
+        ~end
+        ~wobble 1 2
+        R 40 0 1 1 #000004
+        @prop
+        ~blink 2 0.5
+        c 0 1 0.1 #ff0000
+        """)
+        // A shaded rectangle keeps both colours and its span.
+        XCTAssertEqual(art.skyline[0].colorHex, 0xFF8800)
+        XCTAssertEqual(art.skyline[0].topColorHex, 0x000000)
+        XCTAssertTrue(art.skyline[0].isLight)
+        XCTAssertEqual(art.skyline[0].triangles.count, 12)
+        let span = CitySkyline.pieceSpanY(art.skyline[0])
+        XCTAssertEqual(span.minY, 1)
+        XCTAssertEqual(span.maxY, 5)
+        XCTAssertNil(art.skyline[1].topColorHex)
+
+        // Shapes between a motion and ~end share its group; an unknown motion is skipped, and props
+        // never move.
+        XCTAssertEqual(art.motions.map(\.kind), [.slide, .spin, .sway, .blink])
+        XCTAssertEqual(art.motions[1].args, [10, 2, -60])
+        XCTAssertEqual(art.skyline.map(\.group), [0, 1, 1, 1, 2, 3, 4, 0])
+        XCTAssertEqual(art.prop.map(\.group), [0])
+        XCTAssertNil(CitySkyline.motionPivot(art.motions[0]))
+        XCTAssertEqual(CitySkyline.motionPivot(art.motions[1])?.x, 10)
+        XCTAssertEqual(CitySkyline.motionPivot(art.motions[2])?.y, 0)
+
+        let slide = SkylineMotion(kind: .slide, args: [3, 14])
+        XCTAssertEqual(CitySkyline.motionState(slide, timeSec: 0), SkylineMotionState())
+        XCTAssertEqual(CitySkyline.motionState(slide, timeSec: 7).dx, 3, accuracy: 1e-9)
+        XCTAssertEqual(CitySkyline.motionState(slide, timeSec: 14).dx, 0, accuracy: 1e-9)
+
+        let spin = SkylineMotion(kind: .spin, args: [0, 0, 60])
+        XCTAssertEqual(CitySkyline.motionState(spin, timeSec: 15).angleRad, Double.pi / 2, accuracy: 1e-9)
+        XCTAssertEqual(CitySkyline.motionState(spin, timeSec: 75).angleRad, Double.pi / 2, accuracy: 1e-9)
+        let clockwise = SkylineMotion(kind: .spin, args: [0, 0, -60])
+        XCTAssertEqual(CitySkyline.motionState(clockwise, timeSec: 15).angleRad, -Double.pi / 2, accuracy: 1e-9)
+
+        let sway = SkylineMotion(kind: .sway, args: [0, 0, 6, 4])
+        XCTAssertEqual(CitySkyline.motionState(sway, timeSec: 1).angleRad, 6 * Double.pi / 180, accuracy: 1e-9)
+        XCTAssertEqual(CitySkyline.motionState(sway, timeSec: 3).angleRad, -6 * Double.pi / 180, accuracy: 1e-9)
+
+        let blink = SkylineMotion(kind: .blink, args: [2, 0.5])
+        XCTAssertEqual(CitySkyline.motionState(blink, timeSec: 0.4).glow, 1)
+        XCTAssertEqual(CitySkyline.motionState(blink, timeSec: 1.4).glow, CitySkyline.blinkOff)
+        XCTAssertEqual(CitySkyline.motionState(blink, timeSec: 2.4).glow, 1)
+
+        // Reduce Motion: everything rests in its drawn place and blinking lights stay on.
+        for motion in [slide, spin, sway, blink] {
+            XCTAssertEqual(CitySkyline.motionState(motion, timeSec: nil), SkylineMotionState())
+        }
     }
 }

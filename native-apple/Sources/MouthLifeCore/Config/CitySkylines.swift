@@ -19,11 +19,73 @@ public struct SkylinePiece: Equatable, Sendable {
     public let centerX: Double
     /// Triangles as x,y pairs: six numbers per triangle.
     public let triangles: [Double]
+    /// For a shaded rectangle: the colour at its top (`colorHex` is the colour at its foot).
+    public let topColorHex: UInt32?
+    /// 0 for a piece that stays put, else 1 + the index of its motion in `CityArt.motions`.
+    public let group: Int
+
+    public init(
+        isLight: Bool,
+        colorHex: UInt32,
+        order: Int,
+        centerX: Double,
+        triangles: [Double],
+        topColorHex: UInt32? = nil,
+        group: Int = 0
+    ) {
+        self.isLight = isLight
+        self.colorHex = colorHex
+        self.order = order
+        self.centerX = centerX
+        self.triangles = triangles
+        self.topColorHex = topColorHex
+        self.group = group
+    }
+}
+
+/// How a group of shapes moves: a streetcar that glides, clock hands that turn, a beacon that blinks.
+public struct SkylineMotion: Equatable, Sendable {
+    public enum Kind: String, Sendable {
+        case slide, spin, sway, blink
+
+        /// How many numbers follow the motion's name in a drawing.
+        var argCount: Int {
+            switch self {
+            case .slide, .blink: return 2
+            case .spin: return 3
+            case .sway: return 4
+            }
+        }
+    }
+
+    public let kind: Kind
+    /// slide: [dx, period]. spin: [cx, cy, period]. sway: [cx, cy, degrees, period]. blink: [period, duty].
+    public let args: [Double]
+}
+
+/// Where a moving group is at a moment.
+public struct SkylineMotionState: Equatable, Sendable {
+    /// Along the horizon, in drawing units.
+    public var dx: Double = 0
+    /// About the motion's pivot, counter-clockwise as drawn.
+    public var angleRad: Double = 0
+    /// 0...1 multiplier on the group's lights.
+    public var glow: Double = 1
+}
+
+/// Where one roadside prop stands.
+public struct SkylinePropAnchor: Equatable, Sendable {
+    public let x: Double
+    public let z: Double
+    /// Props on the east side are drawn flipped left-to-right, so both rows face the stage.
+    public let mirrored: Bool
 }
 
 public struct CityArt: Equatable, Sendable {
     public let skyline: [SkylinePiece]
     public let prop: [SkylinePiece]
+    /// How the panorama's moving groups move; a piece points at one through `group`.
+    public let motions: [SkylineMotion]
 }
 
 public enum CitySkyline {
@@ -143,7 +205,7 @@ public enum CitySkyline {
     /// Empty when the line is not a known shape with the right number of values.
     private static func tessellate(op: String, n: [Double]) -> [[Double]] {
         switch (op, n.count) {
-        case ("R", 4):
+        case ("R", 4), ("G", 4):
             return [rect(n[0], n[1], n[2], n[3])]
         case ("P", _) where n.count >= 6 && n.count % 2 == 0:
             return [fan(n)]
@@ -191,33 +253,109 @@ public enum CitySkyline {
     public static func parse(_ text: String) -> CityArt {
         var skyline: [SkylinePiece] = []
         var prop: [SkylinePiece] = []
+        var motions: [SkylineMotion] = []
         var intoProp = false
         var order = 0
+        var group = 0
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix(";") { continue }
             if line == "@skyline" || line == "@prop" {
                 intoProp = line == "@prop"
                 order = 0
+                group = 0
                 continue
             }
             let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
-            guard tokens.count >= 3, tokens[0].count == 1, tokens[tokens.count - 1].hasPrefix("#"),
-                  let color = UInt32(tokens[tokens.count - 1].dropFirst(), radix: 16)
-            else { continue }
-            let nums = tokens[1..<(tokens.count - 1)].compactMap { Double($0) }
-            guard nums.count == tokens.count - 2 else { continue }
+            if tokens[0].hasPrefix("~") {
+                if tokens[0] == "~end" {
+                    group = 0
+                    continue
+                }
+                let args = tokens.dropFirst().compactMap { Double($0) }
+                guard !intoProp, group == 0,
+                      let kind = SkylineMotion.Kind(rawValue: String(tokens[0].dropFirst())),
+                      args.count == tokens.count - 1, args.count == kind.argCount
+                else { continue }
+                motions.append(SkylineMotion(kind: kind, args: args))
+                group = motions.count
+                continue
+            }
             let op = tokens[0].uppercased()
+            let colours = op == "G" ? 2 : 1
+            guard tokens.count >= 2 + colours, tokens[0].count == 1 else { continue }
+            let hexes = tokens.suffix(colours).compactMap { token -> UInt32? in
+                token.hasPrefix("#") ? UInt32(token.dropFirst(), radix: 16) : nil
+            }
+            guard hexes.count == colours else { continue }
+            let numTokens = tokens[1..<(tokens.count - colours)]
+            let nums = numTokens.compactMap { Double($0) }
+            guard nums.count == numTokens.count else { continue }
             let lists = tessellate(op: op, n: nums)
             if lists.isEmpty { continue }
             let isLight = tokens[0] != op
             for tris in lists {
-                let piece = SkylinePiece(isLight: isLight, colorHex: color, order: order, centerX: middleX(tris), triangles: tris)
+                let piece = SkylinePiece(
+                    isLight: isLight,
+                    colorHex: hexes[0],
+                    order: order,
+                    centerX: middleX(tris),
+                    triangles: tris,
+                    topColorHex: colours == 2 ? hexes[1] : nil,
+                    group: intoProp ? 0 : group
+                )
                 if intoProp { prop.append(piece) } else { skyline.append(piece) }
             }
             order += 1
         }
-        return CityArt(skyline: skyline, prop: prop)
+        return CityArt(skyline: skyline, prop: prop, motions: motions)
+    }
+
+    // MARK: - Motion
+
+    /// Brightness of a blinking light while it is off: a faint ember, never fully dark.
+    public static let blinkOff: Double = 0.18
+
+    /// The state of a motion `timeSec` into the stage. Pass nil for Reduce Motion: everything rests
+    /// in its drawn place and blinking lights stay on.
+    public static func motionState(_ motion: SkylineMotion, timeSec: Double?) -> SkylineMotionState {
+        var state = SkylineMotionState()
+        guard let t = timeSec else { return state }
+        let a = motion.args
+        let turn = Double.pi * 2
+        switch motion.kind {
+        case .slide:
+            state.dx = a[0] * 0.5 * (1 - cos((turn * t) / a[1]))
+        case .spin:
+            state.angleRad = (t / a[2]).truncatingRemainder(dividingBy: 1) * turn
+        case .sway:
+            state.angleRad = a[2] * deg * sin((turn * t) / a[3])
+        case .blink:
+            let phase = t / a[0] - (t / a[0]).rounded(.down)
+            state.glow = phase < a[1] ? 1 : blinkOff
+        }
+        return state
+    }
+
+    /// The point a motion turns about (spin, sway), in drawing units; nil for motions with no pivot.
+    public static func motionPivot(_ motion: SkylineMotion) -> (x: Double, y: Double)? {
+        switch motion.kind {
+        case .spin, .sway: return (motion.args[0], motion.args[1])
+        case .slide, .blink: return nil
+        }
+    }
+
+    /// Lowest and highest y of a piece: a shaded rectangle runs from its foot colour to its top colour.
+    public static func pieceSpanY(_ piece: SkylinePiece) -> (minY: Double, maxY: Double) {
+        var lo = Double.infinity
+        var hi = -Double.infinity
+        var i = 1
+        while i < piece.triangles.count {
+            lo = min(lo, piece.triangles[i])
+            hi = max(hi, piece.triangles[i])
+            i += 2
+        }
+        return (lo, hi)
     }
 
     /// The skyline for a host city (WorldCartridge.hostId), or nil for a host with no drawing.
@@ -261,11 +399,11 @@ public enum CitySkyline {
     }
 
     /// Where the roadside props stand: a row down each side of the stage.
-    public static func propAnchors(worldWidth: Double, worldDepth: Double) -> [Vec2] {
-        var out: [Vec2] = []
+    public static func propAnchors(worldWidth: Double, worldDepth: Double) -> [SkylinePropAnchor] {
+        var out: [SkylinePropAnchor] = []
         for f in propDepthFractions {
-            out.append(Vec2(x: propInsetX, z: worldDepth * f))
-            out.append(Vec2(x: worldWidth - propInsetX, z: worldDepth * f))
+            out.append(SkylinePropAnchor(x: propInsetX, z: worldDepth * f, mirrored: false))
+            out.append(SkylinePropAnchor(x: worldWidth - propInsetX, z: worldDepth * f, mirrored: true))
         }
         return out
     }
@@ -285,10 +423,38 @@ public enum CitySkyline {
         return best
     }
 
-    /// How brightly a district's lights burn (0...1): a dim glow at first, full once it is sealed.
+    /// How brightly a district's sky and moving lights burn (0...1): a dim glow at first, rising
+    /// smoothly as it gets clean, full once it is sealed.
     public static func lightLevel(cleanRatio: Double, sealed: Bool) -> Double {
         if sealed { return 1 }
         let r = max(0, min(1, cleanRatio))
         return 0.14 + 0.46 * r * r
+    }
+
+    // Windows, signs and lamps do not fade up together: each belongs to one of a few steps, and a
+    // step switches on when its district passes that step's share of clean. The town lights up a
+    // few windows at a time, then blazes when the district is sealed.
+    public static let lightSteps: Int = 4
+    /// Brightness of a stepped light that is off, and of one that is on before its district is sealed.
+    public static let stepOff: Double = 0.14
+    public static let stepOn: Double = 0.82
+    /// The last step switches on at this clean ratio; the others are spread evenly below it.
+    public static let stepSpan: Double = 0.72
+
+    /// The step a light belongs to, from its place in the drawing.
+    public static func lightStep(pieceIndex: Int) -> Int {
+        pieceIndex % lightSteps
+    }
+
+    /// The step a roadside prop's lights belong to: the lamps come on in pairs, far end first.
+    public static func propStep(anchorIndex: Int) -> Int {
+        (anchorIndex / 2) % lightSteps
+    }
+
+    /// How brightly a stepped light burns (0...1).
+    public static func stepLevel(cleanRatio: Double, sealed: Bool, step: Int) -> Double {
+        if sealed { return 1 }
+        let threshold = (Double(step + 1) / Double(lightSteps)) * stepSpan
+        return cleanRatio >= threshold ? stepOn : stepOff
     }
 }

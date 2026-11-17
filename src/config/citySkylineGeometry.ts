@@ -14,10 +14,22 @@
  *   W x y cols rows w h gapX gapY #hex   grid of windows
  *   S cx cy r #hex                       five-point star
  *   N cx cy r pinch tilt #hex            crescent (pinch 0..1: higher is thinner; tilt in degrees)
+ *   G x y w h #bottom #top               rectangle shaded from one colour at its foot to another at
+ *                                        its top (skies; a black top melts into the night)
  *
  * A capital letter is always shown; the same letter in lower case is a light. `@skyline` starts the
  * panorama (x runs 0..64 along the stage, y is height) and `@prop` the small roadside piece drawn
  * round its own base point. Lines starting with `;` are notes. Later lines sit in front.
+ *
+ * In the panorama, shapes between a motion line and `~end` move together:
+ *
+ *   ~slide dx period                     glide dx along the horizon and back, once per period (s)
+ *   ~spin cx cy period                   turn about a point, one turn per period (negative: clockwise)
+ *   ~sway cx cy degrees period           rock about a point, that far each way
+ *   ~blink period duty                   its lights flash: on for `duty` (0..1) of each period
+ *
+ * Motion is decoration only. With Reduce Motion on, everything rests in its drawn place and blinking
+ * lights stay on.
  *
  * This file is the web half of a pair: native-apple/Sources/MouthLifeCore/Config/CitySkylines.swift
  * must build the same triangles (tests/citySkylines.test.ts and the Swift tests check it).
@@ -34,11 +46,25 @@ export interface SkylinePiece {
   cx: number;
   /** Triangles as x,y pairs: six numbers per triangle. */
   tris: number[];
+  /** For a shaded rectangle: the colour at its top (`color` is the colour at its foot). */
+  topColor: number | null;
+  /** 0 for a piece that stays put, else 1 + the index of its motion in `CityArt.motions`. */
+  group: number;
+}
+
+export type SkylineMotionKind = 'slide' | 'spin' | 'sway' | 'blink';
+
+export interface SkylineMotion {
+  kind: SkylineMotionKind;
+  /** slide: [dx, period]. spin: [cx, cy, period]. sway: [cx, cy, degrees, period]. blink: [period, duty]. */
+  args: number[];
 }
 
 export interface CityArt {
   skyline: SkylinePiece[];
   prop: SkylinePiece[];
+  /** How the panorama's moving groups move; a piece points at one through `group`. */
+  motions: SkylineMotion[];
 }
 
 /** The panorama is drawn 64 units wide and centred on stages of any width. */
@@ -66,7 +92,8 @@ const CRESCENT_SEGMENTS = 14;
 const ARC_STEP_DEG = 12;
 const STAR_INNER = 0.42;
 
-const ARG_COUNTS: Record<string, number | null> = { R: 4, P: null, C: 3, H: 3, A: 6, L: 5, W: 8, S: 3, N: 5 };
+const ARG_COUNTS: Record<string, number | null> = { R: 4, P: null, C: 3, H: 3, A: 6, L: 5, W: 8, S: 3, N: 5, G: 4 };
+const MOTION_ARG_COUNTS: Record<SkylineMotionKind, number> = { slide: 2, spin: 3, sway: 4, blink: 2 };
 
 function fail(lineNo: number, why: string): never {
   throw new Error(`skyline art line ${lineNo}: ${why}`);
@@ -163,6 +190,7 @@ function crescent(cx: number, cy: number, r: number, pinch: number, tiltDeg: num
 function tessellate(op: string, n: number[]): number[][] {
   switch (op) {
     case 'R':
+    case 'G':
       return [rect(n[0], n[1], n[2], n[3])];
     case 'P':
       return [fan(n)];
@@ -202,37 +230,116 @@ function middleX(tris: number[]): number {
 
 /** Reads one city's drawing. Throws on a line it does not understand, so a typo fails the tests. */
 export function parseCityArt(text: string): CityArt {
-  const art: CityArt = { skyline: [], prop: [] };
+  const art: CityArt = { skyline: [], prop: [], motions: [] };
   let target = art.skyline;
   let order = 0;
+  let group = 0;
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line === '' || line.startsWith(';')) continue;
     if (line === '@skyline' || line === '@prop') {
+      if (group !== 0) fail(i + 1, 'a motion is still open (missing ~end)');
       target = line === '@prop' ? art.prop : art.skyline;
       order = 0;
       continue;
     }
     const tokens = line.split(/\s+/);
+    if (tokens[0].startsWith('~')) {
+      if (tokens[0] === '~end') {
+        if (group === 0 || tokens.length !== 1) fail(i + 1, '~end without a motion to end');
+        group = 0;
+        continue;
+      }
+      const kind = tokens[0].slice(1) as SkylineMotionKind;
+      if (!(kind in MOTION_ARG_COUNTS)) fail(i + 1, `unknown motion "${tokens[0]}"`);
+      if (target !== art.skyline) fail(i + 1, 'only the panorama can move');
+      if (group !== 0) fail(i + 1, 'motions cannot be nested');
+      const args = tokens.slice(1).map(Number);
+      if (args.length !== MOTION_ARG_COUNTS[kind]) fail(i + 1, `wrong number of values for ${tokens[0]}`);
+      if (args.some((v) => !Number.isFinite(v))) fail(i + 1, 'a number is not a number');
+      if (args[args.length - (kind === 'blink' ? 2 : 1)] === 0) fail(i + 1, 'a period cannot be zero');
+      art.motions.push({ kind, args });
+      group = art.motions.length;
+      continue;
+    }
     const op = tokens[0].toUpperCase();
-    const hex = tokens[tokens.length - 1];
-    const nums = tokens.slice(1, -1).map(Number);
     if (!(op in ARG_COUNTS) || tokens[0].length !== 1) fail(i + 1, `unknown shape "${tokens[0]}"`);
-    if (!/^#[0-9a-f]{6}$/.test(hex)) fail(i + 1, `bad colour "${hex}"`);
+    const colours = op === 'G' ? 2 : 1;
+    const hexes = tokens.slice(-colours);
+    const nums = tokens.slice(1, -colours).map(Number);
+    for (const hex of hexes) if (!/^#[0-9a-f]{6}$/.test(hex)) fail(i + 1, `bad colour "${hex}"`);
     if (nums.some((v) => !Number.isFinite(v))) fail(i + 1, 'a number is not a number');
     const want = ARG_COUNTS[op];
     if (want === null ? nums.length < 6 || nums.length % 2 !== 0 : nums.length !== want) {
       fail(i + 1, `wrong number of values for ${op}`);
     }
     const light = tokens[0] !== op;
-    const color = parseInt(hex.slice(1), 16);
+    const color = parseInt(hexes[0].slice(1), 16);
+    const topColor = colours === 2 ? parseInt(hexes[1].slice(1), 16) : null;
     for (const tris of tessellate(op, nums)) {
-      target.push({ light, color, order, cx: middleX(tris), tris });
+      target.push({ light, color, order, cx: middleX(tris), tris, topColor, group });
     }
     order++;
   }
+  if (group !== 0) fail(lines.length, 'a motion is still open (missing ~end)');
   return art;
+}
+
+/** Where a moving group is at a moment: how far it has slid, turned, and how bright its lights are. */
+export interface SkylineMotionState {
+  /** Along the horizon, in drawing units. */
+  dx: number;
+  /** About the motion's pivot, counter-clockwise as drawn. */
+  angleRad: number;
+  /** 0..1 multiplier on the group's lights. */
+  glow: number;
+}
+
+/** Brightness of a blinking light while it is off: a faint ember, never fully dark. */
+export const SKYLINE_BLINK_OFF = 0.18;
+
+/**
+ * The state of a motion `timeSec` into the stage. Pass null for Reduce Motion: everything rests in
+ * its drawn place and blinking lights stay on.
+ */
+export function skylineMotionState(motion: SkylineMotion, timeSec: number | null): SkylineMotionState {
+  const state: SkylineMotionState = { dx: 0, angleRad: 0, glow: 1 };
+  if (timeSec === null) return state;
+  const a = motion.args;
+  const turn = Math.PI * 2;
+  switch (motion.kind) {
+    case 'slide':
+      state.dx = a[0] * 0.5 * (1 - Math.cos((turn * timeSec) / a[1]));
+      break;
+    case 'spin':
+      state.angleRad = ((timeSec / a[2]) % 1) * turn;
+      break;
+    case 'sway':
+      state.angleRad = a[2] * (Math.PI / 180) * Math.sin((turn * timeSec) / a[3]);
+      break;
+    default: {
+      const phase = timeSec / a[0] - Math.floor(timeSec / a[0]);
+      state.glow = phase < a[1] ? 1 : SKYLINE_BLINK_OFF;
+    }
+  }
+  return state;
+}
+
+/** The point a motion turns about (spin, sway), in drawing units; null for motions with no pivot. */
+export function skylineMotionPivot(motion: SkylineMotion): { x: number; y: number } | null {
+  return motion.kind === 'spin' || motion.kind === 'sway' ? { x: motion.args[0], y: motion.args[1] } : null;
+}
+
+/** Lowest and highest y of a piece: a shaded rectangle runs from `color` at the first to `topColor` at the second. */
+export function skylinePieceSpanY(piece: SkylinePiece): { minY: number; maxY: number } {
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 1; i < piece.tris.length; i += 2) {
+    minY = Math.min(minY, piece.tris[i]);
+    maxY = Math.max(maxY, piece.tris[i]);
+  }
+  return { minY, maxY };
 }
 
 /** World position of a panorama point (x along the horizon, y up the drawing). */
@@ -261,12 +368,19 @@ export function skylinePropPoint(
   return [anchorX + x, SKYLINE_PROP_PLACE.baseY + y * c + lift * s, anchorZ - y * s + lift * c];
 }
 
+export interface SkylinePropAnchor {
+  x: number;
+  z: number;
+  /** Props on the east side are drawn flipped left-to-right, so both rows face the stage. */
+  mirrored: boolean;
+}
+
 /** Where the roadside props stand: a row down each side of the stage. */
-export function skylinePropAnchors(worldWidth: number, worldDepth: number): { x: number; z: number }[] {
-  const out: { x: number; z: number }[] = [];
+export function skylinePropAnchors(worldWidth: number, worldDepth: number): SkylinePropAnchor[] {
+  const out: SkylinePropAnchor[] = [];
   for (const f of SKYLINE_PROP_PLACE.depthFractions) {
-    out.push({ x: SKYLINE_PROP_PLACE.insetX, z: worldDepth * f });
-    out.push({ x: worldWidth - SKYLINE_PROP_PLACE.insetX, z: worldDepth * f });
+    out.push({ x: SKYLINE_PROP_PLACE.insetX, z: worldDepth * f, mirrored: false });
+    out.push({ x: worldWidth - SKYLINE_PROP_PLACE.insetX, z: worldDepth * f, mirrored: true });
   }
   return out;
 }
@@ -286,9 +400,41 @@ export function skylineDistrictIndex(districts: readonly { bounds: { minX: numbe
   return best;
 }
 
-/** How brightly a district's lights burn (0..1): a dim glow at first, full once it is sealed. */
+/**
+ * How brightly a district's sky and moving lights burn (0..1): a dim glow at first, rising smoothly
+ * as it gets clean, full once it is sealed.
+ */
 export function skylineLightLevel(cleanRatio: number, sealed: boolean): number {
   if (sealed) return 1;
   const r = Math.max(0, Math.min(1, cleanRatio));
   return 0.14 + 0.46 * r * r;
+}
+
+/**
+ * Windows, signs and lamps do not fade up together: each belongs to one of a few steps, and a step
+ * switches on when its district passes that step's share of clean. The town lights up a few windows
+ * at a time, then blazes when the district is sealed.
+ */
+export const SKYLINE_LIGHT_STEPS = 4;
+/** Brightness of a stepped light that is off, and of one that is on before its district is sealed. */
+export const SKYLINE_STEP_OFF = 0.14;
+export const SKYLINE_STEP_ON = 0.82;
+/** The last step switches on at this clean ratio; the others are spread evenly below it. */
+export const SKYLINE_STEP_SPAN = 0.72;
+
+/** The step a light belongs to, from its place in the drawing. */
+export function skylineLightStep(pieceIndex: number): number {
+  return pieceIndex % SKYLINE_LIGHT_STEPS;
+}
+
+/** The step a roadside prop's lights belong to: the lamps come on in pairs, far end first. */
+export function skylinePropStep(anchorIndex: number): number {
+  return Math.floor(anchorIndex / 2) % SKYLINE_LIGHT_STEPS;
+}
+
+/** How brightly a stepped light burns (0..1). */
+export function skylineStepLevel(cleanRatio: number, sealed: boolean, step: number): number {
+  if (sealed) return 1;
+  const threshold = ((step + 1) / SKYLINE_LIGHT_STEPS) * SKYLINE_STEP_SPAN;
+  return cleanRatio >= threshold ? SKYLINE_STEP_ON : SKYLINE_STEP_OFF;
 }

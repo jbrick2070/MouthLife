@@ -26,7 +26,9 @@ Welcome! This repository contains **MouthLife**, with active development focused
 
 5. **City Skylines Are Drawn Once, for Both Editions:**
    - Each stage's skyline is a small text drawing in `src/config/skylines/<hostId>.txt` (format documented in `src/config/citySkylineGeometry.ts`). The web reads it directly; the native app reads the generated `CitySkylineArt.swift`. After editing a drawing run `npx vite-node scripts/skyline-native.ts --write`, then the tests on both sides (they compare piece counts and checksums across editions).
-   - Capital-letter shapes are scenery; lower-case shapes are lights, which follow the clean ratio of the district in front of them. Keep every district supplied with lights, and keep colours readable against both the red gum and the black sky.
+   - Capital-letter shapes are scenery; lower-case shapes are lights, which follow the clean ratio of the district in front of them: skies (`g`) brighten smoothly, everything else switches on in four steps and goes to full when the district is sealed. Keep every district supplied with lights, and keep colours readable against the red gum and against that city's sky.
+   - Motion (`~slide`, `~spin`, `~sway`, `~blink`) is decoration only: slow, small, never near the play field, and always at rest under Reduce Motion. Both editions compute it from the same `motionState` function; do not animate skyline pieces any other way.
+   - Draw real places accurately (a second-pass review caught 1970s towers in "1940 Chicago", a sideways Ghana flag and the wrong bridge for New Orleans). Check a landmark's shape and date before adding it.
 6. **One Sign for the Main Menu:**
    - Any button that returns to the Hub is the bright white pill with a house (`.btn-home` + `HOME_ICON_SVG` on web, `MLHomeButtonStyle` + `house.fill` on native). Do not style anything else that way.
 

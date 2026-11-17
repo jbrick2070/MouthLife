@@ -7,6 +7,17 @@ import {
   SKYLINE_PROP_PLACE,
   skylineDistrictIndex,
   skylineLightLevel,
+  skylineLightStep,
+  skylinePropStep,
+  skylineStepLevel,
+  SKYLINE_LIGHT_STEPS,
+  SKYLINE_STEP_OFF,
+  SKYLINE_STEP_ON,
+  SKYLINE_STEP_SPAN,
+  skylineMotionPivot,
+  skylineMotionState,
+  skylinePieceSpanY,
+  SKYLINE_BLINK_OFF,
   skylinePoint,
   skylinePropAnchors,
   skylinePropPoint,
@@ -66,6 +77,88 @@ describe('city skyline drawing format', () => {
     expect(() => parseCityArt('P 0 0 1 1 #112233')).toThrow(/wrong number/);
   });
 
+  it('shades a sky rectangle from its foot colour to its top colour', () => {
+    const art = parseCityArt('g 0 1 10 4 #ff8800 #000000\nG 0 0 2 2 #112233 #445566');
+    expect(art.skyline).toHaveLength(2);
+    expect(art.skyline[0]).toMatchObject({ light: true, color: 0xff8800, topColor: 0x000000, group: 0 });
+    expect(art.skyline[1]).toMatchObject({ light: false, color: 0x112233, topColor: 0x445566 });
+    expect(art.skyline[0].tris).toHaveLength(12);
+    expect(skylinePieceSpanY(art.skyline[0])).toEqual({ minY: 1, maxY: 5 });
+    // Plain shapes carry no second colour.
+    expect(parseCityArt('R 0 0 1 1 #112233').skyline[0].topColor).toBeNull();
+    expect(() => parseCityArt('G 0 0 2 2 #112233')).toThrow(/line 1/);
+  });
+
+  it('groups shapes that move together', () => {
+    const art = parseCityArt(
+      [
+        '@skyline',
+        'R 0 0 1 1 #000001',
+        '~slide 3 14',
+        'R 5 0 2 1 #000002',
+        'w 5.2 0.2 2 1 0.5 0.4 0.2 0 #ffee00',
+        '~end',
+        '~spin 10 2 -60',
+        'l 10 2 10 3 0.1 #00ffff',
+        '~end',
+        '~sway 20 0 4 5',
+        'L 20 0 20 2 0.1 #000003',
+        '~end',
+        '~blink 2 0.5',
+        'c 30 6 0.1 #ff0000',
+        '~end',
+        'R 40 0 1 1 #000004',
+      ].join('\n')
+    );
+    expect(art.motions).toEqual([
+      { kind: 'slide', args: [3, 14] },
+      { kind: 'spin', args: [10, 2, -60] },
+      { kind: 'sway', args: [20, 0, 4, 5] },
+      { kind: 'blink', args: [2, 0.5] },
+    ]);
+    expect(art.skyline.map((p) => p.group)).toEqual([0, 1, 1, 1, 2, 3, 4, 0]);
+    expect(skylineMotionPivot(art.motions[0])).toBeNull();
+    expect(skylineMotionPivot(art.motions[1])).toEqual({ x: 10, y: 2 });
+    expect(skylineMotionPivot(art.motions[2])).toEqual({ x: 20, y: 0 });
+    expect(skylineMotionPivot(art.motions[3])).toBeNull();
+
+    expect(() => parseCityArt('~slide 3 14\nR 0 0 1 1 #000001')).toThrow(/missing ~end/);
+    expect(() => parseCityArt('~slide 3 14\n~spin 0 0 5\n~end')).toThrow(/nested/);
+    expect(() => parseCityArt('~end')).toThrow(/without a motion/);
+    expect(() => parseCityArt('~wobble 1 2\n~end')).toThrow(/unknown motion/);
+    expect(() => parseCityArt('~slide 3\n~end')).toThrow(/wrong number/);
+    expect(() => parseCityArt('~slide 3 0\n~end')).toThrow(/period cannot be zero/);
+    expect(() => parseCityArt('@prop\n~blink 2 0.5\nc 0 1 0.1 #ff0000\n~end')).toThrow(/only the panorama/);
+    expect(() => parseCityArt('~slide 3 14\nR 0 0 1 1 #000001\n@prop')).toThrow(/missing ~end/);
+  });
+
+  it('moves groups the same way every time, and holds them still for Reduce Motion', () => {
+    expect(skylineMotionState({ kind: 'slide', args: [3, 14] }, 0)).toEqual({ dx: 0, angleRad: 0, glow: 1 });
+    expect(skylineMotionState({ kind: 'slide', args: [3, 14] }, 7).dx).toBeCloseTo(3, 9); // far end at half time
+    expect(skylineMotionState({ kind: 'slide', args: [3, 14] }, 14).dx).toBeCloseTo(0, 9); // and back
+
+    expect(skylineMotionState({ kind: 'spin', args: [0, 0, 60] }, 15).angleRad).toBeCloseTo(Math.PI / 2, 9);
+    expect(skylineMotionState({ kind: 'spin', args: [0, 0, -60] }, 15).angleRad).toBeCloseTo(-Math.PI / 2, 9);
+    expect(skylineMotionState({ kind: 'spin', args: [0, 0, 60] }, 75).angleRad).toBeCloseTo(Math.PI / 2, 9);
+
+    expect(skylineMotionState({ kind: 'sway', args: [0, 0, 6, 4] }, 1).angleRad).toBeCloseTo((6 * Math.PI) / 180, 9);
+    expect(skylineMotionState({ kind: 'sway', args: [0, 0, 6, 4] }, 3).angleRad).toBeCloseTo((-6 * Math.PI) / 180, 9);
+
+    expect(skylineMotionState({ kind: 'blink', args: [2, 0.5] }, 0.4).glow).toBe(1);
+    expect(skylineMotionState({ kind: 'blink', args: [2, 0.5] }, 1.4).glow).toBe(SKYLINE_BLINK_OFF);
+    expect(skylineMotionState({ kind: 'blink', args: [2, 0.5] }, 2.4).glow).toBe(1);
+
+    const all = [
+      { kind: 'slide', args: [3, 14] },
+      { kind: 'spin', args: [0, 0, 60] },
+      { kind: 'sway', args: [0, 0, 6, 4] },
+      { kind: 'blink', args: [2, 0.5] },
+    ] as const;
+    for (const motion of all) {
+      expect(skylineMotionState({ kind: motion.kind, args: [...motion.args] }, null)).toEqual({ dx: 0, angleRad: 0, glow: 1 });
+    }
+  });
+
   it('stands the panorama behind the far gum line, leaning back, later pieces in front', () => {
     const [x0, y0, z0] = skylinePoint(10, 0, 0, 64);
     expect([x0, y0, z0]).toEqual([10, SKYLINE_PLACE.baseY, SKYLINE_PLACE.baseZ]);
@@ -80,8 +173,10 @@ describe('city skyline drawing format', () => {
 
     const anchors = skylinePropAnchors(64, 32);
     expect(anchors).toHaveLength(SKYLINE_PROP_PLACE.depthFractions.length * 2);
-    expect(anchors[0]).toEqual({ x: 0.6, z: 32 * 0.3 });
+    expect(anchors[0]).toEqual({ x: 0.6, z: 32 * 0.3, mirrored: false });
     expect(anchors[1].x).toBeCloseTo(63.4, 6);
+    // The east row is drawn flipped, so both rows face the stage.
+    expect(anchors.map((a) => a.mirrored)).toEqual([false, true, false, true, false, true, false, true]);
     expect(skylinePropPoint(0, 0, 0, 0.6, 9.6)).toEqual([0.6, SKYLINE_PROP_PLACE.baseY, 9.6]);
   });
 
@@ -102,6 +197,25 @@ describe('city skyline drawing format', () => {
     expect(skylineLightLevel(1, false)).toBeLessThan(0.7); // the jump to full is the reward for sealing
     expect(skylineLightLevel(0.1, true)).toBe(1);
     expect(skylineLightLevel(5, false)).toBe(skylineLightLevel(1, false));
+  });
+
+  it('windows come on a few at a time, then blaze when the district is sealed', () => {
+    expect(SKYLINE_LIGHT_STEPS).toBe(4);
+    expect([0, 1, 2, 3, 4, 5].map(skylineLightStep)).toEqual([0, 1, 2, 3, 0, 1]);
+    // Roadside lamps come on in pairs (one each side), far end first.
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(skylinePropStep)).toEqual([0, 0, 1, 1, 2, 2, 3, 3]);
+
+    const lit = (ratio: number) =>
+      [0, 1, 2, 3].filter((step) => skylineStepLevel(ratio, false, step) === SKYLINE_STEP_ON).length;
+    expect(lit(0)).toBe(0);
+    expect(lit(0.2)).toBe(1);
+    expect(lit(0.4)).toBe(2);
+    expect(lit(0.6)).toBe(3);
+    expect(lit(SKYLINE_STEP_SPAN)).toBe(4);
+    expect(skylineStepLevel(0, false, 0)).toBe(SKYLINE_STEP_OFF);
+    expect(SKYLINE_STEP_ON).toBeLessThan(1);
+    // Sealing lights everything fully, whatever the step.
+    for (const step of [0, 1, 2, 3]) expect(skylineStepLevel(0.1, true, step)).toBe(1);
   });
 });
 
@@ -139,8 +253,10 @@ describe('city skylines for every stage', () => {
       for (const piece of art.skyline) {
         total += triangles(piece.tris);
         for (let i = 0; i < piece.tris.length; i += 2) {
-          expect(piece.tris[i], `${host} x`).toBeGreaterThanOrEqual(-25);
-          expect(piece.tris[i], `${host} x`).toBeLessThanOrEqual(89);
+          // Skies run far past both ends of the stage so their edges are never on screen.
+          const wide = piece.topColor !== null ? 40 : 0;
+          expect(piece.tris[i], `${host} x`).toBeGreaterThanOrEqual(-25 - wide);
+          expect(piece.tris[i], `${host} x`).toBeLessThanOrEqual(89 + wide);
           expect(piece.tris[i + 1], `${host} y`).toBeGreaterThanOrEqual(-6);
           expect(piece.tris[i + 1], `${host} y`).toBeLessThanOrEqual(8);
         }
@@ -164,7 +280,7 @@ describe('city skylines for every stage', () => {
 
   it('the native reader uses the same placement and shape settings', () => {
     const swift = readFileSync('native-apple/Sources/MouthLifeCore/Config/CitySkylines.swift', 'utf8');
-    const num = (name: string) => Number(new RegExp(`static let ${name}(?:: Double)? = (-?[0-9.]+)`).exec(swift)?.[1]);
+    const num = (name: string) => Number(new RegExp(`static let ${name}(?:: (?:Double|Int))? = (-?[0-9.]+)`).exec(swift)?.[1]);
     expect(num('artWidth')).toBe(SKYLINE_ART_WIDTH);
     expect(num('baseZ')).toBe(SKYLINE_PLACE.baseZ);
     expect(num('baseY')).toBe(SKYLINE_PLACE.baseY);
@@ -174,5 +290,9 @@ describe('city skylines for every stage', () => {
     expect(num('propBaseY')).toBe(SKYLINE_PROP_PLACE.baseY);
     expect(swift).toContain(`propDepthFractions: [Double] = [${SKYLINE_PROP_PLACE.depthFractions.join(', ')}]`);
     expect(swift).toContain('return 0.14 + 0.46 * r * r');
+    expect(num('lightSteps')).toBe(SKYLINE_LIGHT_STEPS);
+    expect(num('stepOff')).toBe(SKYLINE_STEP_OFF);
+    expect(num('stepOn')).toBe(SKYLINE_STEP_ON);
+    expect(num('stepSpan')).toBe(SKYLINE_STEP_SPAN);
   });
 });

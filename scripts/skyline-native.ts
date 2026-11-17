@@ -31,10 +31,15 @@ export function skylineChecksum(pieces: readonly SkylinePiece[]): number {
   return Math.round(sum * 1000) / 1000;
 }
 
-function summary(pieces: readonly SkylinePiece[]): string {
+function summary(pieces: readonly SkylinePiece[], motions: number): string {
   const lights = pieces.filter((p) => p.light).length;
   const triangles = pieces.reduce((n, p) => n + p.tris.length / 6, 0);
-  return `Expected(pieces: ${pieces.length}, lightPieces: ${lights}, triangles: ${triangles}, checksum: ${skylineChecksum(pieces)})`;
+  const shaded = pieces.filter((p) => p.topColor !== null).length;
+  const moving = pieces.filter((p) => p.group > 0).length;
+  return (
+    `Expected(pieces: ${pieces.length}, lightPieces: ${lights}, triangles: ${triangles}, ` +
+    `checksum: ${skylineChecksum(pieces)}, shadedPieces: ${shaded}, movingPieces: ${moving}, motions: ${motions})`
+  );
 }
 
 const constName = (hostId: string): string => hostId.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
@@ -51,6 +56,9 @@ public enum CitySkylineArt {
         public let lightPieces: Int
         public let triangles: Int
         public let checksum: Double
+        public let shadedPieces: Int
+        public let movingPieces: Int
+        public let motions: Int
     }
 
     public static let hostIds: [String] = [${hosts.map((h) => `"${h}"`).join(', ')}]
@@ -65,14 +73,14 @@ ${hosts.map((h) => `        case "${h}": return ${constName(h)}`).join('\n')}
 
     public static func expectedSkyline(forHost hostId: String) -> Expected? {
         switch hostId {
-${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYLINE_TEXT[h]).skyline)}`).join('\n')}
+${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYLINE_TEXT[h]).skyline, parseCityArt(CITY_SKYLINE_TEXT[h]).motions.length)}`).join('\n')}
         default: return nil
         }
     }
 
     public static func expectedProp(forHost hostId: String) -> Expected? {
         switch hostId {
-${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYLINE_TEXT[h]).prop)}`).join('\n')}
+${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYLINE_TEXT[h]).prop, 0)}`).join('\n')}
         default: return nil
         }
     }
