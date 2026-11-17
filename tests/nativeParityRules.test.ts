@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   CompanionArchSim,
@@ -101,5 +102,48 @@ describe('sync codes accepted the way the native app accepts them', () => {
     save.playerProfile.displayName = name;
     const decoded = decodeSaveFromSyncCode(encodeSaveToSyncCode(save));
     expect(decoded.playerProfile.displayName).toBe(cut);
+  });
+});
+
+// The way back to the main menu must look the same wherever it appears: the bright pill with a
+// house. Testers kept missing a plain "Hub" button; this keeps every exit wearing the same sign.
+describe('one sign for the main menu', () => {
+  const read = (path: string) => readFileSync(path, 'utf8');
+
+  it('web: every button back to the Hub is the house pill', () => {
+    const hud = read('src/ui/TelemetryHudOverlay.ts');
+    const brush = read('src/ui/BrushAlongOverlay.ts');
+    for (const [src, id] of [
+      [hud, 'btn-hud-exit'],
+      [hud, 'btn-pause-exit'],
+      [brush, 'btn-pacer-exit'],
+    ] as const) {
+      const tag = new RegExp(`<button[^>]*id="${id}"[^>]*>.*?</button>`, 's').exec(src)?.[0] ?? '';
+      expect(tag, id).toContain('btn-home');
+      expect(tag, id).toContain('${HOME_ICON_SVG}');
+    }
+    expect(read('src/ui/homeIcon.ts')).toContain('class="home-ico"');
+    const css = read('src/styles/main.css');
+    expect(css).toContain('.btn-home {');
+    // On phones the HUD keeps the house (as an icon) instead of hiding it.
+    expect(css).not.toMatch(/#btn-hud-mute, #btn-hud-exit,/);
+    expect(css).toContain('#btn-hud-exit .btn-home-label { display: none; }');
+  });
+
+  it('web: the phone check in code matches the compact HUD rule in the stylesheet', () => {
+    const query = /const COMPACT_HUD_QUERY = '([^']+)';/.exec(read('src/ui/TelemetryHudOverlay.ts'))?.[1];
+    expect(query).toBeTruthy();
+    expect(read('src/styles/main.css')).toContain(`@media ${query} {`);
+  });
+
+  it('native: the same buttons use the house and MLHomeButtonStyle', () => {
+    const hud = read('native-apple/MouthLifeApp/UI/ArcadeHudView.swift');
+    const brush = read('native-apple/MouthLifeApp/UI/BrushAlongView.swift');
+    expect(hud.match(/systemName: "house\.fill"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(hud).toContain('Label(L10n.t("Exit to Hub"), systemImage: "house.fill")');
+    expect(hud).toContain('.buttonStyle(MLHomeButtonStyle())');
+    expect(brush).toContain('Label(L10n.t("Hub"), systemImage: "house.fill")');
+    expect(brush).toContain('.buttonStyle(MLHomeButtonStyle(compact: true))');
+    expect(read('native-apple/MouthLifeApp/UI/DesignSystem.swift')).toContain('public struct MLHomeButtonStyle: ButtonStyle');
   });
 });

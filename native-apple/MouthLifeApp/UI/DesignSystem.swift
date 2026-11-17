@@ -109,6 +109,29 @@ public struct MLPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// The way back to the main menu: the one bright, white pill on the screen. Pair it with the house
+/// icon ("house.fill") so players learn one sign for "main menu". Web twin: `.btn-home`.
+public struct MLHomeButtonStyle: ButtonStyle {
+    /// A smaller pill for tight utility bars.
+    public var compact: Bool = false
+
+    public init(compact: Bool = false) {
+        self.compact = compact
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(compact ? .caption : .subheadline, design: .rounded, weight: .bold))
+            .foregroundStyle(MLTheme.deepOcean)
+            .padding(.horizontal, compact ? 12 : 18)
+            .padding(.vertical, compact ? 8 : 12)
+            .background(Capsule(style: .continuous).fill(Color.white))
+            .overlay(Capsule(style: .continuous).stroke(MLTheme.mintClean.opacity(0.75), lineWidth: 2))
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 public struct MLGlassPillButtonStyle: ButtonStyle {
     public var tint: Color = MLTheme.cyanAccent
 

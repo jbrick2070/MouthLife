@@ -418,10 +418,10 @@ public struct BrushAlongView: View {
                 Button {
                     onCancelToHub()
                 } label: {
-                    Label(L10n.t("Hub"), systemImage: "chevron.left")
-                        .font(.system(.caption, design: .rounded, weight: .bold))
+                    Label(L10n.t("Hub"), systemImage: "house.fill")
                 }
-                .buttonStyle(MLGlassPillButtonStyle())
+                .buttonStyle(MLHomeButtonStyle(compact: true))
+                .accessibilityLabel(L10n.t("Exit to Hub"))
 
                 Spacer(minLength: 2)
 

@@ -24,6 +24,12 @@ Welcome! This repository contains **MouthLife**, with active development focused
 4. **Non-Punitive Design & 100% On-Device Privacy:**
    - Zero streak-loss shaming, `90-day` Saliva Stasis floor (`>= 45%` smoothness, zero offline shield damage), non-punitive `50%` Ca(OH)₂ Pulp Rescue timeout stabilization, `NSPrivacyTracking = false` in `PrivacyInfo.xcprivacy`, and external Safari-only links for `SmileOnU.org` and the further charities in `CharityInfo.moreCharities` (`CharityInfo.swift`; verify every link on the charity's own site before adding one). The owner chose to ship with no maker contact details: do not add an email address, a `mailto:` link or a feedback form to either edition.
 
+5. **City Skylines Are Drawn Once, for Both Editions:**
+   - Each stage's skyline is a small text drawing in `src/config/skylines/<hostId>.txt` (format documented in `src/config/citySkylineGeometry.ts`). The web reads it directly; the native app reads the generated `CitySkylineArt.swift`. After editing a drawing run `npx vite-node scripts/skyline-native.ts --write`, then the tests on both sides (they compare piece counts and checksums across editions).
+   - Capital-letter shapes are scenery; lower-case shapes are lights, which follow the clean ratio of the district in front of them. Keep every district supplied with lights, and keep colours readable against both the red gum and the black sky.
+6. **One Sign for the Main Menu:**
+   - Any button that returns to the Hub is the bright white pill with a house (`.btn-home` + `HOME_ICON_SVG` on web, `MLHomeButtonStyle` + `house.fill` on native). Do not style anything else that way.
+
 ## 3. Verification Checklist Before Committing
 
 ```bash

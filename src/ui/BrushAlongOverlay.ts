@@ -25,6 +25,7 @@ import { DisposerBag, type EventBus } from '../engine/EventBus';
 import { HabitBank, brushAlongMultiplier } from '../engine/persistence/HabitBank';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
+import { HOME_ICON_SVG } from './homeIcon';
 
 // Same preference names as the native app (it keeps these outside the save too).
 const FLOSS_STYLE_KEY = 'mouthlife.pacer.flossToolStyle';
@@ -724,7 +725,7 @@ export class BrushAlongOverlay implements OverlayView {
 
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive row-between pacer-utility-bar">
-        <button type="button" id="btn-pacer-exit" class="btn btn-sm">← Hub</button>
+        <button type="button" id="btn-pacer-exit" class="btn btn-sm btn-home" aria-label="Exit to Hub">${HOME_ICON_SVG}<span>Hub</span></button>
         <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
           <button type="button" id="btn-pacer-voice" class="btn btn-sm btn-icon" title="Voice coach on / off"></button>
           <select id="sel-pacer-lang" class="pacer-lang-select" aria-label="Coach language">${langOptions}</select>

@@ -19,8 +19,14 @@ const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
 const OUT = join(ROOT, 'src', 'i18n', 'strings.en.json');
 
 const SCAN = ['src/ui', 'src/config', 'src/worlds', 'src/main.ts', 'src/engine/sim', 'src/engine/persistence/SaveSystem.ts'];
-// Already translated by hand in 8 languages (the spoken brushing coach and its on-screen labels).
-const SKIP_FILES = new Set(['src/config/brushCoach.ts', 'src/config/gameConfig.ts']);
+// Already translated by hand in 8 languages (the spoken brushing coach and its on-screen labels),
+// plus the city skyline drawings, whose only text is error messages for whoever edits a drawing.
+const SKIP_FILES = new Set([
+  'src/config/brushCoach.ts',
+  'src/config/gameConfig.ts',
+  'src/config/citySkylineGeometry.ts',
+  'src/config/citySkylines.ts',
+]);
 
 function listFiles(rel) {
   const abs = join(ROOT, rel);
@@ -242,6 +248,8 @@ const SWIFT_SKIP = new Set([
   'native-apple/Sources/MouthLifeCore/Config/GameConfig.swift',
   'native-apple/Sources/MouthLifeCore/Config/L10n.swift',
   'native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift',
+  'native-apple/Sources/MouthLifeCore/Config/CitySkylines.swift',
+  'native-apple/Sources/MouthLifeCore/Config/CitySkylineArt.swift',
 ]);
 
 /** Yields the text of every "…" literal in Swift source, with \(…) and printf codes as slots. */

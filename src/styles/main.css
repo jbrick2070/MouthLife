@@ -184,6 +184,26 @@ textarea:focus-visible {
   border-radius: 10px;
 }
 
+/* The way back to the main menu: the one bright pill on the screen, always with the house. */
+.btn-home {
+  background: #f8fafc;
+  border-color: #ffffff;
+  color: #0b2a3d;
+  font-weight: 800;
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.5), 0 4px 14px rgba(94, 234, 212, 0.28);
+}
+
+.btn-home:hover {
+  background: #ffffff;
+  border-color: #5eead4;
+}
+
+.home-ico {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
 .btn-icon {
   min-width: 40px;
   min-height: 40px;
@@ -1213,10 +1233,10 @@ textarea:focus-visible {
   /* 1. Arcade & Pulp Rescue HUD: ultra-slim top bar + single-row bottom-right thumb pills */
   .hud-top {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto 40px;
+    grid-template-columns: 40px minmax(0, 1fr) auto auto 40px;
     align-items: center;
     gap: 5px;
-    padding: 3px 6px 6px 8px;
+    padding: 3px 6px 6px 6px;
     position: relative;
     overflow: hidden;
     border-radius: 13px;
@@ -1226,10 +1246,13 @@ textarea:focus-visible {
     display: contents;
   }
   .hud-world-title, #hud-ph, #hud-sites, #hud-mechanic, #hud-score,
-  #btn-hud-quality, #btn-hud-steer, #btn-hud-mute, #btn-hud-exit,
+  #btn-hud-quality, #btn-hud-steer, #btn-hud-mute,
   #hud-districts {
     display: none !important;
   }
+  /* The house stays, as an icon, so the main menu is always one look away. */
+  #btn-hud-exit { grid-column: 1; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
+  #btn-hud-exit .btn-home-label { display: none; }
   #hud-clean-progress {
     display: block !important;
     position: absolute;
@@ -1241,7 +1264,7 @@ textarea:focus-visible {
     background: rgba(255, 255, 255, 0.1);
   }
   .hud-objective {
-    grid-column: 1;
+    grid-column: 2;
     grid-row: 1;
     min-width: 0;
     margin: 0;
@@ -1252,9 +1275,9 @@ textarea:focus-visible {
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  #hud-timer { grid-column: 2; grid-row: 1; white-space: nowrap; font-size: 0.62rem; padding: 2px 5px; }
-  #hud-clean-pct { grid-column: 3; grid-row: 1; min-width: 0 !important; white-space: nowrap; font-size: 0.66rem !important; }
-  #btn-hud-pause { grid-column: 4; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
+  #hud-timer { grid-column: 3; grid-row: 1; white-space: nowrap; font-size: 0.62rem; padding: 2px 5px; }
+  #hud-clean-pct { grid-column: 4; grid-row: 1; min-width: 0 !important; white-space: nowrap; font-size: 0.66rem !important; }
+  #btn-hud-pause { grid-column: 5; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
 
   .hud-toast {
     margin-top: 4px;

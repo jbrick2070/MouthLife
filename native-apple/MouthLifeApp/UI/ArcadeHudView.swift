@@ -59,7 +59,23 @@ public struct ArcadeHudView: View {
         ZStack {
             VStack(spacing: 8) {
                 // Top Telemetry Strip
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    // The way back to the main menu: the one bright button, always the house. It
+                    // pauses first, so a stray thumb never ends a dive; the pause card then offers
+                    // the same house beside Resume.
+                    Button {
+                        isPausedSheet = true
+                    } label: {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(MLTheme.deepOcean)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(Color.white))
+                            .overlay(Circle().stroke(MLTheme.mintClean.opacity(0.75), lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("Exit to Hub"))
+
                     Button {
                         isPausedSheet = true
                     } label: {
@@ -75,6 +91,8 @@ public struct ArcadeHudView: View {
                             Text(L10n.t("\(cleanPct)% / \(targetPct)% CLEAN"))
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                                 .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .foregroundStyle(cleanPct >= targetPct ? MLTheme.mintClean : MLTheme.textPrimary)
 
                             HStack(spacing: 4) {
@@ -341,11 +359,13 @@ public struct ArcadeHudView: View {
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.cyanAccent))
 
-                        Button(L10n.t("Exit to Hub")) {
+                        Button {
                             isPausedSheet = false
                             onExitToHub()
+                        } label: {
+                            Label(L10n.t("Exit to Hub"), systemImage: "house.fill")
                         }
-                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.coralGum))
+                        .buttonStyle(MLHomeButtonStyle())
                     }
                 }
                 .mlGlassCard(cornerRadius: 24, padding: 20)

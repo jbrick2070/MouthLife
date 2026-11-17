@@ -27,6 +27,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private let companionCrownAnchors: [TouchHit]
 
     private var activeStageNodes: CartridgeStageNodes?
+    /// The stage's city skyline; a child of the stage, rebuilt with it.
+    private var activeSkyline: CitySkylineNodes?
     private var activeCartridgeId: String?
     private var cachedArcadeSnapshot: SessionSnapshot?
     private var cachedDistrictBoxes: [AABB2D] = []
@@ -351,6 +353,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         )
         scene.rootNode.addChildNode(stage.rootNode)
         self.activeStageNodes = stage
+        let skyline = CitySkylineBuilder.build(cartridge: cart)
+        if let skyline { stage.rootNode.addChildNode(skyline.rootNode) }
+        self.activeSkyline = skyline
         self.activeCartridgeId = cart.id
         self.cachedDistrictBoxes = cart.districts.map(\.bounds)
         arcadeEnamelController.setDistrictSeals(boxes: cachedDistrictBoxes, sealAges: districtSealBirthSec)
@@ -826,6 +831,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         probeRig.rootNode.simdEulerAngles = SIMD3<Float>(0, Float(-interpFacing), 0)
 
         let snap = cachedArcadeSnapshot ?? session.makeSnapshot()
+        activeSkyline?.update(
+            dt: dtFloat,
+            nowSec: motionTime,
+            cleanRatios: snap.districtCleanRatios,
+            sealed: snap.sealedDistricts,
+            reducedMotion: reducedMotion
+        )
         if cachedArcadeSnapshot == nil {
             cachedArcadeSnapshot = snap
         }

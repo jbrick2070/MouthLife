@@ -63,6 +63,8 @@ These are machine translations reviewed by a second model, not by native speaker
   4. **`world_4` — Fluoride Coast** *(Accra & Colorado Springs • Ancient Miswak & 1901–1945 Fluoride Discovery)* — Tart organic-acid basins & live enamel conversion into acid-defying fluorapatite (`pH 4.5` critical).
   5. **`world_5` — Slime Dome** *(Station Aurora, 408 km LEO • 1973 NASA Skylab & 1978 Costerton Biofilms)* — Zero-G quorum-sensing EPS polymer shields cracked via Floss shear & Fluoride-Bicarb Surge waves.
   6. **`pulp_rescue` — 90s Emergency Molar Scramble** — Fast non-punitive rescue when repeated treats breach Enamel → Dentin → Pulp (with a safe `50%` Calcium-Hydroxide stabilization floor on timeout).
+- **🏙️ City skylines that wake up as you clean (both editions):** every stage has a flat vector skyline of its real city standing along the far edge, with small props down the sides: Toronto's CN Tower, stadium dome and red streetcar; New Orleans' cathedral, iron balconies and riverboat under a crescent moon; Tokyo's neon, Tokyo Tower and a giant neon acid clock, with 1940 Chicago to the east; Accra's lighthouse and Black Star Gate with Pikes Peak beyond; and the curve of the Earth under Station Aurora and Skylab. Windows, neon and beacons start dim and come on as the district in front of them gets clean, at full brightness once it is sealed. Each city is one small text drawing in `src/config/skylines/` that both editions read.
+- **🏠 One sign for the main menu:** every button that leads back to the Hub is a bright white pill with a house on it (stage HUD, pause card, 2-Min Brush bar). On phones the stage's house pauses first, so a stray thumb never ends a dive.
 
 ---
 

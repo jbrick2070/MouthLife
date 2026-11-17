@@ -35,6 +35,7 @@ import { EntityBatchRenderer } from './EntityBatchRenderer';
 import { GlowPass } from './GlowPass';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
 import { brushCameraAim } from './brushCamera';
+import { CitySkylineBackdrop } from './CitySkylineBackdrop';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 
 export type HubCameraFocus = 'companion' | 'globe';
@@ -63,6 +64,8 @@ export class SceneManager {
 
   readonly enamelMat = new EnamelBiophysicsMaterial();
   readonly earthBackdrop = new OrbitalEarthBackdrop();
+  /** The stage's city skyline; rebuilt with each cartridge. */
+  private citySkyline: CitySkylineBackdrop | null = null;
   readonly entityBatch = new EntityBatchRenderer();
 
   private companionArch!: CompanionArchBuild;
@@ -353,6 +356,8 @@ export class SceneManager {
       this.cartridgeStage.dispose();
       this.cartridgeStage = null;
     }
+    this.citySkyline?.dispose();
+    this.citySkyline = null;
 
     session.grid.syncRgbaBuffer(session.chemistry, cartridge.bChannelMode);
     this.enamelMat.bindGridBuffer(
@@ -368,6 +373,8 @@ export class SceneManager {
     this.foamSamples = [];
     this.foamCursor = 0;
     this.cartridgeStage = buildCartridgeStageGroup(cartridge, this.enamelMat.material);
+    this.citySkyline = new CitySkylineBackdrop(cartridge);
+    this.cartridgeStage.group.add(this.citySkyline.group);
     this.cartridgeStage.group.visible =
       this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
     this.scene.add(this.cartridgeStage.group);
@@ -494,6 +501,7 @@ export class SceneManager {
       this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
 
     if (isArcade && session.cartridge) {
+      this.citySkyline?.update(frameDt, nowSec, session, this.reducedMotion);
       this.enamelMat.setCompanionOverride({ active: false });
       this.enamelMat.setHighlightedTooth(null);
       if (session.grid.syncRgbaBuffer(session.chemistry, session.cartridge.bChannelMode)) {

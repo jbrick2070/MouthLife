@@ -13,6 +13,7 @@
 		2A8F4E6193B24D108C7E5501 /* MotionTiltMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */; };
 		30D871BD9D66AB593D75DAF8 /* EnamelShaders.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF01B776316DF155BF702FA /* EnamelShaders.swift */; };
 		33A73CC66232DBF41B238274 /* ProceduralMeshBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */; };
+		7A11C0DE5EED4B1DA5E2F012 /* CitySkylineBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11C0DE5EED4B1DA5E2F011 /* CitySkylineBuilder.swift */; };
 		6D12B96E6CBF818058026AA4 /* RootContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CBE3F13FC1E0ACFAEB2C84E /* RootContentView.swift */; };
 		6EA6FC8A6024FB4E6CFE67E5 /* CosmicIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E618D1BF0D2200AB4F5AECB /* CosmicIntroView.swift */; };
 		79B3B73E78A6A68D18090C87 /* MouthLife3DViewport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850EA58EF72EEF9D81393447 /* MouthLife3DViewport.swift */; };
@@ -66,6 +67,7 @@
 		C1E8B699A74FCE0C18B43F3C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DesignSystem.swift; path = MouthLifeApp/UI/DesignSystem.swift; sourceTree = "<group>"; };
 		D112FCD387C76EDFFE8955B0 /* MouthLifeSceneController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeSceneController.swift; path = MouthLifeApp/Render/MouthLifeSceneController.swift; sourceTree = "<group>"; };
 		D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProceduralMeshBuilder.swift; path = MouthLifeApp/Render/ProceduralMeshBuilder.swift; sourceTree = "<group>"; };
+		7A11C0DE5EED4B1DA5E2F011 /* CitySkylineBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CitySkylineBuilder.swift; path = MouthLifeApp/Render/CitySkylineBuilder.swift; sourceTree = "<group>"; };
 		D3D407A6E8675D5FDEA5235D /* MouthLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MouthLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -99,6 +101,7 @@
 				5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */,
 				BDF01B776316DF155BF702FA /* EnamelShaders.swift */,
 				D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */,
+				7A11C0DE5EED4B1DA5E2F011 /* CitySkylineBuilder.swift */,
 				D112FCD387C76EDFFE8955B0 /* MouthLifeSceneController.swift */,
 				850EA58EF72EEF9D81393447 /* MouthLife3DViewport.swift */,
 				C1E8B699A74FCE0C18B43F3C /* DesignSystem.swift */,
@@ -217,6 +220,7 @@
 				2A8F4E6193B24D108C7E5501 /* MotionTiltMonitor.swift in Sources */,
 				30D871BD9D66AB593D75DAF8 /* EnamelShaders.swift in Sources */,
 				33A73CC66232DBF41B238274 /* ProceduralMeshBuilder.swift in Sources */,
+				7A11C0DE5EED4B1DA5E2F012 /* CitySkylineBuilder.swift in Sources */,
 				DDD149B2013498F5D0C4E544 /* MouthLifeSceneController.swift in Sources */,
 				79B3B73E78A6A68D18090C87 /* MouthLife3DViewport.swift in Sources */,
 				BF0A74C950467B0EF624455F /* DesignSystem.swift in Sources */,

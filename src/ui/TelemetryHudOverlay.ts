@@ -27,6 +27,10 @@ import {
   type ScreenBox,
   type WayfinderKind,
 } from './hudHelpers';
+import { HOME_ICON_SVG } from './homeIcon';
+
+/** Must match the compact HUD media query in styles/main.css. */
+const COMPACT_HUD_QUERY = '(max-width: 700px), (orientation: landscape) and (max-height: 520px)';
 
 const FOCUSABLE_SEL =
   'button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -320,7 +324,7 @@ export class TelemetryHudOverlay implements OverlayView {
               aria-expanded="false"
               title="Pause (Esc / P)"
             >⏸</button>
-            <button type="button" id="btn-hud-exit" class="btn btn-sm" aria-label="Exit to Smooth Bask Hub">← Hub</button>
+            <button type="button" id="btn-hud-exit" class="btn btn-sm btn-home" aria-label="Exit to Hub" title="Exit to Hub">${HOME_ICON_SVG}<span class="btn-home-label">Hub</span></button>
           </div>
         </div>
 
@@ -632,7 +636,10 @@ export class TelemetryHudOverlay implements OverlayView {
     if (!this.container) return;
 
     this.container.querySelector('#btn-hud-exit')?.addEventListener('click', () => {
-      this.onExitToHub();
+      // On phones the house sits where a stray thumb can land, so it pauses first: the pause
+      // sheet offers the same bright "Exit to Hub" button beside Resume.
+      if (window.matchMedia(COMPACT_HUD_QUERY).matches) this.setPaused(true);
+      else this.onExitToHub();
     });
     this.muteBtnEl?.addEventListener('click', () => this.toggleMuteUi());
     this.container
@@ -1293,7 +1300,7 @@ export class TelemetryHudOverlay implements OverlayView {
         <div id="pause-telemetry-summary" class="row-wrap" style="margin:0 0 6px 0;gap:5px;"></div>
         <div class="row-wrap pause-primary-actions" style="margin:0 0 6px 0;gap:6px;">
           <button type="button" id="btn-pause-restart" class="btn btn-sm">↻ Restart Dive</button>
-          <button type="button" id="btn-pause-exit" class="btn btn-sm">← Exit to Hub</button>
+          <button type="button" id="btn-pause-exit" class="btn btn-sm btn-home">${HOME_ICON_SVG}<span>Exit to Hub</span></button>
           <button type="button" id="btn-pause-mute" aria-pressed="${muted ? 'true' : 'false'}" class="btn btn-sm ${muted ? '' : 'btn-primary'}">${muted ? '🔇 Muted' : '🔊 Sound On'}</button>
           <button type="button" id="btn-pause-steer" aria-pressed="${steer ? 'true' : 'false'}" class="btn btn-sm ${steer ? 'btn-primary' : ''}">${steer ? '🎯 Steer: ON' : '🎯 Steer: OFF'}</button>
         </div>

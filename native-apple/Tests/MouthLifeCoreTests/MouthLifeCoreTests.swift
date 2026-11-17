@@ -989,4 +989,108 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(TutorialProgress(offers: 99).offers, TutorialGuide.maxOffers)
         XCTAssertEqual(TutorialProgress(offers: -4).offers, 0)
     }
+
+    func testCitySkylineReaderBuildsTheSameShapesAsTheWeb() {
+        // CitySkylineArt is generated from the web's drawings and carries what the web parser made
+        // of each one. The same triangles here means both editions show the same skyline.
+        XCTAssertEqual(CitySkylineArt.hostIds, ["accra", "new_orleans", "orbit_aurora", "tokyo", "toronto"])
+        for host in CitySkylineArt.hostIds {
+            guard let art = CitySkyline.art(forHost: host),
+                  let wantSkyline = CitySkylineArt.expectedSkyline(forHost: host),
+                  let wantProp = CitySkylineArt.expectedProp(forHost: host)
+            else {
+                XCTFail("\(host): no drawing")
+                continue
+            }
+            let checks: [([SkylinePiece], CitySkylineArt.Expected, String)] = [
+                (art.skyline, wantSkyline, "skyline"),
+                (art.prop, wantProp, "prop"),
+            ]
+            for (pieces, want, label) in checks {
+                XCTAssertEqual(pieces.count, want.pieces, "\(host) \(label) pieces")
+                XCTAssertEqual(pieces.filter { $0.isLight }.count, want.lightPieces, "\(host) \(label) lights")
+                XCTAssertEqual(pieces.reduce(0) { $0 + $1.triangles.count / 6 }, want.triangles, "\(host) \(label) triangles")
+                XCTAssertEqual(CitySkyline.checksum(pieces), want.checksum, accuracy: 0.01, "\(host) \(label) checksum")
+            }
+        }
+        XCTAssertNil(CitySkyline.art(forHost: "atlantis"))
+
+        // Every stage has a skyline, and every district has lights to switch on.
+        for cart in WorldRegistry.allWorlds {
+            guard let art = CitySkyline.art(forHost: cart.hostId) else {
+                XCTFail("\(cart.id): no skyline for host \(cart.hostId)")
+                continue
+            }
+            let offsetX = (cart.worldWidth - CitySkyline.artWidth) / 2
+            var counts = Array(repeating: 0, count: cart.districts.count)
+            for piece in art.skyline where piece.isLight {
+                counts[CitySkyline.districtIndex(districts: cart.districts, worldX: piece.centerX + offsetX)] += 1
+            }
+            for (i, n) in counts.enumerated() {
+                XCTAssertGreaterThanOrEqual(n, 4, "\(cart.id) district \(i) has lights")
+            }
+            XCTAssertTrue(art.prop.contains { $0.isLight }, "\(cart.id) prop has a light")
+        }
+    }
+
+    func testCitySkylineShapesPlacementAndLights() {
+        let art = CitySkyline.parse("""
+        ; a note
+        @skyline
+        R 1 2 3 4 #112233
+        P 0 0 4 0 4 2 0 2 #445566
+        C 5 5 1 #000001
+        H 5 5 1 #000002
+        A 0 0 2 0.5 0 90 #000003
+        L 0 0 3 4 0.2 #000004
+        S 0 0 1 #000005
+        N 0 0 1 0.4 20 #000006
+        w 0 0 3 2 0.5 0.4 0.1 0.2 #ffee00
+        Z 9 9 9 9 #000000
+        R 1 2 3 #000000
+        @prop
+        c 0 1 0.2 #abcdef
+        """)
+        XCTAssertEqual(art.skyline.prefix(8).map { $0.triangles.count / 6 }, [2, 2, 20, 12, 16, 2, 10, 28])
+        XCTAssertEqual(art.skyline[0].triangles, [1, 2, 4, 2, 4, 6, 1, 2, 4, 6, 1, 6])
+        XCTAssertEqual(art.skyline[0].colorHex, 0x112233)
+        XCTAssertEqual(art.skyline[0].centerX, 2.5)
+        XCTAssertFalse(art.skyline[0].isLight)
+
+        // A window grid is one piece per window, all lights sharing one paint order. The two bad
+        // lines after it are skipped.
+        let windows = Array(art.skyline.dropFirst(8))
+        XCTAssertEqual(windows.count, 6)
+        XCTAssertTrue(windows.allSatisfy { $0.isLight && $0.order == 8 && $0.colorHex == 0xFFEE00 })
+        XCTAssertEqual(art.prop.count, 1)
+        XCTAssertEqual(art.prop[0].order, 0)
+        XCTAssertTrue(art.prop[0].isLight)
+
+        // Stands behind the far gum line, leaning back; later pieces sit in front.
+        let foot = CitySkyline.point(x: 10, y: 0, order: 0, worldWidth: 64)
+        XCTAssertEqual(foot, SIMD3<Double>(10, CitySkyline.baseY, CitySkyline.baseZ))
+        let top = CitySkyline.point(x: 10, y: 4, order: 0, worldWidth: 64)
+        XCTAssertGreaterThan(top.y, foot.y + 3)
+        XCTAssertLessThan(top.z, foot.z - 1.5)
+        XCTAssertGreaterThan(CitySkyline.point(x: 10, y: 0, order: 50, worldWidth: 64).z, foot.z)
+        XCTAssertEqual(CitySkyline.point(x: 32, y: 0, order: 0, worldWidth: 32).x, 16)
+
+        let anchors = CitySkyline.propAnchors(worldWidth: 64, worldDepth: 32)
+        XCTAssertEqual(anchors.count, 8)
+        XCTAssertEqual(anchors[0], Vec2(x: 0.6, z: 32 * 0.3))
+        XCTAssertEqual(anchors[1].x, 63.4, accuracy: 1e-9)
+
+        // Lights follow the district in front of them and stay dim until it is sealed.
+        let districts = world1AnteriorIncisors.districts
+        XCTAssertEqual(CitySkyline.districtIndex(districts: districts, worldX: -5), 0)
+        XCTAssertEqual(CitySkyline.districtIndex(districts: districts, worldX: 30), 1)
+        XCTAssertEqual(CitySkyline.districtIndex(districts: districts, worldX: 70), 2)
+        XCTAssertEqual(CitySkyline.lightLevel(cleanRatio: 0, sealed: false), 0.14, accuracy: 1e-9)
+        XCTAssertGreaterThan(
+            CitySkyline.lightLevel(cleanRatio: 0.5, sealed: false),
+            CitySkyline.lightLevel(cleanRatio: 0.2, sealed: false)
+        )
+        XCTAssertLessThan(CitySkyline.lightLevel(cleanRatio: 1, sealed: false), 0.7)
+        XCTAssertEqual(CitySkyline.lightLevel(cleanRatio: 0.1, sealed: true), 1)
+    }
 }
