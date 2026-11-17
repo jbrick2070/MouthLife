@@ -2915,7 +2915,10 @@ public enum ProceduralMeshBuilder {
         // 9. Supply Relay Beacons
         var relayBeaconNodes: [SCNNode] = []
         let beaconGeo = makeOctahedronGeometry(radius: 0.62)
-        beaconGeo.materials = [makeGlossyPropMaterial(hex: 0xFDE047, emissionHex: 0xF59E0B, roughness: 0.14, metalness: 0.35)]
+        // Picked per city so the pickup stands out from that city's plaque (it used to be a fixed
+        // yellow, which vanished on yellow plaque). Same rule as the web edition.
+        let supplyBeaconHex = pickSupplyBeaconTint(cartridge.palette)
+        beaconGeo.materials = [makeGlossyPropMaterial(hex: supplyBeaconHex, emissionHex: supplyBeaconHex, roughness: 0.14, metalness: 0.35)]
         for (idx, pos) in cartridge.beaconDropSlots.enumerated() {
             let y = Float(sampleTerrainHeight(cartridge: cartridge, x: pos.x, z: pos.z))
             let bNode = SCNNode(geometry: beaconGeo)

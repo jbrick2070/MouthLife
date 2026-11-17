@@ -203,6 +203,18 @@ public let acidPoolTintCandidates: [UInt32] = [
     0x0891B2,
 ]
 
+/// The Dye Scan's pink. A pickup must not look like dyed plaque.
+public let dyeScanPink: UInt32 = 0xF472B6
+
+public let supplyBeaconCandidates: [UInt32] = [
+    0xC2410C,
+    0xDC2626,
+    0xDB2777,
+    0x2563EB,
+    0x7C3AED,
+    0x0F766E,
+]
+
 public let alleyReticleCandidates: [UInt32] = [
     0x06B6D4,
     0xF59E0B,
@@ -299,6 +311,31 @@ public func pickAcidPoolTint(_ palette: LandmarkPaletteInput) -> UInt32 {
 
 public func pickAcidPoolTint(_ palette: WorldVisualPalette) -> UInt32 {
     pickAcidPoolTint(LandmarkPaletteInput(palette))
+}
+
+/// Supply beacon (the Surge pickup) hovering over plaque or scrubbed enamel. It used to be a fixed
+/// yellow, which all but vanished on yellow plaque. It also keeps clear of the other landmark
+/// colours, so a pickup is never mistaken for a spring, an acid puddle, a sugar crystal or helper germs.
+/// Mirrors `pickSupplyBeaconTint` in the web edition.
+public func pickSupplyBeaconTint(_ palette: LandmarkPaletteInput) -> UInt32 {
+    var bgs = [palette.pellicleSlimeHex, palette.matureBiofilmHex]
+    if let enamel = palette.enamelBaseHex { bgs.append(enamel) }
+    return pickFromCandidates(
+        supplyBeaconCandidates,
+        backgrounds: bgs,
+        avoidHexes: [
+            pickSpringTint(palette),
+            pickAcidPoolTint(palette),
+            pickColonyRestoredTint(palette),
+            pickColonyBeaconTint(palette),
+            pickSucroseTint(palette),
+            dyeScanPink,
+        ]
+    )
+}
+
+public func pickSupplyBeaconTint(_ palette: WorldVisualPalette) -> UInt32 {
+    pickSupplyBeaconTint(LandmarkPaletteInput(palette))
 }
 
 public func pickAlleyReticleTint(_ palette: LandmarkPaletteInput) -> UInt32 {

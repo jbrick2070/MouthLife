@@ -813,6 +813,30 @@ final class MouthLifeCoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Landmark Colours
+
+    func testSupplyBeaconColourStandsOutFromPlaqueInEveryCity() {
+        // The beacon used to be this fixed yellow, which all but vanished on yellow plaque.
+        let oldYellow: UInt32 = 0xFDE047
+        var palettes = ["world_1", "world_2", "world_3", "world_4", "world_5"].map {
+            WorldRegistry.cartridgeOrDefault(forId: $0).palette
+        }
+        palettes.append(WorldRegistry.pulpRescue.palette)
+        for palette in palettes {
+            let tint = pickSupplyBeaconTint(palette)
+            XCTAssertTrue(supplyBeaconCandidates.contains(tint))
+            let onPlaque = contrastRatio(tint, palette.pellicleSlimeHex)
+            XCTAssertGreaterThan(onPlaque, 2.4)
+            XCTAssertGreaterThan(onPlaque, contrastRatio(oldYellow, palette.pellicleSlimeHex))
+            XCTAssertGreaterThan(contrastRatio(tint, palette.enamelBaseHex), 3.0)
+            // A pickup is never the colour of another landmark.
+            XCTAssertNotEqual(tint, pickSpringTint(palette))
+            XCTAssertNotEqual(tint, pickAcidPoolTint(palette))
+            XCTAssertNotEqual(tint, pickColonyRestoredTint(palette))
+            XCTAssertNotEqual(tint, pickSucroseTint(palette))
+        }
+    }
+
     // MARK: - How to Play Guide
 
     func testTutorialGuideCardsAndControls() {

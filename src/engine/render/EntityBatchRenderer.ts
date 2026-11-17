@@ -6,6 +6,7 @@ import {
   pickColonyRestoredTint,
   pickSpringTint,
   pickSucroseTint,
+  pickSupplyBeaconTint,
 } from './landmarkContrast';
 import * as THREE from 'three';
 import {
@@ -726,7 +727,8 @@ export class EntityBatchRenderer {
     springGeo.rotateX(Math.PI / 2);
     this.springInst = this.makeInst(springGeo, createCrystalLitMaterial(0xffffff, 1, { emissive: 0.2 }), 8);
 
-    this.beaconInst = this.makeInst(new THREE.OctahedronGeometry(0.62, 0), createCrystalLitMaterial(0xfde047, 1, { emissive: 0.25 }), 8);
+    // White base: each beacon is tinted per city so it stands out from that city's plaque.
+    this.beaconInst = this.makeInst(new THREE.OctahedronGeometry(0.62, 0), createCrystalLitMaterial(0xffffff, 1, { emissive: 0.25 }), 8);
 
     const poolGeo = new THREE.CircleGeometry(1.0, 20);
     poolGeo.rotateX(-Math.PI / 2);
@@ -1211,6 +1213,7 @@ export class EntityBatchRenderer {
     this.commit(this.springInst, spCount);
 
     // 7. Ion relay beacons
+    const beaconHex = pickSupplyBeaconTint(cart.palette);
     let bcCount = 0;
     for (const bc of session.beacons) {
       if (bc.collected || bcCount >= 8) continue;
@@ -1219,7 +1222,9 @@ export class EntityBatchRenderer {
       this.dummy.rotation.set(0, motionTime * 2.2, 0);
       this.dummy.scale.setScalar(1.05);
       this.dummy.updateMatrix();
-      this.beaconInst.setMatrixAt(bcCount++, this.dummy.matrix);
+      this.beaconInst.setMatrixAt(bcCount, this.dummy.matrix);
+      this.beaconInst.setColorAt(bcCount, this.tmpColor.setHex(beaconHex));
+      bcCount++;
       pushShadow(bc.pos.x, y, bc.pos.z, 1.3);
     }
     this.commit(this.beaconInst, bcCount);

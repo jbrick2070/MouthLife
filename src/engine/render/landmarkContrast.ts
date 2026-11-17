@@ -144,6 +144,18 @@ export const ACID_POOL_TINT_CANDIDATES = [
   0x0891b2,
 ] as const;
 
+/** The Dye Scan's pink. A pickup must not look like dyed plaque. */
+export const DYE_SCAN_PINK = 0xf472b6;
+
+export const SUPPLY_BEACON_CANDIDATES = [
+  0xc2410c,
+  0xdc2626,
+  0xdb2777,
+  0x2563eb,
+  0x7c3aed,
+  0x0f766e,
+] as const;
+
 export const ALLEY_RETICLE_CANDIDATES = [
   0x06b6d4,
   0xf59e0b,
@@ -221,6 +233,24 @@ export function pickAcidPoolTint(palette: PaletteLike): number {
   const bgs = [palette.pellicleSlimeHex, palette.matureBiofilmHex];
   if (palette.enamelBaseHex !== undefined) bgs.push(palette.enamelBaseHex);
   return pickFromCandidates(ACID_POOL_TINT_CANDIDATES, bgs, [spring]);
+}
+
+/**
+ * Supply beacon (the Surge pickup) hovering over plaque or scrubbed enamel. It used to be a fixed
+ * yellow, which all but vanished on yellow plaque. It also keeps clear of the other landmark
+ * colours, so a pickup is never mistaken for a spring, an acid puddle, a sugar crystal or helper germs.
+ */
+export function pickSupplyBeaconTint(palette: PaletteLike): number {
+  const bgs = [palette.pellicleSlimeHex, palette.matureBiofilmHex];
+  if (palette.enamelBaseHex !== undefined) bgs.push(palette.enamelBaseHex);
+  return pickFromCandidates(SUPPLY_BEACON_CANDIDATES, bgs, [
+    pickSpringTint(palette),
+    pickAcidPoolTint(palette),
+    pickColonyRestoredTint(palette),
+    pickColonyBeaconTint(palette),
+    pickSucroseTint(palette),
+    DYE_SCAN_PINK,
+  ]);
 }
 
 /** Projected interdental alley-mouth reticle sitting at the enamel/plaque seam. */

@@ -13,8 +13,9 @@ import {
   pickSpringTint,
   pickSucroseTint,
   pickSulcusTint,
+  pickSupplyBeaconTint,
 } from '../src/engine/render/landmarkContrast';
-import { PLAYABLE_CARTRIDGES } from '../src/worlds/worldRegistry';
+import { getCartridgeById, PLAYABLE_CARTRIDGES } from '../src/worlds/worldRegistry';
 
 describe('landmark contrast across all world palettes', () => {
   it('computes WCAG contrast and suppresses neutral white hue artifacts', () => {
@@ -85,5 +86,44 @@ describe('landmark contrast across all world palettes', () => {
 
     const w2Sulcus = pickSulcusTint(PLAYABLE_CARTRIDGES.world_2.palette);
     expect(contrastRatio(w2Sulcus, PLAYABLE_CARTRIDGES.world_2.palette.pellicleSlimeHex)).toBeGreaterThan(2.0);
+  });
+
+  it('gives the supply beacon a colour that stands out from plaque and clean enamel in every world', () => {
+    // It used to be this fixed yellow, which all but vanished on yellow plaque (contrast 1.06).
+    const OLD_YELLOW = 0xfde047;
+    for (const id of ['world_1', 'world_2', 'world_3', 'world_4', 'world_5', 'pulp_rescue']) {
+      const palette = getCartridgeById(id).palette;
+      const tint = pickSupplyBeaconTint(palette);
+      for (const surface of [palette.pellicleSlimeHex, palette.matureBiofilmHex, palette.enamelBaseHex]) {
+        expect(
+          isVisuallySeparated(tint, surface, 1.45, 0.35),
+          `${id} beacon 0x${tint.toString(16)} vs surface 0x${surface.toString(16)}`
+        ).toBe(true);
+      }
+      // Plaque is what a beacon sits on most.
+      expect(contrastRatio(tint, palette.pellicleSlimeHex), id).toBeGreaterThan(2.4);
+      expect(contrastRatio(tint, palette.pellicleSlimeHex), id).toBeGreaterThan(
+        contrastRatio(OLD_YELLOW, palette.pellicleSlimeHex)
+      );
+      // A pickup is never the colour of another landmark.
+      const peers = [
+        pickSpringTint(palette),
+        pickAcidPoolTint(palette),
+        pickColonyRestoredTint(palette),
+        pickColonyBeaconTint(palette),
+        pickSucroseTint(palette),
+      ];
+      expect(peers, id).not.toContain(tint);
+    }
+  });
+
+  it('picks these beacon colours (the native app uses the same rule)', () => {
+    const pick = (id: string) => pickSupplyBeaconTint(getCartridgeById(id).palette);
+    expect(pick('world_1')).toBe(0xdb2777);
+    expect(pick('world_2')).toBe(0xdb2777);
+    expect(pick('world_3')).toBe(0x0f766e);
+    expect(pick('world_4')).toBe(0x7c3aed);
+    expect(pick('world_5')).toBe(0xc2410c);
+    expect(pick('pulp_rescue')).toBe(0x7c3aed);
   });
 });

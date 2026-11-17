@@ -1,12 +1,14 @@
 // Tiny local helper: the game page posts photographed frames here and they are written to disk.
 // Used only while retaking the How to Play guide's pictures; not part of the game.
-//   node scripts/guide-shots/save-server.mjs src/assets/guide
+//   node scripts/guide-shots/save-server.mjs [folder]
+// The folder must be OUTSIDE src/: the dev server watches src/ and reloads the page on every new
+// file, which would stop the photo run after its first picture. Copy the pictures in afterwards.
 import { createServer } from 'node:http';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const outDir = process.argv[2] ?? 'src/assets/guide';
+const outDir = process.argv[2] ?? join(tmpdir(), 'mouthlife-guide-shots');
 mkdirSync(outDir, { recursive: true });
 
 createServer((req, res) => {
