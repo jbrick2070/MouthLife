@@ -130,6 +130,17 @@ public struct WatchRitual: Codable, Equatable, Sendable {
 
     // MARK: - Time
 
+    /// Where this ritual will be `seconds` from now if nothing else happens (a paused one stays put;
+    /// at most 90 s ahead). The watch face draws from this: with the wrist down, watchOS renders the
+    /// coming seconds ahead of time, so each frame must show its own moment, not the moment the
+    /// screen dimmed.
+    public func projected(by seconds: Double) -> WatchRitual {
+        guard seconds > 0, seconds.isFinite else { return self }
+        var copy = self
+        _ = copy.advance(by: min(seconds, 90))
+        return copy
+    }
+
     /// Moves the ritual on by `dt` seconds of real time and returns at most one cue: the newest.
     public mutating func advance(by dt: Double, now: Date = Date()) -> WatchCue? {
         guard stage != .done, !paused, dt.isFinite, dt > 0 else { return nil }

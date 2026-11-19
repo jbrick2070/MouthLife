@@ -103,8 +103,12 @@ final class WatchMusic {
     /// away in between; setting it active again is cheap).
     private func activate() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, policy: .default, options: [])
-        try? session.setActive(true)
+        do {
+            try session.setCategory(.playback, mode: .default, policy: .default, options: [])
+            try session.setActive(true)
+        } catch {
+            WatchLog.note("audio activate failed: \(error)")
+        }
         sessionActive = true
     }
 

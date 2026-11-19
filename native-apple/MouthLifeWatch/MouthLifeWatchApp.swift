@@ -19,6 +19,7 @@ struct WatchRootView: View {
     let controller: WatchController
     @Environment(\.isLuminanceReduced) private var dimmed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private var state: WatchFaceState {
         WatchFaceState(
@@ -33,6 +34,12 @@ struct WatchRootView: View {
             dimmed: dimmed,
             reduceMotion: reduceMotion
         )
+    }
+
+    private func state(at date: Date) -> WatchFaceState {
+        var s = state
+        s.ritual = controller.ritual(at: date)
+        return s
     }
 
     var body: some View {
@@ -51,10 +58,12 @@ struct WatchRootView: View {
                         onClose: { controller.closeControls() }
                     )
                 } else {
-                    // a timeline that ticks every second keeps the face moving in Always On too
-                    // (with the wrist down watchOS only redraws an app that asks for it)
-                    TimelineView(.periodic(from: ritual.startedAt, by: 1)) { _ in
-                        WatchActiveFace(state: state, onMore: { controller.openControls() }, onResume: { controller.togglePause() })
+                    // A timeline that ticks every second keeps the face moving in Always On. With the
+                    // wrist down watchOS draws the coming seconds ahead of time, so each frame shows
+                    // the ritual as it will be at that frame's own date.
+                    TimelineView(.periodic(from: ritual.startedAt, by: 1)) { context in
+                        WatchActiveFace(state: state(at: context.date), onMore: { controller.openControls() }, onResume: { controller.togglePause() })
+                            .onChange(of: "\(context.cadence)", initial: true) { _, cadence in WatchLog.note("cadence \(cadence)") }
                     }
                 }
             } else {
@@ -65,5 +74,7 @@ struct WatchRootView: View {
         .animation(reduceMotion || dimmed ? nil : .easeInOut(duration: 0.2), value: controller.ritual?.countdownDigit)
         // deep purple-black behind every face (purple and gold, like the owner's team)
         .background(WatchLook.background.ignoresSafeArea())
+        .onChange(of: dimmed) { _, on in WatchLog.note("always on \(on ? "dim" : "bright")") }
+        .onChange(of: scenePhase) { _, phase in WatchLog.note("scene \(phase)") }
     }
 }

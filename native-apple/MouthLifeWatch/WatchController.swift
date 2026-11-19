@@ -13,6 +13,8 @@ final class WatchController: NSObject {
     /// What the faces show: a copy of the running ritual, updated once a second and at every change
     /// (so the watch is not redrawing ten times a second).
     private(set) var ritual: WatchRitual?
+    /// When `ritual` was last updated, so the face can look ahead from it (see `ritual(at:)`).
+    @ObservationIgnored private var ritualShownAt = Date()
     /// The running ritual itself, ticked ten times a second.
     @ObservationIgnored private var engine: WatchRitual?
     private(set) var settings = WatchPhoneSettings()
@@ -55,6 +57,7 @@ final class WatchController: NSObject {
     // MARK: - The ritual
 
     func start() {
+        WatchLog.note("start")
         ack = nil
         resumable = nil
         clearCheckpoint()
@@ -68,7 +71,17 @@ final class WatchController: NSObject {
     private func set(_ r: WatchRitual?) {
         engine = r
         ritual = r
+        ritualShownAt = Date()
         music.follow(r)
+    }
+
+    /// The ritual as it will be at `date` (a frame the dimmed screen draws ahead of time). Only while
+    /// the clock is really running: if its ticks have stalled, the face shows what is known, not a
+    /// guess that would snap back.
+    func ritual(at date: Date) -> WatchRitual? {
+        guard let r = ritual, timer != nil, let last = lastTick,
+              ProcessInfo.processInfo.systemUptime - last < 3 else { return ritual }
+        return r.projected(by: date.timeIntervalSince(ritualShownAt))
     }
 
     func resume() {
@@ -154,8 +167,13 @@ final class WatchController: NSObject {
         let now = ProcessInfo.processInfo.systemUptime
         // A short stall still counts (the child kept brushing), but a long gap while the app was away
         // never does: at most 2.5 seconds a tick.
-        let dt = min(2.5, max(0, now - (lastTick ?? now)))
+        let gap = now - (lastTick ?? now)
+        let dt = min(2.5, max(0, gap))
         lastTick = now
+        if gap > 1 { WatchLog.note(String(format: "tick gap %.1fs at %@ %.1f", gap, r.stage.rawValue, r.stageElapsed)) }
+        if Int(r.stageElapsed + dt) / 10 != Int(r.stageElapsed) / 10 {
+            WatchLog.note(String(format: "alive %@ %.1f runtime=%@", r.stage.rawValue, r.stageElapsed + dt, runtimeState))
+        }
         let cue = r.advance(by: dt)
         engine = r
         // show it once a second (the clock and the pacer dot), and at once when something changes
@@ -163,6 +181,7 @@ final class WatchController: NSObject {
         if cue != nil || shown?.stage != r.stage || shown?.paused != r.paused
             || Int(r.stageElapsed) != Int(shown?.stageElapsed ?? -1) {
             ritual = r
+            ritualShownAt = Date()
             music.follow(r)
         }
         handle(cue)
@@ -239,6 +258,12 @@ final class WatchController: NSObject {
         session.delegate = self
         session.start()
         runtime = session
+        WatchLog.note("runtime start requested, state=\(session.state.rawValue)")
+    }
+
+    private var runtimeState: String {
+        guard let runtime else { return "none" }
+        return "\(runtime.state.rawValue)"
     }
 
     private func endRuntime() {
@@ -249,6 +274,7 @@ final class WatchController: NSObject {
     /// The runtime ended early (the child left the app, or time ran out): pause and keep the
     /// progress so it can be resumed.
     fileprivate func runtimeEnded() {
+        WatchLog.note("runtime ended: pausing")
         runtime = nil
         guard var r = engine, r.stage != .done else { return }
         if !r.paused {
@@ -261,6 +287,7 @@ final class WatchController: NSObject {
 
     /// The runtime could not start, or ended without taking the app away: carry on while it is open.
     fileprivate func runtimeLost() {
+        WatchLog.note("runtime lost: carrying on while open")
         runtime = nil
     }
 
@@ -353,10 +380,15 @@ final class WatchController: NSObject {
 }
 
 extension WatchController: WKExtendedRuntimeSessionDelegate {
-    nonisolated func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
+    nonisolated func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        Task { @MainActor in WatchLog.note("runtime didStart") }
+    }
 
     nonisolated func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        Task { @MainActor in self.runtimeEnded() }
+        Task { @MainActor in
+            WatchLog.note("runtime willExpire")
+            self.runtimeEnded()
+        }
     }
 
     nonisolated func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
@@ -364,7 +396,9 @@ extension WatchController: WKExtendedRuntimeSessionDelegate {
         // the system stopped it); if the session merely could not start, carry on while it is open.
         let tookAway = reason == .expired || reason == .resignedFrontmost || reason == .suppressedBySystem
         let id = ObjectIdentifier(extendedRuntimeSession)
+        let why = "runtime invalidated reason=\(reason.rawValue) error=\(error.map { "\($0)" } ?? "none")"
         Task { @MainActor in
+            WatchLog.note(why)
             // our own invalidate at the end of a ritual is not an interruption
             guard let runtime = self.runtime, ObjectIdentifier(runtime) == id else { return }
             if tookAway { self.runtimeEnded() } else { self.runtimeLost() }

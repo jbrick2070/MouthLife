@@ -61,6 +61,25 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertNil(s.countdownDigit)
     }
 
+    func testTheFaceCanLookAheadForTheDimmedScreen() {
+        var r = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&r, seconds: 10)
+        let ahead = r.projected(by: 25)
+        XCTAssertEqual(ahead.stageElapsed, 35, accuracy: 1e-6)
+        XCTAssertEqual(ahead.phase.quadrant, .upperLeft)
+        // looking ahead never changes the ritual itself
+        XCTAssertEqual(r.stageElapsed, 10, accuracy: 1e-6)
+        // across the end of the brush into floss
+        _ = run(&r, seconds: 108)
+        let floss = r.projected(by: 5)
+        XCTAssertEqual(floss.stage, .floss)
+        XCTAssertEqual(floss.stageElapsed, 3, accuracy: 1e-6)
+        // a paused ritual stays where it is, and nothing looks back in time
+        _ = r.setPaused(true)
+        XCTAssertEqual(r.projected(by: 30).stageElapsed, r.stageElapsed)
+        XCTAssertEqual(r.projected(by: -3), r)
+    }
+
     func testRinseRunsOnlyWhenTheGrownUpTurnedItOn() {
         var r = WatchRitual(startedAt: t0, includeRinse: true, rinseSec: 30)
         _ = run(&r, seconds: 165)

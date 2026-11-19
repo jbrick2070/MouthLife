@@ -38,6 +38,11 @@ Welcome! This repository contains **MouthLife**, with active development focused
    - The finale is filmed in 3D: `src/config/finale3d.ts` (Swift twin `Finale3D.swift`, checksum `expectedFinale3D`) lifts the 2D timeline into a world (camera path, 3D sparks that split, each city's fractal sign, the molar's crown and roots, the crystal-column mountain). The renderers are `src/engine/render/FinaleStage3D.ts` (Three.js, under the 2D canvas, which keeps only the host, the face and the fades; it falls back to the 2D show without WebGL) and `native-apple/MouthLifeApp/Render/CityFinaleScene.swift` (SceneKit; the sparks are projected into the 2D layer through `FinaleLens`). Change the 3D maths in both files and regenerate, as for the timeline.
    - The Golden Molar has five cusps, one per campaign city, finished pearl / silver / gold by the city's best grade (from the save; nothing new is stored, so Sync Codes are unchanged). It sits in the Home header on wide screens and floats beside the ? on phones; never let it widen the header past the screen.
    - Reduce Motion keeps every beat but fades instead of flying, sweeping or bursting.
+8. **Apple Watch: Every Frame Shows Its Own Moment (lesson learned on the wrist, 2026-11-19):**
+   - With the wrist down (Always On), watchOS renders the coming `TimelineView` frames ahead of time and plays them back once a second. A face built from live state, rather than from `context.date`, shows the same frame over and over and looks frozen, even though the app is still running. The brush, clock and countdown stopped exactly like that until the face drew `WatchController.ritual(at: context.date)` (`WatchRitual.projected(by:)`).
+   - Keep every time-based watch view a function of the frame's date. Keep Always On guiding: the brush and the floss pick step once a second as outlines, with no glides or pops.
+   - Find watch runtime problems with the on-watch diary (`MouthLifeWatch/WatchLog.swift`; copy it to the Mac with `xcrun devicectl device copy from ... --domain-type appDataContainer`), not by guessing. `xcrun devicectl device capture screenshot` shows the watch's screen.
+   - The plan and decisions for the watch faces are in [`docs/watch-face-plan.md`](docs/watch-face-plan.md).
 
 ## 3. Verification Checklist Before Committing
 
