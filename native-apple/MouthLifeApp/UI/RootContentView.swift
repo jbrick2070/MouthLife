@@ -155,7 +155,7 @@ public struct RootContentView: View {
                             coordinator.sceneController.setVirtualStick(moveX: mx, moveZ: mz, held: held)
                         },
                         onExitToHub: { coordinator.returnToHub() },
-                        onPauseChanged: { paused in coordinator.sceneController.arcadePaused = paused }
+                        onPauseChanged: { paused in coordinator.setArcadePaused(paused) }
                     )
                     .transition(.opacity)
                 }

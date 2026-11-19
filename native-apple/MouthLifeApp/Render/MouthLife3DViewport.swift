@@ -142,5 +142,14 @@ public final class InteractiveMetalSCNView: SCNView {
     public override func mouseUp(with event: NSEvent) {
         controller?.handlePointerUp()
     }
+
+    /// Right-click flosses in a stage, as How to Play teaches ("E or right-click") and as on the web.
+    public override func rightMouseDown(with event: NSEvent) {
+        guard let controller, controller.appMode == .arcade || controller.appMode == .pulpRescue else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        controller.requestSmartFloss()
+    }
 }
 #endif

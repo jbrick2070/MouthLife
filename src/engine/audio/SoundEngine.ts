@@ -31,6 +31,7 @@ import {
   type VoiceOut,
 } from './SynthVoices';
 import { resolveFinaleTrack, type FinaleNote } from '../../config/cityFinale';
+import { scrubMayPlay } from './scrubGate';
 
 const MASTER_GAIN = 0.85;
 const MUSIC_SCALE = 0.55;
@@ -492,6 +493,7 @@ export class SoundEngine {
   setFinaleDucked(ducked: boolean): void {
     if (ducked === this.finaleDucked) return;
     this.finaleDucked = ducked;
+    if (ducked) this.stopScrub();
     this.applyPlaybackState();
   }
 
@@ -656,6 +658,7 @@ export class SoundEngine {
 
   setAmbientMode(mode: AppMode): void {
     this.currentMode = mode;
+    if (mode !== 'ARCADE' && mode !== 'PULP_RESCUE') this.stopScrub();
     if (mode !== 'BRUSH_ALONG') {
       this.pacerQuadrant = 0;
       this.coda = false;
@@ -1218,8 +1221,13 @@ export class SoundEngine {
       state.active &&
       !this.prefs.muted &&
       this.prefs.sfxVolume > 0.001 &&
-      !this.paused &&
-      !this.hidden;
+      scrubMayPlay({
+        mode: this.currentMode,
+        finale: this.finaleDucked,
+        paused: this.paused,
+        hidden: this.hidden,
+        stageLive: true,
+      });
     if (!live) {
       if (this.scrubWasActive) {
         this.scrubGain.gain.setTargetAtTime(0, now, 0.05);

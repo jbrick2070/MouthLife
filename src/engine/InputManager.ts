@@ -244,14 +244,16 @@ export class InputManager {
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
         if (e.pointerType !== 'mouse' && this.steerPointerId !== null) return;
-        // Double-tap anywhere on the tooth: auto-aimed Floss (snaps to the nearest alley mouth)
+        // Double-tap (or double-click, as How to Play teaches and the Mac app does) anywhere on the
+        // tooth: auto-aimed Floss (snaps to the nearest alley mouth)
         const tapNow = { t: performance.now(), x: e.clientX, y: e.clientY };
-        if (e.pointerType !== 'mouse' && isDoubleTap(this.lastTap, tapNow)) {
+        const countsAsTap = e.pointerType !== 'mouse' || e.button === 0;
+        if (countsAsTap && isDoubleTap(this.lastTap, tapNow)) {
           this.pendingFloss = true;
           this.virtualFlossAim = null;
           this.virtualFlossSmartAim = true;
           this.lastTap = null;
-        } else {
+        } else if (countsAsTap) {
           this.lastTap = tapNow;
         }
         const shouldSteer = resolvePointerSteerForType(this.steerPref, e.pointerType);

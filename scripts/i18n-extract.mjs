@@ -223,7 +223,9 @@ function isTextLike(s) {
   if (/^[a-z]+(, ?[a-z\[\]="-]+)+$/.test(s)) return false;
   const tokens = s.split(' ');
   // CSS class lists such as "btn btn-sm hub-drawer-toggle".
-  if (tokens.every((t) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(t)) && tokens.some((t) => t.includes('-'))) return false;
+  // A phrase that starts with a little English word ("or right-click") is text, not a class list.
+  const startsLikeProse = /^(or|and|to|the|a|an|then|with|without|no)$/.test(tokens[0]) && tokens.length > 1;
+  if (!startsLikeProse && tokens.every((t) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(t)) && tokens.some((t) => t.includes('-'))) return false;
   if (tokens.length === 1) {
     // Single words: keep real labels (Lab, Molar, SCRUB), drop ids and code names.
     if (/[_./\\:]/.test(s)) return false;

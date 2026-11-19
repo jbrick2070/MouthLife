@@ -421,14 +421,17 @@ public final class AppCoordinator {
             let deltaClean = max(0.0, snap.worldCleanRatio - self.lastSessionCleanRatio)
             self.lastSessionCleanRatio = snap.worldCleanRatio
             let newlyCleanedCells = snap.scrubActive ? Int((deltaClean * 1400.0).rounded()) : 0
+            // This snapshot was posted from the render thread and can land after the city ended
+            // (finale or score already up): then the brush must stay quiet.
+            let stageLive = ScrubGate.mayPlay(mode: self.mode, finale: self.finale != nil, paused: self.sceneController.arcadePaused, stageLive: snap.isRunning)
             NativeSoundEngine.shared.updateScrub(
-                active: snap.scrubActive,
+                active: stageLive && snap.scrubActive,
                 probeSpeed: snap.probeSpeed,
                 newlyCleaned: newlyCleanedCells,
                 cleanRatio: snap.worldCleanRatio,
                 brushUpgradeId: self.save.equippedUpgrades.brush
             )
-            if snap.scrubActive && snap.probeSpeed > 0.25 {
+            if stageLive && snap.scrubActive && snap.probeSpeed > 0.25 {
                 HapticsEngine.shared.playSonicScrubTick(
                     cleanRatio: snap.worldCleanRatio,
                     speedNormalized: Float(min(1.0, snap.probeSpeed / GameConfig.probeMoveSpeed))
@@ -713,6 +716,13 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .pulpRescue)
         showArcadeToast("🚨 90s Pulp Rescue • Clean 85% (you can’t lose the tooth)!")
+    }
+
+    /// The stage's pause card: stepping stops, so the brush must be silenced here (no further
+    /// snapshot will arrive to turn it off).
+    public func setArcadePaused(_ paused: Bool) {
+        sceneController.arcadePaused = paused
+        if paused { NativeSoundEngine.shared.stopScrub() }
     }
 
     public func returnToHub() {

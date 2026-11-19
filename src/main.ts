@@ -10,6 +10,7 @@ import { SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
 import { SceneManager } from './engine/render/SceneManager';
 import { WorldSession } from './engine/sim/WorldSession';
 import { SoundEngine } from './engine/audio/SoundEngine';
+import { scrubMayPlay } from './engine/audio/scrubGate';
 import { synergyRankIndex } from './engine/audio/musicTheory';
 import { HOST_CITIES } from './config/hostsAndHistory';
 import { getUpgradeById } from './config/upgrades';
@@ -847,8 +848,17 @@ function bootstrapMouthLife(): void {
           fixedDt
         );
         session.step(fixedDt, cmd);
+        // Sealing the last zone (or running out of time) ends the stage inside step(): the finale or
+        // the score is already up by now, so the brush must not start again.
+        const stageLive = scrubMayPlay({
+          mode: currentMode,
+          finale: finaleActive,
+          paused: activeTelemetryHud?.isPaused() ?? false,
+          hidden: false,
+          stageLive: session.isRunning(),
+        });
         sound.updateScrub({
-          active: cmd.scrubHeld && !sceneMgr.isTransitioning(),
+          active: stageLive && cmd.scrubHeld && !sceneMgr.isTransitioning(),
           probeSpeed: session.probeSpeed,
           newlyCleaned: pendingNewlyCleaned,
           cleanRatio: session.grid.getWorldCleanRatio(),

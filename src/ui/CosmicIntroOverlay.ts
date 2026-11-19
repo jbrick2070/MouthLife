@@ -43,6 +43,14 @@ const MOHS_SPECIMENS: readonly MohsEntry[] = [
   },
 ];
 
+/**
+ * One specimen's line under the Mohs scale. The name and the note are separate text runs so the
+ * page translator recognises each of them; the chemical formula is left as written.
+ */
+function mohsDetailHtml(m: MohsEntry): string {
+  return `<strong><span>${m.name}</span> <span data-no-translate>(${m.formula})</span>:</strong> <span>${m.note}</span>`;
+}
+
 interface BeatSpec {
   tag: string;
   title: string;
@@ -188,7 +196,7 @@ export class CosmicIntroOverlay implements OverlayView {
         ).join('')}
       </div>
       <div id="mohs-detail" role="status" aria-live="polite" style="font-size:0.76rem;color:#bae6fd;background:rgba(4,16,28,0.68);padding:7px 10px;border-radius:10px;border:1px solid rgba(56,189,248,0.24);">
-        <strong>${mohsActive.name} (${mohsActive.formula}):</strong> ${mohsActive.note}
+        ${mohsDetailHtml(mohsActive)}
       </div>
     `
         : '';
@@ -316,12 +324,7 @@ export class CosmicIntroOverlay implements OverlayView {
           specimen.classList.toggle('selected', selected);
           specimen.setAttribute('aria-pressed', String(selected));
         }
-        const mineral = MOHS_SPECIMENS[this.selectedMohsIdx];
-        if (specimenDetail) {
-          const name = document.createElement('strong');
-          name.textContent = `${mineral.name} (${mineral.formula}):`;
-          specimenDetail.replaceChildren(name, ` ${mineral.note}`);
-        }
+        if (specimenDetail) specimenDetail.innerHTML = mohsDetailHtml(MOHS_SPECIMENS[this.selectedMohsIdx]);
       });
     });
   }

@@ -1758,6 +1758,9 @@ public final class NativeSoundEngine {
     private var isEngineStarted: Bool = false
     private var isPaused: Bool = false
     private var isInterrupted: Bool = false
+    /// The app mode as the main thread last set it (`currentMode` follows on the sequencer queue).
+    /// The brushing sound may only play in a stage: see `ScrubGate`.
+    private var scrubMode: AppMode = .cosmicIntro
 
     // Adaptive soundtrack state
     private var currentMode: AppMode = .cosmicIntro
@@ -2088,6 +2091,7 @@ public final class NativeSoundEngine {
     public func setFinaleDucked(_ ducked: Bool) {
         guard ducked != finaleDucked else { return }
         finaleDucked = ducked
+        if ducked { stopScrub() }
         pushMixStateToKernel()
     }
 
@@ -2264,6 +2268,8 @@ public final class NativeSoundEngine {
     }
 
     public func setAmbientMode(_ mode: AppMode) {
+        scrubMode = mode
+        if mode != .arcade && mode != .pulpRescue { stopScrub() }
         sequencerQueue.async { [weak self] in
             guard let self else { return }
             let enteringBrush = (mode == .brushAlong && self.currentMode != .brushAlong)
@@ -2729,7 +2735,8 @@ public final class NativeSoundEngine {
     // MARK: - Continuous Nuanced ASMR Brushing & Singing-Enamel Polish
 
     public func updateScrub(_ state: ScrubAudioState) {
-        let live = state.active && !isMuted && !isPaused && !isInterrupted && sfxVolume > 0.001
+        let live = state.active && !isMuted && !isInterrupted && sfxVolume > 0.001
+            && ScrubGate.mayPlay(mode: scrubMode, finale: finaleDucked, paused: isPaused, stageLive: true)
         if live { startEngineIfNeeded() }
 
         let speed01 = Float(min(1.0, max(0.0, state.probeSpeed / 7.0)))
