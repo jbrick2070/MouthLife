@@ -109,6 +109,8 @@ export class SoundEngine {
   private finaleBus: GainNode | null = null;
   private finaleVoice: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private readonly finaleBuffers = new Map<string, Promise<AudioBuffer | null>>();
+  /** Songs whose audio is decoded and ready to start this moment. */
+  private readonly finaleDecoded = new Set<string>();
   /** Bumped on every start/stop, so a song that finishes loading late never starts out of turn. */
   private finaleToken = 0;
   private hidden = false;
@@ -494,8 +496,10 @@ export class SoundEngine {
   }
 
   /** True when the music folder has a song for a city's finale (0..4) or the ending (-1). */
+  /** True when a finale's song is loaded and ready to play this moment (not merely bundled). */
   hasFinaleTrack(index: number): boolean {
-    return resolveFinaleTrack(index, BUNDLED_MUSIC_FILES) !== null;
+    const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
+    return file !== null && this.finaleDecoded.has(file);
   }
 
   /** Starts loading a finale's song, so it is ready the moment the last zone seals. */
@@ -512,9 +516,25 @@ export class SoundEngine {
         ? fetch(`${import.meta.env.BASE_URL}music/${file}`)
             .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
             .then((data) => ctx.decodeAudioData(data))
-            .catch(() => null)
+            .then((buf) => {
+              this.finaleDecoded.add(file);
+              return buf;
+            })
+            .catch(() => {
+              // offline or a hiccup: forget the failure so the next preload tries again
+              this.finaleBuffers.delete(file);
+              return null;
+            })
         : Promise.resolve(null);
-      if (ctx) this.finaleBuffers.set(file, pending);
+      if (ctx) {
+        this.finaleBuffers.set(file, pending);
+        // keep at most two decoded songs (the coming finale and the ending), not all six
+        while (this.finaleBuffers.size > 2) {
+          const oldest = this.finaleBuffers.keys().next().value as string;
+          this.finaleBuffers.delete(oldest);
+          this.finaleDecoded.delete(oldest);
+        }
+      }
     }
     return pending;
   }
@@ -526,7 +546,8 @@ export class SoundEngine {
   playFinaleTrack(index: number, offsetSec: number): void {
     this.stopFinaleTrack(0.25);
     const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
-    if (!file || this.prefs.muted) return;
+    // only a song that is already loaded plays (the show decided on that when it began)
+    if (!file || this.prefs.muted || !this.finaleDecoded.has(file)) return;
     this.unlockOnGesture();
     const token = ++this.finaleToken;
     const startedAt = performance.now() - offsetSec * 1000;
@@ -584,6 +605,8 @@ export class SoundEngine {
       this.musicRevSend?.gain.setTargetAtTime(0, now, 0.05);
       this.musicDelSend?.gain.setTargetAtTime(0, now, 0.05);
       this.trackBus?.gain.setTargetAtTime(FLOOR, now, 0.05);
+      // a finale song keeps its place (it plays on, silent) and is heard again in step on return
+      this.finaleBus?.gain.setTargetAtTime(FLOOR, now, 0.05);
       this.trackDeck?.sync(track, false);
       this.seq.stop();
       this.stopScrub();

@@ -1968,6 +1968,7 @@ public final class NativeSoundEngine {
             if !isMuted {
                 startEngineIfNeeded()
                 pushMixStateToKernel()
+                resumeFinaleTrackInStep()
             }
         @unknown default:
             break
@@ -1978,6 +1979,9 @@ public final class NativeSoundEngine {
     // MARK: Volume, Voice Coach & Preferences API
 
     public func setMuted(_ muted: Bool) {
+        // Settings sends the mute state with every volume change; an unchanged state does nothing
+        // (no repeated unmute chime while a slider is dragged).
+        guard muted != isMuted else { return }
         isMuted = muted
         persistPreferences()
         if muted {
@@ -2091,6 +2095,7 @@ public final class NativeSoundEngine {
 
     private var finalePlayer: AVAudioPlayer?
     private var fadingFinalePlayer: AVAudioPlayer?
+    private var finaleTrackStart: Date?
 
     private var finaleTrackVolume: Float {
         isMuted || musicVolume <= 0.001 ? 0 : min(1.0, musicVolume * 0.72)
@@ -2127,7 +2132,19 @@ public final class NativeSoundEngine {
         player.prepareToPlay()
         player.play()
         finalePlayer = player
+        // where the show's clock says the song should be, for picking it up after an interruption
+        finaleTrackStart = Date().addingTimeInterval(-max(0, offset))
         pushMixStateToKernel()
+    }
+
+    /// After an interruption (a call, Siri) the finale's song picks up where the show now is.
+    private func resumeFinaleTrackInStep() {
+        guard let player = finalePlayer, let start = finaleTrackStart, !isMuted else { return }
+        let at = Date().timeIntervalSince(start)
+        guard at < player.duration else { return }
+        player.currentTime = max(0, at)
+        player.volume = finaleTrackVolume
+        player.play()
     }
 
     /// Fades out whatever finale song is playing.

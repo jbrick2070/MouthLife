@@ -1,4 +1,5 @@
 import { getWorldDentalLesson } from '../config/dentalChart';
+import { uiTranslator } from '../i18n/uiTranslator';
 import { GUM_TENDER_THRESHOLD, SURGE_MAX } from '../config/gameConfig';
 import { findNearestZipMouth, sampleTerrainHeight } from '../engine/physics/CollisionSystem';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
@@ -460,7 +461,8 @@ export class TelemetryHudOverlay implements OverlayView {
   /** Spawns a crisp floating callout anchored to a world position (rises & fades). */
   spawnCallout(text: string, pos: Vec2, tone: CalloutTone = 'mint', life = 1.25, yOffset = 1.6): void {
     const compact = this.isCompactScreen();
-    const displayMsg = compactToastText(text, compact);
+    // translate first, then shorten: the shortened English is not in the language files
+    const displayMsg = compactToastText(uiTranslator.t(text), compact);
     const slot =
       this.callouts.find((c) => c.active && c.el.textContent === displayMsg) ??
       this.callouts.find((c) => !c.active) ??
@@ -1003,7 +1005,7 @@ export class TelemetryHudOverlay implements OverlayView {
       return;
     }
     const compact = this.isCompactScreen();
-    this.toastEl.textContent = compactToastText(msg, compact);
+    this.toastEl.textContent = compactToastText(uiTranslator.t(msg), compact);
     this.toastEl.style.opacity = '1';
     this.toastTimerSec = compact ? Math.min(durationSec, 2.35) : durationSec;
   }
@@ -1198,7 +1200,7 @@ export class TelemetryHudOverlay implements OverlayView {
         acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
         rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
       });
-      const full = compactToastText(`🎯 ${msg}`, this.isCompactScreen());
+      const full = compactToastText(`🎯 ${uiTranslator.t(msg)}`, this.isCompactScreen());
       if (objEl.textContent !== full) objEl.textContent = full;
     }
     const scanSec = Math.ceil(Math.max(0, this.session.discloseActiveRemaining));

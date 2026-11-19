@@ -694,8 +694,8 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.playSugarSplat()
 
         if outcome.triggeredPulpRescue {
-            showHubToast("\(host.signatureTreat.emoji) Acid reached the pulp! Starting Pulp Rescue...")
-            launchPulpRescue()
+            // Ask, as the web does: the hub's Rescue button appears; the child chooses when to start.
+            showHubToast("🚨 Acid reached the pulp! Start the 90s Pulp Rescue to save the tooth!")
         } else if outcome.ionsGranted > 0 {
             showHubToast("\(host.signatureTreat.emoji) Enjoyed \(host.signatureTreat.name)! +\(outcome.ionsGranted) F⁻ • Rub the teeth to polish!")
         } else {
@@ -871,8 +871,8 @@ public final class AppCoordinator {
         save = saveSystem.getSave()
         sceneController.touchSystem.clearAll()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
-        NativeSoundEngine.shared.playPacerCue(.complete)
-        HapticsEngine.shared.playDistrictSeal()
+        // The completion fanfare and its haptic come from the pacerComplete event the save emits
+        // (NativeSoundEngine and HapticsEngine listen), so they play once.
         transition(to: .hub)
         NativeSoundEngine.shared.speakCoachingPhrase(
             BrushCoachCopy.spokenStageWord(.done, lang: coachLanguage)
@@ -1080,8 +1080,8 @@ public final class AppCoordinator {
 
     public func importSyncCode(_ code: String) -> Result<Void, Error> {
         do {
-            let decoded = try SaveSystem.decodeSaveFromSyncCode(code)
-            save = saveSystem.save(decoded)
+            // Merge, never overwrite: an older code must not erase this device's newer progress.
+            save = try saveSystem.importSyncCode(code)
             sceneController.companionSmoothness = save.companion.smoothnessIndex
             if !isWorldUnlocked(activeRadioWorldId) {
                 activeRadioWorldId = pickRecommendedDiveWorld(from: save)

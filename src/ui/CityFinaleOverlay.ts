@@ -243,6 +243,7 @@ export class CityFinaleOverlay implements OverlayView {
   private readonly nextCity: number;
   /** Which part's song is playing ('city' until the ending starts). */
   private trackPart: 'city' | 'ending' | null = null;
+  private readonly songReady: { city: boolean; ending: boolean };
   private readonly stars: { x: number; y: number; r: number; p: number }[] = [];
   private readonly textEls = new Map<string, HTMLElement>();
   private w = 0;
@@ -267,8 +268,11 @@ export class CityFinaleOverlay implements OverlayView {
     this.allGold = opts.finishes.length === CAMPAIGN_PIECES && opts.finishes.every((f) => f === 'gold');
     const notes: FinaleNote[] = [];
     // With a recorded song for a part, only the score's sound effects play over it.
+    // Whether each part's song is ready to play now (loaded), decided once: a part with a song plays
+    // only the score's effects; a part without one (say, offline) keeps the whole synth score.
+    this.songReady = { city: Boolean(opts.hasTrack?.('city')), ending: Boolean(opts.hasTrack?.('ending')) };
     const effectsOnly = (part: 'city' | 'ending') => (note: FinaleNote) =>
-      !opts.hasTrack?.(part) || FINALE_EFFECT_VOICES.includes(note.voice);
+      !this.songReady[part] || FINALE_EFFECT_VOICES.includes(note.voice);
     if (this.city) {
       notes.push(...finaleNotes(this.city.plan, opts.finishes, opts.worldIndex, opts.reducedMotion).filter(effectsOnly('city')));
     }
@@ -376,6 +380,12 @@ export class CityFinaleOverlay implements OverlayView {
 
   private startTrack(part: 'city' | 'ending', offsetSec: number): void {
     if (this.trackPart === part) return;
+    // a part without a ready song keeps the synth score: stop any earlier song, start nothing
+    if (!this.songReady[part]) {
+      if (this.trackPart) this.opts.onTrack?.(null, 0);
+      this.trackPart = null;
+      return;
+    }
     this.trackPart = part;
     this.opts.onTrack?.(part, offsetSec);
   }

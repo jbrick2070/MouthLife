@@ -1834,6 +1834,11 @@ textarea:focus-visible {
     margin: 0;
     padding: 4px 7px;
   }
+  /* the column is narrow: let the header wrap so every button (mute included) stays on screen */
+  .companion-hub:not(.mission-report-shell) .hub-top-bar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
   .companion-hub .hub-center-callout {
     grid-column: 1;
     grid-row: 1;

@@ -384,6 +384,13 @@ function bootstrapMouthLife(): void {
   input.onPauseRequested = () => {
     if (activeTelemetryHud) activeTelemetryHud.setPaused(!activeTelemetryHud.isPaused());
   };
+  // If the graphics card drops the 3D picture mid-mission, pause (the clock must not run behind a
+  // blank screen); the player resumes from the pause card once the picture is back.
+  bus.on('webgl:lost', () => {
+    if ((currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') && activeTelemetryHud && !activeTelemetryHud.isPaused()) {
+      activeTelemetryHud.setPaused(true);
+    }
+  });
 
   bus.on('mutans:popped', ({ pos }) => {
     sound.playMutansPop();

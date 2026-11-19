@@ -467,6 +467,7 @@ export interface AppEventMap {
   'surge:ready': Record<string, never>;
   'audio:changed': { muted: boolean; musicVolume: number; sfxVolume: number };
   'motion:changed': { reduced: boolean };
+  'webgl:lost': Record<string, never>;
   'webgl:restored': Record<string, never>;
   'save:updated': {
     save: MouthLifeSaveV2;

@@ -47,7 +47,8 @@ export class CatalogMatcher {
             const m = /^\{(\d+)\}$/.exec(part);
             if (m) {
               order.push(Number(m[1]));
-              return '(.+?)';
+              // a slot may be empty ("root{1}" for one root), so match zero or more characters
+              return '(.*?)';
             }
             return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           })

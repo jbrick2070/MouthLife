@@ -266,6 +266,7 @@ export class SceneManager {
     // WebGL context loss & restoration resilience
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
+      this.bus.emit('webgl:lost', {});
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
       this.enamelMat.markTextureNeedsUpdate();

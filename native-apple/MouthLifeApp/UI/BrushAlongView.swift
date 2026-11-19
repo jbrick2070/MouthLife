@@ -434,6 +434,8 @@ public struct BrushAlongView: View {
                         Text(L10n.t(stationLabel))
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .lineLimit(1)
+                            // longer languages (German) shrink a little instead of being cut off
+                            .minimumScaleFactor(0.7)
                     }
                 }
                 .buttonStyle(

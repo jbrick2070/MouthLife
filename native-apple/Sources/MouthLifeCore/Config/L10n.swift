@@ -86,7 +86,8 @@ public final class L10nMatcher {
                 literalLength += (literal as NSString).length
                 literalLetters += literal.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
                 order.append(Int(keyNS.substring(with: m.range(at: 1))) ?? 0)
-                source += "(.+?)"
+                // a slot may be empty ("root{1}" for one root), so match zero or more characters (as the web)
+                source += "(.*?)"
                 cursor = m.range.location + m.range.length
             }
             let tail = keyNS.substring(from: cursor)
