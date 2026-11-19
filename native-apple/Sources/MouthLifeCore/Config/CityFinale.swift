@@ -351,6 +351,36 @@ public enum CityFinale {
         return s <= 0 || s >= 1 ? 0 : sin(Double.pi * s)
     }
 
+    /// "A hug for you" at the very end: once its face is on, the Golden Molar opens its arms wide to
+    /// the child, folds them into a hug on the wink, gives one gentle squeeze with happy eyes, and
+    /// hearts float up. With Reduce Motion the arms fade in already hugging. (The web's endingHug.)
+    public struct EndingHug: Sendable {
+        public let arms: Double
+        public let open: Double
+        public let fold: Double
+        public let squeeze: Double
+        public let happyEyes: Bool
+        public let hearts: Double
+    }
+
+    public static func endingHug(_ t: Double, reducedMotion: Bool) -> EndingHug {
+        typealias E = Ending
+        if reducedMotion {
+            return EndingHug(
+                arms: smooth01((t - (E.wink + 0.5)) / 0.8), open: 1, fold: 1, squeeze: 0, happyEyes: false,
+                hearts: smooth01((t - (E.wink + 1.5)) / 0.8)
+            )
+        }
+        return EndingHug(
+            arms: smooth01((t - (E.face + 0.2)) / 0.4),
+            open: smooth01((t - (E.face + 0.2)) / 0.7),
+            fold: smooth01((t - E.wink) / 0.7),
+            squeeze: nod(t, at: E.wink + 1.5, reducedMotion: false),
+            happyEyes: t >= E.wink + 0.8 && t < E.wink + 2.4,
+            hearts: smooth01((t - (E.wink + 1.5)) / 0.4)
+        )
+    }
+
     /// How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1).
     public static func endingCityBubbles(_ t: Double) -> Double {
         smooth01((t - (Ending.finaleStart + 0.6)) / 0.8)

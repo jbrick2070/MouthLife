@@ -2081,7 +2081,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         }
         let fxVal = NSValue(scnVector4: SCNVector4(Float(isGold ? (t >= E.finaleStart ? 1.0 : 0.45) : 0.0), Float(sweepPos), Float(sweepStr), 0))
         (isGold ? goldBody : porcelain).setValue(fxVal, forKey: "molarFx")
-        var pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: allGold), turn: true, reducedMotion: reducedMotion)
+        var pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: reducedMotion)
         if credit.index >= 0 {
             let pinned = FinaleLook.pinnedToView(lens, x: place.x, y: place.y, scale: place.scale)
             pose.position = pinned.position
@@ -2435,7 +2435,7 @@ extension FinalePainter {
         let homes = CityFinale.endingCityBubbles(t)
         if homes > 0.01 {
             let place = CityFinale.endingMolarPlace(t)
-            let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: allGold), turn: true, reducedMotion: rm)
+            let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: rm)
             var bubbles: [(index: Int, x: Double, y: Double, r: Double)] = []
             for i in 0..<CityFinale.campaignPieces {
                 guard let s = lens.project(pose.world(Finale3D.cuspBubbleLocal(i))) else { continue }
@@ -2460,15 +2460,22 @@ extension FinalePainter {
                     paintBurst3D(&glow, lens: lens, burst: burst, index: b, showT: local, show: .fireworks, center: center, scale: CityFinale.endingBurstScale * Finale3D.stageUnit * 0.5, size: (0.06, 0.045), dim: 1)
                 }
             }
+            // the happy tooth: its face (for everyone who finishes), then "a hug for you"
+            let face = CityFinale.endingFace(t)
+            if face.alpha > 0 {
+                let place = CityFinale.endingMolarPlace(t)
+                let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: rm)
+                let anchor = pose.faceAnchor()
+                if let a = lens.project(anchor.center), let b = lens.project(anchor.side) {
+                    let u = hypot(b.x - a.x, b.y - a.y) * 0.78
+                    let hug = CityFinale.endingHug(t, reducedMotion: rm)
+                    paintFaceAt(&ctx, x: a.x, y: a.y, u: u, alpha: face.alpha, wink: face.wink, happy: hug.happyEyes)
+                    paintHugArms(&ctx, x: a.x, y: a.y, u: u, hug: hug, alpha: face.alpha, gold: allGold)
+                    paintHearts(&ctx, x: a.x, y: a.y, u: u, t: t, amount: hug.hearts)
+                }
+            }
             if allGold {
-                let face = CityFinale.endingFace(t)
                 if face.alpha > 0 {
-                    let place = CityFinale.endingMolarPlace(t)
-                    let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: rm)
-                    let anchor = pose.faceAnchor()
-                    if let a = lens.project(anchor.center), let b = lens.project(anchor.side) {
-                        paintFaceAt(&ctx, x: a.x, y: a.y, u: hypot(b.x - a.x, b.y - a.y) * 0.78, alpha: face.alpha, wink: face.wink)
-                    }
                     if !rm {
                         // golden rain over everything as delicate falling streaks
                         let rainCol = Color(red: 0.99, green: 0.88, blue: 0.28)

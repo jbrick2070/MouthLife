@@ -2498,7 +2498,8 @@ export class FinaleStage3D {
     this.molarFx.value.set(isGold ? (t >= E.finaleStart ? 1 : 0.45) : 0, sweepPos, sweepStr, 0);
     // With every piece gold the molar stands up to face you before its face appears, so the face
     // sits on its smooth side rather than between the cusps.
-    this.faceTilt = allGold ? smooth01((t - (E.face - 1.4)) / 1.2) : 0;
+    // every finished game gets the happy face, so the tooth turns a little toward the child for all
+    this.faceTilt = smooth01((t - (E.face - 1.4)) / 1.2);
     this.placeMolar(
       place.x,
       place.y,

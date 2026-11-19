@@ -1357,7 +1357,72 @@ struct FinalePainter {
     }
 
     /// The molar's face round screen point (x, y); `u` is one molar unit in points.
-    func paintFaceAt(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, alpha: Double, wink: Bool) {
+    /// The Golden Molar's arms for "a hug for you" (as the web's paintHugArms): from its sides they
+    /// open wide toward the child, then fold round its middle, peach mittens landing just below its
+    /// cheeks, and squeeze. `u` is the face's size.
+    func paintHugArms(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, hug: CityFinale.EndingHug, alpha: Double, gold: Bool) {
+        let a = hug.arms * alpha
+        guard a > 0.01, u >= 4 else { return }
+        func mix(_ p: Double, _ q: Double, _ k: Double) -> Double { p + (q - p) * k }
+        var c = ctx
+        c.opacity = a
+        for side in [-1.0, 1.0] {
+            // shoulder, elbow (the curve's pull) and hand, in face units: tucked, wide open, hugging
+            let sx = x + side * 1.0 * u
+            let sy = y + 0.36 * u
+            let hx = x + side * mix(mix(1.05, 1.78, hug.open), 0.44 - 0.07 * hug.squeeze, hug.fold) * u
+            let hy = y + mix(mix(0.6, -0.32, hug.open), 0.44, hug.fold) * u
+            let ex = x + side * mix(mix(1.15, 1.55, hug.open), 1.22, hug.fold) * u
+            let ey = y + mix(mix(0.75, 0.42, hug.open), 1.0, hug.fold) * u
+            var arm = Path()
+            arm.move(to: CGPoint(x: sx, y: sy))
+            arm.addQuadCurve(to: CGPoint(x: hx, y: hy), control: CGPoint(x: ex, y: ey))
+            c.stroke(arm, with: .linearGradient(
+                Gradient(colors: gold
+                    ? [Color(red: 0.79, green: 0.6, blue: 0.18), Color(red: 0.95, green: 0.75, blue: 0.31)]
+                    : [Color(red: 0.81, green: 0.78, blue: 0.71), Color(red: 0.93, green: 0.9, blue: 0.84)]),
+                startPoint: CGPoint(x: sx, y: sy), endPoint: CGPoint(x: hx, y: hy)
+            ), style: StrokeStyle(lineWidth: u * (0.2 + 0.02 * hug.squeeze), lineCap: .round))
+            // a little peach mitten with a thumb
+            let mitten = GraphicsContext.Shading.radialGradient(
+                Gradient(colors: [Color(red: 1, green: 0.93, blue: 0.84), Color(red: 0.98, green: 0.57, blue: 0.24)]),
+                center: CGPoint(x: hx - u * 0.05, y: hy - u * 0.06), startRadius: u * 0.02, endRadius: u * 0.17
+            )
+            c.fill(Path(ellipseIn: CGRect(x: hx - u * 0.16, y: hy - u * 0.16, width: u * 0.32, height: u * 0.32)), with: mitten)
+            c.fill(Path(ellipseIn: CGRect(x: hx - side * u * 0.12 - u * 0.065, y: hy - u * 0.1 - u * 0.065, width: u * 0.13, height: u * 0.13)), with: mitten)
+        }
+    }
+
+    /// Little hearts floating up from the hug, swaying as they rise (still, with Reduce Motion).
+    func paintHearts(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, t: Double, amount: Double) {
+        guard amount > 0.01, u >= 4 else { return }
+        let colors: [Color] = [
+            Color(red: 0.98, green: 0.44, blue: 0.52), Color(red: 0.96, green: 0.45, blue: 0.71),
+            Color(red: 0.99, green: 0.88, blue: 0.28), Color(red: 0.99, green: 0.64, blue: 0.69),
+        ]
+        var heart = Path()
+        heart.move(to: CGPoint(x: 0, y: 0.35))
+        heart.addCurve(to: CGPoint(x: 0, y: -0.45), control1: CGPoint(x: -1.1, y: -0.35), control2: CGPoint(x: -0.45, y: -1.15))
+        heart.addCurve(to: CGPoint(x: 0, y: 0.35), control1: CGPoint(x: 0.45, y: -1.15), control2: CGPoint(x: 1.1, y: -0.35))
+        heart.closeSubpath()
+        for k in 0..<12 {
+            let start = CityFinale.Ending.wink + 1.5 + Double(k) * 0.22
+            let age = rm ? 0.9 + Double(k % 4) * 0.25 : t - start
+            if age <= 0 { continue }
+            let life = rm ? 1.0 : 2.4
+            let fade = rm ? amount : min(1, age / 0.25) * max(0, 1 - age / life)
+            if fade <= 0.01 { continue }
+            let hx = x + (CityFinale.hash(k, 71) - 0.5) * 3.0 * u + (rm ? 0 : sin(age * 3 + Double(k)) * 0.12 * u)
+            let hy = y + 0.3 * u - age * 0.95 * u
+            let s = u * (0.14 + 0.08 * CityFinale.hash(k, 73))
+            var c = ctx
+            c.opacity = fade * amount
+            c.concatenate(CGAffineTransform(translationX: hx, y: hy).scaledBy(x: s, y: s))
+            c.fill(heart, with: .color(colors[k % colors.count]))
+        }
+    }
+
+    func paintFaceAt(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, alpha: Double, wink: Bool, happy: Bool = false) {
         let brown = Color(red: 0.26, green: 0.13, blue: 0.02)
         var c = ctx
         c.opacity = alpha
@@ -1374,8 +1439,9 @@ struct FinalePainter {
             c.fill(Path(ellipseIn: CGRect(x: ex + u * 0.02 - u * 0.065, y: y - u * 0.06 - u * 0.065, width: u * 0.13, height: u * 0.13)), with: .color(brown))
             c.fill(Path(ellipseIn: CGRect(x: ex - u * 0.026, y: y - u * 0.11, width: u * 0.044, height: u * 0.044)), with: .color(Color(red: 1, green: 0.98, blue: 0.92)))
         }
-        eye(x - u * 0.3, closed: false)
-        eye(x + u * 0.3, closed: wink)
+        // `happy`: both eyes curve shut for a moment during the hug's squeeze
+        eye(x - u * 0.3, closed: happy)
+        eye(x + u * 0.3, closed: wink || happy)
         var smile = Path()
         smile.addArc(center: CGPoint(x: x, y: y + u * 0.05), radius: u * 0.3, startAngle: .radians(0.15 * Double.pi), endAngle: .radians(0.85 * Double.pi), clockwise: false)
         c.stroke(smile, with: .color(brown), style: StrokeStyle(lineWidth: max(2, u * 0.06), lineCap: .round))

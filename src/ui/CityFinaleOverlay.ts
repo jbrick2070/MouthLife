@@ -30,6 +30,7 @@ import {
   PORTAL_STAGE,
   endingCityBubbles,
   endingCredit,
+  endingHug,
   endingEmblemOrbit,
   endingFace,
   endingGoldRain,
@@ -1510,9 +1511,18 @@ export class CityFinaleOverlay implements OverlayView {
         this.paintGlow(ctx, this.stageX(o.x), this.stageY(o.y), 0.2 * this.unit, 'rgba(253,230,138,0.45)', o.alpha);
         this.paintEmblem(ctx, city, this.stageX(o.x), this.stageY(o.y), 0.11 * this.unit, 1, o.alpha);
       }
+      // the happy tooth: its face (for everyone who finishes), then "a hug for you"
+      const face = endingFace(t);
+      if (face.alpha > 0) {
+        const fx = this.stageX(place.x + GOLDEN_MOLAR.bodyCenter.x * place.scale);
+        const fy = this.stageY(place.y + GOLDEN_MOLAR.bodyCenter.y * place.scale);
+        const fu = this.unit * place.scale;
+        const hug = endingHug(t, rm);
+        this.paintFaceAt(ctx, fx, fy, fu, face.alpha, face.wink, hug.happyEyes);
+        this.paintHugArms(ctx, fx, fy, fu, hug, face.alpha);
+        this.paintHearts(ctx, fx, fy, fu, t, hug.hearts);
+      }
       if (this.allGold) {
-        const face = endingFace(t);
-        if (face.alpha > 0) this.paintFace(ctx, place.x, place.y, place.scale, face.alpha, face.wink);
         if (!rm) {
           ctx.setTransform(d, 0, 0, d, 0, 0);
           for (const drop of endingGoldRain(t, this.w / 2 / this.unit)) {
@@ -1550,10 +1560,17 @@ export class CityFinaleOverlay implements OverlayView {
         this.paintBubbleRim(ctx, x, b.y, b.r, homes);
       }
     }
-    if (this.allGold && t >= E.finaleStart) {
+    // the happy tooth: its face (for everyone who finishes), then "a hug for you"
+    if (t >= E.finaleStart) {
       const face = endingFace(t);
       const spot = face.alpha > 0 ? stage.molarFaceOnScreen(this.w, this.h) : null;
-      if (spot) this.paintFaceAt(ctx, spot.x, spot.y, spot.u * 0.78, face.alpha, face.wink);
+      if (spot) {
+        const u = spot.u * 0.78;
+        const hug = endingHug(t, rm);
+        this.paintFaceAt(ctx, spot.x, spot.y, u, face.alpha, face.wink, hug.happyEyes);
+        this.paintHugArms(ctx, spot.x, spot.y, u, hug, face.alpha);
+        this.paintHearts(ctx, spot.x, spot.y, u, t, hug.hearts);
+      }
     }
     this.paintEndingVeils(ctx, t, 0.22);
   }
@@ -1578,14 +1595,95 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.globalAlpha = 1;
   }
 
-  private paintFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number, alpha: number, wink: boolean): void {
-    const x = this.stageX(cx + GOLDEN_MOLAR.bodyCenter.x * scale);
-    const y = this.stageY(cy + GOLDEN_MOLAR.bodyCenter.y * scale);
-    this.paintFaceAt(ctx, x, y, this.unit * scale, alpha, wink);
-  }
 
   /** The molar's face round screen point (x, y); `u` is one molar unit in CSS pixels. */
-  private paintFaceAt(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, alpha: number, wink: boolean): void {
+  /**
+   * The Golden Molar's arms for "a hug for you": from its sides they open wide toward the child,
+   * then fold round its middle, little peach mittens landing just below its cheeks, and squeeze.
+   * `u` is the face's size, so the arms grow with the tooth.
+   */
+  private paintHugArms(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    u: number,
+    hug: { arms: number; open: number; fold: number; squeeze: number },
+    alpha: number
+  ): void {
+    const a = hug.arms * alpha;
+    if (a <= 0.01 || u < 4) return;
+    const d = this.dpr;
+    const mix = (p: number, q: number, k: number): number => p + (q - p) * k;
+    for (const side of [-1, 1]) {
+      // shoulder, elbow (the curve's pull) and hand, in face units: tucked, wide open, hugging
+      const sx = x + side * 1.0 * u;
+      const sy = y + 0.36 * u;
+      const handX = mix(mix(1.05, 1.78, hug.open), 0.44 - 0.07 * hug.squeeze, hug.fold);
+      const handY = mix(mix(0.6, -0.32, hug.open), 0.44, hug.fold);
+      const elbowX = mix(mix(1.15, 1.55, hug.open), 1.22, hug.fold);
+      const elbowY = mix(mix(0.75, 0.42, hug.open), 1.0, hug.fold);
+      const hx = x + side * handX * u;
+      const hy = y + handY * u;
+      const ex = x + side * elbowX * u;
+      const ey = y + elbowY * u;
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.globalAlpha = a;
+      ctx.lineCap = 'round';
+      const arm = ctx.createLinearGradient(sx, sy, hx, hy);
+      arm.addColorStop(0, this.allGold ? '#c99a2e' : '#cfc6b4');
+      arm.addColorStop(1, this.allGold ? '#f3c04f' : '#ede6d6');
+      ctx.strokeStyle = arm;
+      ctx.lineWidth = u * (0.2 + 0.02 * hug.squeeze);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(ex, ey, hx, hy);
+      ctx.stroke();
+      // a little peach mitten with a thumb
+      const mitt = ctx.createRadialGradient(hx - u * 0.05, hy - u * 0.06, u * 0.02, hx, hy, u * 0.17);
+      mitt.addColorStop(0, '#ffedd5');
+      mitt.addColorStop(1, '#fb923c');
+      ctx.fillStyle = mitt;
+      ctx.beginPath();
+      ctx.arc(hx, hy, u * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(hx - side * u * 0.12, hy - u * 0.1, u * 0.065, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Little hearts floating up from the hug, swaying as they rise (still, with Reduce Motion). */
+  private paintHearts(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, t: number, amount: number): void {
+    if (amount <= 0.01 || u < 4) return;
+    const d = this.dpr;
+    const rm = this.opts.reducedMotion;
+    const colors = ['#fb7185', '#f472b6', '#fde047', '#fda4af'];
+    for (let k = 0; k < 12; k++) {
+      const start = ENDING_TIMES.wink + 1.5 + k * 0.22;
+      const age = rm ? 0.9 + (k % 4) * 0.25 : t - start;
+      if (age <= 0) continue;
+      const life = rm ? 1 : 2.4;
+      const fade = rm ? amount : Math.min(1, age / 0.25) * Math.max(0, 1 - age / life);
+      if (fade <= 0.01) continue;
+      const hx = x + (finaleHash(k, 71) - 0.5) * 3.0 * u + (rm ? 0 : Math.sin(age * 3 + k) * 0.12 * u);
+      const hy = y + 0.3 * u - age * 0.95 * u;
+      const s = u * (0.14 + 0.08 * finaleHash(k, 73));
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.translate(hx, hy);
+      ctx.scale(s, s);
+      ctx.globalAlpha = fade * amount;
+      ctx.fillStyle = colors[k % colors.length];
+      ctx.beginPath();
+      ctx.moveTo(0, 0.35);
+      ctx.bezierCurveTo(-1.1, -0.35, -0.45, -1.15, 0, -0.45);
+      ctx.bezierCurveTo(0.45, -1.15, 1.1, -0.35, 0, 0.35);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private paintFaceAt(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, alpha: number, wink: boolean, happy = false): void {
     const d = this.dpr;
     ctx.setTransform(d, 0, 0, d, 0, 0);
     ctx.globalAlpha = alpha;
@@ -1615,8 +1713,9 @@ export class CityFinaleOverlay implements OverlayView {
       ctx.fill();
     };
     ctx.lineWidth = Math.max(2, u * 0.045);
-    eye(x - u * 0.3, false);
-    eye(x + u * 0.3, wink);
+    // `happy`: both eyes curve shut for a moment during the hug's squeeze
+    eye(x - u * 0.3, happy);
+    eye(x + u * 0.3, wink || happy);
     ctx.lineWidth = Math.max(2, u * 0.06);
     // smile
     ctx.beginPath();

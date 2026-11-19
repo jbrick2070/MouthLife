@@ -290,6 +290,36 @@ export function finaleNod(t: number, at: number, reducedMotion: boolean): number
   return s <= 0 || s >= 1 ? 0 : Math.sin(Math.PI * s);
 }
 
+/**
+ * "A hug for you" at the very end (an idea from Codex Astra 6.2): once its face is on, the Golden
+ * Molar opens its arms wide to the child, folds them into a hug on the wink, gives one gentle squeeze
+ * with happy eyes, and hearts float up. With Reduce Motion the arms fade in already hugging.
+ */
+export function endingHug(
+  t: number,
+  reducedMotion: boolean
+): { arms: number; open: number; fold: number; squeeze: number; happyEyes: boolean; hearts: number } {
+  const E = ENDING_TIMES;
+  if (reducedMotion) {
+    return {
+      arms: smooth01((t - (E.wink + 0.5)) / 0.8),
+      open: 1,
+      fold: 1,
+      squeeze: 0,
+      happyEyes: false,
+      hearts: smooth01((t - (E.wink + 1.5)) / 0.8),
+    };
+  }
+  return {
+    arms: smooth01((t - (E.face + 0.2)) / 0.4),
+    open: smooth01((t - (E.face + 0.2)) / 0.7),
+    fold: smooth01((t - E.wink) / 0.7),
+    squeeze: finaleNod(t, E.wink + 1.5, false),
+    happyEyes: t >= E.wink + 0.8 && t < E.wink + 2.4,
+    hearts: smooth01((t - (E.wink + 1.5)) / 0.4),
+  };
+}
+
 /** How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1). */
 export function endingCityBubbles(t: number): number {
   return smooth01((t - (ENDING_TIMES.finaleStart + 0.6)) / 0.8);
