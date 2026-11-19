@@ -59,6 +59,7 @@ import {
 import type { EventBus } from '../EventBus';
 import {
   buildAlleyWalls,
+  buildGumWalls,
   findNearestZipMouth,
   moveCircleWithSlide,
   resolveCircleCollisions,
@@ -188,7 +189,7 @@ export class WorldSession {
     this.grid.bakeFromCartridge(cartridge);
     this.scoring.reset();
 
-    this.allCollisionWalls = [...cartridge.wallBoxes, ...buildAlleyWalls(cartridge)];
+    this.allCollisionWalls = [...cartridge.wallBoxes, ...buildAlleyWalls(cartridge), ...buildGumWalls(cartridge)];
     this.sealedDistricts = new Array(cartridge.districts.length).fill(false);
 
     this.probePos = { x: cartridge.probeSpawn.x, z: cartridge.probeSpawn.z };
@@ -638,8 +639,14 @@ export class WorldSession {
       if (dist <= radius + 0.45) {
         m.hp -= 3.2 * dt;
         if (dist > 0.05) {
-          m.pos.x += (dx / dist) * 5.0 * dt;
-          m.pos.z += (dz / dist) * 5.0 * dt;
+          // Knocked back, but never through a wall or onto the gum
+          m.pos = resolveCircleCollisions(
+            { x: m.pos.x + (dx / dist) * 5.0 * dt, z: m.pos.z + (dz / dist) * 5.0 * dt },
+            0.45,
+            this.cartridge.worldWidth,
+            this.cartridge.worldDepth,
+            this.allCollisionWalls
+          );
         }
         if (m.hp <= 0) {
           this.bus.emit('mutans:popped', { pos: { x: m.pos.x, z: m.pos.z }, via: 'brush' });

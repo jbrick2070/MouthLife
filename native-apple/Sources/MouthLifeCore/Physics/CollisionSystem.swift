@@ -125,6 +125,37 @@ public func buildAlleyWalls(_ cartridge: WorldCartridge) -> [AABB2D] {
     buildAlleyWalls(cartridge.interdentalAlleys)
 }
 
+/// The tooth surface: the box around the cartridge's playable enamel. The red gum lies outside it.
+public func playableBounds(_ cartridge: WorldCartridge) -> AABB2D {
+    let boxes = cartridge.playableMaskBoxes
+    guard !boxes.isEmpty else {
+        return AABB2D(minX: 0, minZ: 0, maxX: cartridge.worldWidth, maxZ: cartridge.worldDepth)
+    }
+    return AABB2D(
+        minX: boxes.map(\.minX).min()!,
+        minZ: boxes.map(\.minZ).min()!,
+        maxX: boxes.map(\.maxX).max()!,
+        maxZ: boxes.map(\.maxZ).max()!
+    )
+}
+
+/// Solid walls over the gum all round the tooth surface, so neither HYDRA-1 nor a germ can drive or
+/// wander onto the gum (and so round the end of a divider instead of flossing through its gap).
+/// They reach past the world's edge, so a body pressed into a corner is always pushed back onto
+/// the enamel. Web twin: `buildGumWalls` in `CollisionSystem.ts`.
+public func buildGumWalls(_ cartridge: WorldCartridge) -> [AABB2D] {
+    let b = playableBounds(cartridge)
+    let w = cartridge.worldWidth
+    let d = cartridge.worldDepth
+    let pad = 2.0
+    return [
+        AABB2D(minX: -pad, minZ: -pad, maxX: w + pad, maxZ: b.minZ),
+        AABB2D(minX: -pad, minZ: b.maxZ, maxX: w + pad, maxZ: d + pad),
+        AABB2D(minX: -pad, minZ: b.minZ, maxX: b.minX, maxZ: b.maxZ),
+        AABB2D(minX: b.maxX, minZ: b.minZ, maxX: w + pad, maxZ: b.maxZ),
+    ]
+}
+
 public func circleIntersectsAABB(
     cx: Double,
     cz: Double,

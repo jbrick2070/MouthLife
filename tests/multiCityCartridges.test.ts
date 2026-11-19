@@ -5,8 +5,11 @@ import { EventBus } from '../src/engine/EventBus';
 import { SaveSystem } from '../src/engine/persistence/SaveSystem';
 import {
   buildAlleyWalls,
+  buildGumWalls,
   circleIntersectsAABB,
   findNearestZipMouth,
+  moveCircleWithSlide,
+  playableBounds,
   segmentsIntersect2D,
   tryStartCapillaryZip,
 } from '../src/engine/physics/CollisionSystem';
@@ -45,11 +48,12 @@ function inAnyBox(boxes: readonly AABB2D[], p: Vec2): boolean {
 }
 
 /**
- * Flood-fills walkable HYDRA-1 positions on a 0.5u lattice, adding Capillary Tether-Zip edges
- * across every interdental alley, and returns a reachability predicate.
+ * Flood-fills walkable HYDRA-1 positions on a 0.5u lattice (the gum is solid, as in the game),
+ * optionally adding Capillary Tether-Zip edges across every interdental alley, and returns a
+ * reachability predicate.
  */
-function buildReachability(cart: WorldCartridge): (p: Vec2, tol: number) => boolean {
-  const walls = [...cart.wallBoxes, ...buildAlleyWalls(cart)];
+function buildReachability(cart: WorldCartridge, zips = true): (p: Vec2, tol: number) => boolean {
+  const walls = [...cart.wallBoxes, ...buildAlleyWalls(cart), ...buildGumWalls(cart)];
   const step = 0.5;
   const nx = Math.floor(cart.worldWidth / step);
   const nz = Math.floor(cart.worldDepth / step);
@@ -101,7 +105,7 @@ function buildReachability(cart: WorldCartridge): (p: Vec2, tol: number) => bool
     push(ix - 1, iz);
     push(ix, iz + 1);
     push(ix, iz - 1);
-    zipJump(ix * step, iz * step);
+    if (zips) zipJump(ix * step, iz * step);
   }
 
   return (p, tol) => {
@@ -172,6 +176,68 @@ describe('Multi-City Cartridge Registry', () => {
       }
     });
   }
+
+  for (const cart of [
+    plaqueCityCartridge,
+    crescentSulcusCartridge,
+    neonAcidClockCartridge,
+    fluorapatiteCoastCartridge,
+    orbitalBiofilmDomeCartridge,
+  ]) {
+    it(`${cart.title}: the gum is solid, so the far side of a divider needs the floss`, () => {
+      const walkOnly = buildReachability(cart, false);
+      const withFloss = buildReachability(cart);
+      const targets = cart.commensalSiteSpawns.map((s) => s.pos);
+      expect(targets.some((p) => !walkOnly(p, 1.5)), 'some colony lies beyond a floss gap').toBe(true);
+      expect(targets.every((p) => withFloss(p, 1.5)), 'flossing reaches every colony').toBe(true);
+      // Every floss gap lands back on the tooth surface, clear of the gum.
+      const b = playableBounds(cart);
+      for (const alley of cart.interdentalAlleys) {
+        for (const end of [alley.endpointA, alley.endpointB]) {
+          expect(end.x - PROBE_RADIUS >= b.minX && end.x + PROBE_RADIUS <= b.maxX, `${alley.id} x`).toBe(true);
+          expect(end.z - PROBE_RADIUS >= b.minZ && end.z + PROBE_RADIUS <= b.maxZ, `${alley.id} z`).toBe(true);
+        }
+      }
+    });
+  }
+
+  it('HYDRA-1 cannot drive along the gum round the end of a divider', () => {
+    const cart = plaqueCityCartridge;
+    const walls = [...cart.wallBoxes, ...buildAlleyWalls(cart), ...buildGumWalls(cart)];
+    const b = playableBounds(cart);
+    // West of the premolar divider, close to the north gumline, steering east and onto the gum.
+    let pos: Vec2 = { x: 28.5, z: 6 };
+    for (let i = 0; i < 400; i++) {
+      pos = moveCircleWithSlide(pos, { x: 0.08, z: -0.04 }, PROBE_RADIUS, cart.worldWidth, cart.worldDepth, walls);
+      expect(pos.z - PROBE_RADIUS).toBeGreaterThanOrEqual(b.minZ - 1e-6);
+    }
+    expect(pos.x).toBeLessThan(30.59);
+  });
+
+  it('germs bounce off the gum edge instead of wandering onto it', () => {
+    const { session } = makeSession(plaqueCityCartridge);
+    const b = playableBounds(plaqueCityCartridge);
+    session.mutans.length = 0;
+    session.mutans.push({
+      id: 999,
+      pos: { x: 12, z: b.maxZ - 0.6 },
+      vel: { x: 0, z: 1.5 },
+      hopPhase: 0,
+      hp: 99,
+      stunRemaining: 0,
+      acidDropCooldown: 99,
+      parentSucroseId: 'none',
+    });
+    const germ = session.mutans[0];
+    let maxZ = 0;
+    for (let i = 0; i < 180; i++) {
+      session.step(1 / 60, IDLE);
+      maxZ = Math.max(maxZ, germ.pos.z);
+    }
+    expect(maxZ + 0.45).toBeLessThanOrEqual(b.maxZ + 1e-6);
+    expect(germ.vel.z).toBeLessThan(0); // it turned round rather than sticking to the edge
+    expect(germ.pos.z).toBeLessThan(b.maxZ - 1);
+  });
 
   it('findNearestZipMouth reports the near-side alley mouth, zip range and walking blockage', () => {
     const far = findNearestZipMouth({ x: 8, z: 16 }, plaqueCityCartridge.interdentalAlleys, plaqueCityCartridge.wallBoxes);

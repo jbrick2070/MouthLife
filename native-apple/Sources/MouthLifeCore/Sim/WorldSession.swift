@@ -297,7 +297,7 @@ public final class WorldSession {
         self.chemistry.reset(from: cartridge)
         self.scoring.reset()
 
-        self.allCollisionWalls = cartridge.wallBoxes + buildAlleyWalls(cartridge)
+        self.allCollisionWalls = cartridge.wallBoxes + buildAlleyWalls(cartridge) + buildGumWalls(cartridge)
         self.sealedDistricts = Array(repeating: false, count: cartridge.districts.count)
 
         self.probePos = cartridge.probeSpawn
@@ -731,7 +731,8 @@ public final class WorldSession {
             probeZip: probeZip,
             effectiveBrushRadius: effectiveBrushRadius,
             effectiveBrushArcRad: effectiveBrushArcRad,
-            scrubActive: lastScrubHeld,
+            // A finished stage no longer brushes (no foam, no sound), even if the button is still held.
+            scrubActive: lastScrubHeld && !isCompleted,
             surgeMeter: surgeMeter,
             flossCooldown: flossCooldown,
             discloseCooldown: discloseCooldown,
@@ -772,8 +773,14 @@ public final class WorldSession {
             if dist <= radius + 0.45 {
                 mutans[i].hp -= 3.2 * dt
                 if dist > 0.05 {
-                    mutans[i].pos.x += (dx / dist) * 5.0 * dt
-                    mutans[i].pos.z += (dz / dist) * 5.0 * dt
+                    // Knocked back, but never through a wall or onto the gum
+                    mutans[i].pos = resolveCircleCollisions(
+                        pos: Vec2(x: mutans[i].pos.x + (dx / dist) * 5.0 * dt, z: mutans[i].pos.z + (dz / dist) * 5.0 * dt),
+                        radius: 0.45,
+                        worldWidth: cartridge.worldWidth,
+                        worldDepth: cartridge.worldDepth,
+                        walls: allCollisionWalls
+                    )
                 }
                 if mutans[i].hp <= 0 {
                     let poppedPos = mutans[i].pos

@@ -33,6 +33,37 @@ export function sampleHillsHeight(hills: readonly HillDef[], x: number, z: numbe
   return y;
 }
 
+/** The tooth surface: the box around the cartridge's playable enamel. The red gum lies outside it. */
+export function playableBounds(cartridge: WorldCartridge): AABB2D {
+  const boxes = cartridge.playableMaskBoxes;
+  if (boxes.length === 0) return { minX: 0, maxX: cartridge.worldWidth, minZ: 0, maxZ: cartridge.worldDepth };
+  return {
+    minX: Math.min(...boxes.map((b) => b.minX)),
+    maxX: Math.max(...boxes.map((b) => b.maxX)),
+    minZ: Math.min(...boxes.map((b) => b.minZ)),
+    maxZ: Math.max(...boxes.map((b) => b.maxZ)),
+  };
+}
+
+/**
+ * Solid walls over the gum all round the tooth surface, so neither HYDRA-1 nor a germ can drive or
+ * wander onto the gum (and so round the end of a divider instead of flossing through its gap).
+ * They reach past the world's edge, so a body pressed into a corner is always pushed back onto
+ * the enamel.
+ */
+export function buildGumWalls(cartridge: WorldCartridge): AABB2D[] {
+  const b = playableBounds(cartridge);
+  const w = cartridge.worldWidth;
+  const d = cartridge.worldDepth;
+  const pad = 2;
+  return [
+    { minX: -pad, maxX: w + pad, minZ: -pad, maxZ: b.minZ },
+    { minX: -pad, maxX: w + pad, minZ: b.maxZ, maxZ: d + pad },
+    { minX: -pad, maxX: b.minX, minZ: b.minZ, maxZ: b.maxZ },
+    { minX: b.maxX, maxX: w + pad, minZ: b.minZ, maxZ: b.maxZ },
+  ];
+}
+
 /**
  * Single-source derivation of flanking collision AABB walls from cartridge.interdentalAlleys[].
  * Supports axis-aligned north-south or east-west interproximal alleys.

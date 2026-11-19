@@ -882,8 +882,11 @@ function bootstrapMouthLife(): void {
       input.pollGamepad();
       touch.step(frameDt);
       activeTelemetryHud?.tickHud(frameDt);
+      // A finished stage no longer brushes (no foam), even if the button is still held.
       const scrubbingActive =
         (currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') &&
+        !finaleActive &&
+        session.isRunning() &&
         !sceneMgr.isTransitioning() &&
         input.isScrubInputActive();
 
