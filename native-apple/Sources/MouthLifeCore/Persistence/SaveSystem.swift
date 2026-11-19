@@ -797,6 +797,7 @@ public final class SaveSystem {
         fullBrush: Bool = true,
         rinseStepOff: Bool = false,
         date: Date = Date(),
+        rewardDay: Date? = nil,
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
         var next = currentSave
@@ -807,6 +808,7 @@ public final class SaveSystem {
             fullBrush: fullBrush,
             rinseStepOff: rinseStepOff,
             date: date,
+            rewardDay: rewardDay,
             calendar: calendar
         )
         let nowMs = Int64((date.timeIntervalSince1970 * 1000.0).rounded())

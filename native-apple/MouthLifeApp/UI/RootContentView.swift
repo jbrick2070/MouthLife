@@ -77,7 +77,6 @@ public struct RootContentView: View {
                     onTogglePause: { coordinator.togglePacerPause() },
                     onSelectFlossToolStyle: { style in coordinator.setFlossToolStyle(style) },
                     onSelectMouthwashDuration: { style in coordinator.setMouthwashDurationStyle(style) },
-                    onEnterFlossBonusNow: { coordinator.enterFlossBonusNow() },
                     onEnterMouthwashBonusNow: { didFloss in coordinator.enterMouthwashBonusNow(completedFloss: didFloss) },
                     onCompleteSession: { withFloss, withRinse in
                         coordinator.completeBrushAlongSession(

@@ -118,9 +118,12 @@ public enum HabitBank {
         fullBrush: Bool = true,
         rinseStepOff: Bool = false,
         date: Date = Date(),
+        rewardDay: Date? = nil,
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
-        let dateKey = localDateKey(for: date, calendar: calendar)
+        // `rewardDay`: a brush synced late (from the watch) counts against the day it was brushed;
+        // everything else (the companion's polish, pruning) uses `date`, now.
+        let dateKey = localDateKey(for: rewardDay ?? date, calendar: calendar)
         let currentSlot = save.dailySlotsByDate[dateKey] ?? DailySlotLog()
         let outcome = evaluatePacerReward(
             currentSlot: currentSlot,

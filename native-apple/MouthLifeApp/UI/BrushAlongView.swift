@@ -343,7 +343,6 @@ public struct BrushAlongView: View {
     public let onTogglePause: () -> Void
     public let onSelectFlossToolStyle: (FlossToolStyle) -> Void
     public let onSelectMouthwashDuration: (MouthwashDurationStyle) -> Void
-    public let onEnterFlossBonusNow: () -> Void
     public let onEnterMouthwashBonusNow: (Bool) -> Void
     public let onCompleteSession: (Bool, Bool) -> Void
     public let onCancelToHub: () -> Void
@@ -367,7 +366,6 @@ public struct BrushAlongView: View {
         onTogglePause: @escaping () -> Void,
         onSelectFlossToolStyle: @escaping (FlossToolStyle) -> Void = { _ in },
         onSelectMouthwashDuration: @escaping (MouthwashDurationStyle) -> Void = { _ in },
-        onEnterFlossBonusNow: @escaping () -> Void,
         onEnterMouthwashBonusNow: @escaping (Bool) -> Void = { _ in },
         onCompleteSession: @escaping (Bool, Bool) -> Void,
         onCancelToHub: @escaping () -> Void
@@ -390,7 +388,6 @@ public struct BrushAlongView: View {
         self.onTogglePause = onTogglePause
         self.onSelectFlossToolStyle = onSelectFlossToolStyle
         self.onSelectMouthwashDuration = onSelectMouthwashDuration
-        self.onEnterFlossBonusNow = onEnterFlossBonusNow
         self.onEnterMouthwashBonusNow = onEnterMouthwashBonusNow
         self.onCompleteSession = onCompleteSession
         self.onCancelToHub = onCancelToHub
@@ -415,7 +412,7 @@ public struct BrushAlongView: View {
         // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
         let amount: (String) -> String = { [fullBrush] label in fullBrush ? label : BrushCoachCopy.withoutIonAmount(label) }
         let floss = BrushCoachCopy.actionButtonLabels(for: coachLanguage, rinseStepOff: !includeRinse)
-        let buttons = (flossJump: floss.flossJump, doneFloss: amount(floss.doneFloss), skipFloss: amount(floss.skipFloss))
+        let buttons = (doneFloss: amount(floss.doneFloss), skipFloss: amount(floss.skipFloss))
         let rinse = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
         let mwButtons = (rinseJump: rinse.rinseJump, doneRinse: amount(rinse.doneRinse), skipRinse: amount(rinse.skipRinse))
         let clockGlow: Color = {
@@ -738,15 +735,8 @@ public struct BrushAlongView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
 
+                        // No tapping ahead: floss waits for the whole 2 minutes (the clock rolls into it).
                         Spacer(minLength: 4)
-
-                        Button {
-                            onEnterFlossBonusNow()
-                        } label: {
-                            Label(L10n.t(buttons.flossJump), systemImage: "sparkles")
-                                .font(.system(.caption2, design: .rounded, weight: .bold))
-                        }
-                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.fluorapatiteGold))
                     }
                 }
             }

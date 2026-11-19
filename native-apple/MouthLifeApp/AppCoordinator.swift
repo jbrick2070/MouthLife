@@ -172,6 +172,62 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
         applyLaunchArgumentsIfPresent()
         syncSceneMode()
+        startWatchLink()
+    }
+
+    // MARK: - Apple Watch
+
+    private static let watchLedgerDefaultsKey = "mouthlife.watch.importLedger"
+
+    /// Listens for brushes finished on the paired Apple Watch and tells it the grown-up's settings.
+    private func startWatchLink() {
+        #if os(iOS) && canImport(WatchConnectivity)
+        PhoneWatchBridge.shared.onRecord = { [weak self] record in
+            // no answer at all (the app going away, an unreadable ledger): the watch keeps it and sends it again
+            self?.importWatchBrush(record)
+        }
+        PhoneWatchBridge.shared.activate()
+        pushWatchSettings()
+        #endif
+    }
+
+    /// The watch's settings: the rinse step only if a grown-up turned it on here, its length, the language.
+    private func pushWatchSettings() {
+        #if os(iOS) && canImport(WatchConnectivity)
+        PhoneWatchBridge.shared.push(WatchPhoneSettings(
+            includeRinse: includeRinse,
+            rinseSec: mouthwashDurationStyle.durationSec,
+            language: coachLanguage,
+            revision: Date().timeIntervalSince1970
+        ))
+        #endif
+    }
+
+    /// Pays a brush finished on the watch, once per session (a resend gets the same answer), with
+    /// the same fair rules as a brush here, credited to the day it was brushed.
+    func importWatchBrush(_ record: WatchBrushRecord) -> WatchBrushAck? {
+        var ledger = WatchImportLedger()
+        if let data = UserDefaults.standard.data(forKey: Self.watchLedgerDefaultsKey) {
+            // an unreadable ledger could pay old brushes again: pay nothing until it reads
+            guard let stored = try? JSONDecoder().decode(WatchImportLedger.self, from: data) else { return nil }
+            ledger = stored
+        }
+        if let known = ledger.ack(for: record.sessionId) { return known }
+        let ack = ledger.apply(record, to: saveSystem, rinseAllowed: includeRinse) { ledger in
+            if let data = try? JSONEncoder().encode(ledger) {
+                UserDefaults.standard.set(data, forKey: Self.watchLedgerDefaultsKey)
+            }
+        }
+        save = saveSystem.getSave()
+        sceneController.companionSmoothness = save.companion.smoothnessIndex
+        if mode == .hub {
+            if ack.ionsAwarded > 0 {
+                showHubToast("⌚ Brushed on Apple Watch! +\(ack.ionsAwarded) F⁻")
+            } else {
+                showHubToast("⌚ Brushed on Apple Watch!")
+            }
+        }
+        return ack
     }
 
     public func isWorldUnlocked(_ worldId: String) -> Bool {
@@ -769,6 +825,7 @@ public final class AppCoordinator {
         coachLanguage = language
         NativeSoundEngine.shared.setCoachLanguage(language)
         NativeSoundEngine.shared.playUiTap()
+        pushWatchSettings()
         if mode == .brushAlong && !pacerIsPaused && voiceCoachEnabled {
             speakCurrentPacerPhaseCue()
         }
@@ -802,6 +859,7 @@ public final class AppCoordinator {
         includeRinse = on
         UserDefaults.standard.set(on, forKey: Self.includeRinseDefaultsKey)
         NativeSoundEngine.shared.playUiTap()
+        pushWatchSettings()
     }
 
     public func setMouthwashDurationStyle(_ style: MouthwashDurationStyle) {
@@ -818,6 +876,7 @@ public final class AppCoordinator {
         sceneController.pacerMouthwashDurationSec = newDur
         UserDefaults.standard.set(style.rawValue, forKey: Self.mouthwashDurationDefaultsKey)
         NativeSoundEngine.shared.playUiTap()
+        pushWatchSettings()
     }
 
     public func togglePacerPause() {

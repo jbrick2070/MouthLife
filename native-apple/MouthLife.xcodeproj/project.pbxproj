@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A11000000000000000002 /* PhoneWatchBridge.swift */; };
+		7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000001 /* MouthLifeWatchApp.swift */; };
+		7C0A12000000000000000012 /* WatchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000002 /* WatchController.swift */; };
+		7C0A12000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000004 /* Assets.xcassets */; };
+		7C0A12000000000000000015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000005 /* PrivacyInfo.xcprivacy */; };
+		7C0A12000000000000000021 /* MouthLifeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7C0A12000000000000000031 /* MouthLifeCore */; };
+		7C0A12000000000000000022 /* MouthLifeWatchUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C0A12000000000000000032 /* MouthLifeWatchUI */; };
 		04C1B02BBE00EAA1A6EF11ED /* CompanionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87DE4132E4982A9110761AA /* CompanionHubView.swift */; };
 		06C97DB9354A31AB771A4B6F /* SyncSaveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */; };
 		1142B09836D2B7D1D1B90140 /* HapticsEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B233D855B398BD62F8D4023 /* HapticsEngine.swift */; };
@@ -41,6 +48,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7C0A11000000000000000002 /* PhoneWatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhoneWatchBridge.swift; path = MouthLifeApp/Sync/PhoneWatchBridge.swift; sourceTree = "<group>"; };
+		7C0A12000000000000000001 /* MouthLifeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeWatchApp.swift; path = MouthLifeWatch/MouthLifeWatchApp.swift; sourceTree = "<group>"; };
+		7C0A12000000000000000002 /* WatchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchController.swift; path = MouthLifeWatch/WatchController.swift; sourceTree = "<group>"; };
+		7C0A12000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = MouthLifeWatch/Info.plist; sourceTree = "<group>"; };
+		7C0A12000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = MouthLifeWatch/Assets.xcassets; sourceTree = "<group>"; };
+		7C0A12000000000000000005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = MouthLifeWatch/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		7C0A12000000000000000006 /* MouthLifeWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MouthLifeWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UpgradeLabSheet.swift; path = MouthLifeApp/UI/Sheets/UpgradeLabSheet.swift; sourceTree = "<group>"; };
 		0248270C23F4E7619D84FE50 /* MouthLifeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeApp.swift; path = MouthLifeApp/MouthLifeApp.swift; sourceTree = "<group>"; };
 		112D0164C1E00B5EAD4CA50F /* HistoryAlmanacSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HistoryAlmanacSheet.swift; path = MouthLifeApp/UI/Sheets/HistoryAlmanacSheet.swift; sourceTree = "<group>"; };
@@ -84,6 +98,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7C0A12000000000000000042 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7C0A12000000000000000021 /* MouthLifeCore in Frameworks */,
+				7C0A12000000000000000022 /* MouthLifeWatchUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -91,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				A943E2CB17B8D37DFDA2FF32 /* MouthLifeApp */,
+				7C0A12000000000000000071 /* MouthLifeWatch */,
 				BA37807E51C804FC08BA2A74 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -124,6 +148,7 @@
 				8FCB3D2C8E1B5ABFA1741026 /* ProfileAndSettingsSheet.swift */,
 				A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */,
 				0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */,
+				7C0A11000000000000000002 /* PhoneWatchBridge.swift */,
 				8738225AC4938AA2222183FA /* Assets.xcassets */,
 				59C4D8B12E7A3094C61B8E23 /* Music */,
 				7A11C0DE5EED4B1DA5E2F005 /* guide */,
@@ -137,8 +162,21 @@
 			isa = PBXGroup;
 			children = (
 				D3D407A6E8675D5FDEA5235D /* MouthLife.app */,
+				7C0A12000000000000000006 /* MouthLifeWatch.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7C0A12000000000000000071 /* MouthLifeWatch */ = {
+			isa = PBXGroup;
+			children = (
+				7C0A12000000000000000001 /* MouthLifeWatchApp.swift */,
+				7C0A12000000000000000002 /* WatchController.swift */,
+				7C0A12000000000000000004 /* Assets.xcassets */,
+				7C0A12000000000000000005 /* PrivacyInfo.xcprivacy */,
+				7C0A12000000000000000003 /* Info.plist */,
+			);
+			name = MouthLifeWatch;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -164,6 +202,27 @@
 			productReference = D3D407A6E8675D5FDEA5235D /* MouthLife.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7C0A12000000000000000051 /* MouthLifeWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7C0A12000000000000000063 /* Build configuration list for PBXNativeTarget "MouthLifeWatch" */;
+			buildPhases = (
+				7C0A12000000000000000041 /* Sources */,
+				7C0A12000000000000000042 /* Frameworks */,
+				7C0A12000000000000000043 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MouthLifeWatch;
+			packageProductDependencies = (
+				7C0A12000000000000000031 /* MouthLifeCore */,
+				7C0A12000000000000000032 /* MouthLifeWatchUI */,
+			);
+			productName = MouthLifeWatch;
+			productReference = 7C0A12000000000000000006 /* MouthLifeWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -175,6 +234,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					2ABC05E66CF63648EDBF405A = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					7C0A12000000000000000051 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -196,6 +258,7 @@
 			projectRoot = "";
 			targets = (
 				2ABC05E66CF63648EDBF405A /* MouthLife */,
+				7C0A12000000000000000051 /* MouthLifeWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -209,6 +272,15 @@
 				83A1C9E04D2B7105F98E6C12 /* Music in Resources */,
 				7A11C0DE5EED4B1DA5E2F006 /* guide in Resources */,
 				7AC08195CAB641C304F7E0AF /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C0A12000000000000000043 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7C0A12000000000000000014 /* Assets.xcassets in Resources */,
+				7C0A12000000000000000015 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +317,16 @@
 				FA422C8939196D341AB49DF7 /* ProfileAndSettingsSheet.swift in Sources */,
 				06C97DB9354A31AB771A4B6F /* SyncSaveSheet.swift in Sources */,
 				BD73DEFA5F53F745C560E3CE /* UpgradeLabSheet.swift in Sources */,
+				7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C0A12000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */,
+				7C0A12000000000000000012 /* WatchController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,6 +434,58 @@
 			};
 			name = Release;
 		};
+		7C0A12000000000000000061 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C2QJ3SGZST;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mouthlife.plaque.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		7C0A12000000000000000062 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C2QJ3SGZST;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mouthlife.plaque.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -373,6 +507,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		7C0A12000000000000000063 /* Build configuration list for PBXNativeTarget "MouthLifeWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7C0A12000000000000000061 /* Debug */,
+				7C0A12000000000000000062 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -387,6 +530,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 96320F82233D0E1B9674FCF0 /* XCLocalSwiftPackageReference "." */;
 			productName = MouthLifeCore;
+		};
+		7C0A12000000000000000031 /* MouthLifeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96320F82233D0E1B9674FCF0 /* XCLocalSwiftPackageReference "." */;
+			productName = MouthLifeCore;
+		};
+		7C0A12000000000000000032 /* MouthLifeWatchUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96320F82233D0E1B9674FCF0 /* XCLocalSwiftPackageReference "." */;
+			productName = MouthLifeWatchUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

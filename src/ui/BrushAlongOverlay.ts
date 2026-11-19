@@ -728,6 +728,7 @@ export class BrushAlongOverlay implements OverlayView {
         </div>
         <template id="tpl-labels" data-rinse="${encodeURIComponent(mw.rinseJump)}" data-done="${encodeURIComponent(amount(buttons.doneFloss))}" data-skip="${encodeURIComponent(amount(buttons.skipFloss))}"></template>`;
     }
+    // No tapping ahead while brushing: floss waits for the whole 2 minutes (the clock rolls into it).
     return `
       <div class="pacer-row">
         <strong id="pacer-title" class="pacer-title"></strong>
@@ -735,9 +736,7 @@ export class BrushAlongOverlay implements OverlayView {
       </div>
       <div class="pacer-row">
         <span class="pacer-action-wrap"><span id="pacer-action-icon" aria-hidden="true"></span> <span id="pacer-action" class="pacer-action"></span></span>
-        <button type="button" id="btn-pacer-to-floss" class="btn btn-sm"></button>
-      </div>
-      <template id="tpl-labels" data-floss="${encodeURIComponent(buttons.flossJump)}"></template>`;
+      </div>`;
   }
 
   private renderRunning(): void {
@@ -791,7 +790,6 @@ export class BrushAlongOverlay implements OverlayView {
     // Button labels come from the copy table; set as text so punctuation never becomes markup.
     const labels = this.$<HTMLTemplateElement>('#tpl-labels')?.dataset ?? {};
     const label = (key: string): string => decodeURIComponent(labels[key] ?? '');
-    this.setText('#btn-pacer-to-floss', `✨ ${label('floss')}`);
     this.setText('#btn-pacer-to-rinse', `💧 ${label('rinse')}`);
     this.setText('#btn-pacer-done-floss', label('done'));
     this.setText('#btn-pacer-skip-floss', label('skip'));
@@ -819,7 +817,6 @@ export class BrushAlongOverlay implements OverlayView {
       this.speakCurrentCue();
     });
 
-    this.$('#btn-pacer-to-floss')?.addEventListener('click', () => this.enterFlossBonus());
     this.$('#btn-pacer-to-rinse')?.addEventListener('click', () => this.enterMouthwashBonus(true));
     this.$('#btn-pacer-done-floss')?.addEventListener('click', () => this.completeSession(true, false));
     this.$('#btn-pacer-skip-floss')?.addEventListener('click', () => {
