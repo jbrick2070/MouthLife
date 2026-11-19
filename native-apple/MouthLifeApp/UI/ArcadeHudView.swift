@@ -14,6 +14,8 @@ public struct ArcadeHudView: View {
     public let onFireDisclose: () -> Void
     public let onVirtualStickMove: (Double, Double, Bool) -> Void
     public let onExitToHub: () -> Void
+    /// Tells the game the pause card is up or down, so the mission really stops while it shows.
+    public let onPauseChanged: (Bool) -> Void
 
     @State private var flossDragOffset: CGSize = .zero
     @State private var stickDragOffset: CGSize = .zero
@@ -30,7 +32,8 @@ public struct ArcadeHudView: View {
         onFireRinse: @escaping () -> Void,
         onFireDisclose: @escaping () -> Void,
         onVirtualStickMove: @escaping (Double, Double, Bool) -> Void,
-        onExitToHub: @escaping () -> Void
+        onExitToHub: @escaping () -> Void,
+        onPauseChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         self.cartridge = cartridge
         self.snapshot = snapshot
@@ -43,6 +46,7 @@ public struct ArcadeHudView: View {
         self.onFireDisclose = onFireDisclose
         self.onVirtualStickMove = onVirtualStickMove
         self.onExitToHub = onExitToHub
+        self.onPauseChanged = onPauseChanged
     }
 
     public var body: some View {
@@ -341,6 +345,8 @@ public struct ArcadeHudView: View {
 
             if isPausedSheet {
                 Color.black.opacity(0.55)
+                    .onAppear { onPauseChanged(true) }
+                    .onDisappear { onPauseChanged(false) }
                     .ignoresSafeArea()
                     .onTapGesture { isPausedSheet = false }
 

@@ -1,6 +1,6 @@
 // MouthLife Offline PWA Service Worker
 // Network-first for HTML/shell (instant updates when online) + cache-first for immutable hashed Vite bundles.
-const CACHE_NAME = 'mouthlife-shell-v2';
+const CACHE_NAME = 'mouthlife-shell-v3';
 const SHELL_URLS = [
   './',
   './index.html',
@@ -11,6 +11,11 @@ const SHELL_URLS = [
   './icon-512.png',
   './privacy.html',
 ];
+
+// Hosts may send `Vary: Origin`; a module script asks with an Origin header and the stored copy was
+// fetched without one, so a strict match misses it offline. These files are same-origin and their
+// names carry their content hash, so the header cannot change what they hold.
+const MATCH = { ignoreVary: true, ignoreSearch: false };
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -49,7 +54,7 @@ self.addEventListener('message', (event) => {
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all(
         urls.slice(0, 40).map((u) =>
-          cache.match(u).then((hit) => hit || cache.add(u).catch(() => undefined))
+          cache.match(u, MATCH).then((hit) => hit || cache.add(u).catch(() => undefined))
         )
       )
     )
@@ -69,7 +74,7 @@ self.addEventListener('fetch', (event) => {
   // Immutable content-hashed Vite bundles (/assets/*): cache-first, populate on miss
   if (url.pathname.includes('/assets/')) {
     event.respondWith(
-      caches.match(req).then((cached) => {
+      caches.match(req, MATCH).then((cached) => {
         if (cached) return cached;
         return fetch(req).then((res) => {
           if (res && res.status === 200) {
@@ -94,7 +99,7 @@ self.addEventListener('fetch', (event) => {
         return res;
       })
       .catch(() =>
-        caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : Response.error()))
+        caches.match(req, MATCH).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html', MATCH) : Response.error()))
       )
   );
 });

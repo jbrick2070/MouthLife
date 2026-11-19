@@ -15,6 +15,7 @@ public struct ProfileAndSettingsSheet: View {
     @State private var coachLanguage: CoachLanguage
     @State private var reducedMotion: Bool
     @State private var showProMotionTelemetry: Bool
+    @State private var showPrivacyPolicy = false
 
     public let onSaveProfile: (String, Int, String) -> Void
     public let onChangeQuality: (QualityPreference) -> Void
@@ -253,6 +254,15 @@ public struct ProfileAndSettingsSheet: View {
                             .font(.system(.caption2, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.mintClean)
 
+                        Button {
+                            showPrivacyPolicy = true
+                        } label: {
+                            Label(L10n.t("Privacy Policy"), systemImage: "lock.shield")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
+                        .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
+
                         Text(L10n.t(CharityInfo.clinicalDisclaimer))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(MLTheme.textMuted)
@@ -263,6 +273,58 @@ public struct ProfileAndSettingsSheet: View {
             }
             .background(MLTheme.deepOcean.ignoresSafeArea())
             .navigationTitle(L10n.t("Profile & Settings"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t("Done")) { dismiss() }
+                        .foregroundStyle(MLTheme.cyanAccent)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// The privacy policy, in the app (no link out): what MouthLife keeps, where, and what it never does.
+/// The web edition has the same text in public/privacy.html.
+struct PrivacyPolicyView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let sections: [(String, String)] = [
+        ("No personal data", "MouthLife does not collect, send, rent or sell any personal data, analytics, device identifiers, location or usage data. There are no accounts, no tracking and no advertising."),
+        ("Everything stays on this device", "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings."),
+        ("Not medical advice", "MouthLife is an educational game and a 2-minute brushing timer. It is not a substitute for advice, diagnosis or treatment from a dentist. Ask a dentist or dental hygienist about your oral health."),
+        ("Charity links", "The charity pages are optional and open only after a grown-up answers a question. MouthLife is not affiliated with these charities, takes no fee and never handles donations; each website has its own policies."),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(L10n.t("Zero Sign-Up • Zero Tracking • 100% On-Device"))
+                        .font(.system(.footnote, design: .rounded, weight: .bold))
+                        .foregroundStyle(MLTheme.mintClean)
+                    ForEach(sections, id: \.0) { section in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.t(section.0))
+                                .font(.system(.headline, design: .rounded, weight: .heavy))
+                                .foregroundStyle(MLTheme.textPrimary)
+                            Text(L10n.t(section.1))
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(MLTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text(L10n.t("Effective November 2026"))
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(MLTheme.textMuted)
+                }
+                .padding(18)
+            }
+            .background(MLTheme.deepOcean.ignoresSafeArea())
+            .navigationTitle(L10n.t("Privacy Policy"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

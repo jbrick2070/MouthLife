@@ -45,6 +45,11 @@ const IMAGE_URLS: Record<string, string> = (() => {
   return byName;
 })();
 
+/** Every guide picture's address, so the offline app can fetch them all ahead of time. */
+export function allTutorialImageUrls(): string[] {
+  return Object.values(IMAGE_URLS);
+}
+
 export function tutorialImageUrl(name: string): string | undefined {
   return IMAGE_URLS[name];
 }

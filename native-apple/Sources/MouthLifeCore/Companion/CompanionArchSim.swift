@@ -52,6 +52,7 @@ public enum CompanionArchSim {
         }
 
         var ionsAdded = 0
+        var evaluatedTo = nowEpochMs
 
         if state.smoothnessIndex >= GameConfig.smoothBaskThreshold {
             let maxBaskHours = (state.smoothnessIndex - GameConfig.smoothBaskThreshold) / GameConfig.offlineBaskSlopePerHr
@@ -65,9 +66,14 @@ public enum CompanionArchSim {
             )
             ionsAdded = nextReservoir - state.unclaimedIdleIons
             state.unclaimedIdleIons = nextReservoir
+            // When the whole wait is inside the bask window and the reservoir has room, count only
+            // the time that earned whole ions; the rest carries to the next check (as on the web).
+            let carry = baskHours >= elapsedHours && nextReservoir < GameConfig.idleIonReservoirCap
+            let usedHours = carry ? min(elapsedHours, Double(rawIons) / GameConfig.idleIonsPerBaskHr) : baskHours
+            if carry { evaluatedTo = state.lastEvaluatedEpochMs + Int64((usedHours * 3_600_000.0).rounded(.down)) }
 
-            var nextSmooth = state.smoothnessIndex - baskHours * GameConfig.offlineBaskSlopePerHr
-            let remHours = elapsedHours - baskHours
+            var nextSmooth = state.smoothnessIndex - usedHours * GameConfig.offlineBaskSlopePerHr
+            let remHours = carry ? 0 : elapsedHours - baskHours
             if remHours > 0 {
                 nextSmooth = max(
                     GameConfig.stasisFloorSmoothness,
@@ -89,7 +95,7 @@ public enum CompanionArchSim {
         state.recentTreatTimestampsMs = state.recentTreatTimestampsMs.filter { ts in
             nowEpochMs - ts < oneHourMs
         }
-        state.lastEvaluatedEpochMs = nowEpochMs
+        state.lastEvaluatedEpochMs = evaluatedTo
         return ionsAdded
     }
 

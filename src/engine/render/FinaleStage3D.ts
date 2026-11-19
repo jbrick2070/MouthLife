@@ -83,13 +83,6 @@ const E = ENDING_TIMES;
 /** The widest vertical angle on tall screens (degrees); beyond it the camera steps back. */
 const MAX_VFOV = 76;
 
-/** A spark's tail: [seconds behind, brightness, size] of each echo drawn behind it. */
-const TRAIL: readonly (readonly [number, number, number])[] = [
-  [0, 1, 1],
-  [0.035, 0.55, 0.8],
-  [0.07, 0.3, 0.62],
-];
-
 function hexColor(hex: number): THREE.Color {
   return new THREE.Color().setHex(hex);
 }
@@ -107,13 +100,18 @@ const RELIEF_VERT = /* glsl */ `
   uniform float uNeon;
   uniform float uOverride;
   uniform float uGlow;
+  uniform float uMirror;
   uniform float uRiseEnd;
   uniform float uWaveEnd;
   uniform float uBlazeEnd;
   uniform float uShowEnd;
+  uniform vec4 uHaze;
+  uniform vec4 uBurstA;
+  uniform vec4 uBurstB;
   varying vec3 vColor;
   varying float vAlpha;
-  varying float vY;
+  varying vec3 vWorldPos;
+  varying float vIsLight;
   float sm(float x) { x = clamp(x, 0.0, 1.0); return x * x * (3.0 - 2.0 * x); }
   void main() {
     bool isLight = aKind > 0.5 && aKind < 1.5;
@@ -125,33 +123,70 @@ const RELIEF_VERT = /* glsl */ `
     float flash = (isLight && age > 0.0 && uRm < 0.5) ? 0.75 * exp(-age / 0.16) : 0.0;
     float showT = uT - uBlazeEnd;
     if (uNeon > 0.5 && isLight && uRm < 0.5 && showT >= 0.0 && uT < uShowEnd) level *= 0.84 + 0.16 * cos(12.566370614 * showT);
+    float stageFocus = uOverride >= 0.0 ? 0.0 : sm((uT - 14.0) / 1.4);
     level *= 1.0 - 0.35 * sm((uT - 14.0) / 1.0);
     if (uOverride >= 0.0) { level = uOverride; flash = 0.0; }
     if (isLight) level *= uGlow;
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    // Gentle living-water wave undulation on the reflection, anchored seamlessly at y = 0
+    if (uMirror > 0.5 && wp.y < 0.0 && uRm < 0.5) {
+      float wd = -wp.y;
+      wp.x += (sin(wd * 2.6 - uT * 1.8 + wp.x * 0.22) * 0.11 + sin(wd * 5.2 + uT * 1.3 - wp.x * 0.35) * 0.045) * smoothstep(0.0, 1.5, wd);
+    }
     // The drawing's levels were made for screen colours; in linear light their squares match.
     // Lit windows run a little past 1, so the bloom makes them glow.
     float lin = level * level;
     vec3 lit = color * lin * aShade * aShade * (isLight ? 1.3 : 1.0);
     if (!isLight) lit = min(lit, vec3(1.0));
-    vColor = lit + (vec3(1.0) - min(lit, vec3(1.0))) * flash;
+    // Soft coloured wash from bursting firework shells onto nearby buildings and their reflection
+    float hCatch = 0.45 + 0.55 * clamp(abs(wp.y) / 5.5, 0.0, 1.0);
+    float dA = (aCx - uBurstA.w) / 15.0;
+    float dB = (aCx - uBurstB.w) / 15.0;
+    vec3 burstWash = uBurstA.rgb * exp(-dA * dA) + uBurstB.rgb * exp(-dB * dB);
+    float catchAmt = isLight ? 0.14 : (0.44 * hCatch * (0.65 + 0.35 * aShade));
+    lit += burstWash * catchAmt * (0.35 + 0.65 * color);
+    // Atmospheric twilight haze on the far skyline so the stage reads crisply in front
+    float camDist = length(cameraPosition - wp.xyz);
+    float distHaze = smoothstep(34.0, 96.0, camDist) * 0.24;
+    float lowMist = 1.0 - clamp(abs(wp.y) / 7.0, 0.0, 1.0);
+    float hazeAmt = clamp((distHaze + stageFocus * (0.34 + 0.14 * lowMist)) * uHaze.w, 0.0, 0.58);
+    if (isLight) hazeAmt *= 0.62;
+    float hazeLit = uOverride >= 0.0 ? uOverride * uOverride : (0.25 + 0.75 * smoothstep(2.5, 7.5, uT));
+    vec3 colOut = lit + (vec3(1.0) - min(lit, vec3(1.0))) * flash;
+    vColor = mix(colOut, uHaze.rgb * hazeLit, hazeAmt);
     vAlpha = aAlpha;
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vY = wp.y;
+    vWorldPos = wp.xyz;
+    vIsLight = isLight ? 1.0 : 0.0;
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
 
 const RELIEF_FRAG = /* glsl */ `
   uniform float uMirror;
+  uniform float uT;
+  uniform float uRm;
   varying vec3 vColor;
   varying float vAlpha;
-  varying float vY;
+  varying vec3 vWorldPos;
+  varying float vIsLight;
   void main() {
     float a = vAlpha;
-    if (uMirror > 0.5 && vY > 0.0) discard;
-    if (uMirror > 0.5) a *= 0.34 * (1.0 - smoothstep(0.0, 6.0, -vY));
+    vec3 col = vColor;
+    if (uMirror > 0.5) {
+      if (vWorldPos.y > 0.0) discard;
+      float depth = -vWorldPos.y;
+      float rt = uRm > 0.5 ? 0.0 : uT;
+      float w1 = sin(depth * 8.5 + vWorldPos.x * 0.45 - rt * 2.1);
+      float w2 = sin(depth * 14.5 - vWorldPos.x * 0.78 + rt * 1.55);
+      float wave = 0.55 * w1 + 0.45 * w2;
+      float ripple = 0.72 + 0.28 * wave;
+      float fade = 1.0 - smoothstep(0.0, 6.2, depth);
+      float crest = smoothstep(0.54, 0.96, wave) * fade;
+      col = col * ripple + col * crest * (vIsLight > 0.5 ? 0.85 : 0.35);
+      a *= 0.42 * fade * (0.82 + 0.18 * wave);
+    }
     if (a < 0.003) discard;
-    gl_FragColor = vec4(vColor, a);
+    gl_FragColor = vec4(col, a);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -225,6 +260,15 @@ class CityRelief {
     cx: number;
   }[] = [];
   constructor(art: CityArt, plan: CityFinalePlan) {
+    const stops = skyStops(art);
+    const midHorizon = hexColor(stops.colors[2][0]);
+    const inSpace = plan.show === 'meteors';
+    const hazeCol = new THREE.Color(0x0b1636);
+    if (!inSpace) {
+      hazeCol.r += midHorizon.r * 0.045;
+      hazeCol.g += midHorizon.g * 0.045;
+      hazeCol.b += midHorizon.b * 0.045;
+    }
     this.uniforms = {
       uT: { value: 0 },
       uRm: { value: 0 },
@@ -234,6 +278,9 @@ class CityRelief {
       uWaveEnd: { value: T.waveEnd },
       uBlazeEnd: { value: T.blazeEnd },
       uShowEnd: { value: T.showEnd },
+      uHaze: { value: new THREE.Vector4(hazeCol.r, hazeCol.g, hazeCol.b, inSpace ? 0.3 : 1.0) },
+      uBurstA: { value: new THREE.Vector4(0, 0, 0, 0) },
+      uBurstB: { value: new THREE.Vector4(0, 0, 0, 0) },
     };
     const still = { solid: emptyBucket() };
     const moving = art.motions.map(() => emptyBucket());
@@ -424,10 +471,16 @@ class CityRelief {
   }
 
   /** `override` >= 0 lights the whole city at that level (the credits); `motionAll` runs every motion. */
-  update(t: number, reducedMotion: boolean, override: number, motionAll: number | null): void {
+  update(t: number, reducedMotion: boolean, override: number, motionAll: number | null, burstA?: THREE.Vector4, burstB?: THREE.Vector4): void {
     this.uniforms.uT.value = t;
     this.uniforms.uRm.value = reducedMotion ? 1 : 0;
     this.uniforms.uOverride.value = override;
+    const ua = this.uniforms.uBurstA.value as THREE.Vector4;
+    const ub = this.uniforms.uBurstB.value as THREE.Vector4;
+    if (burstA) ua.copy(burstA);
+    else ua.set(0, 0, 0, 0);
+    if (burstB) ub.copy(burstB);
+    else ub.set(0, 0, 0, 0);
     const q = this.tmpQ;
     for (const m of this.movers) {
       let time: number | null = null;
@@ -528,12 +581,29 @@ const SKY_FRAG = /* glsl */ `
     vec3 space = vec3(0.003, 0.006, 0.022);
     vec3 col = mix(glowSky * level, night, sm((h - uSkyH.w) / 0.14));
     col = mix(col, space, sm((h - 0.3) / 0.45));
-    if (d.y < 0.0 && uSpace < 0.5) col = c0 * level * 0.04 + vec3(0.003, 0.007, 0.024);
+    if (d.y < 0.0 && uSpace < 0.5) {
+      float depth = -d.y;
+      float az = atan(d.x, -d.z);
+      float wt = uRm > 0.5 ? 0.0 : uTime;
+      // Perspective-foreshortened ripples: fine near the horizon, wider swells below
+      float wz = 1.0 / (depth + 0.04);
+      float horizonBand = exp(-depth * 13.0);
+      float midBand = exp(-depth * 4.2);
+      float swell = 0.5 + 0.5 * sin(wz * 1.15 - wt * 1.2 + sin(az * 6.0 + wt * 0.35) * 1.4);
+      // fine glints, not broad patches: broad ones read as mud
+      float sparkle = noise(vec2(az * 110.0 + sin(wz * 0.45 + wt * 0.4) * 0.8, wz * 1.6 - wt * 0.75));
+      float glints = smoothstep(0.8, 0.97, sparkle) * (0.4 + 0.6 * swell);
+      vec3 horizonTint = c0 * level;
+      vec3 auroraRefl = mix(uAuroraA, uAuroraB, 0.45) * uAurora * 0.16 * midBand * (0.55 + 0.45 * swell);
+      col = vec3(0.003, 0.007, 0.024)
+        + horizonTint * (0.012 + 0.14 * horizonBand * (0.65 + 0.35 * swell) + 0.08 * midBand * glints)
+        + auroraRefl;
+    }
     // stars: soft round points at a jittered spot in each cell, warm or cool
     vec3 g = d * 260.0;
     vec3 cell = floor(g);
     vec3 off = fract(g) - 0.5 - (vec3(hash(cell + 7.0), hash(cell + 13.0), hash(cell + 21.0)) - 0.5) * 0.6;
-    float star = step(0.9965, hash(cell)) * smoothstep(0.3, 0.04, length(off)) * (uSpace > 0.5 ? 1.0 : smoothstep(0.02, 0.2, h));
+    float star = step(0.9965, hash(cell)) * (1.0 - smoothstep(0.04, 0.3, length(off))) * (uSpace > 0.5 ? 1.0 : smoothstep(0.02, 0.2, h));
     float tw = 0.6 + 0.4 * sin(uTime * 2.0 + hash(cell + 3.0) * 40.0);
     vec3 tint = mix(vec3(1.0, 0.86, 0.7), vec3(0.75, 0.85, 1.0), hash(cell + 5.0));
     col += tint * star * tw * 1.3;
@@ -629,8 +699,8 @@ const POINTS_FRAG = /* glsl */ `
     vec2 c = gl_PointCoord - 0.5;
     float r = length(c) * 2.0;
     if (r > 1.0) discard;
-    float core = smoothstep(1.0, 0.0, r);
-    gl_FragColor = vec4(vColor * (0.35 * core + 0.9 * smoothstep(0.35, 0.0, r)) * vAlpha, 1.0);
+    float core = 1.0 - smoothstep(0.0, 1.0, r);
+    gl_FragColor = vec4(vColor * (0.35 * core + 0.9 * (1.0 - smoothstep(0.0, 0.35, r))) * vAlpha, 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -686,7 +756,12 @@ class GlowPoints {
 
   end(): void {
     this.geo.setDrawRange(0, this.count);
-    for (const name of ['position', 'color', 'aAlpha', 'aSize']) (this.geo.getAttribute(name) as THREE.BufferAttribute).needsUpdate = true;
+    for (const name of ['position', 'color', 'aAlpha', 'aSize']) {
+      const attr = this.geo.getAttribute(name) as THREE.BufferAttribute;
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, Math.max(1, this.count) * attr.itemSize);
+      attr.needsUpdate = true;
+    }
   }
 
   dispose(): void {
@@ -694,6 +769,221 @@ class GlowPoints {
     this.material.dispose();
   }
 }
+
+// ---------------------------------------------------------------------------------- glowing streaks (fireworks, rockets, stardust)
+
+const STREAK_VERT = /* glsl */ `
+  attribute vec3 aTail;
+  attribute vec3 color;
+  attribute vec2 aCorner;
+  attribute vec2 aStyle;
+  uniform vec2 uViewport;
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying vec2 vUv;
+  void main() {
+    vec4 clipH = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 clipT = projectionMatrix * modelViewMatrix * vec4(aTail, 1.0);
+    if (clipH.w <= 0.05 || clipT.w <= 0.05) {
+      gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      vColor = vec3(0.0);
+      vAlpha = 0.0;
+      vUv = aCorner;
+      return;
+    }
+    vec2 ndcH = clipH.xy / clipH.w;
+    vec2 ndcT = clipT.xy / clipT.w;
+    vec2 aspect = vec2(uViewport.x / max(1.0, uViewport.y), 1.0);
+    vec2 dir = (ndcH - ndcT) * aspect;
+    float len = length(dir);
+    vec2 fwd = len > 0.0005 ? dir / len : vec2(1.0, 0.0);
+    vec2 side = vec2(-fwd.y, fwd.x);
+    vec4 clip = mix(clipT, clipH, aCorner.x);
+    float ndcHalf = max(aStyle.y * projectionMatrix[1][1] / max(0.2, clip.w), 2.4 / max(1.0, uViewport.y));
+    float capExt = (aCorner.x * 2.0 - 1.0) * ndcHalf;
+    float widthScale = mix(0.42, 1.0, aCorner.x);
+    vec2 offset = (fwd * capExt + side * aCorner.y * ndcHalf * widthScale) / aspect;
+    gl_Position = vec4(clip.xy + offset * clip.w, clip.z, clip.w);
+    vColor = max(mix(vec3(dot(color, vec3(0.2126, 0.7152, 0.0722))), color, 1.38), 0.0);
+    vAlpha = aStyle.x;
+    vUv = aCorner;
+  }
+`;
+
+const STREAK_FRAG = /* glsl */ `
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying vec2 vUv;
+  void main() {
+    float across = abs(vUv.y);
+    float edge = 1.0 - smoothstep(0.0, 1.0, across);
+    float core = 1.0 - smoothstep(0.0, 0.45, across);
+    float tailFade = smoothstep(0.0, 0.82, vUv.x);
+    float headCap = 1.0 - smoothstep(0.76, 1.0, vUv.x);
+    float body = (edge * edge * 0.55 + core * 0.78) * tailFade * headCap;
+    float headDist = length(vec2((vUv.x - 0.80) * 5.0, vUv.y));
+    float tip = 1.0 - smoothstep(0.0, 0.95, headDist);
+    vec3 col = vColor * (body + tip * 0.95) + vec3(1.0, 0.97, 0.9) * tip * 0.55;
+    float energy = (body + tip) * vAlpha;
+    if (energy < 0.004) discard;
+    gl_FragColor = vec4(col * vAlpha, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+class GlowStreaks {
+  readonly mesh: THREE.Mesh;
+  private readonly geo = new THREE.BufferGeometry();
+  private readonly head: Float32Array;
+  private readonly tail: Float32Array;
+  private readonly col: Float32Array;
+  private readonly style: Float32Array;
+  private count = 0;
+  private prevCount = 0;
+  readonly material: THREE.ShaderMaterial;
+
+  constructor(private readonly max: number) {
+    this.head = new Float32Array(max * 12);
+    this.tail = new Float32Array(max * 12);
+    this.col = new Float32Array(max * 12);
+    this.style = new Float32Array(max * 8);
+    const corner = new Float32Array(max * 8);
+    const indices = new Uint16Array(max * 6);
+    for (let i = 0; i < max; i++) {
+      corner.set([0, -1, 0, 1, 1, -1, 1, 1], i * 8);
+      const v = i * 4;
+      indices.set([v, v + 1, v + 2, v + 2, v + 1, v + 3], i * 6);
+    }
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.head, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('aTail', new THREE.BufferAttribute(this.tail, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setAttribute('aCorner', new THREE.BufferAttribute(corner, 2));
+    this.geo.setAttribute('aStyle', new THREE.BufferAttribute(this.style, 2).setUsage(THREE.DynamicDrawUsage));
+    this.geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: STREAK_VERT,
+      fragmentShader: STREAK_FRAG,
+      uniforms: { uViewport: { value: new THREE.Vector2(1280, 720) } },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    this.mesh = new THREE.Mesh(this.geo, this.material);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 10;
+  }
+
+  begin(): void {
+    this.count = 0;
+  }
+
+  add(x: number, y: number, z: number, px: number, py: number, pz: number, c: THREE.Color, alpha: number, halfWidth: number): void {
+    if (this.count >= this.max || alpha <= 0.004) return;
+    const i = this.count++;
+    const p = i * 12;
+    const s = i * 8;
+    for (let k = 0; k < 4; k++) {
+      const o = p + k * 3;
+      this.head[o] = x;
+      this.head[o + 1] = y;
+      this.head[o + 2] = z;
+      this.tail[o] = px;
+      this.tail[o + 1] = py;
+      this.tail[o + 2] = pz;
+      this.col[o] = c.r;
+      this.col[o + 1] = c.g;
+      this.col[o + 2] = c.b;
+      const so = s + k * 2;
+      this.style[so] = alpha;
+      this.style[so + 1] = halfWidth;
+    }
+  }
+
+  end(): void {
+    this.geo.setDrawRange(0, this.count * 6);
+    if (this.count > 0 || this.prevCount > 0) {
+      for (const name of ['position', 'aTail', 'color', 'aStyle']) {
+        const attr = this.geo.getAttribute(name) as THREE.BufferAttribute;
+        attr.clearUpdateRanges();
+        attr.addUpdateRange(0, Math.max(1, this.count * 6) * attr.itemSize);
+        attr.needsUpdate = true;
+      }
+    }
+    this.prevCount = this.count;
+  }
+
+  dispose(): void {
+    this.geo.dispose();
+    this.material.dispose();
+  }
+}
+
+// ---------------------------------------------------------------------------------- fractal sign & crystal path shaders
+
+const FRACTAL_VERT = /* glsl */ `
+  attribute vec3 color;
+  attribute vec2 aEmblemFx;
+  varying vec3 vColor;
+  varying vec2 vFx;
+  void main() {
+    vColor = color;
+    vFx = aEmblemFx;
+    vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const FRACTAL_FRAG = /* glsl */ `
+  varying vec3 vColor;
+  varying vec2 vFx;
+  void main() {
+    float depth = vFx.x;
+    float glint = vFx.y;
+    vec3 warm = vec3(1.0, 0.72, 0.24);
+    float lum = dot(vColor, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tinted = mix(vColor, max(vColor, vec3(0.18, 0.14, 0.06)) * warm * 1.45 + warm * (0.18 + 0.25 * lum), depth * 0.58);
+    float boost = mix(1.42, 2.05, depth);
+    vec3 col = tinted * boost + vec3(1.0, 0.94, 0.76) * glint * 1.35;
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
+const PATH_VERT = /* glsl */ `
+  varying float vU;
+  varying float vRim;
+  void main() {
+    vU = clamp(position.y + 0.5, 0.0, 1.0);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vec3 vn = normalize(normalMatrix * normal);
+    vRim = clamp(abs(dot(vn, normalize(-mv.xyz))), 0.0, 1.0);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const PATH_FRAG = /* glsl */ `
+  uniform vec4 uPathFx;
+  varying float vU;
+  varying float vRim;
+  void main() {
+    float fill = uPathFx.x;
+    float shimmer = uPathFx.y;
+    float headGlow = uPathFx.z;
+    float alpha = uPathFx.w;
+    float lit = fill <= 0.001 ? 0.0 : (fill >= 0.999 ? 1.0 : 1.0 - smoothstep(fill - 0.08, fill + 0.02, vU));
+    vec3 glass = vec3(0.75, 0.91, 1.0);
+    vec3 gold = vec3(0.98, 0.76, 0.24) * (0.7 + 0.45 * vRim);
+    float d = (vU - shimmer) * 6.5;
+    float crest = exp(-d * d) * headGlow * (lit > 0.02 || abs(vU - fill) < 0.18 ? 1.0 : 0.0);
+    vec3 col = mix(glass, gold, lit) + vec3(1.0, 0.95, 0.74) * crest * 1.45;
+    float a = mix(0.30, 1.0, clamp(lit + crest * 0.85, 0.0, 1.0)) * alpha;
+    if (a < 0.004) discard;
+    gl_FragColor = vec4(col, a);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
 
 // ---------------------------------------------------------------------------------- the golden fractal
 
@@ -733,57 +1023,92 @@ const BULB_FRAG = /* glsl */ `
     return 0.5 * log(max(r, 1e-6)) * r / dr;
   }
   void main() {
+    if (uAlpha < 0.003) discard;
     vec2 ndc = vUv * 2.0 - 1.0;
     vec3 rd = normalize(uCamRot * vec3(ndc.x * uTanHalf * uAspect, ndc.y * uTanHalf, -1.0));
     vec3 ro = uCamPos - uCenter;
-    // bounding sphere
+    // Tangent-plane coordinates round the fractal sun, for soft golden light rays behind the tooth
+    vec3 toCenter = -ro;
+    float centerDist = length(toCenter);
+    vec3 centerDir = toCenter / max(centerDist, 0.001);
+    float fwdDot = dot(rd, centerDir);
+    if (fwdDot <= 0.05) discard;
+    vec3 rayRight = normalize(cross(centerDir, vec3(0.0, 1.0, 0.0)));
+    vec3 rayUp = cross(rayRight, centerDir);
+    vec3 onPlane = rd / fwdDot - centerDir;
+    float rx = dot(onPlane, rayRight) * centerDist / max(uRadius, 0.001);
+    float ry = dot(onPlane, rayUp) * centerDist / max(uRadius, 0.001);
+    float rad = length(vec2(rx, ry));
+    if (rad > 2.35) discard;
+    float ang = atan(ry, rx);
+    // Slow colour breathing across copper-amber, 24k gold and warm champagne light
+    float breath = 0.5 + 0.5 * sin(uTime * 0.65);
+    float breath2 = 0.5 + 0.5 * cos(uTime * 0.42 + 1.1);
+    float raysA = pow(max(0.0, 0.5 + 0.5 * sin(ang * 10.0 + uTime * 0.22)), 3.0);
+    float raysB = pow(max(0.0, 0.5 + 0.5 * sin(ang * 16.0 - uTime * 0.14 + 1.3)), 4.0);
+    float raysC = 0.5 + 0.5 * sin(ang * 6.0 + uTime * 0.09);
+    float beams = (0.55 * raysA + 0.45 * raysB) * (0.65 + 0.35 * raysC);
+    float rayReach = smoothstep(0.32, 0.85, rad) * (1.0 - smoothstep(0.95, 2.25, rad));
+    float halo = exp(-rad * rad * 1.55) * (1.0 - smoothstep(1.5, 2.25, rad));
+    vec3 rayTint = mix(vec3(1.0, 0.70, 0.24), vec3(1.0, 0.86, 0.48), breath);
+    vec3 rayCol = rayTint * (halo * 0.30 + beams * rayReach * 0.52);
+    float rayAlpha = clamp(halo * 0.34 + beams * rayReach * 0.42, 0.0, 0.75);
+    // Bounding sphere for the Mandelbulb (rays outside skip raymarching entirely)
     float b = dot(ro, rd);
     float c = dot(ro, ro) - uRadius * uRadius;
     float disc = b * b - c;
-    if (disc < 0.0 || uAlpha < 0.003) discard;
-    float tNear = max(0.0, -b - sqrt(disc));
-    float tFar = -b + sqrt(disc);
-    mat3 spin = rotY(uTime * 0.35) * rotX(0.4 + sin(uTime * 0.2) * 0.2);
-    float t = tNear;
-    float trap = 0.0;
-    float steps = 0.0;
-    bool hit = false;
-    for (int i = 0; i < 72; i++) {
-      vec3 p = spin * ((ro + rd * t) / uRadius * 1.2);
-      float d = de(p, trap) * uRadius / 1.2;
-      if (d < 0.002 * t) { hit = true; break; }
-      t += d * 0.9;
-      steps += 1.0;
-      if (t > tFar) break;
-    }
-    float glow = steps / 72.0;
     vec3 col = vec3(0.0);
     float a = 0.0;
-    if (hit) {
-      // lit gold: a surface normal from the distance estimate, a key light, a rim, and the
-      // marching steps as ambient occlusion (deep folds take more steps)
-      vec3 p = spin * ((ro + rd * t) / uRadius * 1.2);
-      float e = 0.0012 * t / uRadius;
-      float tr;
-      vec3 n = normalize(vec3(
-        de(p + vec3(e, 0.0, 0.0), tr) - de(p - vec3(e, 0.0, 0.0), tr),
-        de(p + vec3(0.0, e, 0.0), tr) - de(p - vec3(0.0, e, 0.0), tr),
-        de(p + vec3(0.0, 0.0, e), tr) - de(p - vec3(0.0, 0.0, e), tr)));
-      vec3 v = -normalize(spin * rd);
-      vec3 l = normalize(spin * vec3(0.45, 0.8, 0.4));
-      float diff = max(dot(n, l), 0.0);
-      float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-      float spec = pow(max(dot(reflect(-l, n), v), 0.0), 24.0);
-      float ao = 1.0 - glow;
-      vec3 base = mix(vec3(0.62, 0.36, 0.08), vec3(1.0, 0.76, 0.3), clamp(trap * 0.8, 0.0, 1.0));
-      col = base * (0.3 + 0.7 * diff) * (0.45 + 0.55 * ao) + vec3(1.0, 0.85, 0.5) * (0.3 * rim + 0.45 * spec);
-      a = 1.0;
-    } else {
-      col = vec3(1.0, 0.7, 0.25) * glow * glow * 0.45;
-      a = glow;
+    bool hit = false;
+    if (disc >= 0.0) {
+      float tNear = max(0.0, -b - sqrt(disc));
+      float tFar = -b + sqrt(disc);
+      mat3 spin = rotY(uTime * 0.35) * rotX(0.4 + sin(uTime * 0.2) * 0.2);
+      float t = tNear;
+      float trap = 0.0;
+      float steps = 0.0;
+      for (int i = 0; i < 72; i++) {
+        vec3 p = spin * ((ro + rd * t) / uRadius * 1.2);
+        float d = de(p, trap) * uRadius / 1.2;
+        if (d < 0.002 * t) { hit = true; break; }
+        t += d * 0.9;
+        steps += 1.0;
+        if (t > tFar) break;
+      }
+      float glow = steps / 72.0;
+      if (hit) {
+        // lit gold: a surface normal from the distance estimate, a key light, a rim, and the
+        // marching steps as ambient occlusion (deep folds take more steps)
+        vec3 p = spin * ((ro + rd * t) / uRadius * 1.2);
+        float e = 0.0012 * t / uRadius;
+        float tr;
+        vec3 n = normalize(vec3(
+          de(p + vec3(e, 0.0, 0.0), tr) - de(p - vec3(e, 0.0, 0.0), tr),
+          de(p + vec3(0.0, e, 0.0), tr) - de(p - vec3(0.0, e, 0.0), tr),
+          de(p + vec3(0.0, 0.0, e), tr) - de(p - vec3(0.0, 0.0, e), tr)));
+        vec3 v = -normalize(spin * rd);
+        vec3 l = normalize(spin * vec3(0.45, 0.8, 0.4));
+        float diff = max(dot(n, l), 0.0);
+        float rim = pow(max(1.0 - max(dot(n, v), 0.0), 0.0), 3.0);
+        float spec = pow(max(dot(reflect(-l, n), v), 0.0), 24.0);
+        float ao = 1.0 - glow;
+        vec3 deepTone = mix(vec3(0.56, 0.30, 0.06), vec3(0.76, 0.34, 0.14), breath);
+        vec3 brightTone = mix(vec3(1.0, 0.74, 0.24), vec3(1.0, 0.84, 0.42), breath);
+        vec3 base = mix(deepTone, brightTone, clamp(trap * 0.85, 0.0, 1.0));
+        vec3 rimTint = mix(vec3(1.0, 0.86, 0.50), vec3(0.92, 0.96, 1.0), breath2 * 0.24);
+        vec3 innerWarmth = vec3(0.95, 0.56, 0.14) * glow * (0.14 + 0.16 * breath);
+        col = base * (0.32 + 0.68 * diff) * (0.45 + 0.55 * ao) + rimTint * (0.34 * rim + 0.48 * spec) + innerWarmth;
+        a = 1.0;
+      } else {
+        vec3 coronaTint = mix(vec3(1.0, 0.64, 0.20), vec3(1.0, 0.82, 0.38), breath);
+        col = coronaTint * glow * glow * 0.48;
+        a = glow;
+      }
     }
-    // premultiplied, over the sky: solid where it is hit, a soft corona round it
-    gl_FragColor = vec4(col * uAlpha * (hit ? 1.0 : a), uAlpha * a);
+    // premultiplied, over the sky: solid where it hits, soft breathing corona and sunbeams around it
+    vec3 outRgb = hit ? col : (col * a + rayCol);
+    float outA = hit ? 1.0 : clamp(a + rayAlpha * 0.35, 0.0, 1.0);
+    gl_FragColor = vec4(outRgb * uAlpha, outA * uAlpha);
     #include <colorspace_fragment>
   }
 `;
@@ -880,6 +1205,7 @@ export class FinaleStage3D {
   private readonly camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 900);
   private readonly glow = new GlowPass();
   private env: THREE.Texture | null = null;
+  private envTarget: THREE.WebGLRenderTarget | null = null;
   private readonly disposables: { dispose(): void }[] = [];
   private readonly track = (d: { dispose(): void }): void => {
     this.disposables.push(d);
@@ -904,14 +1230,15 @@ export class FinaleStage3D {
   };
   private skyFor = -2;
   private readonly reliefs = new Map<number, CityRelief>();
-  private readonly sparks = new GlowPoints(14000);
+  private readonly sparks = new GlowPoints(4000);
+  private readonly streaks = new GlowStreaks(4500);
   private readonly water: THREE.Mesh;
   private readonly beads: THREE.InstancedMesh;
   private readonly balloons: THREE.Group[] = [];
   private readonly meteorLines: THREE.LineSegments;
   private readonly meteorPos = new Float32Array(12 * 6);
   private readonly emblemGeos = new Map<number, THREE.BufferGeometry>();
-  private readonly fractals = new Map<number, THREE.InstancedMesh>();
+  private readonly fractals = new Map<number, { inst: THREE.InstancedMesh; fxBuf: Float32Array; fxAttr: THREE.InstancedBufferAttribute }>();
   private readonly orbitEmblems: THREE.Mesh[] = [];
   private readonly probe = new THREE.Group();
   private readonly coinRoot = new THREE.Group();
@@ -921,6 +1248,7 @@ export class FinaleStage3D {
   /** 0: the molar shows its chewing surface; 1: it stands up to face you (the ending's face). */
   private faceTilt = 0;
   private readonly molar = new THREE.Group();
+  private readonly molarFx = { value: new THREE.Vector4(0, -3, 0, 0) };
   private readonly molarBodyGlass: THREE.MeshPhysicalMaterial;
   private readonly molarBodyGold: THREE.MeshPhysicalMaterial;
   private readonly molarBody: THREE.Mesh;
@@ -928,10 +1256,12 @@ export class FinaleStage3D {
   private readonly bezelMat: THREE.MeshStandardMaterial;
   private readonly cuspCoins: (THREE.Group | null)[] = [];
   private readonly mountain = new THREE.Group();
+  private readonly mountainFx = { value: new THREE.Vector4(0, 0, 0, 0) };
+  private readonly probeLocal = { value: new THREE.Vector4(0, 0, 0, 0) };
   private readonly mountainMat: THREE.MeshStandardMaterial;
   private readonly ledgeMeshes: THREE.Mesh[] = [];
   private readonly ledgeCoins: (THREE.Group | null)[] = [];
-  private readonly pathMeshes: THREE.Mesh[] = [];
+  private readonly pathMaterials: THREE.ShaderMaterial[] = [];
   private readonly ledgeGold: THREE.MeshStandardMaterial;
   private readonly ledgeDim: THREE.MeshStandardMaterial;
   private readonly bulb: THREE.Mesh;
@@ -940,6 +1270,8 @@ export class FinaleStage3D {
   private readonly coinGlow: THREE.Sprite;
   private readonly summitGlow: THREE.Sprite;
   private readonly rays: THREE.Mesh;
+  private readonly burstA = new THREE.Vector4();
+  private readonly burstB = new THREE.Vector4();
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpE = new THREE.Euler();
@@ -971,7 +1303,10 @@ export class FinaleStage3D {
       r.toneMapping = THREE.ACESFilmicToneMapping;
       r.toneMappingExposure = 1.05;
       const pmrem = new THREE.PMREMGenerator(r);
-      this.env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const room = new RoomEnvironment();
+      this.envTarget = pmrem.fromScene(room, 0.04);
+      this.env = this.envTarget.texture;
+      room.dispose();
       pmrem.dispose();
     }
     this.glow.strength = 0.7;
@@ -988,10 +1323,10 @@ export class FinaleStage3D {
     sky.frustumCulled = false;
     this.scene.add(sky);
 
-    // the dark water the city stands in, with its reflection showing through
+    // the dark water the city stands in, with its rippled reflection and horizon shimmer showing through
     const waterGeo = new THREE.CircleGeometry(420, 96);
     waterGeo.rotateX(-Math.PI / 2);
-    const waterMat = new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.62, depthWrite: false });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.55, depthWrite: false });
     this.track(waterGeo);
     this.track(waterMat);
     this.water = new THREE.Mesh(waterGeo, waterMat);
@@ -1009,6 +1344,7 @@ export class FinaleStage3D {
     this.scene.add(rim);
 
     this.scene.add(this.sparks.points);
+    this.scene.add(this.streaks.mesh);
 
     // beads, balloons and meteor streaks for the shows that have them
     const beadGeo = new THREE.SphereGeometry(0.2, 10, 8);
@@ -1154,7 +1490,72 @@ export class FinaleStage3D {
       envMapIntensity: 0.55,
       transparent: true,
     });
+    this.molarBodyGlass.customProgramCacheKey = () => 'molar-porcelain-v1';
+    this.molarBodyGlass.onBeforeCompile = (shader) => {
+      shader.uniforms.uMolarFx = this.molarFx;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vMolarLocal;\nvarying vec3 vMolarWorld;\nvarying vec3 vMolarNormal;')
+        .replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\nvMolarLocal = position;\nvMolarWorld = (modelMatrix * vec4(position, 1.0)).xyz;\nvMolarNormal = normalize(mat3(modelMatrix) * normal);'
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uMolarFx;\nvarying vec3 vMolarLocal;\nvarying vec3 vMolarWorld;\nvarying vec3 vMolarNormal;')
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            vec3 wn = normalize(vMolarNormal);
+            vec3 V = normalize(cameraPosition - vMolarWorld);
+            vec3 keyDir = normalize(vec3(-8.0, 20.0, 30.0));
+            float NdotV = clamp(dot(wn, V), 0.0, 1.0);
+            float rim = pow(max(0.0, 1.0 - NdotV), 2.2);
+            float wrap = clamp((dot(wn, keyDir) + 0.55) / 1.55, 0.0, 1.0);
+            float backWarm = pow(clamp(1.0 - max(dot(wn, keyDir), 0.0), 0.0, 1.0), 1.6) * (0.35 + 0.65 * rim);
+            float bodyDepth = 1.0 - smoothstep(0.0, 1.4, max(0.0, -vMolarLocal.z - 0.25));
+            vec3 honey = vec3(0.55, 0.28, 0.09);
+            vec3 cream = vec3(0.75, 0.50, 0.24);
+            // a hint of warmth inside, kept low so the porcelain keeps its shading
+            vec3 innerGlow = (honey * (0.14 + 0.22 * backWarm) + cream * (0.08 * wrap + 0.16 * rim)) * (0.45 + 0.55 * bodyDepth) * 0.4;
+            innerGlow += vec3(0.85, 0.62, 0.22) * uMolarFx.x * (0.18 + 0.35 * rim);
+            float sweepCoord = vMolarLocal.x * 0.78 + vMolarLocal.y * 0.52 + vMolarLocal.z * 0.25;
+            float sd = sweepCoord - uMolarFx.y;
+            float sweepBand = exp(-sd * sd * 14.0) * uMolarFx.z;
+            innerGlow += vec3(1.0, 0.92, 0.68) * sweepBand * 0.75;
+            totalEmissiveRadiance += innerGlow;
+          }`
+        );
+    };
     this.molarBodyGold = new THREE.MeshPhysicalMaterial({ color: 0xe8b23e, metalness: 1, roughness: 0.26, clearcoat: 0.5, envMap: this.env, envMapIntensity: 1.0, transparent: true });
+    this.molarBodyGold.customProgramCacheKey = () => 'molar-gold-v1';
+    this.molarBodyGold.onBeforeCompile = (shader) => {
+      shader.uniforms.uMolarFx = this.molarFx;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vMolarLocal;\nvarying vec3 vMolarWorld;\nvarying vec3 vMolarNormal;')
+        .replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\nvMolarLocal = position;\nvMolarWorld = (modelMatrix * vec4(position, 1.0)).xyz;\nvMolarNormal = normalize(mat3(modelMatrix) * normal);'
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uMolarFx;\nvarying vec3 vMolarLocal;\nvarying vec3 vMolarWorld;\nvarying vec3 vMolarNormal;')
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            vec3 wn = normalize(vMolarNormal);
+            vec3 V = normalize(cameraPosition - vMolarWorld);
+            float NdotV = clamp(dot(wn, V), 0.0, 1.0);
+            float rim = pow(max(0.0, 1.0 - NdotV), 2.6);
+            float sweepCoord = vMolarLocal.x * 0.78 + vMolarLocal.y * 0.52 + vMolarLocal.z * 0.25;
+            float sd = sweepCoord - uMolarFx.y;
+            float sharp = exp(-sd * sd * 24.0);
+            float broad = exp(-sd * sd * 4.5);
+            vec3 sweepCol = (vec3(1.0, 0.94, 0.68) * sharp * 1.45 + vec3(0.95, 0.68, 0.16) * broad * 0.55) * uMolarFx.z;
+            vec3 warmRim = vec3(0.92, 0.64, 0.18) * rim * (0.22 + 0.15 * uMolarFx.x);
+            totalEmissiveRadiance += sweepCol + warmRim;
+          }`
+        );
+    };
     this.track(this.molarBodyGlass);
     this.track(this.molarBodyGold);
     this.molarBody = new THREE.Mesh(molarGeo, this.molarBodyGlass);
@@ -1196,6 +1597,57 @@ export class FinaleStage3D {
     }
     prism.setAttribute('color', new THREE.BufferAttribute(shade, 3));
     this.mountainMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.32, metalness: 0.1, envMap: this.env, envMapIntensity: 0.9, transparent: true });
+    this.mountainMat.customProgramCacheKey = () => 'mountain-crystal-v1';
+    this.mountainMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uMountainFx = this.mountainFx;
+      shader.uniforms.uProbeLocal = this.probeLocal;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vMountLocal;\nvarying vec3 vMountWorld;\nvarying vec3 vMountNormal;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec4 mLocal = instanceMatrix * vec4(position, 1.0);
+            vMountLocal = mLocal.xyz;
+            vMountWorld = (modelMatrix * mLocal).xyz;
+          #else
+            vMountLocal = position;
+            vMountWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+          #endif
+          vMountNormal = normalize(mat3(modelMatrix) * normal);`
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uMountainFx;\nuniform vec4 uProbeLocal;\nvarying vec3 vMountLocal;\nvarying vec3 vMountWorld;\nvarying vec3 vMountNormal;')
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          {
+            vec3 lp = vMountLocal;
+            vec3 wn = normalize(vMountNormal);
+            vec3 V = normalize(cameraPosition - vMountWorld);
+            float hFrac = clamp((lp.y + 1.1) / 1.6, 0.0, 1.0);
+            float NdotV = clamp(abs(dot(wn, V)), 0.0, 1.0);
+            float fresnel = pow(max(0.0, 1.0 - NdotV), 2.2);
+            float topFace = smoothstep(0.65, 0.95, wn.y);
+            float breathe = uMountainFx.y > 0.5 ? 0.5 : 0.5 + 0.5 * sin(uMountainFx.x * 1.6 - lp.y * 5.0 + lp.x * 2.5);
+            vec3 deepGlow = vec3(0.05, 0.36, 0.52);
+            vec3 midGlow = vec3(0.14, 0.62, 0.72);
+            vec3 topGlow = vec3(0.95, 0.78, 0.38);
+            vec3 cCol = hFrac < 0.55
+              ? mix(deepGlow, midGlow, hFrac / 0.55)
+              : mix(midGlow, topGlow, smoothstep(0.55, 0.95, hFrac));
+            vec3 inner = cCol * (0.11 + 0.28 * fresnel + 0.09 * breathe) * (1.0 - 0.35 * topFace);
+            inner += cCol * topFace * (0.07 + 0.14 * hFrac);
+            vec3 dp = lp - vec3(0.0, 0.5, 0.0);
+            float peakGlow = exp(-dot(dp, dp) * 3.8);
+            inner += vec3(1.0, 0.80, 0.32) * peakGlow * (0.24 + 0.45 * uMountainFx.z);
+            vec3 pp = lp - uProbeLocal.xyz;
+            float probeCatch = exp(-dot(pp, pp) * 14.0) * uProbeLocal.w;
+            inner += vec3(0.25, 0.92, 0.82) * probeCatch * 0.42;
+            totalEmissiveRadiance += inner;
+          }`
+        );
+    };
     this.track(prism);
     this.track(this.mountainMat);
     const spire = new THREE.InstancedMesh(prism, this.mountainMat, columns.length);
@@ -1240,11 +1692,20 @@ export class FinaleStage3D {
     for (let k = 0; k + 1 < stops.length; k++) {
       const a = new THREE.Vector3(...stops[k]);
       const b = new THREE.Vector3(...stops[k + 1]);
-      const m = new THREE.Mesh(pathGeo, this.ledgeDim);
+      const pm = new THREE.ShaderMaterial({
+        vertexShader: PATH_VERT,
+        fragmentShader: PATH_FRAG,
+        uniforms: { uPathFx: { value: new THREE.Vector4(0, 0, 0, 1) } },
+        transparent: true,
+        depthWrite: false,
+      });
+      this.track(pm);
+      this.pathMaterials.push(pm);
+      const m = new THREE.Mesh(pathGeo, pm);
       m.position.copy(a).add(b).multiplyScalar(0.5);
       m.scale.set(1, a.distanceTo(b), 1);
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
-      this.pathMeshes.push(m);
+      m.renderOrder = 6;
       this.mountain.add(m);
     }
     this.summitGlow = sprite(0xfde68a);
@@ -1286,23 +1747,36 @@ export class FinaleStage3D {
     this.bulb.visible = false;
     this.scene.add(this.bulb);
 
-    // each city's sign: the fractal bloom, and a single sign for the ending's circle
+    // each city's sign: the fractal bloom (coloured by depth + appear glint), and a single sign for the ending's circle
+    const fractalMat = new THREE.ShaderMaterial({
+      vertexShader: FRACTAL_VERT,
+      fragmentShader: FRACTAL_FRAG,
+      side: THREE.DoubleSide,
+    });
+    const orbitMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, color: new THREE.Color(1.42, 1.42, 1.42), side: THREE.DoubleSide });
+    this.track(fractalMat);
+    this.track(orbitMat);
     cities.forEach((city, i) => {
       if (!city) return;
       const geo = emblemGeometry(city.art.emblem, 0.14);
       this.track(geo);
       this.emblemGeos.set(i, geo);
-      // bright enough to bloom: the signs glow like neon
-      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5), side: THREE.DoubleSide });
-      this.track(mat);
       const count = emblemFractalNodes(i).length;
-      const inst = new THREE.InstancedMesh(geo, mat, count);
+      const instGeo = new THREE.BufferGeometry();
+      instGeo.setAttribute('position', geo.getAttribute('position'));
+      instGeo.setAttribute('color', geo.getAttribute('color'));
+      instGeo.setAttribute('normal', geo.getAttribute('normal'));
+      const fxBuf = new Float32Array(count * 2);
+      const fxAttr = new THREE.InstancedBufferAttribute(fxBuf, 2).setUsage(THREE.DynamicDrawUsage);
+      instGeo.setAttribute('aEmblemFx', fxAttr);
+      this.track(instGeo);
+      const inst = new THREE.InstancedMesh(instGeo, fractalMat, count);
       inst.frustumCulled = false;
       inst.count = 0;
       inst.renderOrder = 7;
-      this.fractals.set(i, inst);
+      this.fractals.set(i, { inst, fxBuf, fxAttr });
       this.scene.add(inst);
-      const orbit = new THREE.Mesh(geo, mat);
+      const orbit = new THREE.Mesh(geo, orbitMat);
       orbit.visible = false;
       this.orbitEmblems.push(orbit);
       this.scene.add(orbit);
@@ -1376,7 +1850,7 @@ export class FinaleStage3D {
   /** The sky over city `index` (-1: plain night), lit as at show time `t` or at `override`. */
   private setSky(index: number, aurora: number, t: number, override: number): void {
     const u = this.skyUniforms;
-    u.uTime.value = t;
+    u.uTime.value = this.reducedMotion ? 4 : t;
     u.uAurora.value = aurora;
     u.uT.value = t;
     u.uRm.value = this.reducedMotion ? 1 : 0;
@@ -1406,26 +1880,77 @@ export class FinaleStage3D {
     return buildCoin(geo ?? new THREE.BufferGeometry(), finish, this.env, this.track);
   }
 
-  /** Draws the city's show and celebration sparks (city space) into the point buffer. */
+  /** Finds up to two strongest active firework burst flashes to wash over the city skyline. */
+  private computeBurstFlash(plan: CityFinalePlan, showT: number, dim: number): void {
+    this.burstA.set(0, 0, 0, 0);
+    this.burstB.set(0, 0, 0, 0);
+    if (this.reducedMotion || showT < 0 || dim <= 0.004) return;
+    const delay = plan.show === 'meteors' ? 0 : 0.9;
+    let bestA = 0;
+    let bestB = 0;
+    for (const burst of plan.bursts) {
+      const age = showT - burst.t - delay;
+      if (age < 0 || age > 0.72) continue;
+      const str = smooth01(age / 0.04) * Math.exp(-age / 0.24) * 0.55 * dim;
+      if (str <= bestB) continue;
+      this.colA.setHex(burst.color);
+      if (str > bestA) {
+        bestB = bestA;
+        this.burstB.copy(this.burstA);
+        bestA = str;
+        this.burstA.set(this.colA.r * str, this.colA.g * str, this.colA.b * str, burst.x);
+      } else {
+        bestB = str;
+        this.burstB.set(this.colA.r * str, this.colA.g * str, this.colA.b * str, burst.x);
+      }
+    }
+  }
+
+  /** Draws the city's show and celebration streaks/sparks (city space). */
+  /** No beads, balloons or shooting stars on screen (before a city's show, or under another city's credit). */
+  private clearShowProps(): void {
+    this.beads.count = 0;
+    for (const b of this.balloons) b.visible = false;
+    this.meteorPos.fill(0);
+    (this.meteorLines.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+  }
+
   private drawShow(city: FinaleCity3D, showT: number, dim: number): void {
     const plan = city.plan;
-    if (showT < 0) return;
+    if (showT < 0) {
+      this.clearShowProps();
+      return;
+    }
+    const delay = plan.show === 'meteors' ? 0 : 0.9;
     plan.bursts.forEach((burst, b) => {
       const center = burstWorld(burst, b);
+      if (this.reducedMotion) {
+        const still = (showT - burst.t - delay) / 1.6;
+        if (still >= 0 && still < 1) this.sparks.add(center[0], center[1], center[2], this.colA.setHex(burst.color), 0.7 * dim * Math.sin(Math.PI * still), 2.6);
+        return;
+      }
       const rocket = finaleRocket(burst, showT, plan.show);
       if (rocket) {
         const p = skylineWorld(rocket.x, rocket.y, 0);
-        this.sparks.add(p[0], p[1], center[2], this.colA.setHex(0xfef3c7), 1, 0.9);
+        const tail = skylineWorld(rocket.x, Math.max(0, rocket.y - 1.35), 0);
+        this.colA.setHex(0xfef3c7);
+        this.streaks.add(p[0], p[1], center[2], tail[0], tail[1], center[2], this.colA, 0.95 * dim, 0.16);
+        this.sparks.add(p[0], p[1], center[2], this.colA, 0.9 * dim, 0.75);
       }
       if (this.reducedMotion) return;
       this.colA.setHex(burst.color);
       this.colB.setHex(burst.color2);
-      // each spark with a short tail: the same burst a moment earlier, fainter and smaller
-      for (const [lag, fade, size] of TRAIL) {
-        for (const s of burstSparks3D(burst, b, showT - lag, plan.show, center)) {
-          this.mixed.copy(this.colA).lerp(this.colB, s.mix);
-          this.sparks.add(s.x, s.y, s.z, this.mixed, s.alpha * dim * fade, (s.gen === 0 ? 0.6 : 0.42) * size);
-        }
+      // Soft brief core bloom right as the shell opens
+      const age = showT - burst.t - delay;
+      if (age >= 0 && age < 0.28) {
+        const coreAlpha = 0.52 * dim * smooth01(age / 0.025) * Math.exp(-age / 0.08);
+        const coreSize = 2.4 * (0.45 + 1.3 * smooth01(age / 0.12));
+        this.mixed.copy(this.colA).lerp(this.colB, 0.35);
+        this.sparks.add(center[0], center[1], center[2], this.mixed, coreAlpha, coreSize);
+      }
+      for (const s of burstSparks3D(burst, b, showT, plan.show, center)) {
+        this.mixed.copy(this.colA).lerp(this.colB, s.mix);
+        this.streaks.add(s.x, s.y, s.z, s.px, s.py, s.pz, this.mixed, s.alpha * dim, s.gen === 0 ? 0.24 : 0.16);
       }
     });
     // beads
@@ -1465,7 +1990,8 @@ export class FinaleStage3D {
   }
 
   private placeFractal(index: number, t: number): void {
-    for (const [i, inst] of this.fractals) {
+    for (const [i, entry] of this.fractals) {
+      const { inst, fxBuf, fxAttr } = entry;
       if (i !== index) {
         inst.count = 0;
         continue;
@@ -1480,8 +2006,11 @@ export class FinaleStage3D {
         this.tmpP.set(e.x, e.y, e.z);
         this.tmpM.compose(this.tmpP, this.tmpQ, this.tmpS);
         inst.setMatrixAt(k, this.tmpM);
+        fxBuf[k * 2] = Math.min(1, e.level / 3);
+        fxBuf[k * 2 + 1] = e.glint;
       });
       inst.instanceMatrix.needsUpdate = true;
+      fxAttr.needsUpdate = true;
     }
   }
 
@@ -1574,6 +2103,15 @@ export class FinaleStage3D {
     this.mountainMat.opacity = m.alpha;
     this.mountainMat.transparent = m.alpha < 0.999;
     const atTop = finaleClimbStatus(this.finishes).left === 0;
+    const summitBlaze = atTop && t >= T.summitHop ? Math.min(1, 0.55 + Math.exp(-(t - T.summitHop) / 0.55)) : 0;
+    this.mountainFx.value.set(t, this.reducedMotion ? 1 : 0, summitBlaze, 0);
+    const probeNow = finaleProbe(t, this.reducedMotion, this.worldIndex, atTop);
+    if (probeNow.space === 'stage' && probeNow.alpha > 0.01 && t >= T.molarEnd) {
+      const py = probeNow.y - m.dy;
+      this.probeLocal.value.set(probeNow.x, py, mountainFront(probeNow.x, py) + 0.08, probeNow.alpha);
+    } else {
+      this.probeLocal.value.set(0, 0, 0, 0);
+    }
     const earned = (i: number): boolean =>
       i === this.worldIndex ? t >= T.climbHop : (this.finishes[i] ?? 'empty') !== 'empty';
     this.ledgeMeshes.forEach((l, i) => {
@@ -1595,10 +2133,62 @@ export class FinaleStage3D {
         coin.rotation.y = this.reducedMotion ? 0 : t * 0.8 + i;
       }
     });
-    this.pathMeshes.forEach((p, k) => {
-      const done = k < CAMPAIGN_PIECES ? earned(k) : atTop && t >= T.summitHop;
-      p.material = done ? this.ledgeGold : this.ledgeDim;
+    const hopStart = T.climbHop - 0.8;
+    const summitStart = T.summitHop - 0.8;
+    this.pathMaterials.forEach((pm, k) => {
+      let fill = 0;
+      let shimmer = 0;
+      let headGlow = 0;
+      const phase = ((t * 0.65 - k * 0.22) % 1 + 1) % 1;
+      if (k < CAMPAIGN_PIECES) {
+        if (k === this.worldIndex) {
+          if (t >= T.climbHop) {
+            fill = 1;
+            shimmer = phase;
+            headGlow = this.reducedMotion ? 0 : 0.35 + 0.65 * Math.exp(-(t - T.climbHop) / 0.5);
+          } else if (t >= hopStart && !this.reducedMotion) {
+            const s = smooth01((t - hopStart) / 0.8);
+            fill = s;
+            shimmer = s;
+            headGlow = 1;
+          }
+        } else if (earned(k)) {
+          fill = 1;
+          shimmer = phase;
+          headGlow = this.reducedMotion ? 0 : 0.35;
+        }
+      } else if (atTop) {
+        if (t >= T.summitHop) {
+          fill = 1;
+          shimmer = ((t * 0.75 - k * 0.22) % 1 + 1) % 1;
+          headGlow = this.reducedMotion ? 0 : 0.45 + 0.75 * Math.exp(-(t - T.summitHop) / 0.6);
+        } else if (t >= summitStart && !this.reducedMotion) {
+          const s = smooth01((t - summitStart) / 0.8);
+          fill = s;
+          shimmer = s;
+          headGlow = 1;
+        }
+      }
+      (pm.uniforms.uPathFx.value as THREE.Vector4).set(fill, shimmer, headGlow, m.alpha);
     });
+    // Brief golden sparkle ring on the ledge when the probe touches down
+    if (!this.reducedMotion) {
+      const addTouchdown = (at: number, ledgeIdx: number): void => {
+        const age = t - at;
+        if (age < 0 || age > 0.5) return;
+        const l = ledge3D(ledgeIdx);
+        const w0 = stageWorld(l[0], l[1] + m.dy, l[2] * STAGE.unit);
+        const r = 0.25 + 1.3 * smooth01(age / 0.45);
+        const fade = (1 - age / 0.5) * m.alpha;
+        this.colA.setHex(0xfde68a);
+        for (let j = 0; j < 10; j++) {
+          const a = (Math.PI * 2 * j) / 10 + age * 1.4;
+          this.sparks.add(w0[0] + Math.cos(a) * r, w0[1] + Math.sin(a) * r * 0.45 + age * 0.6, w0[2] + 0.15, this.colA, fade * 0.85, 0.22);
+        }
+      };
+      addTouchdown(T.climbHop, this.worldIndex);
+      if (atTop) addTouchdown(T.summitHop, CAMPAIGN_PIECES);
+    }
     const top = stageWorld(0, 0.66 + m.dy, 0);
     this.summitGlow.visible = true;
     this.summitGlow.position.set(top[0], top[1], top[2] - 0.5);
@@ -1627,9 +2217,13 @@ export class FinaleStage3D {
     const buffer = r.getDrawingBufferSize(this.tmpV2);
     const perUnit = buffer.y / (2 * Math.tan(((this.camera.fov * Math.PI) / 180) / 2));
     const scale = this.sparks.material.uniforms.uScale;
-    scale.value = (perUnit * GlowPass.bufferSize(buffer.x, buffer.y).h) / Math.max(1, buffer.y);
+    const glowBuf = GlowPass.bufferSize(buffer.x, buffer.y);
+    const viewport = this.streaks.material.uniforms.uViewport.value as THREE.Vector2;
+    scale.value = (perUnit * glowBuf.h) / Math.max(1, buffer.y);
+    viewport.set(glowBuf.w, glowBuf.h);
     this.glow.prepare(r, this.scene, this.camera);
     scale.value = perUnit;
+    viewport.set(buffer.x, buffer.y);
     r.setRenderTarget(null);
     r.render(this.scene, this.camera);
     this.glow.composite(r);
@@ -1646,7 +2240,7 @@ export class FinaleStage3D {
     this.probe.visible = false;
     this.bulb.visible = false;
     for (const o of this.orbitEmblems) o.visible = false;
-    for (const inst of this.fractals.values()) inst.count = 0;
+    for (const { inst } of this.fractals.values()) inst.count = 0;
   }
 
   /** One frame of a city's finale, `t` seconds in. */
@@ -1659,20 +2253,25 @@ export class FinaleStage3D {
     this.hideStage();
     this.faceTilt = 0;
     this.setCamera(finaleCamera3D(t, this.reducedMotion), w, h);
-    relief.update(t, this.reducedMotion, -1, null);
+    const dim = 1 - 0.35 * smooth01((t - 14.0) / 1.0);
+    this.computeBurstFlash(city.plan, t - T.blazeEnd, dim);
+    relief.update(t, this.reducedMotion, -1, null, this.burstA, this.burstB);
     const aurora = smooth01((t - T.waveEnd) / 1.2) * (t < T.showEnd ? 1 : 0.55);
     this.setSky(this.worldIndex, this.reducedMotion ? aurora * 0.6 : aurora, t, -1);
 
     // the show
     this.sparks.begin();
-    const dim = 1 - 0.35 * smooth01((t - 14.0) / 1.0);
+    this.streaks.begin();
     this.drawShow(city, t - T.blazeEnd, dim);
 
     // the emblem: its rocket, then the fractal bloom of the city's sign
     const rocket = finaleEmblemRocket(t);
     if (rocket && !this.reducedMotion) {
       const p = stageWorld(rocket.x, rocket.y, 0);
-      this.sparks.add(0, lerpN(p[1] - 6, EMBLEM_WORLD.center[1], (t - T.showEnd) / (T.emblemBurst - T.showEnd)), EMBLEM_WORLD.center[2], this.colA.setHex(0xfef3c7), 1, 1.1);
+      const y = lerpN(p[1] - 6, EMBLEM_WORLD.center[1], (t - T.showEnd) / (T.emblemBurst - T.showEnd));
+      this.colA.setHex(0xfef3c7);
+      this.streaks.add(0, y, EMBLEM_WORLD.center[2], 0, y - 1.6, EMBLEM_WORLD.center[2], this.colA, 1, 0.2);
+      this.sparks.add(0, y, EMBLEM_WORLD.center[2], this.colA, 0.95, 1.0);
     }
     this.placeFractal(this.worldIndex, t);
 
@@ -1688,7 +2287,8 @@ export class FinaleStage3D {
       this.coinRoot.visible = true;
       const p = stageWorld(piece.x, piece.y, 0.8);
       this.coinRoot.position.set(...p);
-      this.coinRoot.scale.setScalar(PIECE_RADIUS * piece.scale * STAGE.unit * Math.max(0.01, piece.alpha));
+      this.coinRoot.scale.setScalar(PIECE_RADIUS * piece.scale * STAGE.unit);
+      setOpacity(this.coinRoot, piece.alpha);
       this.coinRoot.rotation.set(0, piece.spin, 0);
       this.coinGlow.visible = true;
       this.coinGlow.position.set(p[0], p[1], p[2] - 0.3);
@@ -1706,6 +2306,8 @@ export class FinaleStage3D {
     // the molar, then the mountain with the molar on its summit
     const dy = this.placeMountain(t);
     const molar = finaleMolar(t, this.reducedMotion);
+    const slotShine = finaleSlotShine(t);
+    this.molarFx.value.set(slotShine, -3, 0, 0);
     this.placeMolar(
       molar.x,
       molar.y,
@@ -1714,7 +2316,7 @@ export class FinaleStage3D {
       t,
       (i) => (i === this.worldIndex ? (t >= T.slot ? finish : 'empty') : this.finishes[i] ?? 'empty'),
       this.worldIndex,
-      finaleSlotShine(t),
+      slotShine,
       false,
       t < T.molarEnd
     );
@@ -1735,6 +2337,7 @@ export class FinaleStage3D {
       }
     }
     this.sparks.end();
+    this.streaks.end();
     this.draw();
   }
 
@@ -1746,12 +2349,18 @@ export class FinaleStage3D {
     const credit = endingCredit(t);
     this.setCamera(endingCamera3D(t, this.reducedMotion), w, h);
     this.sparks.begin();
+    this.streaks.begin();
     if (credit.index >= 0) {
       const relief = this.showOnly(credit.index);
       const city = this.cities[credit.index];
-      relief?.update(T.end, this.reducedMotion, credit.alpha, this.reducedMotion ? null : t);
-      this.setSky(credit.index, credit.alpha * 0.6, t, credit.alpha);
       const within = t - E.creditsStart - credit.index * E.creditSeconds;
+      if (city) this.computeBurstFlash(city.plan, within - 0.6, credit.alpha);
+      else {
+        this.burstA.set(0, 0, 0, 0);
+        this.burstB.set(0, 0, 0, 0);
+      }
+      relief?.update(T.end, this.reducedMotion, credit.alpha, this.reducedMotion ? null : t, this.burstA, this.burstB);
+      this.setSky(credit.index, credit.alpha * 0.6, t, credit.alpha);
       if (city) this.drawShow(city, within - 0.6, credit.alpha);
     } else {
       this.showOnly(-1);
@@ -1762,9 +2371,28 @@ export class FinaleStage3D {
       (this.meteorLines.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     }
 
-    // the molar, its pieces flying in, then gold
+    // the molar, its pieces flying in, then gold with a light sweep across it on snap
     const place = endingMolarPlace(t);
     const snapped = t >= E.snap;
+    const isGold = snapped && allGold;
+    let sweepPos = -3;
+    let sweepStr = 0;
+    if (snapped) {
+      const snapAge = t - E.snap;
+      if (this.reducedMotion) {
+        sweepPos = 0;
+        sweepStr = Math.exp(-snapAge / 0.85) * (isGold ? 0.5 : 0.35);
+      } else if (snapAge < 1.35) {
+        const s = snapAge / 1.35;
+        sweepPos = lerpN(-1.7, 1.8, smooth01(s));
+        sweepStr = Math.sin(s * Math.PI) * (isGold ? 1.0 : 0.65);
+      } else if (isGold && t >= E.face && t - E.face < 1.2) {
+        const s = (t - E.face) / 1.2;
+        sweepPos = lerpN(-1.5, 1.6, smooth01(s));
+        sweepStr = Math.sin(s * Math.PI) * 0.55;
+      }
+    }
+    this.molarFx.value.set(isGold ? (t >= E.finaleStart ? 1 : 0.45) : 0, sweepPos, sweepStr, 0);
     // With every piece gold the molar stands up to face you before its face appears, so the face
     // sits on its smooth side rather than between the cusps.
     this.faceTilt = allGold ? smooth01((t - (E.face - 1.4)) / 1.2) : 0;
@@ -1777,7 +2405,7 @@ export class FinaleStage3D {
       (i) => (endingPiece(i, t, this.reducedMotion).arrived ? this.finishes[i] ?? 'pearl' : 'empty'),
       -1,
       0,
-      snapped && allGold,
+      isGold,
       true
     );
     if (credit.index >= 0 && this.molar.visible) {
@@ -1806,9 +2434,21 @@ export class FinaleStage3D {
         this.flyingRoot.add(coin);
       }
       coin.visible = true;
-      coin.position.set(...stageWorld(p.x, p.y, 1));
-      coin.scale.setScalar(GOLDEN_MOLAR.cuspRadius * place.scale * p.scale * STAGE.unit);
-      coin.rotation.set(0, p.spin, 0);
+      // Over the last part of the flight the coin eases into its socket's own place, turn and size
+      // on the tilted 3D molar, so it is already exactly there when it clicks in.
+      const flight = Math.max(0, Math.min(1, (t - (E.firstPiece + i * E.pieceGap)) / E.pieceFlight));
+      const k = this.reducedMotion ? 1 : smooth01((flight - 0.55) / 0.45);
+      const top = molarCuspTop(i);
+      this.molar.updateMatrixWorld(true);
+      this.tmpP.set(top[0], top[1], top[2] + 0.03);
+      this.molar.localToWorld(this.tmpP);
+      this.molar.getWorldQuaternion(this.tmpQ);
+      const socketScale = GOLDEN_MOLAR.cuspRadius * 0.88 * this.molar.scale.x;
+      const fly = stageWorld(p.x, p.y, 1);
+      coin.position.set(fly[0], fly[1], fly[2]).lerp(this.tmpP, k);
+      coin.quaternion.setFromEuler(this.tmpE.set(0, p.spin, 0)).slerp(this.tmpQ, k);
+      coin.scale.setScalar(lerpN(GOLDEN_MOLAR.cuspRadius * place.scale * p.scale * STAGE.unit, socketScale, k));
+      setOpacity(coin, p.alpha);
     }
     this.flyingRoot.visible = true;
 
@@ -1826,7 +2466,7 @@ export class FinaleStage3D {
       // a golden fractal sun rising behind the molar
       const c = stageWorld(place.x, place.y + 0.15, -10);
       u.uCenter.value.set(c[0], c[1], c[2]);
-      u.uRadius.value = 5.2 * (0.2 + 0.8 * grow);
+      u.uRadius.value = this.reducedMotion ? 5.2 : 5.2 * (0.2 + 0.8 * grow);
       u.uTime.value = this.reducedMotion ? 0 : local;
       u.uAlpha.value = grow * fade;
       u.uPower.value = this.reducedMotion ? 8 : 6 + 2 * smooth01(local / 3);
@@ -1844,27 +2484,34 @@ export class FinaleStage3D {
           const center = stageWorld(burst.x, burst.y, -2 + (b % 3));
           this.colA.setHex(burst.color);
           this.colB.setHex(burst.color2);
-          for (const [lag, fade, size] of TRAIL) {
-            for (const s of burstSparks3D(burst, b, local - lag, 'fireworks', center, ENDING_BURST_SCALE * STAGE.unit * 0.5)) {
-              this.mixed.copy(this.colA).lerp(this.colB, s.mix);
-              this.sparks.add(s.x, s.y, s.z, this.mixed, s.alpha * fade, (s.gen === 0 ? 0.2 : 0.14) * size);
-            }
+          const age = local - burst.t - 0.9;
+          if (age >= 0 && age < 0.25) {
+            const coreAlpha = 0.45 * smooth01(age / 0.025) * Math.exp(-age / 0.08);
+            this.mixed.copy(this.colA).lerp(this.colB, 0.35);
+            this.sparks.add(center[0], center[1], center[2], this.mixed, coreAlpha, 0.95 * (0.5 + smooth01(age / 0.12)));
+          }
+          for (const s of burstSparks3D(burst, b, local, 'fireworks', center, ENDING_BURST_SCALE * STAGE.unit * 0.5)) {
+            this.mixed.copy(this.colA).lerp(this.colB, s.mix);
+            this.streaks.add(s.x, s.y, s.z, s.px, s.py, s.pz, this.mixed, s.alpha, s.gen === 0 ? 0.09 : 0.065);
           }
         });
       }
       if (allGold && !this.reducedMotion && endingFace(t).alpha > 0) {
-        // golden rain over everything
+        // golden rain over everything as delicate shimmering streaks
+        this.colA.setHex(0xfde047);
         for (let k = 0; k < 120; k++) {
           const a = t - E.face - 0.03 * k;
           if (a < 0) continue;
           const fall = (a * (0.9 + 0.7 * ((k * 37) % 11) / 11)) % 5;
           const x = (((k * 53) % 97) / 97 - 0.5) * 30;
+          const y = 22 - fall * 4.4;
           const z = (((k * 29) % 41) / 41) * 12;
-          this.sparks.add(x, 22 - fall * 4.4, z, this.colA.setHex(0xfde047), 0.8, 0.22);
+          this.streaks.add(x, y, z, x, y + 0.65, z, this.colA, 0.8, 0.06);
         }
       }
     }
     this.sparks.end();
+    this.streaks.end();
     this.draw();
   }
 
@@ -1892,11 +2539,31 @@ export class FinaleStage3D {
     for (const r of this.reliefs.values()) r.dispose();
     for (const d of this.disposables) d.dispose();
     this.sparks.dispose();
+    this.streaks.dispose();
     this.glow.dispose();
+    this.beads.dispose();
+    for (const f of this.fractals.values()) f.inst.dispose();
+    this.mountain.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) o.dispose();
+    });
+    this.envTarget?.dispose();
     this.env?.dispose();
     this.renderer?.dispose();
     this.renderer = null;
   }
+}
+
+/** Fades every material in a group (the coins), going into the transparent pass only while fading. */
+function setOpacity(group: THREE.Object3D, alpha: number): void {
+  group.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      m.opacity = alpha;
+      m.transparent = alpha < 0.999;
+    }
+  });
 }
 
 function lerpN(a: number, b: number, t: number): number {

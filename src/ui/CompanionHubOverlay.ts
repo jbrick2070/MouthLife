@@ -1035,7 +1035,7 @@ export class CompanionHubOverlay implements OverlayView {
                 .join('')}
             </div>
 
-            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🤝 Get Involved, Volunteer &amp; Reach Out</div>
+            <div style="font-size:0.75rem;font-weight:700;color:#99f6e4;margin-bottom:6px;">🤝 Get Involved &amp; Volunteer</div>
             <div class="row-wrap" style="margin-bottom:8px;">
               ${c.involvementLinks
                 .map(
@@ -1047,29 +1047,6 @@ export class CompanionHubOverlay implements OverlayView {
                     rel="noopener noreferrer"
                   >
                     ${escapeHtml(l.label)} <span aria-hidden="true">↗</span>
-                  </a>
-                `
-                )
-                .join('')}
-              <a
-                class="btn btn-sm"
-                href="${escapeHtml(c.contactMailto)}"
-              >
-                ✉️ ${escapeHtml(c.contactEmail)}
-              </a>
-            </div>
-
-            <div class="row-wrap" style="margin-bottom:10px;">
-              ${c.socialLinks
-                .map(
-                  (s) => `
-                  <a
-                    class="btn btn-sm"
-                    href="${escapeHtml(s.url)}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    🔗 ${escapeHtml(s.label)} ↗
                   </a>
                 `
                 )
@@ -1162,7 +1139,6 @@ export class CompanionHubOverlay implements OverlayView {
           <div class="row-wrap" style="margin:8px 0 12px 0;">
             <button type="button" id="btn-copy-sync" class="btn btn-primary btn-sm">📋 Copy ML2 Code</button>
             <button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>
-            <button type="button" id="btn-copy-beta-diag" class="btn btn-sm" title="Copy a device report for feedback">🩺 Copy Beta Report</button>
           </div>
           <label for="txt-sync-import" style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Import ML2 Sync Code</label>
           <textarea
@@ -1820,55 +1796,6 @@ export class CompanionHubOverlay implements OverlayView {
       a.download = 'backup.mouthlife.json';
       a.click();
       URL.revokeObjectURL(url);
-    });
-
-    this.container.querySelector('#btn-copy-beta-diag')?.addEventListener('click', () => {
-      const dbg = (window as unknown as {
-        __MOUTHLIFE_DEBUG__?: {
-          getDrawCalls?: () => number;
-          getQualityTier?: () => string;
-          getAudioState?: () => string;
-        };
-      }).__MOUTHLIFE_DEBUG__;
-      const cleared = Object.entries(save.worlds)
-        .filter(([, w]) => w.completed)
-        .map(([id]) => id);
-      const report = JSON.stringify({
-        app: 'MouthLife v1.0-beta',
-        ts: new Date().toISOString(),
-        viewport:
-          typeof window !== 'undefined'
-            ? `${window.innerWidth}x${window.innerHeight}@${Number(window.devicePixelRatio || 1).toFixed(2)}x`
-            : 'n/a',
-        qualityTier: dbg?.getQualityTier?.() ?? save.qualityPreference,
-        drawCalls: dbg?.getDrawCalls?.() ?? -1,
-        audioState: dbg?.getAudioState?.() ?? 'unknown',
-        stamps: save.totalBrushStamps,
-        ions: save.fluorideIons,
-        clearedWorlds: cleared,
-        syncCode: this.saveSys.exportSyncCode(),
-      });
-      const exportArea = this.container?.querySelector<HTMLTextAreaElement>('#txt-sync-export');
-      const fallbackCopy = () => {
-        if (exportArea) {
-          exportArea.value = report;
-          exportArea.focus();
-          exportArea.select();
-          exportArea.setSelectionRange?.(0, report.length);
-          try {
-            document.execCommand?.('copy');
-          } catch {
-            // Leave selected for manual copy
-          }
-        }
-      };
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(report).catch(() => fallbackCopy());
-      } else {
-        fallbackCopy();
-      }
-      this.statusBanner = 'Report copied!';
-      showSyncInlineFeedback('✓ Report copied!');
     });
 
     this.container.querySelector('#btn-reset-save')?.addEventListener('click', () => {

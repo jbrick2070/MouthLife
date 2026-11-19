@@ -35,6 +35,22 @@ describe('Sync Code import resilience', () => {
     expect(JSON.stringify(sys.getSave())).toBe(before);
   });
 
+  it('merges an older code without erasing newer progress', () => {
+    const a = freshSave();
+    const oldCode = a.exportSyncCode();
+    const save = a.getSave();
+    save.fluorideIons = 412;
+    save.worlds.world_1 = { ...save.worlds.world_1, completed: true, timesCleared: 2, bestScore: 9900, bestGrade: 'S' };
+    save.unlockedHistoryNotes = [...save.unlockedHistoryNotes, 'note_newer'];
+    a.save(save, save.lastSavedEpochMs + 1000);
+    const merged = a.importSyncCode(oldCode);
+    expect(merged.fluorideIons).toBe(412);
+    expect(merged.worlds.world_1.completed).toBe(true);
+    expect(merged.worlds.world_1.bestScore).toBe(9900);
+    expect(merged.worlds.world_1.bestGrade).toBe('S');
+    expect(merged.unlockedHistoryNotes).toContain('note_newer');
+  });
+
   it('never lowers monotonic brush stamps when importing an older save', () => {
     const a = freshSave();
     const oldCode = a.exportSyncCode();

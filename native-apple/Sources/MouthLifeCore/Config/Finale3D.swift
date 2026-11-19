@@ -145,7 +145,8 @@ public enum Finale3D {
         if t < E.creditsStart || t >= E.finaleStart {
             let local = t < E.creditsStart ? t : t - E.finaleStart
             let a = reducedMotion ? 0 : (t < E.creditsStart ? max(0, local - E.snap) * 0.12 : sin(local * 0.35) * 0.32)
-            let r = t < E.creditsStart ? lerp(15, 13, CityFinale.smooth01(local / E.snap)) : 15
+            // with Reduce Motion the camera holds its distance too
+            let r = reducedMotion ? 13 : (t < E.creditsStart ? lerp(15, 13, CityFinale.smooth01(local / E.snap)) : 15)
             // looking a little below the molar's middle, so it sits above the words at the bottom
             return CameraShot(
                 pos: Vec3(m.x + sin(a) * r, m.y + 0.2, m.z + cos(a) * r),
@@ -156,7 +157,7 @@ public enum Finale3D {
         let local = t - E.creditsStart
         let within = clamp(local - floor(local / E.creditSeconds) * E.creditSeconds, 0, E.creditSeconds)
         let a = reducedMotion ? 0 : -0.35 + (0.7 * within) / E.creditSeconds
-        return CameraShot(pos: Vec3(sin(a) * 46, 9, cos(a) * 46), target: Vec3(0, 10, 0), fov: 48)
+        return CameraShot(pos: Vec3(sin(a) * 40, 8, cos(a) * 40), target: Vec3(0, 9.5, 0), fov: 48)
     }
 
     // MARK: - 3D fireworks, each spark splitting once
@@ -175,6 +176,10 @@ public enum Finale3D {
         public let x: Double
         public let y: Double
         public let z: Double
+        /// Where the spark was a moment ago, for a stretched streak.
+        public let px: Double
+        public let py: Double
+        public let pz: Double
         /// 0 = burst's first colour, 1 = its second.
         public let mix: Double
         public let alpha: Double
@@ -205,6 +210,8 @@ public enum Finale3D {
         if age < 0 || age >= shape.life { return [] }
         let gravity = show == .meteors ? 0 : shape.gravity
         let splitAt = shape.split * shape.life
+        let lag = burst.kind == .willow ? 0.16 : 0.095
+        let childLag = burst.kind == .willow ? 0.11 : 0.075
         var out: [Spark3D] = []
         func reach(_ speed: Double, _ a: Double, _ radius: Double) -> Double { radius * speed * (1 - exp(-3.2 * a)) * scale }
         for i in 0..<shape.sparks {
@@ -213,26 +220,45 @@ public enum Finale3D {
             let a = min(age, splitAt)
             let dist = reach(speed, a, shape.radius)
             let drop = gravity * a * a * scale
-            let px = center.x + d.x * dist
-            let py = center.y + d.y * dist - drop
-            let pz = center.z + d.z * dist
+            let sx = center.x + d.x * dist
+            let sy = center.y + d.y * dist - drop
+            let sz = center.z + d.z * dist
             if age < splitAt {
+                let pa = max(0, age - lag)
+                let pdist = reach(speed, pa, shape.radius)
+                let pdrop = gravity * pa * pa * scale
                 let fade = 1 - (age / shape.life) * 0.4
-                out.append(Spark3D(x: px, y: py, z: pz, mix: clamp(age / splitAt, 0, 1) * 0.5, alpha: fade, gen: 0))
+                out.append(Spark3D(
+                    x: sx,
+                    y: sy,
+                    z: sz,
+                    px: center.x + d.x * pdist,
+                    py: center.y + d.y * pdist - pdrop,
+                    pz: center.z + d.z * pdist,
+                    mix: clamp(age / splitAt, 0, 1) * 0.5,
+                    alpha: fade,
+                    gen: 0
+                ))
                 continue
             }
             // the split: a small burst from where the spark had got to
             let ca = age - splitAt
             let cl = shape.life - splitAt
+            let pca = max(0, ca - childLag)
             let fade = 1 - (ca / cl) * (ca / cl)
             for c in 0..<shape.children {
                 let cd = sparkDirection(.peony, c, shape.children, b * 31 + i)
                 let cdist = reach(1, ca, shape.childRadius)
                 let cdrop = gravity * (a + ca) * (a + ca) * scale - drop
+                let pcdist = reach(1, pca, shape.childRadius)
+                let pcdrop = gravity * (a + pca) * (a + pca) * scale - drop
                 out.append(Spark3D(
-                    x: px + cd.x * cdist,
-                    y: py + cd.y * cdist - cdrop,
-                    z: pz + cd.z * cdist,
+                    x: sx + cd.x * cdist,
+                    y: sy + cd.y * cdist - cdrop,
+                    z: sz + cd.z * cdist,
+                    px: sx + cd.x * pcdist,
+                    py: sy + cd.y * pcdist - pcdrop,
+                    pz: sz + cd.z * pcdist,
                     mix: 0.5 + 0.5 * clamp(ca / cl, 0, 1),
                     alpha: fade,
                     gen: 1
@@ -256,6 +282,8 @@ public enum Finale3D {
         public let alpha: Double
         /// 0 for the sign itself, 1, 2, ... for each smaller copy.
         public let level: Int
+        /// 0..1 brief flash right as this copy pops into place (0 under Reduce Motion).
+        public let glint: Double
     }
 
     public struct FractalNode: Equatable, Sendable {
@@ -370,8 +398,10 @@ public enum Finale3D {
                     scale *= 1 - e
                 }
             }
+            let age = t - appearAt
+            let glint = reducedMotion || age <= 0 ? 0 : CityFinale.smooth01(age / 0.08) * exp(-max(0, age - 0.05) / 0.18)
             let gear = cityIndex == 2 && !reducedMotion ? (n.level % 2 == 0 ? 1 : -1.6) * (t - T.emblemBurst) * 1.4 : 0
-            out.append(EmblemInstance(x: x, y: y, z: z, roll: n.roll + gear, yaw: spin, scale: scale, alpha: alpha, level: n.level))
+            out.append(EmblemInstance(x: x, y: y, z: z, roll: n.roll + gear, yaw: spin, scale: scale, alpha: alpha, level: n.level, glint: glint))
         }
         return out
     }
@@ -695,13 +725,13 @@ public enum Finale3D {
                 let cam = finaleCamera(t, reducedMotion: rm)
                 sum += cam.pos.x * 0.1 + cam.pos.y * 0.2 + cam.pos.z * 0.03 + cam.target.x * 0.05 + cam.target.y * 0.07 + cam.fov * 0.01
                 for e in emblemFractal(cityIndex, t, reducedMotion: rm) {
-                    sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha
+                    sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha + e.glint * 0.1
                 }
             }
             let showT = t - CityFinale.blazeEnd
             for (b, burst) in bursts.enumerated() {
                 for s in burstSparks(burst, b, showT: showT, show: show, center: burstWorld(burst, b)) {
-                    sum += s.x * 0.003 + s.y * 0.005 + s.z * 0.007 + s.alpha + s.mix + Double(s.gen)
+                    sum += s.x * 0.003 + s.y * 0.005 + s.z * 0.007 + s.px * 0.002 + s.py * 0.004 + s.pz * 0.006 + s.alpha + s.mix + Double(s.gen)
                 }
             }
             t += 0.29

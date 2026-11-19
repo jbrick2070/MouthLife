@@ -630,17 +630,76 @@ export class SaveSystem {
 
   importSyncCode(code: string, nowEpochMs = Date.now()): MouthLifeSaveV2 {
     const imported = decodeSaveFromSyncCode(code, nowEpochMs);
-    // Preserve monotonic stamps across merges if player imports on existing device
-    imported.totalBrushStamps = Math.max(
-      imported.totalBrushStamps,
-      this.currentSave.totalBrushStamps
-    );
-    CompanionArchSim.reconcileOfflineElapsed(imported.companion, nowEpochMs);
-    imported.saveRevision = Math.max(this.currentSave.saveRevision, imported.saveRevision) + 1;
-    this.currentSave = imported;
+    // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
+    const merged = mergeSaves(this.currentSave, imported);
+    CompanionArchSim.reconcileOfflineElapsed(merged.companion, nowEpochMs);
+    merged.saveRevision = Math.max(this.currentSave.saveRevision, imported.saveRevision) + 1;
+    this.currentSave = merged;
     this.checkThresholdAutoUnlocks();
     this.persistInternal(nowEpochMs);
     this.bus.emit('save:updated', { save: this.currentSave });
     return this.currentSave;
   }
+}
+
+/**
+ * Two saves of the same player (this device's and an imported Sync Code) made into one, so that an
+ * older code never erases newer progress: each city keeps its best record, counts keep the higher
+ * value, unlocks are combined, each day's reward slots keep the higher count (a daily cap is never
+ * earned twice), the companion comes from whichever save is newer, and this device keeps its own
+ * graphics setting. The Swift twin is SaveSystem.mergeSaves.
+ */
+export function mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2): MouthLifeSaveV2 {
+  const newer = imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current;
+  const union = (a: readonly string[], b: readonly string[]): string[] => [...new Set([...a, ...b])];
+  const worlds: Record<string, WorldRecord> = {};
+  for (const id of new Set([...Object.keys(current.worlds), ...Object.keys(imported.worlds)])) {
+    const a = current.worlds[id];
+    const b = imported.worlds[id];
+    if (!a || !b) {
+      worlds[id] = { ...(a ?? b) } as WorldRecord;
+      continue;
+    }
+    worlds[id] = {
+      unlocked: a.unlocked || b.unlocked,
+      completed: a.completed || b.completed,
+      timesCleared: Math.max(a.timesCleared, b.timesCleared),
+      bestScore: Math.max(a.bestScore, b.bestScore),
+      bestGrade: GRADE_ORDER[a.bestGrade] >= GRADE_ORDER[b.bestGrade] ? a.bestGrade : b.bestGrade,
+      bestCleanlinessPct: Math.max(a.bestCleanlinessPct, b.bestCleanlinessPct),
+      sitesRestoredMax: Math.max(a.sitesRestoredMax, b.sitesRestoredMax),
+    };
+  }
+  const daily: Record<string, { fullRewards: number; tips: number }> = {};
+  for (const day of new Set([...Object.keys(current.dailySlotsByDate), ...Object.keys(imported.dailySlotsByDate)])) {
+    const a = current.dailySlotsByDate[day] ?? { fullRewards: 0, tips: 0 };
+    const b = imported.dailySlotsByDate[day] ?? { fullRewards: 0, tips: 0 };
+    daily[day] = { fullRewards: Math.max(a.fullRewards, b.fullRewards), tips: Math.max(a.tips, b.tips) };
+  }
+  const unlockedUpgrades = union(current.unlockedUpgrades, imported.unlockedUpgrades);
+  const pick = (slot: 'brush' | 'floss' | 'rinse'): string | null => {
+    const want = newer.equippedUpgrades[slot] ?? current.equippedUpgrades[slot] ?? imported.equippedUpgrades[slot];
+    return want && unlockedUpgrades.includes(want) ? want : null;
+  };
+  return {
+    ...newer,
+    hasSeenCosmicIntro: current.hasSeenCosmicIntro || imported.hasSeenCosmicIntro,
+    playerProfile: { ...imported.playerProfile },
+    companion: structuredCloneSafe(newer.companion),
+    totalBrushStamps: Math.max(current.totalBrushStamps, imported.totalBrushStamps),
+    fluorideIons: Math.max(current.fluorideIons, imported.fluorideIons),
+    dailySlotsByDate: daily,
+    pendingSupplyBeacons: Math.max(current.pendingSupplyBeacons, imported.pendingSupplyBeacons),
+    remineralizedOverdriveRuns: Math.max(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns),
+    unlockedUpgrades,
+    equippedUpgrades: { brush: pick('brush'), floss: pick('floss'), rinse: pick('rinse') },
+    unlockedHistoryNotes: union(current.unlockedHistoryNotes, imported.unlockedHistoryNotes),
+    qualityPreference: current.qualityPreference,
+    worlds,
+    lastSavedEpochMs: Math.max(current.lastSavedEpochMs, imported.lastSavedEpochMs),
+  };
+}
+
+function structuredCloneSafe<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }

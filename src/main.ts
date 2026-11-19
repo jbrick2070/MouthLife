@@ -17,7 +17,9 @@ import { TutorialGate, type TutorialPageId } from './config/tutorial';
 import type { AppMode, OverlayView } from './engine/types';
 import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { VoiceCoach } from './engine/audio/VoiceCoach';
-import { uiTranslator } from './i18n/uiTranslator';
+import { uiTranslator, warmAllLanguagePacks } from './i18n/uiTranslator';
+import { allTutorialImageUrls } from './ui/TutorialOverlay';
+import { installParentGate } from './ui/parentGate';
 import { evaluateBrushPhase } from './config/brushCoach';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
 import { CosmicIntroOverlay } from './ui/CosmicIntroOverlay';
@@ -81,6 +83,12 @@ function bootstrapMouthLife(): void {
   const sound = new SoundEngine();
   const voiceCoach = new VoiceCoach();
   voiceCoach.onSpeakingChanged = (speaking) => sound.setVoiceDucked(speaking);
+  // Mute silences the coach too, and the effects slider sets how loud it speaks.
+  voiceCoach.soundLevel = () => {
+    const prefs = sound.getPrefs();
+    if (prefs.muted || prefs.sfxVolume <= 0.001) return 0;
+    return Math.max(0.35, Math.min(1, prefs.sfxVolume * 1.6));
+  };
   // One language for the whole game: screens, and the spoken brushing coach.
   uiTranslator.attach(document.body);
   void uiTranslator.setLanguage(voiceCoach.getLanguage());
@@ -941,6 +949,8 @@ function bootstrapMouthLife(): void {
   };
 }
 
+// Outside links (charity pages, donations) wait for a grown-up.
+installParentGate();
 bootstrapMouthLife();
 
 // Offline-capable PWA shell for mobile Home Screen & dead-zone bathroom play (production only)
@@ -963,6 +973,17 @@ if (
           .map((entry) => entry.name)
           .filter((name) => name.startsWith(window.location.origin) && name.includes('/assets/'));
         if (urls.length > 0) reg.active?.postMessage({ type: 'precache', urls });
+        // Fetch what a first visit never asks for (guide pictures, other languages) once the worker
+        // controls the page, so they are cached for play without a connection.
+        const warm = (): void => {
+          const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 2000));
+          idle(() => {
+            warmAllLanguagePacks();
+            for (const url of allTutorialImageUrls()) void fetch(url).catch(() => undefined);
+          });
+        };
+        if (navigator.serviceWorker.controller) warm();
+        else navigator.serviceWorker.addEventListener('controllerchange', warm, { once: true });
       })
       .catch(() => {});
   });

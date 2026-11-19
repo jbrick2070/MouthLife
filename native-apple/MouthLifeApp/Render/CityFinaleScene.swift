@@ -308,13 +308,29 @@ private func glowImage() -> CGImage? {
 // MARK: - Shaders
 
 private enum FinaleShaders {
-    /// The relief city: the wave of light, worked out per vertex from the show's time.
-    static func relief() -> String {
-        """
+    /// The relief city: wave of light, coloured firework flashes, far twilight haze, and (for the
+    /// mirror twin) gentle water-surface wave undulation.
+    static func relief(mirror: Bool) -> String {
+        let vary = mirror ? "#pragma varyings\nfloat4 reliefInfo;\n" : ""
+        let ripple = mirror
+            ? """
+            if (wp.y < 0.0 && uRm < 0.5) {
+                float wd = -wp.y;
+                float shift = (sin(wd * 2.6 - uT * 1.8 + wp.x * 0.22) * 0.11 + sin(wd * 5.2 + uT * 1.3 - wp.x * 0.35) * 0.045) * smoothstep(0.0, 1.5, wd);
+                _geometry.position.x += shift;
+                wp.x += shift;
+            }
+            out.reliefInfo = float4(uT, uRm, isLight ? 1.0 : 0.0, 0.0);
+            """
+            : ""
+        return """
         #pragma arguments
         float4 showTime;
         float4 cityLook;
-
+        float4 cityHaze;
+        float4 burstA;
+        float4 burstB;
+        \(vary)
         #pragma body
         float uT = showTime.x;
         float uRm = showTime.y;
@@ -340,11 +356,31 @@ private enum FinaleShaders {
         level *= 1.0 - 0.35 * d * d * (3.0 - 2.0 * d);
         if (uOverride >= 0.0) { level = uOverride; flash = 0.0; }
         if (isLight) { level *= uGlow; }
+        float3 wp = (scn_node.modelTransform * float4(_geometry.position.xyz, 1.0)).xyz;
+        \(ripple)
         // the drawing's levels were made for screen colours; in linear light their squares match,
         // and lit windows run a little past 1 so the bloom makes them glow
-        float3 lit = _geometry.color.rgb * (level * level) * (shade * shade) * (isLight ? 1.3 : 1.0);
+        float3 baseCol = _geometry.color.rgb;
+        float3 lit = baseCol * (level * level) * (shade * shade) * (isLight ? 1.3 : 1.0);
         if (!isLight) { lit = min(lit, float3(1.0)); }
-        _geometry.color = float4(lit + (float3(1.0) - min(lit, float3(1.0))) * flash, 1.0);
+        // soft coloured wash from bursting firework shells onto nearby buildings and their reflection
+        float hCatch = 0.45 + 0.55 * clamp(abs(wp.y) / 5.5, 0.0, 1.0);
+        float dA = (cx - burstA.w) / 15.0;
+        float dB = (cx - burstB.w) / 15.0;
+        float3 burstWash = burstA.rgb * exp(-dA * dA) + burstB.rgb * exp(-dB * dB);
+        float catchAmt = isLight ? 0.14 : (0.44 * hCatch * (0.65 + 0.35 * shade));
+        lit += burstWash * catchAmt * (0.35 + 0.65 * baseCol);
+        // atmospheric twilight haze on the far skyline so the foreground stage reads crisply in front
+        float camDist = length((scn_node.modelViewTransform * float4(_geometry.position.xyz, 1.0)).xyz);
+        float distHaze = smoothstep(34.0, 96.0, camDist) * 0.24;
+        float sf = clamp((uT - 14.0) / 1.4, 0.0, 1.0);
+        float stageFocus = uOverride >= 0.0 ? 0.0 : sf * sf * (3.0 - 2.0 * sf);
+        float lowMist = 1.0 - clamp(abs(wp.y) / 7.0, 0.0, 1.0);
+        float hazeAmt = clamp((distHaze + stageFocus * (0.34 + 0.14 * lowMist)) * cityHaze.w, 0.0, 0.58);
+        if (isLight) { hazeAmt *= 0.62; }
+        float hazeLit = uOverride >= 0.0 ? uOverride * uOverride : (0.25 + 0.75 * smoothstep(2.5, 7.5, uT));
+        float3 colOut = lit + (float3(1.0) - min(lit, float3(1.0))) * flash;
+        _geometry.color = float4(mix(colOut, cityHaze.rgb * hazeLit, hazeAmt), 1.0);
         """
     }
 
@@ -445,22 +481,39 @@ private enum FinaleShaders {
     float3 space = float3(0.003, 0.006, 0.022);
     float3 col = mix(glowSky * level, night, finaleSm((h - H.w) / 0.14));
     col = mix(col, space, finaleSm((h - 0.3) / 0.45));
-    // the water: darker here than on the web, which lays a dark water sheet over the same sky
-    if (d.y < 0.0 && uSpace < 0.5) { col = c0 * level * 0.015 + float3(0.002, 0.004, 0.014); }
+    // living water below the horizon: gentle horizon shimmer and fine drifting glints
+    if (d.y < 0.0 && uSpace < 0.5) {
+        float depth = -d.y;
+        float az = atan2(d.x, -d.z);
+        float wt = uRm > 0.5 ? 0.0 : uT;
+        float wz = 1.0 / (depth + 0.04);
+        float horizonBand = exp(-depth * 13.0);
+        float midBand = exp(-depth * 4.2);
+        float swell = 0.5 + 0.5 * sin(wz * 1.15 - wt * 1.2 + sin(az * 6.0 + wt * 0.35) * 1.4);
+        // fine glints, not broad patches: broad ones read as mud
+        float sparkle = finaleSkyNoise(float2(az * 110.0 + sin(wz * 0.45 + wt * 0.4) * 0.8, wz * 1.6 - wt * 0.75));
+        float glints = smoothstep(0.8, 0.97, sparkle) * (0.4 + 0.6 * swell);
+        float3 horizonTint = c0 * level;
+        float3 auroraRefl = mix(auroraA.rgb, auroraB.rgb, 0.45) * uAurora * 0.10 * midBand * (0.55 + 0.45 * swell);
+        col = float3(0.002, 0.004, 0.015)
+            + horizonTint * (0.008 + 0.1 * horizonBand * (0.65 + 0.35 * swell) + 0.05 * midBand * glints)
+            + auroraRefl;
+    }
     // stars: soft round points at a jittered spot in each cell, warm or cool
     float3 g = d * 260.0;
     float3 cell = floor(g);
     float3 off = fract(g) - 0.5 - (float3(finaleSkyHash(cell + 7.0), finaleSkyHash(cell + 13.0), finaleSkyHash(cell + 21.0)) - 0.5) * 0.6;
-    float star = step(0.9965, finaleSkyHash(cell)) * smoothstep(0.3, 0.04, length(off)) * (uSpace > 0.5 ? 1.0 : finaleSm((h - 0.02) / 0.18));
-    float tw = 0.6 + 0.4 * sin(uT * 2.0 + finaleSkyHash(cell + 3.0) * 40.0);
+    float star = step(0.9965, finaleSkyHash(cell)) * (1.0 - smoothstep(0.04, 0.3, length(off))) * (uSpace > 0.5 ? 1.0 : finaleSm((h - 0.02) / 0.18));
+    float skyClock = uRm > 0.5 ? 4.0 : uT;
+    float tw = 0.6 + 0.4 * sin(skyClock * 2.0 + finaleSkyHash(cell + 3.0) * 40.0);
     float3 tint = mix(float3(1.0, 0.86, 0.7), float3(0.75, 0.85, 1.0), finaleSkyHash(cell + 5.0));
     col += tint * star * tw * 1.3;
     if (uAurora > 0.001 && d.y > 0.12 && d.y < 0.65) {
         float az = atan2(d.x, -d.z);
-        float warp = finaleSkyFbm(float2(az * 3.0 + uT * 0.04, d.y * 2.0));
-        float fold = abs(sin(az * 6.0 + warp * 5.0 + uT * 0.15));
+        float warp = finaleSkyFbm(float2(az * 3.0 + skyClock * 0.04, d.y * 2.0));
+        float fold = abs(sin(az * 6.0 + warp * 5.0 + skyClock * 0.15));
         float ribbon = pow(1.0 - fold, 5.0);
-        float rays = 0.55 + 0.45 * finaleSkyNoise(float2(az * 140.0, uT * 0.6));
+        float rays = 0.55 + 0.45 * finaleSkyNoise(float2(az * 140.0, skyClock * 0.6));
         float base = 0.28 + 0.06 * sin(az * 3.0 + warp * 2.0);
         float band = smoothstep(base - 0.04, base + 0.02, d.y) * (1.0 - smoothstep(base + 0.04, base + 0.26, d.y));
         float3 ac = mix(auroraA.rgb, auroraB.rgb, smoothstep(base, base + 0.22, d.y));
@@ -502,75 +555,263 @@ private enum FinaleShaders {
     float spinT = bulbLook.x;
     float alpha = bulbLook.y;
     float power = bulbLook.z;
+    if (alpha < 0.003) { discard_fragment(); }
     float3 worldPos = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
     float3 camPos = scn_frame.inverseViewTransform[3].xyz;
     float3 rd = normalize(worldPos - camPos);
     float3 ro = camPos - center;
+    // tangent-plane coordinates round the fractal sun, for soft golden light rays behind the tooth
+    float3 toCenter = -ro;
+    float centerDist = length(toCenter);
+    float3 centerDir = toCenter / max(centerDist, 0.001);
+    float fwdDot = dot(rd, centerDir);
+    if (fwdDot <= 0.05) { discard_fragment(); }
+    float3 rayRight = normalize(cross(centerDir, float3(0.0, 1.0, 0.0)));
+    float3 rayUp = cross(rayRight, centerDir);
+    float3 onPlane = rd / fwdDot - centerDir;
+    float rx = dot(onPlane, rayRight) * centerDist / max(radius, 0.001);
+    float ry = dot(onPlane, rayUp) * centerDist / max(radius, 0.001);
+    float rad = length(float2(rx, ry));
+    if (rad > 2.35) { discard_fragment(); }
+    float ang = atan2(ry, rx);
+    // slow colour breathing across copper-amber, 24k gold and warm champagne light
+    float breath = 0.5 + 0.5 * sin(spinT * 0.65);
+    float breath2 = 0.5 + 0.5 * cos(spinT * 0.42 + 1.1);
+    float raysA = pow(max(0.5 + 0.5 * sin(ang * 10.0 + spinT * 0.22), 0.0), 3.0);
+    float raysB = pow(max(0.5 + 0.5 * sin(ang * 16.0 - spinT * 0.14 + 1.3), 0.0), 4.0);
+    float raysC = 0.5 + 0.5 * sin(ang * 6.0 + spinT * 0.09);
+    float beams = (0.55 * raysA + 0.45 * raysB) * (0.65 + 0.35 * raysC);
+    float rayReach = smoothstep(0.32, 0.85, rad) * (1.0 - smoothstep(0.95, 2.25, rad));
+    float halo = exp(-rad * rad * 1.55) * (1.0 - smoothstep(1.5, 2.25, rad));
+    float3 rayTint = mix(float3(1.0, 0.70, 0.24), float3(1.0, 0.86, 0.48), breath);
+    float3 rayCol = rayTint * (halo * 0.30 + beams * rayReach * 0.52);
+    float rayAlpha = clamp(halo * 0.34 + beams * rayReach * 0.42, 0.0, 0.75);
     float b = dot(ro, rd);
     float c = dot(ro, ro) - radius * radius;
     float disc = b * b - c;
-    if (disc < 0.0 || alpha < 0.003) { discard_fragment(); }
-    float tNear = max(0.0, -b - sqrt(disc));
-    float tFar = -b + sqrt(disc);
-    float ca = cos(spinT * 0.35), sa = sin(spinT * 0.35);
-    float tilt = 0.4 + sin(spinT * 0.2) * 0.2;
-    float cb = cos(tilt), sb = sin(tilt);
-    float3x3 spinY = float3x3(float3(ca, 0.0, -sa), float3(0.0, 1.0, 0.0), float3(sa, 0.0, ca));
-    float3x3 spinX = float3x3(float3(1.0, 0.0, 0.0), float3(0.0, cb, sb), float3(0.0, -sb, cb));
-    float3x3 spin = spinY * spinX;
-    float t = tNear;
-    float trap = 0.0;
-    float steps = 0.0;
-    bool hit = false;
-    for (int i = 0; i < 44; i++) {
-        float3 p = spin * ((ro + rd * t) / radius * 1.2);
-        float dist = finaleBulbDE(p, power, trap) * radius / 1.2;
-        if (dist < 0.003 * t) { hit = true; break; }
-        t += dist * 0.9;
-        steps += 1.0;
-        if (t > tFar) { break; }
-    }
-    float glow = steps / 44.0;
     float3 col = float3(0.0);
     float a = 0.0;
-    if (hit) {
-        float3 p = spin * ((ro + rd * t) / radius * 1.2);
-        float e = 0.0015 * t / radius;
-        float tr;
-        float3 n = normalize(float3(
-            finaleBulbDE(p + float3(e, 0.0, 0.0), power, tr) - finaleBulbDE(p - float3(e, 0.0, 0.0), power, tr),
-            finaleBulbDE(p + float3(0.0, e, 0.0), power, tr) - finaleBulbDE(p - float3(0.0, e, 0.0), power, tr),
-            finaleBulbDE(p + float3(0.0, 0.0, e), power, tr) - finaleBulbDE(p - float3(0.0, 0.0, e), power, tr)));
-        float3 v = -normalize(spin * rd);
-        float3 l = normalize(spin * float3(0.45, 0.8, 0.4));
-        float diff = max(dot(n, l), 0.0);
-        float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-        float spec = pow(max(dot(reflect(-l, n), v), 0.0), 24.0);
-        float ao = 1.0 - glow;
-        float3 base = mix(float3(0.62, 0.36, 0.08), float3(1.0, 0.76, 0.3), clamp(trap * 0.8, 0.0, 1.0));
-        col = base * (0.3 + 0.7 * diff) * (0.45 + 0.55 * ao) + float3(1.0, 0.85, 0.5) * (0.3 * rim + 0.45 * spec);
-        a = 1.0;
-    } else {
-        col = float3(1.0, 0.7, 0.25) * glow * glow * 0.45;
-        a = glow;
+    bool hit = false;
+    if (disc >= 0.0) {
+        float tNear = max(0.0, -b - sqrt(disc));
+        float tFar = -b + sqrt(disc);
+        float ca = cos(spinT * 0.35), sa = sin(spinT * 0.35);
+        float tilt = 0.4 + sin(spinT * 0.2) * 0.2;
+        float cb = cos(tilt), sb = sin(tilt);
+        float3x3 spinY = float3x3(float3(ca, 0.0, -sa), float3(0.0, 1.0, 0.0), float3(sa, 0.0, ca));
+        float3x3 spinX = float3x3(float3(1.0, 0.0, 0.0), float3(0.0, cb, sb), float3(0.0, -sb, cb));
+        float3x3 spin = spinY * spinX;
+        float t = tNear;
+        float trap = 0.0;
+        float steps = 0.0;
+        for (int i = 0; i < 44; i++) {
+            float3 p = spin * ((ro + rd * t) / radius * 1.2);
+            float dist = finaleBulbDE(p, power, trap) * radius / 1.2;
+            if (dist < 0.003 * t) { hit = true; break; }
+            t += dist * 0.9;
+            steps += 1.0;
+            if (t > tFar) { break; }
+        }
+        float glow = steps / 44.0;
+        if (hit) {
+            float3 p = spin * ((ro + rd * t) / radius * 1.2);
+            float e = 0.0015 * t / radius;
+            float tr;
+            float3 n = normalize(float3(
+                finaleBulbDE(p + float3(e, 0.0, 0.0), power, tr) - finaleBulbDE(p - float3(e, 0.0, 0.0), power, tr),
+                finaleBulbDE(p + float3(0.0, e, 0.0), power, tr) - finaleBulbDE(p - float3(0.0, e, 0.0), power, tr),
+                finaleBulbDE(p + float3(0.0, 0.0, e), power, tr) - finaleBulbDE(p - float3(0.0, 0.0, e), power, tr)));
+            float3 v = -normalize(spin * rd);
+            float3 l = normalize(spin * float3(0.45, 0.8, 0.4));
+            float diff = max(dot(n, l), 0.0);
+            float rim = pow(max(1.0 - max(dot(n, v), 0.0), 0.0), 3.0);
+            float spec = pow(max(dot(reflect(-l, n), v), 0.0), 24.0);
+            float ao = 1.0 - glow;
+            float3 deepTone = mix(float3(0.56, 0.30, 0.06), float3(0.76, 0.34, 0.14), breath);
+            float3 brightTone = mix(float3(1.0, 0.74, 0.24), float3(1.0, 0.84, 0.42), breath);
+            float3 base = mix(deepTone, brightTone, clamp(trap * 0.85, 0.0, 1.0));
+            float3 rimTint = mix(float3(1.0, 0.86, 0.50), float3(0.92, 0.96, 1.0), breath2 * 0.24);
+            float3 innerWarmth = float3(0.95, 0.56, 0.14) * glow * (0.14 + 0.16 * breath);
+            col = base * (0.32 + 0.68 * diff) * (0.45 + 0.55 * ao) + rimTint * (0.34 * rim + 0.48 * spec) + innerWarmth;
+            a = 1.0;
+        } else {
+            float3 coronaTint = mix(float3(1.0, 0.64, 0.20), float3(1.0, 0.82, 0.38), breath);
+            col = coronaTint * glow * glow * 0.48;
+            a = glow;
+        }
     }
-    // premultiplied, over the sky: solid where it is hit, a soft corona round it
-    _output.color = float4(col * alpha * (hit ? 1.0 : a), alpha * a);
+    // premultiplied, over the sky: solid where it hits, soft breathing corona and sunbeams around it
+    float3 outRgb = hit ? col : (col * a + rayCol);
+    float outA = hit ? 1.0 : clamp(a + rayAlpha * 0.35, 0.0, 1.0);
+    _output.color = float4(outRgb * alpha, outA * alpha);
     """
 
-    /// The city's reflection in the water: dimmer the deeper it goes, tinted toward the water.
+    /// The city's reflection in the water: gentle horizontal ripples, crest glints, fading into deep water.
     static let mirror = """
     #pragma body
     float3 wp = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
     if (wp.y > 0.0) { discard_fragment(); }
-    float fade = 0.22 * (1.0 - smoothstep(0.0, 6.0, -wp.y));
-    _output.color = float4(_output.color.rgb * fade + float3(0.003, 0.006, 0.02) * (1.0 - fade), 1.0);
+    float depth = -wp.y;
+    float uT = in.reliefInfo.x;
+    float uRm = in.reliefInfo.y;
+    float isLight = in.reliefInfo.z;
+    float rt = uRm > 0.5 ? 0.0 : uT;
+    float w1 = sin(depth * 8.5 + wp.x * 0.45 - rt * 2.1);
+    float w2 = sin(depth * 14.5 - wp.x * 0.78 + rt * 1.55);
+    float wave = 0.55 * w1 + 0.45 * w2;
+    float ripple = 0.72 + 0.28 * wave;
+    float depthFade = 1.0 - smoothstep(0.0, 6.2, depth);
+    float crest = smoothstep(0.54, 0.96, wave) * depthFade;
+    float fade = 0.25 * depthFade * (0.82 + 0.18 * wave);
+    float3 refl = _output.color.rgb * ripple + _output.color.rgb * crest * (isLight > 0.5 ? 0.85 : 0.35);
+    _output.color = float4(refl * fade + float3(0.003, 0.006, 0.02) * (1.0 - fade), 1.0);
     """
 
-    /// Bright enough to bloom: the fractal signs glow like neon.
+    /// Bright enough to bloom: fractal signs grow warmer/brighter with depth and glint as they appear.
     static let neon = """
+    #pragma arguments
+    float4 emblemFx;
+
     #pragma body
-    _output.color.rgb *= 1.5;
+    float depth = emblemFx.x;
+    float glint = emblemFx.y;
+    float3 base = _output.color.rgb;
+    float3 warm = float3(1.0, 0.72, 0.24);
+    float lum = dot(base, float3(0.2126, 0.7152, 0.0722));
+    float3 tinted = mix(base, max(base, float3(0.18, 0.14, 0.06)) * warm * 1.45 + warm * (0.18 + 0.25 * lum), depth * 0.58);
+    float boost = mix(1.42, 2.05, depth);
+    _output.color.rgb = tinted * boost + float3(1.0, 0.94, 0.76) * glint * 1.35;
+    """
+
+    /// Passes local vertex position to surface modifiers (avoids inverseModelTransform per fragment).
+    static let localPositionGeometry = """
+    #pragma varyings
+    float3 localPos;
+
+    #pragma body
+    out.localPos = _geometry.position.xyz;
+    """
+
+    /// Warm inner subsurface glow inside the porcelain molar, pulsing gently when a cusp piece clicks in.
+    static let porcelainWarmth = """
+    #pragma arguments
+    float4 molarFx;
+
+    #pragma body
+    float3 wp = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
+    float3 lp = in.localPos;
+    float3 wn = normalize((scn_frame.inverseViewTransform * float4(_surface.normal, 0.0)).xyz);
+    float3 camPos = scn_frame.inverseViewTransform[3].xyz;
+    float3 V = normalize(camPos - wp);
+    float3 keyDir = normalize(float3(-8.0, 20.0, 30.0));
+    float NdotV = clamp(dot(wn, V), 0.0, 1.0);
+    float rim = pow(max(1.0 - NdotV, 0.0), 2.2);
+    float wrap = clamp((dot(wn, keyDir) + 0.55) / 1.55, 0.0, 1.0);
+    float backWarm = pow(clamp(1.0 - max(dot(wn, keyDir), 0.0), 0.0, 1.0), 1.6) * (0.35 + 0.65 * rim);
+    float bodyDepth = 1.0 - smoothstep(0.0, 1.4, max(0.0, -lp.z - 0.25));
+    float3 honey = float3(0.55, 0.28, 0.09);
+    float3 cream = float3(0.75, 0.50, 0.24);
+    // a hint of warmth inside, kept low so the porcelain keeps its shading
+    float3 innerGlow = (honey * (0.14 + 0.22 * backWarm) + cream * (0.08 * wrap + 0.16 * rim)) * (0.45 + 0.55 * bodyDepth) * 0.4;
+    innerGlow += float3(0.85, 0.62, 0.22) * molarFx.x * (0.18 + 0.35 * rim);
+    float sweepCoord = lp.x * 0.78 + lp.y * 0.52 + lp.z * 0.25;
+    float sd = sweepCoord - molarFx.y;
+    float sweepBand = exp(-sd * sd * 14.0) * molarFx.z;
+    innerGlow += float3(1.0, 0.92, 0.68) * sweepBand * 0.75;
+    _surface.emission.rgb += innerGlow;
+    """
+
+    /// Warm gold rim sheen and diagonal light sweep across the Golden Molar when it snaps together.
+    static let goldSweep = """
+    #pragma arguments
+    float4 molarFx;
+
+    #pragma body
+    float3 wp = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
+    float3 lp = in.localPos;
+    float3 wn = normalize((scn_frame.inverseViewTransform * float4(_surface.normal, 0.0)).xyz);
+    float3 camPos = scn_frame.inverseViewTransform[3].xyz;
+    float3 V = normalize(camPos - wp);
+    float NdotV = clamp(dot(wn, V), 0.0, 1.0);
+    float rim = pow(max(1.0 - NdotV, 0.0), 2.6);
+    float sweepCoord = lp.x * 0.78 + lp.y * 0.52 + lp.z * 0.25;
+    float sd = sweepCoord - molarFx.y;
+    float sharp = exp(-sd * sd * 24.0);
+    float broad = exp(-sd * sd * 4.5);
+    float3 sweepCol = (float3(1.0, 0.94, 0.68) * sharp * 1.45 + float3(0.95, 0.68, 0.16) * broad * 0.55) * molarFx.z;
+    float3 warmRim = float3(0.92, 0.64, 0.18) * rim * (0.22 + 0.15 * molarFx.x);
+    _surface.emission.rgb += sweepCol + warmRim;
+    """
+
+    /// Translucent turquoise-to-gold inner glow in the crystal mountain columns + probe facet catch.
+    static let crystalMountain = """
+    #pragma arguments
+    float4 mountainFx;
+    float4 probeLocal;
+
+    #pragma body
+    float3 wp = (scn_frame.inverseViewTransform * float4(_surface.position, 1.0)).xyz;
+    float3 lp = in.localPos;
+    float3 wn = normalize((scn_frame.inverseViewTransform * float4(_surface.normal, 0.0)).xyz);
+    float3 camPos = scn_frame.inverseViewTransform[3].xyz;
+    float3 V = normalize(camPos - wp);
+    float hFrac = clamp((lp.y + 1.1) / 1.6, 0.0, 1.0);
+    float NdotV = clamp(abs(dot(wn, V)), 0.0, 1.0);
+    float fresnel = pow(max(1.0 - NdotV, 0.0), 2.2);
+    float topFace = smoothstep(0.65, 0.95, wn.y);
+    float breathe = mountainFx.y > 0.5 ? 0.5 : 0.5 + 0.5 * sin(mountainFx.x * 1.6 - lp.y * 5.0 + lp.x * 2.5);
+    float3 deepGlow = float3(0.05, 0.36, 0.52);
+    float3 midGlow = float3(0.14, 0.62, 0.72);
+    float3 topGlow = float3(0.95, 0.78, 0.38);
+    float3 cCol = hFrac < 0.55
+        ? mix(deepGlow, midGlow, hFrac / 0.55)
+        : mix(midGlow, topGlow, smoothstep(0.55, 0.95, hFrac));
+    float3 inner = cCol * (0.11 + 0.28 * fresnel + 0.09 * breathe) * (1.0 - 0.35 * topFace);
+    inner += cCol * topFace * (0.07 + 0.14 * hFrac);
+    float3 dp = lp - float3(0.0, 0.5, 0.0);
+    float peakGlow = exp(-dot(dp, dp) * 3.8);
+    inner += float3(1.0, 0.80, 0.32) * peakGlow * (0.24 + 0.45 * mountainFx.z);
+    float3 pp = lp - probeLocal.xyz;
+    float probeCatch = exp(-dot(pp, pp) * 14.0) * probeLocal.w;
+    inner += float3(0.25, 0.92, 0.82) * probeCatch * 0.42;
+    _surface.emission.rgb += inner;
+    """
+
+    /// Path segment coordinates (0 at lower ledge -> 1 at upper ledge) for the climbing golden shimmer.
+    static let pathGeometry = """
+    #pragma varyings
+    float pathU;
+    float pathRim;
+
+    #pragma body
+    out.pathU = clamp(_geometry.position.y + 0.5, 0.0, 1.0);
+    float3 vp = (scn_node.modelViewTransform * float4(_geometry.position.xyz, 1.0)).xyz;
+    float3 vn = normalize((scn_node.modelViewTransform * float4(_geometry.normal.xyz, 0.0)).xyz);
+    out.pathRim = clamp(abs(dot(vn, normalize(-vp))), 0.0, 1.0);
+    """
+
+    /// Path segment fragment: turns glass to luminous gold with a bright shimmer riding up beside the probe.
+    static let pathFragment = """
+    #pragma transparent
+    #pragma arguments
+    float4 pathFx;
+
+    #pragma body
+    float vU = in.pathU;
+    float vRim = in.pathRim;
+    float fill = pathFx.x;
+    float shimmer = pathFx.y;
+    float headGlow = pathFx.z;
+    float alpha = pathFx.w;
+    float lit = fill <= 0.001 ? 0.0 : (fill >= 0.999 ? 1.0 : 1.0 - smoothstep(fill - 0.08, fill + 0.02, vU));
+    float3 glass = float3(0.75, 0.91, 1.0);
+    float3 gold = float3(0.98, 0.76, 0.24) * (0.7 + 0.45 * vRim);
+    float d = (vU - shimmer) * 6.5;
+    float crest = exp(-d * d) * headGlow * (lit > 0.02 || abs(vU - fill) < 0.18 ? 1.0 : 0.0);
+    float3 col = mix(glass, gold, lit) + float3(1.0, 0.95, 0.74) * crest * 1.45;
+    float a = mix(0.30, 1.0, clamp(lit + crest * 0.85, 0.0, 1.0)) * alpha;
+    if (a < 0.004) { discard_fragment(); }
+    _output.color = float4(col * a, a);
     """
 }
 
@@ -599,6 +840,8 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
     private let reliefRoot = SCNNode()
 
     private var fractalNodes: [SCNNode] = []
+    private var fractalMaterials: [SCNMaterial] = []
+    private var fractalLastFx: [SIMD2<Float>] = []
     private var fractalFor = -1
     private var emblemGeometries: [Int: SCNGeometry] = [:]
     private var orbitNodes: [SCNNode] = []
@@ -621,9 +864,10 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
     private var cuspFinish: [MolarFinish] = Array(repeating: .empty, count: CityFinale.campaignPieces)
 
     private let mountain = SCNNode()
+    private let mountainMaterial = SCNMaterial()
     private var ledgeNodes: [SCNNode] = []
     private var ledgeCoins: [SCNNode?] = Array(repeating: nil, count: CityFinale.campaignPieces)
-    private var pathNodes: [SCNNode] = []
+    private var pathMaterials: [SCNMaterial] = []
     private let ledgeGold = SCNMaterial()
     private let ledgeDim = SCNMaterial()
     private let summitGlow: SCNNode
@@ -742,6 +986,23 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         prebuild()
     }
 
+    private func appendFractalNode(index: Int) {
+        let mat = SCNMaterial()
+        mat.lightingModel = .constant
+        mat.isDoubleSided = true
+        mat.shaderModifiers = [.fragment: FinaleShaders.neon]
+        mat.setValue(NSValue(scnVector4: SCNVector4(0, 0, 0, 0)), forKey: "emblemFx")
+        let copy = emblemGeometry(index)?.copy() as? SCNGeometry
+        copy?.materials = [mat]
+        let n = SCNNode(geometry: copy)
+        n.renderingOrder = 7
+        n.isHidden = true
+        fractalNodes.append(n)
+        fractalMaterials.append(mat)
+        fractalLastFx.append(SIMD2<Float>(-1, -1))
+        scene.rootNode.addChildNode(n)
+    }
+
     /// Everything the show would otherwise create on a beat (the coins, the fractal's copies).
     private func prebuild() {
         if request.kind != .ending {
@@ -750,11 +1011,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             let count = Finale3D.emblemFractalNodes(worldIndex).count
             fractalFor = worldIndex
             for _ in 0..<count {
-                let n = SCNNode(geometry: emblemGeometry(worldIndex))
-                n.renderingOrder = 7
-                n.isHidden = true
-                fractalNodes.append(n)
-                scene.rootNode.addChildNode(n)
+                appendFractalNode(index: worldIndex)
             }
         }
         for i in 0..<CityFinale.campaignPieces where finish(i) != .empty {
@@ -841,6 +1098,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         m.lightingModel = .constant
         m.isDoubleSided = true
         m.shaderModifiers = [.fragment: FinaleShaders.neon]
+        m.setValue(NSValue(scnVector4: SCNVector4(0, 0, 0, 0)), forKey: "emblemFx")
         g.materials = [m]
         emblemGeometries[index] = g
         return g
@@ -914,8 +1172,14 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         pbr(porcelain, hex: 0xC9C0B0, metal: 0, rough: 0.42)
         porcelain.clearCoat.contents = 0.7
         porcelain.clearCoatRoughness.contents = 0.2
+        porcelain.emission.contents = PlatformColor.black
+        porcelain.shaderModifiers = [.geometry: FinaleShaders.localPositionGeometry, .surface: FinaleShaders.porcelainWarmth]
+        porcelain.setValue(NSValue(scnVector4: SCNVector4(0, -3, 0, 0)), forKey: "molarFx")
         pbr(goldBody, hex: 0xE8B23E, metal: 1, rough: 0.26)
         goldBody.clearCoat.contents = 0.5
+        goldBody.emission.contents = PlatformColor.black
+        goldBody.shaderModifiers = [.geometry: FinaleShaders.localPositionGeometry, .surface: FinaleShaders.goldSweep]
+        goldBody.setValue(NSValue(scnVector4: SCNVector4(0, -3, 0, 0)), forKey: "molarFx")
         if let g = meshGeometry(Finale3D.goldenMolarMesh()) {
             g.materials = [porcelain]
             molarBody.geometry = g
@@ -1000,9 +1264,12 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             }
         }
         if let g = makeGeometry(positions: pos, normals: nor, colors: col) {
-            let m = SCNMaterial()
-            pbr(m, hex: 0xFFFFFF, metal: 0.1, rough: 0.32)
-            g.materials = [m]
+            pbr(mountainMaterial, hex: 0xFFFFFF, metal: 0.1, rough: 0.32)
+            mountainMaterial.emission.contents = PlatformColor.black
+            mountainMaterial.shaderModifiers = [.geometry: FinaleShaders.localPositionGeometry, .surface: FinaleShaders.crystalMountain]
+            mountainMaterial.setValue(NSValue(scnVector4: SCNVector4(0, reducedMotion ? 1 : 0, 0, 0)), forKey: "mountainFx")
+            mountainMaterial.setValue(NSValue(scnVector4: SCNVector4(0, 0, 0, 0)), forKey: "probeLocal")
+            g.materials = [mountainMaterial]
             mountain.addChildNode(SCNNode(geometry: g))
         }
         pbr(ledgeGold, hex: 0xFDE68A, metal: 0.6, rough: 0.3)
@@ -1024,11 +1291,20 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         for k in 0..<(stops.count - 1) {
             let a = SIMD3<Float>(Float(stops[k].x), Float(stops[k].y), Float(stops[k].z))
             let b = SIMD3<Float>(Float(stops[k + 1].x), Float(stops[k + 1].y), Float(stops[k + 1].z))
-            let cyl = SCNCylinder(radius: 0.016, height: CGFloat(simd_distance(a, b)))
+            let cyl = SCNCylinder(radius: 0.016, height: 1)
+            let pm = SCNMaterial()
+            pm.lightingModel = .constant
+            pm.blendMode = .alpha
+            pm.writesToDepthBuffer = false
+            pm.shaderModifiers = [.geometry: FinaleShaders.pathGeometry, .fragment: FinaleShaders.pathFragment]
+            pm.setValue(NSValue(scnVector4: SCNVector4(0, 0, 0, 1)), forKey: "pathFx")
+            cyl.materials = [pm]
+            pathMaterials.append(pm)
             let n = SCNNode(geometry: cyl)
             n.simdPosition = (a + b) * 0.5
+            n.simdScale = SIMD3<Float>(1, simd_distance(a, b), 1)
             n.simdOrientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: simd_normalize(b - a))
-            pathNodes.append(n)
+            n.renderingOrder = 6
             mountain.addChildNode(n)
         }
         mountain.isHidden = true
@@ -1207,23 +1483,36 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             }
         }
 
-        func material(glow: Float) -> SCNMaterial {
+        let stops = FinaleLook.skyStops(art)
+        let midHorizon = FinaleLook.linear(stops.colors[2].0)
+        let inSpace = plan.show == .meteors
+        var haze = FinaleLook.linear(0x0B1636)
+        if !inSpace { haze += midHorizon * 0.045 }
+        let hazeW: Float = inSpace ? 0.3 : 1.0
+        let hazeVec = NSValue(scnVector4: SCNVector4(haze.x, haze.y, haze.z, hazeW))
+        let zeroVec = NSValue(scnVector4: SCNVector4(0, 0, 0, 0))
+
+        func material(glow: Float, mirror: Bool = false) -> SCNMaterial {
             let m = SCNMaterial()
             m.lightingModel = .constant
             m.diffuse.contents = PlatformColor.white
             m.locksAmbientWithDiffuse = false
             m.ambient.contents = PlatformColor.black
             m.isDoubleSided = true
-            m.shaderModifiers = [.geometry: FinaleShaders.relief()]
+            m.shaderModifiers = mirror
+                ? [.geometry: FinaleShaders.relief(mirror: true), .fragment: FinaleShaders.mirror]
+                : [.geometry: FinaleShaders.relief(mirror: false)]
             m.setValue(NSValue(scnVector4: SCNVector4(0, reducedMotion ? 1 : 0, -1, 0)), forKey: "showTime")
             m.setValue(NSValue(scnVector4: SCNVector4(plan.show == .neon ? 1 : 0, glow, 0, 0)), forKey: "cityLook")
+            m.setValue(hazeVec, forKey: "cityHaze")
+            m.setValue(zeroVec, forKey: "burstA")
+            m.setValue(zeroVec, forKey: "burstB")
             return m
         }
-        // each material's mirror twin shares its show time (set together in updateRelief)
+        // each material's mirror twin shares its show time and burst flashes (set together in updateRelief)
         var mirrors: [(SCNMaterial, SCNMaterial)] = []
         func mirrorOf(_ m: SCNMaterial) -> SCNMaterial {
-            let twin = material(glow: 1)
-            twin.shaderModifiers = [.geometry: FinaleShaders.relief(), .fragment: FinaleShaders.mirror]
+            let twin = material(glow: 1, mirror: true)
             mirrors.append((m, twin))
             return twin
         }
@@ -1323,8 +1612,42 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         return r
     }
 
-    private func updateRelief(_ r: Relief, t: Double, override: Double, motionAll: Double?) {
-        r.material.setValue(NSValue(scnVector4: SCNVector4(Float(t), reducedMotion ? 1 : 0, Float(override), 0)), forKey: "showTime")
+    private func computeBurstFlash(_ plan: CityFinalePlan?, showT: Double, dim: Double) -> (SCNVector4, SCNVector4) {
+        let zero = SCNVector4(0, 0, 0, 0)
+        guard let plan, !reducedMotion, showT >= 0, dim > 0.004 else { return (zero, zero) }
+        let delay = plan.show == .meteors ? 0.0 : 0.9
+        var bestA = 0.0
+        var bestB = 0.0
+        var outA = zero
+        var outB = zero
+        for burst in plan.bursts {
+            let age = showT - burst.t - delay
+            if age < 0 || age > 0.72 { continue }
+            let str = CityFinale.smooth01(age / 0.04) * exp(-age / 0.24) * 0.55 * dim
+            if str <= bestB { continue }
+            let c = FinaleLook.linear(burst.colorHex)
+            let s = Float(str)
+            let v = SCNVector4(c.x * s, c.y * s, c.z * s, Float(burst.x))
+            if str > bestA {
+                bestB = bestA
+                outB = outA
+                bestA = str
+                outA = v
+            } else {
+                bestB = str
+                outB = v
+            }
+        }
+        return (outA, outB)
+    }
+
+    private func updateRelief(_ r: Relief, t: Double, override: Double, motionAll: Double?, burstA: SCNVector4, burstB: SCNVector4) {
+        let timeVal = NSValue(scnVector4: SCNVector4(Float(t), reducedMotion ? 1 : 0, Float(override), 0))
+        let valA = NSValue(scnVector4: burstA)
+        let valB = NSValue(scnVector4: burstB)
+        r.material.setValue(timeVal, forKey: "showTime")
+        r.material.setValue(valA, forKey: "burstA")
+        r.material.setValue(valB, forKey: "burstB")
         for m in r.movers {
             var time: Double?
             if !reducedMotion {
@@ -1336,8 +1659,10 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
                 }
             }
             let state = CitySkyline.motionState(m.motion, timeSec: time)
-            m.material.setValue(NSValue(scnVector4: SCNVector4(Float(t), reducedMotion ? 1 : 0, Float(override), 0)), forKey: "showTime")
+            m.material.setValue(timeVal, forKey: "showTime")
             m.material.setValue(NSValue(scnVector4: SCNVector4(r.neon, Float(state.glow), 0, 0)), forKey: "cityLook")
+            m.material.setValue(valA, forKey: "burstA")
+            m.material.setValue(valB, forKey: "burstB")
             m.node.simdPosition = m.rest + m.tangent * Float(state.dx)
             m.node.simdOrientation = simd_quatf(angle: Float(state.angleRad), axis: m.normal)
             m.mirror.simdPosition = m.node.simdPosition
@@ -1346,6 +1671,8 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         for (source, twin) in r.mirrors {
             twin.setValue(source.value(forKey: "showTime"), forKey: "showTime")
             twin.setValue(source.value(forKey: "cityLook"), forKey: "cityLook")
+            twin.setValue(valA, forKey: "burstA")
+            twin.setValue(valB, forKey: "burstB")
         }
     }
 
@@ -1407,6 +1734,16 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         mountain.simdPosition = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
         mountain.simdScale = SIMD3<Float>(repeating: Float(Finale3D.stageUnit))
         mountain.opacity = CGFloat(m.alpha)
+        let summitBlaze = atTop && t >= CityFinale.summitHop ? min(1, 0.55 + exp(-(t - CityFinale.summitHop) / 0.55)) : 0
+        mountainMaterial.setValue(NSValue(scnVector4: SCNVector4(Float(t), reducedMotion ? 1 : 0, Float(summitBlaze), 0)), forKey: "mountainFx")
+        let probeNow = CityFinale.probe(t, reducedMotion: reducedMotion, climbTo: worldIndex, summit: atTop)
+        if probeNow.space == .stage && probeNow.alpha > 0.01 && t >= CityFinale.molarEnd {
+            let py = probeNow.y - m.dy
+            let pz = Finale3D.mountainFront(probeNow.x, py) + 0.08
+            mountainMaterial.setValue(NSValue(scnVector4: SCNVector4(Float(probeNow.x), Float(py), Float(pz), Float(probeNow.alpha))), forKey: "probeLocal")
+        } else {
+            mountainMaterial.setValue(NSValue(scnVector4: SCNVector4(0, 0, 0, 0)), forKey: "probeLocal")
+        }
         func earned(_ i: Int) -> Bool { i == worldIndex ? t >= CityFinale.climbHop : finish(i) != .empty }
         for (i, node) in ledgeNodes.enumerated() {
             let on = earned(i)
@@ -1426,9 +1763,45 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
                 coin.simdEulerAngles = SIMD3<Float>(0, reducedMotion ? 0 : Float(t * 0.8 + Double(i)), 0)
             }
         }
-        for (k, node) in pathNodes.enumerated() {
-            let done = k < CityFinale.campaignPieces ? earned(k) : atTop && t >= CityFinale.summitHop
-            node.geometry?.materials = [done ? ledgeGold : ledgeDim]
+        let hopStart = CityFinale.climbHop - 0.8
+        let summitStart = CityFinale.summitHop - 0.8
+        for (k, pm) in pathMaterials.enumerated() {
+            var fill = 0.0
+            var shimmer = 0.0
+            var headGlow = 0.0
+            let rawPhase = t * 0.65 - Double(k) * 0.22
+            let phase = rawPhase - floor(rawPhase)
+            if k < CityFinale.campaignPieces {
+                if k == worldIndex {
+                    if t >= CityFinale.climbHop {
+                        fill = 1
+                        shimmer = phase
+                        headGlow = reducedMotion ? 0 : 0.35 + 0.65 * exp(-(t - CityFinale.climbHop) / 0.5)
+                    } else if t >= hopStart && !reducedMotion {
+                        let s = CityFinale.smooth01((t - hopStart) / 0.8)
+                        fill = s
+                        shimmer = s
+                        headGlow = 1
+                    }
+                } else if earned(k) {
+                    fill = 1
+                    shimmer = phase
+                    headGlow = reducedMotion ? 0 : 0.35
+                }
+            } else if atTop {
+                if t >= CityFinale.summitHop {
+                    let sRaw = t * 0.75 - Double(k) * 0.22
+                    fill = 1
+                    shimmer = sRaw - floor(sRaw)
+                    headGlow = reducedMotion ? 0 : 0.45 + 0.75 * exp(-(t - CityFinale.summitHop) / 0.6)
+                } else if t >= summitStart && !reducedMotion {
+                    let s = CityFinale.smooth01((t - summitStart) / 0.8)
+                    fill = s
+                    shimmer = s
+                    headGlow = 1
+                }
+            }
+            pm.setValue(NSValue(scnVector4: SCNVector4(Float(fill), Float(shimmer), Float(headGlow), Float(m.alpha))), forKey: "pathFx")
         }
         let top = Finale3D.stageWorld(0, 0.66 + m.dy, -0.5)
         summitGlow.isHidden = false
@@ -1479,13 +1852,16 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         let list = Finale3D.emblemFractal(index, t, reducedMotion: reducedMotion)
         if fractalFor != index {
             fractalFor = index
-            for n in fractalNodes { n.geometry = emblemGeometry(index) }
+            for (k, n) in fractalNodes.enumerated() {
+                if let copy = emblemGeometry(index)?.copy() as? SCNGeometry {
+                    copy.materials = [fractalMaterials[k]]
+                    n.geometry = copy
+                }
+                fractalLastFx[k] = SIMD2<Float>(-1, -1)
+            }
         }
         while fractalNodes.count < list.count {
-            let n = SCNNode(geometry: emblemGeometry(index))
-            n.renderingOrder = 7
-            fractalNodes.append(n)
-            scene.rootNode.addChildNode(n)
+            appendFractalNode(index: index)
         }
         for (k, n) in fractalNodes.enumerated() {
             guard k < list.count else {
@@ -1497,6 +1873,13 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             n.simdPosition = SIMD3<Float>(Float(e.x), Float(e.y), Float(e.z))
             n.simdEulerAngles = SIMD3<Float>(0, Float(e.yaw), Float(e.roll))
             n.simdScale = SIMD3<Float>(repeating: Float(e.scale * max(0.001, e.alpha)))
+            let depth = Float(min(1.0, Double(e.level) / 3.0))
+            let glint = Float(e.glint)
+            let last = fractalLastFx[k]
+            if abs(depth - last.x) > 0.004 || abs(glint - last.y) > 0.004 {
+                fractalLastFx[k] = SIMD2<Float>(depth, glint)
+                fractalMaterials[k].setValue(NSValue(scnVector4: SCNVector4(depth, glint, 0, 0)), forKey: "emblemFx")
+            }
         }
     }
 
@@ -1532,7 +1915,9 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         guard let relief = showOnly(worldIndex), let art = arts[worldIndex] else { return }
         hideStage()
         _ = setCamera(Finale3D.finaleCamera(t, reducedMotion: reducedMotion), w: w, h: h)
-        updateRelief(relief, t: t, override: -1, motionAll: nil)
+        let dim = 1 - 0.35 * CityFinale.smooth01((t - 14.0) / 1.0)
+        let flash = computeBurstFlash(art.finale, showT: t - CityFinale.blazeEnd, dim: dim)
+        updateRelief(relief, t: t, override: -1, motionAll: nil, burstA: flash.0, burstB: flash.1)
         let aurora = CityFinale.smooth01((t - CityFinale.waveEnd) / 1.2) * (t < CityFinale.showEnd ? 1 : 0.55)
         setSky(worldIndex, aurora: reducedMotion ? aurora * 0.6 : aurora, t: t, override: -1)
         placeShowProps(art, showT: t - CityFinale.blazeEnd)
@@ -1548,7 +1933,8 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             coinRoot.isHidden = false
             let p = Finale3D.stageWorld(piece.x, piece.y, 0.8)
             coinRoot.simdPosition = SIMD3<Float>(Float(p.x), Float(p.y), Float(p.z))
-            coinRoot.simdScale = SIMD3<Float>(repeating: Float(CityFinale.pieceRadius * piece.scale * Finale3D.stageUnit * max(0.01, piece.alpha)))
+            coinRoot.simdScale = SIMD3<Float>(repeating: Float(CityFinale.pieceRadius * piece.scale * Finale3D.stageUnit))
+            coinRoot.opacity = CGFloat(piece.alpha)
             coinRoot.simdEulerAngles = SIMD3<Float>(0, Float(piece.spin), 0)
             coinGlow.isHidden = false
             coinGlow.simdPosition = SIMD3<Float>(Float(p.x), Float(p.y), Float(p.z - 0.3))
@@ -1565,11 +1951,13 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
 
         let dy = placeMountain(t)
         let m = CityFinale.molar(t, reducedMotion: reducedMotion)
+        let slotShine = CityFinale.slotShine(t)
+        porcelain.setValue(NSValue(scnVector4: SCNVector4(Float(slotShine), -3, 0, 0)), forKey: "molarFx")
         let pose = FinaleLook.molarPose(cx: m.x, cy: m.y, scale: CityFinale.Molar.scale * m.scale, t: t, faceTilt: 0, turn: t < CityFinale.molarEnd, reducedMotion: reducedMotion)
         placeMolar(
             pose, alpha: m.alpha,
             placed: { i in i == self.worldIndex ? (t >= CityFinale.slot ? finishHere : .empty) : self.finish(i) },
-            shineIndex: worldIndex, shine: CityFinale.slotShine(t), gold: false
+            shineIndex: worldIndex, shine: slotShine, gold: false
         )
         placeProbe(t, mountainDy: dy)
     }
@@ -1580,12 +1968,14 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         let credit = CityFinale.endingCredit(t)
         let lens = setCamera(Finale3D.endingCamera(t, reducedMotion: reducedMotion), w: w, h: h)
         if credit.index >= 0 {
+            let within = t - E.creditsStart - Double(credit.index) * E.creditSeconds
+            let art = credit.index < arts.count ? arts[credit.index] : nil
             if let relief = showOnly(credit.index) {
-                updateRelief(relief, t: CityFinale.end, override: credit.alpha, motionAll: reducedMotion ? nil : t)
+                let flash = computeBurstFlash(art?.finale, showT: within - 0.6, dim: credit.alpha)
+                updateRelief(relief, t: CityFinale.end, override: credit.alpha, motionAll: reducedMotion ? nil : t, burstA: flash.0, burstB: flash.1)
             }
             setSky(credit.index, aurora: credit.alpha * 0.6, t: t, override: credit.alpha)
-            let within = t - E.creditsStart - Double(credit.index) * E.creditSeconds
-            placeShowProps(arts[credit.index], showT: within - 0.6)
+            placeShowProps(art, showT: within - 0.6)
         } else {
             _ = showOnly(-1)
             setSky(-1, aurora: t >= E.finaleStart ? 1 : 0.35, t: t, override: 1)
@@ -1594,6 +1984,26 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
 
         let place = CityFinale.endingMolarPlace(t)
         let snapped = t >= E.snap
+        let isGold = snapped && allGold
+        var sweepPos = -3.0
+        var sweepStr = 0.0
+        if snapped {
+            let snapAge = t - E.snap
+            if reducedMotion {
+                sweepPos = 0
+                sweepStr = exp(-snapAge / 0.85) * (isGold ? 0.5 : 0.35)
+            } else if snapAge < 1.35 {
+                let s = snapAge / 1.35
+                sweepPos = -1.7 + 3.5 * CityFinale.smooth01(s)
+                sweepStr = sin(s * Double.pi) * (isGold ? 1.0 : 0.65)
+            } else if isGold && t >= E.face && t - E.face < 1.2 {
+                let s = (t - E.face) / 1.2
+                sweepPos = -1.5 + 3.1 * CityFinale.smooth01(s)
+                sweepStr = sin(s * Double.pi) * 0.55
+            }
+        }
+        let fxVal = NSValue(scnVector4: SCNVector4(Float(isGold ? (t >= E.finaleStart ? 1.0 : 0.45) : 0.0), Float(sweepPos), Float(sweepStr), 0))
+        (isGold ? goldBody : porcelain).setValue(fxVal, forKey: "molarFx")
         var pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: allGold), turn: true, reducedMotion: reducedMotion)
         if credit.index >= 0 {
             let pinned = FinaleLook.pinnedToView(lens, x: place.x, y: place.y, scale: place.scale)
@@ -1603,7 +2013,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         placeMolar(
             pose, alpha: place.alpha,
             placed: { i in CityFinale.endingPiece(i, t: t, reducedMotion: self.reducedMotion).arrived ? self.finish(i) : .empty },
-            shineIndex: -1, shine: 0, gold: snapped && allGold
+            shineIndex: -1, shine: 0, gold: isGold
         )
         // the pieces in flight
         flyingRoot.isHidden = false
@@ -1620,10 +2030,21 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             }
             guard let coin = flyingCoins[i] else { continue }
             coin.isHidden = false
-            let wp = Finale3D.stageWorld(p.x, p.y, 1)
-            coin.simdPosition = SIMD3<Float>(Float(wp.x), Float(wp.y), Float(wp.z))
-            coin.simdScale = SIMD3<Float>(repeating: Float(CityFinale.Molar.cuspRadius * place.scale * p.scale * Finale3D.stageUnit))
-            coin.simdEulerAngles = SIMD3<Float>(0, Float(p.spin), 0)
+            // Over the last part of the flight the coin eases into its socket's own place, turn and
+            // size on the tilted 3D molar, so it is already exactly there when it clicks in.
+            let flight = max(0, min(1, (t - (E.firstPiece + Double(i) * E.pieceGap)) / E.pieceFlight))
+            let k = reducedMotion ? 1 : CityFinale.smooth01((flight - 0.55) / 0.45)
+            let top = Finale3D.molarCuspTop(i)
+            let socket = pose.world(SIMD3<Double>(top.x, top.y, top.z + 0.03))
+            let fly = Finale3D.stageWorld(p.x, p.y, 1)
+            let at = fly + (socket - fly) * k
+            coin.simdPosition = SIMD3<Float>(Float(at.x), Float(at.y), Float(at.z))
+            let flyScale = CityFinale.Molar.cuspRadius * place.scale * p.scale * Finale3D.stageUnit
+            let socketScale = CityFinale.Molar.cuspRadius * 0.88 * pose.scale
+            coin.simdScale = SIMD3<Float>(repeating: Float(flyScale + (socketScale - flyScale) * k))
+            let flyTurn = simd_quatf(angle: Float(p.spin), axis: SIMD3<Float>(0, 1, 0))
+            coin.simdOrientation = simd_slerp(flyTurn, molar.simdOrientation, Float(k))
+            coin.opacity = CGFloat(p.alpha)
         }
 
         // the last scene: the golden fractal rising behind the molar, the signs circling
@@ -1632,10 +2053,10 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             let grow = reducedMotion ? CityFinale.smooth01(local / 1.0) : CityFinale.smooth01(local / 1.6)
             let fade = 1 - CityFinale.smooth01((t - (E.end - 0.8)) / 0.8)
             let c = Finale3D.stageWorld(place.x, place.y + 0.15, -10)
-            let radius = 5.2 * (0.2 + 0.8 * grow)
+            let radius = reducedMotion ? 5.2 : 5.2 * (0.2 + 0.8 * grow)
             bulb.isHidden = false
             bulb.simdPosition = SIMD3<Float>(Float(c.x), Float(c.y), Float(c.z))
-            bulb.simdScale = SIMD3<Float>(repeating: Float(radius * 1.3))
+            bulb.simdScale = SIMD3<Float>(repeating: Float(radius * 2.4))
             bulbMaterial.setValue(NSValue(scnVector4: SCNVector4(Float(c.x), Float(c.y), Float(c.z), Float(radius))), forKey: "bulbCenter")
             let power = reducedMotion ? 8 : 6 + 2 * CityFinale.smooth01(local / 3)
             bulbMaterial.setValue(NSValue(scnVector4: SCNVector4(Float(reducedMotion ? 0 : local), Float(grow * fade), Float(power), 0)), forKey: "bulbLook")
@@ -1728,20 +2149,67 @@ extension FinalePainter {
         guard alpha > 0.004, let a = lens.project(head) else { return }
         let b = lens.project(tail) ?? a
         let px = max(1.2, lens.pixels(size, depth: a.depth))
-        paintSpark(&ctx, x: a.x, y: a.y, px: b.x, py: b.y, color: color, size: px, alpha: alpha)
+        var c = ctx
+        c.blendMode = .plusLighter
+        c.opacity = alpha * 0.22
+        c.fill(Path(ellipseIn: CGRect(x: a.x - px * 2.5, y: a.y - px * 2.5, width: px * 5.0, height: px * 5.0)), with: .color(color))
+        if hypot(a.x - b.x, a.y - b.y) > 0.5 {
+            var streak = Path()
+            streak.move(to: CGPoint(x: b.x, y: b.y))
+            streak.addLine(to: CGPoint(x: a.x, y: a.y))
+            c.opacity = 1
+            c.stroke(streak, with: .linearGradient(
+                Gradient(colors: [color.opacity(0), color.opacity(alpha)]),
+                startPoint: CGPoint(x: b.x, y: b.y),
+                endPoint: CGPoint(x: a.x, y: a.y)
+            ), style: StrokeStyle(lineWidth: px, lineCap: .round))
+        }
+        c.opacity = alpha * 0.9
+        c.fill(Path(ellipseIn: CGRect(x: a.x - px * 0.85, y: a.y - px * 0.85, width: px * 1.7, height: px * 1.7)), with: .color(color))
+        c.opacity = alpha * 0.65
+        c.fill(Path(ellipseIn: CGRect(x: a.x - px * 0.45, y: a.y - px * 0.45, width: px * 0.9, height: px * 0.9)), with: .color(Color(red: 1, green: 0.97, blue: 0.9)))
     }
 
-    /// One burst's sparks, each drawn from where it was a moment ago to where it is.
+    /// One burst's sparks, each drawn as a tapered streak from its previous position to its head.
     private func paintBurst3D(_ ctx: inout GraphicsContext, lens: FinaleLens, burst: FinaleBurst, index b: Int, showT: Double, show: FinaleShow, center: SIMD3<Double>, scale: Double, size: (Double, Double), dim: Double) {
-        let now = Finale3D.burstSparks(burst, b, showT: showT, show: show, center: center, scale: scale)
-        if now.isEmpty { return }
-        let then = Finale3D.burstSparks(burst, b, showT: showT - 0.07, show: show, center: center, scale: scale)
+        let delay = show == .meteors ? 0.0 : 0.9
+        let age = showT - burst.t - delay
         let c1 = finaleRGB(burst.colorHex)
         let c2 = finaleRGB(burst.color2Hex)
-        for (i, s) in now.enumerated() {
-            let prev = i < then.count && then[i].gen == s.gen ? then[i] : s
+        if age >= 0 && age < 0.28, let s = lens.project(center) {
+            let coreAlpha = 0.52 * dim * CityFinale.smooth01(age / 0.025) * exp(-age / 0.08)
+            let coreRadius = lens.pixels(2.2 * scale * (0.45 + 1.3 * CityFinale.smooth01(age / 0.12)), depth: s.depth)
+            paintGlow(&ctx, x: s.x, y: s.y, radius: coreRadius, color: finaleColor(c1 + (c2 - c1) * 0.35), alpha: coreAlpha)
+        }
+        let now = Finale3D.burstSparks(burst, b, showT: showT, show: show, center: center, scale: scale)
+        if now.isEmpty { return }
+        for s in now {
             let color = finaleColor(c1 + (c2 - c1) * s.mix)
-            sparkStroke(&ctx, lens: lens, head: SIMD3(s.x, s.y, s.z), tail: SIMD3(prev.x, prev.y, prev.z), color: color, size: s.gen == 0 ? size.0 : size.1, alpha: s.alpha * dim)
+            sparkStroke(&ctx, lens: lens, head: SIMD3(s.x, s.y, s.z), tail: SIMD3(s.px, s.py, s.pz), color: color, size: s.gen == 0 ? size.0 : size.1, alpha: s.alpha * dim)
+        }
+    }
+
+    /// Reduce Motion: no rocket climbs; a still light swells and fades where the shell would burst.
+    private func stillBurstLight(_ ctx: inout GraphicsContext, lens: FinaleLens, burst: FinaleBurst, center: SIMD3<Double>, showT: Double, show: FinaleShow, dim: Double) {
+        let delay = show == .meteors ? 0.0 : 0.9
+        let still = (showT - burst.t - delay) / 1.6
+        guard still >= 0, still < 1, let s = lens.project(center) else { return }
+        paintGlow(&ctx, x: s.x, y: s.y, radius: lens.pixels(2.6, depth: s.depth), color: finaleColor(finaleRGB(burst.colorHex)), alpha: 0.7 * dim * sin(Double.pi * still))
+    }
+
+    /// Station Aurora's shooting stars, each a fading line from its head back along its tail.
+    private func paintMeteors(_ ctx: inout GraphicsContext, lens: FinaleLens, showT: Double, alpha: Double) {
+        for m in CityFinale.meteors(showT) {
+            let a = Finale3D.skylineWorld(m.x, m.y, 0)
+            let b = Finale3D.skylineWorld(m.tailX, m.tailY, 0)
+            guard let pa = lens.project(SIMD3(a.x, a.y, a.z - 4)), let pb = lens.project(SIMD3(b.x, b.y, b.z - 4)) else { continue }
+            var line = Path()
+            line.move(to: CGPoint(x: pa.x, y: pa.y))
+            line.addLine(to: CGPoint(x: pb.x, y: pb.y))
+            ctx.stroke(line, with: .linearGradient(
+                Gradient(colors: [Color.white.opacity(m.alpha * alpha), Color.white.opacity(0)]),
+                startPoint: CGPoint(x: pa.x, y: pa.y), endPoint: CGPoint(x: pb.x, y: pb.y)
+            ), style: StrokeStyle(lineWidth: 2, lineCap: .round))
         }
     }
 
@@ -1756,10 +2224,17 @@ extension FinalePainter {
         if showT >= 0 {
             for (b, burst) in plan.bursts.enumerated() {
                 let center = Finale3D.burstWorld(burst, b)
+                if rm {
+                    stillBurstLight(&glow, lens: lens, burst: burst, center: center, showT: showT, show: plan.show, dim: dim)
+                    continue
+                }
                 if let r = CityFinale.rocket(burst, showT: showT, show: plan.show) {
                     let p = Finale3D.skylineWorld(r.x, r.y, 0)
-                    if let s = lens.project(SIMD3(p.x, p.y, center.z)) {
-                        paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.9, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: 1)
+                    let tail = Finale3D.skylineWorld(r.x, max(0, r.y - 1.35), 0)
+                    let head = SIMD3(p.x, p.y, center.z)
+                    sparkStroke(&glow, lens: lens, head: head, tail: SIMD3(tail.x, tail.y, center.z), color: Color(red: 1, green: 0.95, blue: 0.78), size: 0.14, alpha: 0.95 * dim)
+                    if let s = lens.project(head) {
+                        paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.75, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: 0.9 * dim)
                     }
                 }
                 if !rm {
@@ -1786,13 +2261,16 @@ extension FinalePainter {
             let p = Finale3D.stageWorld(rocket.x, rocket.y, 0)
             let k = min(1, max(0, (t - CityFinale.showEnd) / (CityFinale.emblemBurst - CityFinale.showEnd)))
             let y = p.y - 6 + (Finale3D.emblemCenter.y - (p.y - 6)) * k
-            if let s = lens.project(SIMD3(0, y, Finale3D.emblemCenter.z)) {
-                paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(1.1, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: 1)
+            let head = SIMD3(0, y, Finale3D.emblemCenter.z)
+            sparkStroke(&glow, lens: lens, head: head, tail: SIMD3(0, y - 1.6, Finale3D.emblemCenter.z), color: Color(red: 1, green: 0.95, blue: 0.78), size: 0.18, alpha: 1)
+            if let s = lens.project(head) {
+                paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(1.0, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: 0.95)
             }
         }
-        // the probe's trail
+        // the probe's trail and brief touchdown sparkle ring on the climbed ledge
         if !rm {
-            let dy = CityFinale.mountain(t, reducedMotion: rm).dy
+            let m = CityFinale.mountain(t, reducedMotion: rm)
+            let dy = m.dy
             for k in 1...7 {
                 let past = CityFinale.probe(t - Double(k) * 0.04, reducedMotion: false, climbTo: request.worldIndex, summit: atTop)
                 if past.space == .hidden { continue }
@@ -1800,6 +2278,22 @@ extension FinalePainter {
                 guard let s = lens.project(wp) else { continue }
                 paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(past.space == .city ? 0.8 : 0.22, depth: s.depth), color: Color(red: 0.37, green: 0.92, blue: 0.83), alpha: 0.6 * (1 - Double(k) / 8))
             }
+            func paintTouchdown(at: Double, ledgeIdx: Int) {
+                let age = t - at
+                guard m.alpha > 0.01, age >= 0, age <= 0.5 else { return }
+                let l = Finale3D.ledge(ledgeIdx)
+                let w0 = Finale3D.stageWorld(l.x, l.y + dy, l.z * Finale3D.stageUnit)
+                let r = 0.25 + 1.3 * CityFinale.smooth01(age / 0.45)
+                let fade = (1 - age / 0.5) * m.alpha * 0.85
+                for j in 0..<10 {
+                    let a = (Double.pi * 2 * Double(j)) / 10 + age * 1.4
+                    let wp = SIMD3(w0.x + cos(a) * r, w0.y + sin(a) * r * 0.45 + age * 0.6, w0.z + 0.15)
+                    guard let s = lens.project(wp) else { continue }
+                    paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.22, depth: s.depth), color: Color(red: 0.99, green: 0.9, blue: 0.54), alpha: fade)
+                }
+            }
+            paintTouchdown(at: CityFinale.climbHop, ledgeIdx: request.worldIndex)
+            if atTop { paintTouchdown(at: CityFinale.summitHop, ledgeIdx: CityFinale.campaignPieces) }
         }
         let host = CityFinale.host(t, reducedMotion: rm)
         paintHost(&ctx, city, onLeft: plan.hostOnLeft, rise: host.rise, wave: host.wave)
@@ -1823,15 +2317,25 @@ extension FinalePainter {
             let within = t - E.creditsStart - Double(credit.index) * E.creditSeconds
             for (b, burst) in c.plan.bursts.enumerated() {
                 let center = Finale3D.burstWorld(burst, b)
+                if rm {
+                    stillBurstLight(&glow, lens: lens, burst: burst, center: center, showT: within - 0.6, show: c.plan.show, dim: credit.alpha)
+                    continue
+                }
                 if let r = CityFinale.rocket(burst, showT: within - 0.6, show: c.plan.show) {
                     let p = Finale3D.skylineWorld(r.x, r.y, 0)
-                    if let s = lens.project(SIMD3(p.x, p.y, center.z)) {
-                        paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.9, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: credit.alpha)
+                    let tail = Finale3D.skylineWorld(r.x, max(0, r.y - 1.35), 0)
+                    let head = SIMD3(p.x, p.y, center.z)
+                    sparkStroke(&glow, lens: lens, head: head, tail: SIMD3(tail.x, tail.y, center.z), color: Color(red: 1, green: 0.95, blue: 0.78), size: 0.14, alpha: 0.95 * credit.alpha)
+                    if let s = lens.project(head) {
+                        paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.75, depth: s.depth), color: Color(red: 1, green: 0.95, blue: 0.78), alpha: 0.9 * credit.alpha)
                     }
                 }
                 if !rm {
                     paintBurst3D(&glow, lens: lens, burst: burst, index: b, showT: within - 0.6, show: c.plan.show, center: center, scale: 1, size: (0.16, 0.11), dim: credit.alpha)
                 }
+            }
+            if c.plan.show == .meteors && !rm {
+                paintMeteors(&glow, lens: lens, showT: within - 0.6, alpha: credit.alpha)
             }
             paintHost(&ctx, c, onLeft: c.plan.hostOnLeft, rise: credit.alpha, wave: rm ? 0 : 0.5 * sin(Double.pi * 2 * 1.4 * t))
         }
@@ -1853,21 +2357,22 @@ extension FinalePainter {
                         paintFaceAt(&ctx, x: a.x, y: a.y, u: hypot(b.x - a.x, b.y - a.y) * 0.78, alpha: face.alpha, wink: face.wink)
                     }
                     if !rm {
-                        // golden rain over everything
+                        // golden rain over everything as delicate falling streaks
+                        let rainCol = Color(red: 0.99, green: 0.88, blue: 0.28)
                         for k in 0..<120 {
                             let age = t - E.face - 0.03 * Double(k)
                             if age < 0 { continue }
                             let fall = (age * (0.9 + 0.7 * Double((k * 37) % 11) / 11)).truncatingRemainder(dividingBy: 5)
                             let x = (Double((k * 53) % 97) / 97 - 0.5) * 30
+                            let y = 22 - fall * 4.4
                             let z = Double((k * 29) % 41) / 41 * 12
-                            guard let s = lens.project(SIMD3(x, 22 - fall * 4.4, z)) else { continue }
-                            paintGlow(&glow, x: s.x, y: s.y, radius: lens.pixels(0.22, depth: s.depth), color: Color(red: 0.99, green: 0.88, blue: 0.28), alpha: 0.8)
+                            sparkStroke(&glow, lens: lens, head: SIMD3(x, y, z), tail: SIMD3(x, y + 0.65, z), color: rainCol, size: 0.055, alpha: 0.8)
                         }
                     }
                 }
             }
         }
-        let snapFlash = t >= E.snap && !rm ? exp(-(t - E.snap) / 0.15) * 0.3 : 0
+        let snapFlash = t >= E.snap && !rm ? exp(-(t - E.snap) / 0.15) * 0.22 : 0
         fillScreen(&ctx, color: Color(red: 1, green: 0.98, blue: 0.92), alpha: snapFlash)
         fillScreen(&ctx, color: Color(red: 0.004, green: 0.012, blue: 0.047), alpha: CityFinale.smooth01((t - (E.end - 0.6)) / 0.6))
     }

@@ -114,6 +114,11 @@ export class CatalogMatcher {
 type Loader = () => Promise<{ default: Catalog } | Catalog>;
 const LOADERS = import.meta.glob<{ default: Catalog }>('./locales/[a-z][a-z].json') as Record<string, Loader>;
 
+/** Loads every language pack once, so a later switch works offline (the files are cached as they load). */
+export function warmAllLanguagePacks(): void {
+  for (const load of Object.values(LOADERS)) void load().catch(() => undefined);
+}
+
 export function availableUiLanguages(): string[] {
   return ['en', ...Object.keys(LOADERS).map((p) => /([a-z]{2})\.json$/.exec(p)?.[1] ?? '').filter(Boolean)];
 }
@@ -168,7 +173,8 @@ export class UiTranslator {
     if (token !== this.loadToken) return; // a newer request won
     this.lang = lang;
     this.matcher = matcher;
-    if (typeof document !== 'undefined') document.documentElement.lang = lang;
+    // the page's language is the one actually on screen (English when a pack failed to load)
+    if (typeof document !== 'undefined') document.documentElement.lang = matcher || lang === 'en' ? lang : 'en';
     if (this.root) this.translateTree(this.root);
   }
 

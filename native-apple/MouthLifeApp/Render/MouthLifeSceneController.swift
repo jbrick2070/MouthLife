@@ -69,6 +69,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public var companionAcidStress: Float = 0.0
     public var pacerElapsedSec: Double = 0.0
     public var pacerInFlossBonus: Bool = false
+    /// True while the arcade's pause card is up: the mission does not step (its clock stops too).
+    public var arcadePaused: Bool = false
     public var pacerStage: PacerStage = .brushing
     public var pacerFlossToolStyle: FlossToolStyle = .flossPick
     public var pacerMouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec
@@ -746,7 +748,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         guard let session = activeSession else { return }
         let cart = session.cartridge
 
-        if appMode != .report && !session.isCompleted {
+        if arcadePaused {
+            accumulator = 0
+        }
+        if appMode != .report && !session.isCompleted && !arcadePaused {
             accumulator = min(0.12, accumulator + rawDt)
             var didStep = false
             var steppedSnapshot: SessionSnapshot?

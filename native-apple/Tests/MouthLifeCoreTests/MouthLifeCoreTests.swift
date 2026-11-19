@@ -1038,6 +1038,27 @@ final class MouthLifeCoreTests: XCTestCase {
         }
     }
 
+    func testImportMergesWithoutErasingNewerProgress() {
+        // An older Sync Code merged into a newer save keeps the newer progress (as on the web).
+        let older = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_000_000)
+        var newer = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_100_000)
+        newer.fluorideIons = 412
+        var w1 = newer.worlds["world_1"] ?? WorldRecord(unlocked: true)
+        w1.completed = true
+        w1.bestScore = 9900
+        w1.bestGrade = .s
+        newer.worlds["world_1"] = w1
+        newer.unlockedHistoryNotes.append("note_newer")
+        let merged = SaveSystem.mergeSaves(current: newer, imported: older)
+        XCTAssertEqual(merged.fluorideIons, 412)
+        XCTAssertEqual(merged.worlds["world_1"]?.completed, true)
+        XCTAssertEqual(merged.worlds["world_1"]?.bestScore, 9900)
+        XCTAssertEqual(merged.worlds["world_1"]?.bestGrade, .s)
+        XCTAssertTrue(merged.unlockedHistoryNotes.contains("note_newer"))
+        // a huge schema version is refused, not a crash
+        XCTAssertThrowsError(try SaveSystem.decodeSaveFromSyncCode("ML2:" + Data(#"{"schemaVersion":1e300}"#.utf8).base64EncodedString()))
+    }
+
     func testFinale3DMatchesTheWebNumberForNumber() {
         // The 3D finale's camera path, fireworks, fractal signs, molar and crystal mountain: the same
         // numbers as src/config/finale3d.ts, so both editions film the same movie.

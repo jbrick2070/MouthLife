@@ -345,10 +345,11 @@ public final class SaveSystem {
             return base
         }
 
-        let version = Int(versionDouble)
-        guard (version == 1 || version == 2) && Double(version) == versionDouble else {
+        // check the value before turning it into an Int: a huge number would crash the conversion
+        guard versionDouble == 1 || versionDouble == 2 else {
             return base
         }
+        let version = Int(versionDouble)
 
         base.saveRevision = clampInt(obj["saveRevision"], min: 1, max: maxImportedCounter, fallback: 1)
         base.lastSavedEpochMs = clampInt64(
@@ -674,9 +675,9 @@ public final class SaveSystem {
         guard let vDouble = jsonDouble(dict["schemaVersion"]) else {
             throw SyncCodeError.unsupportedSchemaVersion(-1)
         }
-        let vInt = Int(vDouble)
-        guard (vInt == 1 || vInt == 2) && Double(vInt) == vDouble else {
-            throw SyncCodeError.unsupportedSchemaVersion(vInt)
+        // check the value before turning it into an Int: a huge number would crash the conversion
+        guard vDouble == 1 || vDouble == 2 else {
+            throw SyncCodeError.unsupportedSchemaVersion(vDouble.isFinite && abs(vDouble) < 1e9 ? Int(vDouble) : -1)
         }
 
         return migrateSave(jsonObject: dict, nowEpochMs: nowEpochMs)
@@ -1046,6 +1047,62 @@ public final class SaveSystem {
         _ = save(next, nowEpochMs: nowEpochMs)
     }
 
+    /// Two saves of the same player made into one, so an older code never erases newer progress:
+    /// each city keeps its best record, counts keep the higher value, unlocks are combined, each
+    /// day's reward slots keep the higher count, the companion comes from the newer save, and this
+    /// device keeps its own graphics setting. Twin of mergeSaves in SaveSystem.ts.
+    public static func mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2) -> MouthLifeSaveV2 {
+        let newer = imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current
+        func union(_ a: [String], _ b: [String]) -> [String] {
+            var seen = Set<String>()
+            return (a + b).filter { seen.insert($0).inserted }
+        }
+        var worlds: [String: WorldRecord] = [:]
+        for id in Set(current.worlds.keys).union(imported.worlds.keys) {
+            guard let a = current.worlds[id], let b = imported.worlds[id] else {
+                worlds[id] = current.worlds[id] ?? imported.worlds[id]
+                continue
+            }
+            var w = a
+            w.unlocked = a.unlocked || b.unlocked
+            w.completed = a.completed || b.completed
+            w.timesCleared = max(a.timesCleared, b.timesCleared)
+            w.bestScore = max(a.bestScore, b.bestScore)
+            w.bestGrade = a.bestGrade.rank >= b.bestGrade.rank ? a.bestGrade : b.bestGrade
+            w.bestCleanlinessPct = max(a.bestCleanlinessPct, b.bestCleanlinessPct)
+            w.sitesRestoredMax = max(a.sitesRestoredMax, b.sitesRestoredMax)
+            worlds[id] = w
+        }
+        var daily: [String: DailySlotLog] = [:]
+        for day in Set(current.dailySlotsByDate.keys).union(imported.dailySlotsByDate.keys) {
+            let a = current.dailySlotsByDate[day] ?? DailySlotLog()
+            let b = imported.dailySlotsByDate[day] ?? DailySlotLog()
+            daily[day] = DailySlotLog(fullRewards: max(a.fullRewards, b.fullRewards), tips: max(a.tips, b.tips))
+        }
+        let unlocked = union(current.unlockedUpgrades, imported.unlockedUpgrades)
+        func pick(_ slot: KeyPath<EquippedUpgrades, String?>) -> String? {
+            let want = newer.equippedUpgrades[keyPath: slot] ?? current.equippedUpgrades[keyPath: slot] ?? imported.equippedUpgrades[keyPath: slot]
+            guard let want, unlocked.contains(want) else { return nil }
+            return want
+        }
+        var out = newer
+        out.hasSeenCosmicIntro = current.hasSeenCosmicIntro || imported.hasSeenCosmicIntro
+        out.playerProfile = imported.playerProfile
+        out.companion = newer.companion
+        out.totalBrushStamps = max(current.totalBrushStamps, imported.totalBrushStamps)
+        out.fluorideIons = max(current.fluorideIons, imported.fluorideIons)
+        out.dailySlotsByDate = daily
+        out.pendingSupplyBeacons = max(current.pendingSupplyBeacons, imported.pendingSupplyBeacons)
+        out.remineralizedOverdriveRuns = max(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns)
+        out.unlockedUpgrades = unlocked
+        out.equippedUpgrades = EquippedUpgrades(brush: pick(\.brush), floss: pick(\.floss), rinse: pick(\.rinse))
+        out.unlockedHistoryNotes = union(current.unlockedHistoryNotes, imported.unlockedHistoryNotes)
+        out.qualityPreference = current.qualityPreference
+        out.worlds = worlds
+        out.lastSavedEpochMs = max(current.lastSavedEpochMs, imported.lastSavedEpochMs)
+        return out
+    }
+
     public func exportSyncCode() -> String {
         Self.encodeSaveToSyncCode(currentSave)
     }
@@ -1055,12 +1112,12 @@ public final class SaveSystem {
         _ code: String,
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) throws -> MouthLifeSaveV2 {
-        var imported = try Self.decodeSaveFromSyncCode(code, nowEpochMs: nowEpochMs)
-        // Preserve monotonic stamps across merges if player imports on existing device
-        imported.totalBrushStamps = max(imported.totalBrushStamps, currentSave.totalBrushStamps)
-        _ = CompanionArchSim.reconcileOfflineElapsed(&imported.companion, nowEpochMs: nowEpochMs)
-        imported.saveRevision = max(currentSave.saveRevision, imported.saveRevision) + 1
-        currentSave = imported
+        let imported = try Self.decodeSaveFromSyncCode(code, nowEpochMs: nowEpochMs)
+        // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
+        var merged = Self.mergeSaves(current: currentSave, imported: imported)
+        _ = CompanionArchSim.reconcileOfflineElapsed(&merged.companion, nowEpochMs: nowEpochMs)
+        merged.saveRevision = max(currentSave.saveRevision, imported.saveRevision) + 1
+        currentSave = merged
         _ = checkThresholdAutoUnlocks()
         persistInternal(nowEpochMs: nowEpochMs)
         bus.emit(.saveUpdated(save: currentSave))

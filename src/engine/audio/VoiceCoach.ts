@@ -63,6 +63,8 @@ export class VoiceCoach {
   onSpeakingChanged: ((speaking: boolean) => void) | null = null;
   /** Called after the language changes. The whole game uses this one language setting. */
   onLanguageChanged: ((language: CoachLanguage) => void) | null = null;
+  /** The game's sound settings: speech is silent when muted and follows the effects volume (0..1). */
+  soundLevel: (() => number) | null = null;
 
   constructor() {
     this.enabled = readPref(ENABLED_KEY) !== '0';
@@ -112,9 +114,11 @@ export class VoiceCoach {
   /** Speak one cue now, replacing any cue still being spoken. */
   speak(text: string): void {
     const synth = this.synth();
-    if (!synth || !this.enabled || !text) return;
+    const level = this.soundLevel ? this.soundLevel() : 1;
+    if (!synth || !this.enabled || !text || level <= 0.001) return;
     const bcp47 = COACH_LANGUAGE_INFO[this.language].bcp47VoiceCode;
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = Math.min(1, Math.max(0, level));
     utterance.lang = bcp47;
     const voices = synth.getVoices();
     const idx = pickVoice(voices, bcp47);

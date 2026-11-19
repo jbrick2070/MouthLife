@@ -3,6 +3,8 @@ import SwiftUI
 
 public struct RootContentView: View {
     @Bindable public var coordinator: AppCoordinator
+    /// The system's Reduce Motion setting; the game follows it (the in-app switch can still turn it on).
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
@@ -11,7 +13,7 @@ public struct RootContentView: View {
     public var body: some View {
         ZStack {
             // Full-screen 120Hz Native Metal SceneKit 3D Viewport
-            MouthLife3DViewport(controller: coordinator.sceneController)
+            MouthLife3DViewport(controller: coordinator.sceneController, paused: coordinator.finale != nil)
                 .ignoresSafeArea()
 
             // Streamlined Liquid-Glass Mode Overlays
@@ -100,7 +102,8 @@ public struct RootContentView: View {
                         onVirtualStickMove: { mx, mz, held in
                             coordinator.sceneController.setVirtualStick(moveX: mx, moveZ: mz, held: held)
                         },
-                        onExitToHub: { coordinator.returnToHub() }
+                        onExitToHub: { coordinator.returnToHub() },
+                        onPauseChanged: { paused in coordinator.sceneController.arcadePaused = paused }
                     )
                     .transition(.opacity)
                 }
@@ -218,5 +221,8 @@ public struct RootContentView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        // Follow the system's Reduce Motion: on at launch if it is on, and live when it changes.
+        .onAppear { if systemReduceMotion { coordinator.reducedMotion = true } }
+        .onChange(of: systemReduceMotion) { _, reduce in coordinator.reducedMotion = reduce }
     }
 }

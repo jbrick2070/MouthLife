@@ -6,9 +6,12 @@ import UIKit
 
 public struct MouthLife3DViewport: UIViewRepresentable {
     public let controller: MouthLifeSceneController
+    /// True while something covers the whole screen (a finale): the game's scene stops drawing.
+    public var paused: Bool
 
-    public init(controller: MouthLifeSceneController) {
+    public init(controller: MouthLifeSceneController, paused: Bool = false) {
         self.controller = controller
+        self.paused = paused
     }
 
     public func makeUIView(context: Context) -> InteractiveMetalSCNView {
@@ -31,6 +34,8 @@ public struct MouthLife3DViewport: UIViewRepresentable {
 
     public func updateUIView(_ uiView: InteractiveMetalSCNView, context: Context) {
         uiView.preferredFramesPerSecond = 120
+        uiView.isPlaying = !paused
+        uiView.rendersContinuously = !paused
         switch controller.qualityTier {
         case .ultra, .medium:
             uiView.antialiasingMode = .multisampling4X
@@ -78,9 +83,12 @@ import AppKit
 
 public struct MouthLife3DViewport: NSViewRepresentable {
     public let controller: MouthLifeSceneController
+    /// True while something covers the whole screen (a finale): the game's scene stops drawing.
+    public var paused: Bool
 
-    public init(controller: MouthLifeSceneController) {
+    public init(controller: MouthLifeSceneController, paused: Bool = false) {
         self.controller = controller
+        self.paused = paused
     }
 
     public func makeNSView(context: Context) -> InteractiveMetalSCNView {
@@ -102,6 +110,8 @@ public struct MouthLife3DViewport: NSViewRepresentable {
 
     public func updateNSView(_ nsView: InteractiveMetalSCNView, context: Context) {
         nsView.preferredFramesPerSecond = 120
+        nsView.isPlaying = !paused
+        nsView.rendersContinuously = !paused
     }
 }
 

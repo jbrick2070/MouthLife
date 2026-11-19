@@ -188,12 +188,16 @@ final class FinaleClock {
         notes = all.enumerated().sorted { a, b in a.element.t == b.element.t ? a.offset < b.offset : a.element.t < b.element.t }.map(\.element)
     }
 
+    /// Whether the show has begun (its clock runs, its notes and song play).
+    private(set) var started = false
+
     func time(at date: Date) -> Double {
-        date.timeIntervalSince(start)
+        started ? date.timeIntervalSince(start) : 0
     }
 
     /// The show starts now: its clock, and its song (the city's, or the ending's).
     func begin() {
+        started = true
         start = Date()
         sceneClock.setStart(start)
         lastT = -1
@@ -216,7 +220,7 @@ final class FinaleClock {
     }
 
     func advance(to date: Date) {
-        guard !finished else { return }
+        guard started, !finished else { return }
         let t = time(at: date)
         if t >= total {
             finish()
@@ -246,7 +250,9 @@ final class FinaleClock {
     /// Skip jumps over the city's show to the ending, if there is one; otherwise ends.
     func skip(at date: Date) {
         let t = time(at: date)
-        if cityLength > 0 && t < cityLength - 0.5 && total > cityLength {
+        // only once Skip shows; a skip anywhere in the city part goes on to the grand finale
+        guard t >= skipAfter(at: t) else { return }
+        if cityLength > 0 && t < cityLength && total > cityLength {
             start = date.addingTimeInterval(-cityLength)
             sceneClock.setStart(start)
             lastT = cityLength
@@ -318,14 +324,19 @@ public struct CityFinaleView: View {
         .onAppear {
             clock.onDone = onDone
             NativeSoundEngine.shared.setFinaleDucked(true)
-            clock.begin()
+            // Build the 3D scene first, then start the clock and the song together with the picture.
             if stage == nil {
                 let request = request
                 let sceneClock = clock.sceneClock
                 Task.detached(priority: .userInitiated) {
                     let built = FinaleScene3D(request: request, clock: sceneClock)
-                    await MainActor.run { stage = built }
+                    await MainActor.run {
+                        stage = built
+                        clock.begin()
+                    }
                 }
+            } else {
+                clock.begin()
             }
         }
         .onDisappear {
@@ -1251,6 +1262,7 @@ struct FinalePainter {
             c.fill(white, with: .color(Color(red: 1, green: 0.98, blue: 0.92)))
             c.stroke(white, with: .color(brown), lineWidth: max(2, u * 0.045))
             c.fill(Path(ellipseIn: CGRect(x: ex + u * 0.02 - u * 0.065, y: y - u * 0.06 - u * 0.065, width: u * 0.13, height: u * 0.13)), with: .color(brown))
+            c.fill(Path(ellipseIn: CGRect(x: ex - u * 0.026, y: y - u * 0.11, width: u * 0.044, height: u * 0.044)), with: .color(Color(red: 1, green: 0.98, blue: 0.92)))
         }
         eye(x - u * 0.3, closed: false)
         eye(x + u * 0.3, closed: wink)

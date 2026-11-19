@@ -180,7 +180,8 @@ export function endingCamera3D(t: number, reducedMotion: boolean): CameraShot {
   if (t < E.creditsStart || t >= E.finaleStart) {
     const local = t < E.creditsStart ? t : t - E.finaleStart;
     const a = reducedMotion ? 0 : t < E.creditsStart ? Math.max(0, local - E.snap) * 0.12 : Math.sin(local * 0.35) * 0.32;
-    const r = t < E.creditsStart ? lerp(15, 13, smooth01(local / E.snap)) : 15;
+    // with Reduce Motion the camera holds its distance too
+    const r = reducedMotion ? 13 : t < E.creditsStart ? lerp(15, 13, smooth01(local / E.snap)) : 15;
     // looking a little below the molar's middle, so it sits above the words at the bottom
     return {
       pos: [m[0] + Math.sin(a) * r, m[1] + 0.2, m[2] + Math.cos(a) * r],
@@ -191,7 +192,7 @@ export function endingCamera3D(t: number, reducedMotion: boolean): CameraShot {
   const local = t - E.creditsStart;
   const within = clamp(local - Math.floor(local / E.creditSeconds) * E.creditSeconds, 0, E.creditSeconds);
   const a = reducedMotion ? 0 : -0.35 + (0.7 * within) / E.creditSeconds;
-  return { pos: [Math.sin(a) * 46, 9, Math.cos(a) * 46], target: [0, 10, 0], fov: 48 };
+  return { pos: [Math.sin(a) * 40, 8, Math.cos(a) * 40], target: [0, 9.5, 0], fov: 48 };
 }
 
 const ENDING_TIMES_3D = ENDING_TIMES;
@@ -210,6 +211,10 @@ export interface Spark3D {
   x: number;
   y: number;
   z: number;
+  /** Where the spark was a moment ago, for a stretched streak. */
+  px: number;
+  py: number;
+  pz: number;
   /** 0 = burst's first colour, 1 = its second. */
   mix: number;
   alpha: number;
@@ -243,6 +248,8 @@ export function burstSparks3D(burst: FinaleBurst, b: number, showT: number, show
   if (age < 0 || age >= shape.life) return [];
   const gravity = show === 'meteors' ? 0 : shape.gravity;
   const splitAt = shape.split * shape.life;
+  const lag = burst.kind === 'willow' ? 0.16 : 0.095;
+  const childLag = burst.kind === 'willow' ? 0.11 : 0.075;
   const out: Spark3D[] = [];
   const reach = (speed: number, a: number, radius: number): number => radius * speed * (1 - Math.exp(-3.2 * a)) * scale;
   for (let i = 0; i < shape.sparks; i++) {
@@ -251,26 +258,45 @@ export function burstSparks3D(burst: FinaleBurst, b: number, showT: number, show
     const a = Math.min(age, splitAt);
     const dist = reach(speed, a, shape.radius);
     const drop = gravity * a * a * scale;
-    const px = center[0] + d[0] * dist;
-    const py = center[1] + d[1] * dist - drop;
-    const pz = center[2] + d[2] * dist;
+    const sx = center[0] + d[0] * dist;
+    const sy = center[1] + d[1] * dist - drop;
+    const sz = center[2] + d[2] * dist;
     if (age < splitAt) {
+      const pa = Math.max(0, age - lag);
+      const pdist = reach(speed, pa, shape.radius);
+      const pdrop = gravity * pa * pa * scale;
       const fade = 1 - (age / shape.life) * 0.4;
-      out.push({ x: px, y: py, z: pz, mix: clamp(age / splitAt, 0, 1) * 0.5, alpha: fade, gen: 0 });
+      out.push({
+        x: sx,
+        y: sy,
+        z: sz,
+        px: center[0] + d[0] * pdist,
+        py: center[1] + d[1] * pdist - pdrop,
+        pz: center[2] + d[2] * pdist,
+        mix: clamp(age / splitAt, 0, 1) * 0.5,
+        alpha: fade,
+        gen: 0,
+      });
       continue;
     }
     // the split: a small burst from where the spark had got to
     const ca = age - splitAt;
     const cl = shape.life - splitAt;
+    const pca = Math.max(0, ca - childLag);
     const fade = 1 - (ca / cl) * (ca / cl);
     for (let c = 0; c < shape.children; c++) {
       const cd = sparkDirection('peony', c, shape.children, b * 31 + i);
       const cdist = reach(1, ca, shape.childRadius);
       const cdrop = gravity * (a + ca) * (a + ca) * scale - drop;
+      const pcdist = reach(1, pca, shape.childRadius);
+      const pcdrop = gravity * (a + pca) * (a + pca) * scale - drop;
       out.push({
-        x: px + cd[0] * cdist,
-        y: py + cd[1] * cdist - cdrop,
-        z: pz + cd[2] * cdist,
+        x: sx + cd[0] * cdist,
+        y: sy + cd[1] * cdist - cdrop,
+        z: sz + cd[2] * cdist,
+        px: sx + cd[0] * pcdist,
+        py: sy + cd[1] * pcdist - pcdrop,
+        pz: sz + cd[2] * pcdist,
         mix: 0.5 + 0.5 * clamp(ca / cl, 0, 1),
         alpha: fade,
         gen: 1,
@@ -294,6 +320,8 @@ export interface EmblemInstance {
   alpha: number;
   /** 0 for the sign itself, 1, 2, ... for each smaller copy. */
   level: number;
+  /** 0..1 brief flash right as this copy pops into place (0 under Reduce Motion). */
+  glint: number;
 }
 
 interface Node {
@@ -416,8 +444,10 @@ export function emblemFractal(cityIndex: number, t: number, reducedMotion: boole
         scale *= 1 - e;
       }
     }
+    const age = t - appearAt;
+    const glint = reducedMotion || age <= 0 ? 0 : smooth01(age / 0.08) * Math.exp(-Math.max(0, age - 0.05) / 0.18);
     const gear = cityIndex === 2 && !reducedMotion ? (n.level % 2 === 0 ? 1 : -1.6) * (t - T.emblemBurst) * 1.4 : 0;
-    out.push({ x, y, z, roll: n.roll + gear, yaw: spin, scale, alpha, level: n.level });
+    out.push({ x, y, z, roll: n.roll + gear, yaw: spin, scale, alpha, level: n.level, glint });
   });
   return out;
 }
@@ -745,11 +775,13 @@ export function finale3DChecksum(bursts: readonly FinaleBurst[], show: FinaleSho
     for (const rm of [false, true]) {
       const cam = finaleCamera3D(t, rm);
       sum += cam.pos[0] * 0.1 + cam.pos[1] * 0.2 + cam.pos[2] * 0.03 + cam.target[0] * 0.05 + cam.target[1] * 0.07 + cam.fov * 0.01;
-      for (const e of emblemFractal(cityIndex, t, rm)) sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha;
+      for (const e of emblemFractal(cityIndex, t, rm)) sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha + e.glint * 0.1;
     }
     const showT = t - FINALE_TIMES.blazeEnd;
     bursts.forEach((burst, b) => {
-      for (const s of burstSparks3D(burst, b, showT, show, burstWorld(burst, b))) sum += s.x * 0.003 + s.y * 0.005 + s.z * 0.007 + s.alpha + s.mix + s.gen;
+      for (const s of burstSparks3D(burst, b, showT, show, burstWorld(burst, b))) {
+        sum += s.x * 0.003 + s.y * 0.005 + s.z * 0.007 + s.px * 0.002 + s.py * 0.004 + s.pz * 0.006 + s.alpha + s.mix + s.gen;
+      }
     });
   }
   for (let t = 0; t <= ENDING_TIMES.end; t += 0.53) {

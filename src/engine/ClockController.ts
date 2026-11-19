@@ -138,6 +138,7 @@ export class ClockController {
   }
 
   stopPacer(): void {
+    this.releaseScreenWakeLock();
     this.pacerActive = false;
     this.pacerPausedManual = false;
     this.pacerSuspendedBySystem = false;
@@ -155,6 +156,8 @@ export class ClockController {
     this.pacerPausedManual = paused;
     if (!paused) {
       this.requestScreenWakeLock();
+    } else {
+      this.releaseScreenWakeLock();
     }
     if (changed && this.pacerActive) {
       this.bus.emit('pacer:paused', { paused });
@@ -186,12 +189,34 @@ export class ClockController {
     return pacerStageEndSec(this.pacerStage, this.pacerMouthwashDurationSec);
   }
 
+  /** One screen wake lock, held while the pacer runs and let go when it pauses or stops. */
+  private wakeLock: { release(): Promise<void>; addEventListener?: (type: 'release', cb: () => void) => void } | null = null;
+  private wakeWanted = false;
+
   private requestScreenWakeLock(): void {
-    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
-      (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<unknown> } })
-        .wakeLock?.request('screen')
-        .catch(() => {});
-    }
+    this.wakeWanted = true;
+    if (this.wakeLock || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<NonNullable<ClockController['wakeLock']>> } })
+      .wakeLock?.request('screen')
+      .then((lock) => {
+        // the pacer may have stopped while the request was pending
+        if (!this.wakeWanted || this.wakeLock) {
+          void lock.release().catch(() => {});
+          return;
+        }
+        this.wakeLock = lock;
+        lock.addEventListener?.('release', () => {
+          if (this.wakeLock === lock) this.wakeLock = null;
+        });
+      })
+      .catch(() => {});
+  }
+
+  private releaseScreenWakeLock(): void {
+    this.wakeWanted = false;
+    const lock = this.wakeLock;
+    this.wakeLock = null;
+    if (lock) void lock.release().catch(() => {});
   }
 
   tickFrame(nowMs: number): void {

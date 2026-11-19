@@ -94,11 +94,11 @@ public enum CitySkylineArt {
 
     /// The 3D finale's checksum for each city (see src/config/finale3d.ts and Finale3D.swift).
     public static let expectedFinale3D: [String: Double] = [
-        "toronto": 16081.653,
-        "new_orleans": 15442.029,
-        "tokyo": 14558.265,
-        "accra": 13808.009,
-        "orbit_aurora": 13123.777,
+        "toronto": 16227.717,
+        "new_orleans": 15576.727,
+        "tokyo": 14622.865,
+        "accra": 13936.216,
+        "orbit_aurora": 13272.933,
     ]
 
     static let accra = #"""

@@ -48,6 +48,7 @@ export class CompanionArchSim {
     }
 
     let ionsAdded = 0;
+    let evaluatedTo = nowEpochMs;
 
     if (state.smoothnessIndex >= SMOOTH_BASK_THRESHOLD) {
       const maxBaskHours =
@@ -62,9 +63,15 @@ export class CompanionArchSim {
       );
       ionsAdded = nextReservoir - state.unclaimedIdleIons;
       state.unclaimedIdleIons = nextReservoir;
+      // When the whole wait is inside the bask window and the reservoir has room, count only the
+      // time that earned whole ions; the rest carries to the next check, so many short check-ins
+      // earn the same as one long one.
+      const carry = baskHours >= elapsedHours && nextReservoir < IDLE_ION_RESERVOIR_CAP;
+      const usedHours = carry ? Math.min(elapsedHours, rawIons / IDLE_IONS_PER_BASK_HR) : baskHours;
+      if (carry) evaluatedTo = state.lastEvaluatedEpochMs + Math.floor(usedHours * 3_600_000);
 
-      let nextSmooth = state.smoothnessIndex - baskHours * OFFLINE_BASK_SLOPE_PER_HR;
-      const remHours = elapsedHours - baskHours;
+      let nextSmooth = state.smoothnessIndex - usedHours * OFFLINE_BASK_SLOPE_PER_HR;
+      const remHours = carry ? 0 : elapsedHours - baskHours;
       if (remHours > 0) {
         nextSmooth = Math.max(
           STASIS_FLOOR_SMOOTHNESS,
@@ -87,7 +94,7 @@ export class CompanionArchSim {
     state.recentTreatTimestampsMs = state.recentTreatTimestampsMs.filter(
       (ts) => nowEpochMs - ts < 3_600_000
     );
-    state.lastEvaluatedEpochMs = nowEpochMs;
+    state.lastEvaluatedEpochMs = evaluatedTo;
     return ionsAdded;
   }
 

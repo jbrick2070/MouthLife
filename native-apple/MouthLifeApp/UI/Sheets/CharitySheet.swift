@@ -3,6 +3,9 @@ import MouthLifeCore
 
 public struct CharitySheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The system's way to open a link; every link in this sheet goes through the grown-up check first.
+    @Environment(\.openURL) private var systemOpenURL
+    @State private var gate: GateTarget?
 
     public init() {}
 
@@ -203,7 +206,78 @@ public struct CharitySheet: View {
                 }
             }
         }
+        // Links that leave the app wait for a grown-up (Apple's Kids Category asks for this).
+        .environment(\.openURL, OpenURLAction { url in
+            gate = GateTarget(url: url)
+            return .handled
+        })
+        .sheet(item: $gate) { target in
+            ParentGateView {
+                systemOpenURL(target.url)
+            }
+            .presentationDetents([.medium])
+        }
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct GateTarget: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// A times-table question with four answers, which a young child cannot answer yet. The web does the
+/// same in src/ui/parentGate.ts.
+struct ParentGateView: View {
+    let onPass: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var a = Int.random(in: 3...9)
+    @State private var b = Int.random(in: 3...9)
+    @State private var choices: [Int] = []
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text(L10n.t("For grown-ups"))
+                .font(.system(.title3, design: .rounded, weight: .heavy))
+                .foregroundStyle(MLTheme.textPrimary)
+            Text(verbatim: "\(a) × \(b) = ?")
+                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .foregroundStyle(MLTheme.textPrimary)
+                .accessibilityLabel(Text(verbatim: "\(a) × \(b)"))
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(choices, id: \.self) { n in
+                    Button {
+                        let right = n == a * b
+                        dismiss()
+                        if right { onPass() }
+                    } label: {
+                        Text(verbatim: "\(n)")
+                            .font(.system(.title2, design: .rounded, weight: .heavy))
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.08)))
+                            .foregroundStyle(MLTheme.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Button(L10n.t("Not now")) { dismiss() }
+                .foregroundStyle(MLTheme.cyanAccent)
+        }
+        .padding(22)
+        .frame(maxWidth: 360)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(MLTheme.deepOcean.ignoresSafeArea())
+        .onAppear {
+            guard choices.isEmpty else { return }
+            let answer = a * b
+            var set: Set<Int> = [answer]
+            while set.count < 4 {
+                let step = Bool.random() ? 1 : a
+                let near = answer + (Int.random(in: -4...4)) * step
+                if near > 0 && near != answer { set.insert(near) }
+            }
+            choices = set.shuffled()
+        }
     }
 }
 

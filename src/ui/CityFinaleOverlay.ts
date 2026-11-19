@@ -392,7 +392,10 @@ export class CityFinaleOverlay implements OverlayView {
   /** Skip jumps over the city's show to the ending, if there is one; otherwise ends. */
   private skip(): void {
     const t = this.elapsed();
-    if (this.city && t < this.cityLength - 0.5 && this.total > this.cityLength) {
+    // Skip works only once it shows (a focused, still-hidden button must not end the show), and a
+    // skip anywhere in the city part goes on to the grand finale rather than past it.
+    if (t < this.skipAfter()) return;
+    if (this.city && t < this.cityLength && this.total > this.cityLength) {
       this.startMs = performance.now() - this.cityLength * 1000;
       this.startTrack('ending', 0);
       this.lastT = this.cityLength;
@@ -434,7 +437,9 @@ export class CityFinaleOverlay implements OverlayView {
       this.opts.onCovered?.(isCovered);
     }
     const skipBtn = this.shell?.querySelector<HTMLElement>('.finale-skip');
-    skipBtn?.classList.toggle('show', t >= this.skipAfter());
+    const canSkip = t >= this.skipAfter();
+    skipBtn?.classList.toggle('show', canSkip);
+    if (skipBtn) (skipBtn as HTMLButtonElement).disabled = !canSkip;
 
     this.resize();
     const ctx = this.ctx;
@@ -1332,7 +1337,7 @@ export class CityFinaleOverlay implements OverlayView {
       const spot = face.alpha > 0 ? stage.molarFaceOnScreen(this.w, this.h) : null;
       if (spot) this.paintFaceAt(ctx, spot.x, spot.y, spot.u * 0.78, face.alpha, face.wink);
     }
-    this.paintEndingVeils(ctx, t, 0.3);
+    this.paintEndingVeils(ctx, t, 0.22);
   }
 
   /** The flash as the molar snaps together, and the fade out at the very end. */
@@ -1385,6 +1390,10 @@ export class CityFinaleOverlay implements OverlayView {
       ctx.fillStyle = '#422006';
       ctx.beginPath();
       ctx.arc(ex + u * 0.02, y - u * 0.06, u * 0.065, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fffbeb';
+      ctx.beginPath();
+      ctx.arc(ex - u * 0.004, y - u * 0.088, u * 0.022, 0, Math.PI * 2);
       ctx.fill();
     };
     ctx.lineWidth = Math.max(2, u * 0.045);
