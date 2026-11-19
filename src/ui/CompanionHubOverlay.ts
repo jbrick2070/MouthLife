@@ -26,6 +26,7 @@ import {
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
+import { readIncludeRinse, writeIncludeRinse } from '../engine/persistence/pacerPrefs';
 import { truncateDisplayName, type SaveSystem } from '../engine/persistence/SaveSystem';
 import type { HubCameraFocus } from '../engine/render/SceneManager';
 import type { OverlayView } from '../engine/types';
@@ -776,6 +777,7 @@ export class CompanionHubOverlay implements OverlayView {
 
     if (this.activeModal === 'profile') {
       const reduced = Boolean(this.actions.isReducedMotion?.());
+      const rinseOn = readIncludeRinse();
       const muted = this.actions.isMuted();
       return `
         <div class="modal-backdrop" id="modal-bg">
@@ -842,6 +844,23 @@ export class CompanionHubOverlay implements OverlayView {
               >
                 ${reduced ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF'}
               </button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Brushing</div>
+            <div style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
+              <div class="row-between">
+                <span id="lbl-rinse-step" style="font-size:0.78rem;color:#e0f2fe;">💧 Fluoride Rinse Step</span>
+                <button
+                  type="button"
+                  id="btn-toggle-rinse"
+                  aria-labelledby="lbl-rinse-step"
+                  aria-describedby="note-rinse-step"
+                  aria-pressed="${rinseOn ? 'true' : 'false'}"
+                  class="btn btn-sm ${rinseOn ? 'btn-primary' : ''}"
+                >
+                  ${rinseOn ? '✓ On' : 'Off'}
+                </button>
+              </div>
+              <div id="note-rinse-step" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">For grown-ups: ages 6 and up. Follow the label.</div>
             </div>
             <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Audio</div>
             <div style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
@@ -1678,6 +1697,13 @@ export class CompanionHubOverlay implements OverlayView {
       this.actions.onToggleReducedMotion?.();
       this.actions.onPlayUiTap();
       this.render();
+    });
+
+    this.container.querySelector('#btn-toggle-rinse')?.addEventListener('click', () => {
+      syncPendingName();
+      writeIncludeRinse(!readIncludeRinse());
+      this.actions.onPlayUiTap();
+      this.rerenderModalKeepingScroll('#btn-toggle-rinse');
     });
 
     this.container.querySelector<HTMLSelectElement>('#sel-app-language')?.addEventListener('change', (e) => {

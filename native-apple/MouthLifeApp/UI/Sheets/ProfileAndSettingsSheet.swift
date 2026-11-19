@@ -14,6 +14,7 @@ public struct ProfileAndSettingsSheet: View {
     @State private var voiceCoachEnabled: Bool
     @State private var coachLanguage: CoachLanguage
     @State private var reducedMotion: Bool
+    @State private var includeRinse: Bool
     @State private var showProMotionTelemetry: Bool
     @State private var showPrivacyPolicy = false
 
@@ -23,6 +24,7 @@ public struct ProfileAndSettingsSheet: View {
     public let onChangeVoiceCoach: (Bool) -> Void
     public let onChangeLanguage: (CoachLanguage) -> Void
     public let onChangeReducedMotion: (Bool) -> Void
+    public let onChangeIncludeRinse: (Bool) -> Void
     public let onToggleProMotionTelemetry: (Bool) -> Void
     public let onReplayCosmicIntro: () -> Void
 
@@ -35,6 +37,7 @@ public struct ProfileAndSettingsSheet: View {
         voiceCoachEnabled: Bool = true,
         coachLanguage: CoachLanguage = .english,
         reducedMotion: Bool,
+        includeRinse: Bool = true,
         showProMotionTelemetry: Bool,
         onSaveProfile: @escaping (String, Int, String) -> Void,
         onChangeQuality: @escaping (QualityPreference) -> Void,
@@ -42,6 +45,7 @@ public struct ProfileAndSettingsSheet: View {
         onChangeVoiceCoach: @escaping (Bool) -> Void = { _ in },
         onChangeLanguage: @escaping (CoachLanguage) -> Void = { _ in },
         onChangeReducedMotion: @escaping (Bool) -> Void,
+        onChangeIncludeRinse: @escaping (Bool) -> Void = { _ in },
         onToggleProMotionTelemetry: @escaping (Bool) -> Void,
         onReplayCosmicIntro: @escaping () -> Void
     ) {
@@ -55,6 +59,7 @@ public struct ProfileAndSettingsSheet: View {
         _voiceCoachEnabled = State(initialValue: voiceCoachEnabled)
         _coachLanguage = State(initialValue: coachLanguage)
         _reducedMotion = State(initialValue: reducedMotion)
+        _includeRinse = State(initialValue: includeRinse)
         _showProMotionTelemetry = State(initialValue: showProMotionTelemetry)
         self.onSaveProfile = onSaveProfile
         self.onChangeQuality = onChangeQuality
@@ -62,6 +67,7 @@ public struct ProfileAndSettingsSheet: View {
         self.onChangeVoiceCoach = onChangeVoiceCoach
         self.onChangeLanguage = onChangeLanguage
         self.onChangeReducedMotion = onChangeReducedMotion
+        self.onChangeIncludeRinse = onChangeIncludeRinse
         self.onToggleProMotionTelemetry = onToggleProMotionTelemetry
         self.onReplayCosmicIntro = onReplayCosmicIntro
     }
@@ -145,6 +151,27 @@ public struct ProfileAndSettingsSheet: View {
                             .onChange(of: reducedMotion) { _, next in
                                 onChangeReducedMotion(next)
                             }
+                    }
+                    .mlGlassCard()
+
+                    // Brushing card: a grown-up can leave out the fluoride rinse (it is on unless they do).
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.t("Brushing"))
+                            .font(.system(.caption, design: .rounded, weight: .bold))
+                            .foregroundStyle(MLTheme.cyanAccent)
+
+                        Toggle(L10n.t("💧 Fluoride Rinse Step"), isOn: $includeRinse)
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            .tint(MLTheme.mintClean)
+                            .onChange(of: includeRinse) { _, next in
+                                onChangeIncludeRinse(next)
+                            }
+                            .accessibilityHint(L10n.t("For grown-ups: ages 6 and up. Follow the label."))
+
+                        Text(L10n.t("For grown-ups: ages 6 and up. Follow the label."))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(MLTheme.textSecondary)
+                            .accessibilityHidden(true)
                     }
                     .mlGlassCard()
 

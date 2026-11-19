@@ -150,6 +150,9 @@ public enum GameConfig {
     public static let brushAlongFlossIons: Int = 25
     public static let brushAlongMouthwashIons: Int = 25
     public static let brushAlongTipIons: Int = 5
+    /// The brushing stage counts as the full 2 minutes when it ran to within this many seconds of the
+    /// end. Tapping ahead to floss earlier still earns a small "good try" reward, never the full one.
+    public static let brushAlongFullBrushGraceSec: Double = 2.0
     public static let maxSupplyBeacons: Int = 4
     public static let maxOverdriveRuns: Int = 4
 

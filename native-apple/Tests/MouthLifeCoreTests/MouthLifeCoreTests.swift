@@ -331,6 +331,46 @@ final class MouthLifeCoreTests: XCTestCase {
 
     // MARK: - 6. SaveSystem V1->V2 Migration, HabitBank & Cross-Platform ML2: Sync Codes
 
+    func testEarlyTapThroughEarnsGoodTryTipAndKeepsFullRewardsForFullBrush() throws {
+        let mem = InMemorySaveStorage()
+        let sys = SaveSystem(bus: EventBus(), storage: mem)
+        var start = sys.load(nowEpochMs: 1_700_000_000_000)
+        start.totalBrushStamps = 9
+        start.fluorideIons = 40
+        start.pendingSupplyBeacons = 1
+        start.remineralizedOverdriveRuns = 1
+        _ = sys.save(start, nowEpochMs: 1_700_000_000_000)
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // Tapped through to Done early: a tip, no stamp, beacon or Overdrive run, and nothing taken away.
+        let early = sys.recordBrushAlongCompletion(withFlossBonus: true, withMouthwashBonus: true, fullBrush: false, date: day)
+        XCTAssertEqual(early.slotType, .tip)
+        XCTAssertEqual(early.ionsAwarded, 5)
+        XCTAssertFalse(early.stampAwarded)
+        XCTAssertEqual(sys.getSave().totalBrushStamps, 9)
+        XCTAssertEqual(sys.getSave().fluorideIons, 45)
+        XCTAssertEqual(sys.getSave().pendingSupplyBeacons, 1)
+        XCTAssertEqual(sys.getSave().remineralizedOverdriveRuns, 1)
+
+        // The same day's two full rewards are still there for full brushes.
+        for _ in 0..<2 {
+            let full = sys.recordBrushAlongCompletion(withFlossBonus: true, withMouthwashBonus: true, date: day)
+            XCTAssertEqual(full.slotType, .full)
+            XCTAssertEqual(full.ionsAwarded, 100)
+            XCTAssertTrue(full.stampAwarded)
+        }
+        XCTAssertEqual(sys.getSave().totalBrushStamps, 11)
+        XCTAssertEqual(sys.getSave().pendingSupplyBeacons, 3)
+
+        // Early taps share the 3 daily tips, then earn nothing more (and still never take anything).
+        _ = sys.recordBrushAlongCompletion(withFlossBonus: false, fullBrush: false, date: day)
+        _ = sys.recordBrushAlongCompletion(withFlossBonus: false, fullBrush: false, date: day)
+        let capped = sys.recordBrushAlongCompletion(withFlossBonus: false, fullBrush: false, date: day)
+        XCTAssertEqual(capped.slotType, .capped)
+        XCTAssertEqual(capped.ionsAwarded, 0)
+        XCTAssertEqual(sys.getSave().totalBrushStamps, 11)
+    }
+
     func testHabitBankCapsAndCrossPlatformMl2SyncRoundTrip() throws {
         let mem = InMemorySaveStorage()
         let bus = EventBus()
@@ -672,6 +712,12 @@ final class MouthLifeCoreTests: XCTestCase {
             date: Date(timeIntervalSince1970: 1_700_000_000)
         )
         XCTAssertEqual(save.fluorideIons, before + 100)
+    }
+
+    func testEarlyTapThroughLabelsDropThePromisedAmounts() {
+        XCTAssertEqual(BrushCoachCopy.withoutIonAmount("Done (+75 F⁻)"), "Done")
+        XCTAssertEqual(BrushCoachCopy.withoutIonAmount("スキップ (+50 F⁻)"), "スキップ")
+        XCTAssertEqual(BrushCoachCopy.withoutIonAmount("Floss Pick"), "Floss Pick")
     }
 
     // MARK: - Translations (same rules as the web edition's uiTranslator)

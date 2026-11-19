@@ -80,6 +80,45 @@ describe('SaveSystem & HabitBank', () => {
     expect(sys.getSave().totalBrushStamps).toBe(2);
   });
 
+  it('gives a brush tapped ahead early a small good-try tip and keeps the full rewards for the full 2 minutes', () => {
+    const bus = new EventBus();
+    const sys = new SaveSystem(bus);
+    const save = sys.load(1_700_000_000_000);
+    save.totalBrushStamps = 9;
+    save.fluorideIons = 40;
+    save.pendingSupplyBeacons = 1;
+    save.remineralizedOverdriveRuns = 1;
+    const day = new Date(2026, 5, 2, 8, 0, 0);
+
+    // Tapped through to Done early: a tip, no stamp, beacon or Overdrive run, and nothing taken away.
+    const early = HabitBank.completeBrushAlong(save, {
+      withFlossBonus: true,
+      withMouthwashBonus: true,
+      fullBrush: false,
+      date: day,
+    });
+    expect(early).toMatchObject({ slotType: 'tip', stampAwarded: false, ionsAwarded: 5, fullBrush: false });
+    expect(save.totalBrushStamps).toBe(9);
+    expect(save.fluorideIons).toBe(45);
+    expect(save.pendingSupplyBeacons).toBe(1);
+    expect(save.remineralizedOverdriveRuns).toBe(1);
+
+    // The same day's two full rewards are still there for full brushes.
+    for (let i = 0; i < 2; i++) {
+      const full = HabitBank.completeBrushAlong(save, { withFlossBonus: true, withMouthwashBonus: true, date: day });
+      expect(full).toMatchObject({ slotType: 'full', stampAwarded: true, ionsAwarded: 100, fullBrush: true });
+    }
+    expect(save.totalBrushStamps).toBe(11);
+    expect(save.pendingSupplyBeacons).toBe(3);
+
+    // Early taps share the 3 daily tips, then earn nothing more (and still never take anything).
+    HabitBank.completeBrushAlong(save, { withFlossBonus: false, fullBrush: false, date: day });
+    HabitBank.completeBrushAlong(save, { withFlossBonus: false, fullBrush: false, date: day });
+    const capped = HabitBank.completeBrushAlong(save, { withFlossBonus: false, fullBrush: false, date: day });
+    expect(capped).toMatchObject({ slotType: 'capped', ionsAwarded: 0, stampAwarded: false });
+    expect(save.totalBrushStamps).toBe(11);
+  });
+
   it('decrements beacons per pickup, decrements Overdrive only on completed Arcade run, and roundtrips UTF-8 ML2 Sync Codes', () => {
     const bus = new EventBus();
     const sys = new SaveSystem(bus);

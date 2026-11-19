@@ -18,11 +18,16 @@ import {
   type PacerStage,
 } from '../config/brushCoach';
 import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
-import { BRUSH_ALONG_FLOSS_BONUS_SEC, BRUSH_ALONG_TOTAL_SEC } from '../config/gameConfig';
+import {
+  BRUSH_ALONG_FLOSS_BONUS_SEC,
+  BRUSH_ALONG_FULL_BRUSH_GRACE_SEC,
+  BRUSH_ALONG_TOTAL_SEC,
+} from '../config/gameConfig';
 import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import { HabitBank, brushAlongMultiplier } from '../engine/persistence/HabitBank';
+import { readIncludeRinse } from '../engine/persistence/pacerPrefs';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
 import { HOME_ICON_SVG } from './homeIcon';
@@ -96,6 +101,10 @@ export class BrushAlongOverlay implements OverlayView {
   private view: 'running' | 'summary' = 'running';
   private renderedStage: PacerStage | null = null;
   private completedFloss = false;
+  /** Whether the brushing stage ran its full 2 minutes (not tapped ahead to floss early). */
+  private fullBrush = false;
+  /** A grown-up can leave out the fluoride rinse (ages 6 and up); it is on unless they do. */
+  private includeRinse = true;
   private flossToolStyle: FlossToolStyle = 'flossPick';
   private mouthwashStyle: MouthwashDurationStyle = 'totalCare60s';
 
@@ -115,6 +124,7 @@ export class BrushAlongOverlay implements OverlayView {
     ionsAwarded: number;
     stampAwarded: boolean;
     slotType: 'full' | 'tip' | 'capped';
+    fullBrush: boolean;
     withMouthwashBonus: boolean;
     multiplier: number;
   } | null = null;
@@ -193,6 +203,8 @@ export class BrushAlongOverlay implements OverlayView {
     this.view = 'running';
     this.renderedStage = null;
     this.completedFloss = false;
+    this.fullBrush = false;
+    this.includeRinse = readIncludeRinse();
     this.rewardResult = null;
     this.lastAnnouncedQuadrant = -1;
     this.lastAnnouncedSurface = -1;
@@ -324,8 +336,9 @@ export class BrushAlongOverlay implements OverlayView {
       }
       this.callbacks.onActiveQuadrantChanged(phase.quadrant);
       if (elapsedSec >= flossEnd - 0.05) {
-        // Roll hands-free into the fluoride rinse stage.
-        this.enterMouthwashBonus(true);
+        // Roll hands-free into the fluoride rinse stage, or finish when a grown-up left it out.
+        if (this.includeRinse) this.enterMouthwashBonus(true);
+        else this.completeSession(true, false);
         return;
       }
     } else {
@@ -348,6 +361,9 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private enterFlossBonus(): void {
+    if (this.clock.getPacerStage() === 'brushing') {
+      this.fullBrush = this.clock.getPacerElapsedSec() >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
+    }
     this.announcedFlossLowerHalf = false;
     this.lastPipKey = '';
     this.clock.enterFlossBonus();
@@ -380,7 +396,11 @@ export class BrushAlongOverlay implements OverlayView {
     this.callbacks.onActiveQuadrantChanged(-1);
 
     const save = this.saveSys.getSave();
-    const outcome = HabitBank.completeBrushAlong(save, { withFlossBonus, withMouthwashBonus });
+    const outcome = HabitBank.completeBrushAlong(save, {
+      withFlossBonus,
+      withMouthwashBonus,
+      fullBrush: this.fullBrush,
+    });
     this.saveSys.save(save);
     this.rewardResult = { ...outcome, withMouthwashBonus, multiplier: brushAlongMultiplier(withFlossBonus, withMouthwashBonus) };
     this.bus.emit('pacer:complete', {
@@ -649,6 +669,8 @@ export class BrushAlongOverlay implements OverlayView {
 
   private bannerHtml(stage: PacerStage): string {
     const buttons = BrushCoachCopy.actionButtonLabels(this.lang);
+    // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
+    const amount = (label: string): string => (this.fullBrush ? label : BrushCoachCopy.withoutIonAmount(label));
     if (stage === 'mouthwashBonus') {
       const mw = BrushCoachCopy.mouthwashButtonLabels(this.completedFloss, this.lang);
       return `
@@ -678,7 +700,7 @@ export class BrushAlongOverlay implements OverlayView {
           <button type="button" id="btn-pacer-done-rinse" class="btn btn-primary"></button>
           <button type="button" id="btn-pacer-skip-rinse" class="btn"></button>
         </div>
-        <template id="tpl-labels" data-done="${encodeURIComponent(mw.doneRinse)}" data-skip="${encodeURIComponent(mw.skipRinse)}"></template>`;
+        <template id="tpl-labels" data-done="${encodeURIComponent(amount(mw.doneRinse))}" data-skip="${encodeURIComponent(amount(mw.skipRinse))}"></template>`;
     }
     if (stage === 'flossBonus') {
       const mw = BrushCoachCopy.mouthwashButtonLabels(true, this.lang);
@@ -694,11 +716,11 @@ export class BrushAlongOverlay implements OverlayView {
           <span class="pacer-action-wrap"><span aria-hidden="true">✨</span> <span id="pacer-action" class="pacer-action"></span></span>
         </div>
         <div class="pacer-actions">
-          <button type="button" id="btn-pacer-to-rinse" class="btn btn-primary"></button>
-          <button type="button" id="btn-pacer-done-floss" class="btn"></button>
+          ${this.includeRinse ? '<button type="button" id="btn-pacer-to-rinse" class="btn btn-primary"></button>' : ''}
+          <button type="button" id="btn-pacer-done-floss" class="btn${this.includeRinse ? '' : ' btn-primary'}"></button>
           <button type="button" id="btn-pacer-skip-floss" class="btn"></button>
         </div>
-        <template id="tpl-labels" data-rinse="${encodeURIComponent(mw.rinseJump)}" data-done="${encodeURIComponent(buttons.doneFloss)}" data-skip="${encodeURIComponent(buttons.skipFloss)}"></template>`;
+        <template id="tpl-labels" data-rinse="${encodeURIComponent(mw.rinseJump)}" data-done="${encodeURIComponent(amount(buttons.doneFloss))}" data-skip="${encodeURIComponent(amount(buttons.skipFloss))}"></template>`;
     }
     return `
       <div class="pacer-row">
@@ -794,7 +816,10 @@ export class BrushAlongOverlay implements OverlayView {
     this.$('#btn-pacer-to-floss')?.addEventListener('click', () => this.enterFlossBonus());
     this.$('#btn-pacer-to-rinse')?.addEventListener('click', () => this.enterMouthwashBonus(true));
     this.$('#btn-pacer-done-floss')?.addEventListener('click', () => this.completeSession(true, false));
-    this.$('#btn-pacer-skip-floss')?.addEventListener('click', () => this.enterMouthwashBonus(false));
+    this.$('#btn-pacer-skip-floss')?.addEventListener('click', () => {
+      if (this.includeRinse) this.enterMouthwashBonus(false);
+      else this.completeSession(false, false);
+    });
     this.$('#btn-pacer-done-rinse')?.addEventListener('click', () => this.completeSession(this.completedFloss, true));
     this.$('#btn-pacer-skip-rinse')?.addEventListener('click', () => this.completeSession(this.completedFloss, false));
 
@@ -828,14 +853,26 @@ export class BrushAlongOverlay implements OverlayView {
     this.renderedStage = null;
     const r = this.rewardResult;
     const rinse = r?.withMouthwashBonus ?? false;
+    // Tapped ahead before the 2 minutes were up: a kind "good try" and a small tip, never a scolding.
+    const goodTry = r !== null && !r.fullBrush;
+    const banner = goodTry
+      ? '🌱 GOOD TRY!'
+      : rinse
+        ? '💜 FLUORIDE RINSE SEAL COMPLETE!'
+        : '🦷 100% MIRROR-SMOOTH BASK RESTORED!';
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive row-between">
-        <strong style="color:#5eead4;">${rinse ? '💜 FLUORIDE RINSE SEAL COMPLETE!' : '🦷 100% MIRROR-SMOOTH BASK RESTORED!'}</strong>
+        <strong style="color:#5eead4;">${banner}</strong>
         ${this.buildMuteBtnHtml()}
       </div>
       <div></div>
       <div class="cosmic-card glass-card ui-interactive" style="text-align:center;">
-        <h2 style="margin:0 0 6px 0;font-size:1.18rem;">Fresh, Smooth, Fluoride-Strong Teeth!</h2>
+        <h2 style="margin:0 0 6px 0;font-size:1.18rem;">${goodTry ? 'Every brush helps!' : 'Fresh, Smooth, Fluoride-Strong Teeth!'}</h2>
+        ${
+          goodTry
+            ? '<p style="margin:0 0 8px 0;font-size:0.9rem;font-weight:700;color:#fde68a;">Brush the whole 2 minutes to earn a Habit Stamp.</p>'
+            : ''
+        }
         <p style="margin:0 0 10px 0;font-size:0.82rem;color:#cbd5e1;">
           ${
             rinse
@@ -844,11 +881,11 @@ export class BrushAlongOverlay implements OverlayView {
           }
         </p>
         <div class="row-wrap" style="justify-content:center;margin-bottom:12px;">
-          <span class="pill-badge">✦ +${r?.ionsAwarded ?? 0} Fluoride Ions</span>
+          ${goodTry && (r?.ionsAwarded ?? 0) === 0 ? '' : `<span class="pill-badge">✦ +${r?.ionsAwarded ?? 0} Fluoride Ions</span>`}
           ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${r.multiplier >= 2 ? 'Floss + Rinse' : 'Bonus Step'}</span>` : ''}
           ${r?.stampAwarded ? '<span class="pill-badge">🦷 +1 Permanent Habit Stamp</span>' : ''}
           ${r?.slotType === 'full' ? '<span class="pill-badge">📡 +1 Supply Beacon</span><span class="pill-badge">⚡ +1 Overdrive Run</span>' : ''}
-          ${r?.slotType === 'capped' ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}
+          ${r?.slotType === 'capped' && !goodTry ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}
         </div>
         <button type="button" id="btn-done-pacer" class="btn btn-primary" style="width:100%;">
           Bask in Smooth Teeth (Return to Hub) ✦

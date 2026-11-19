@@ -516,6 +516,11 @@ export const BrushCoachCopy = {
     return { flossJump: w.flossJump, doneFloss: `${w.done} (+75 F⁻)`, skipFloss: `${w.skip} (+50 F⁻)` };
   },
 
+  /** "Done (+75 F⁻)" → "Done": after an early tap-through the promised amounts no longer apply. */
+  withoutIonAmount(label: string): string {
+    return label.replace(/\s*\(\+\d+ F⁻\)$/, '');
+  },
+
   mouthwashButtonLabels(
     didFloss: boolean,
     lang: CoachLanguage

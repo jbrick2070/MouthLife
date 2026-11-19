@@ -45,7 +45,7 @@ open MouthLife.xcodeproj
 - **`Surface/OralSurfaceGrid.swift` & `OralChemistrySim.swift`** — `256×128` (`128×128` Pulp Rescue) enamel surface grid, dirty sub-rectangle `RGBA8Unorm` packing (`SurfaceDirtyRect`), `O(1)` equilibrium chemistry fast-path, Stephan `20s` acid curve, Hydroxyapatite (`pH 5.5`) vs. Fluorapatite (`pH 4.5`), and 1948 Bass 45° sulcus care.
 - **`Physics/CollisionSystem.swift`, `Scoring/ScoringEngine.swift`, `Sim/WorldSession.swift`, `Worlds/WorldCartridges.swift`** — Interdental alley walls, `0.22s` Capillary Tether-Zip, `10,000`-pt 4-pillar scoring (`250` Par Time floor), and `world_1`..`world_5` + `pulp_rescue`.
 - **`Companion/CompanionArchSim.swift` & `CompanionTouchSystem.swift`** — `12h` Smooth Bask (`72 F⁻` reservoir), `90-day` Saliva Stasis (`>= 45%`), 14-crown pentatonic glass-harp rubbing, and zero-permadeath `50%` Ca(OH)₂ Pulp Rescue stabilization.
-- **`Persistence/SaveSystem.swift` & `HabitBank.swift`** — `UserDefaults` + optional iCloud `NSUbiquitousKeyValueStore`, V1→V2 migration, daily `2 full + 3 courtesy tip` Brush-Along cap, and cross-platform `ML2:` Base64URL Sync Codes.
+- **`Persistence/SaveSystem.swift` & `HabitBank.swift`** — `UserDefaults` + optional iCloud `NSUbiquitousKeyValueStore`, V1→V2 migration, daily `2 full + 3 courtesy tip` Brush-Along cap (full rewards only when brushing ran the whole 2 minutes; an early tap-through earns a "good try" tip), and cross-platform `ML2:` Base64URL Sync Codes.
 
 ### `MouthLifeApp/Render/` (120Hz ProMotion Metal & SceneKit Pipeline)
 - **`EnamelShaders.swift`** — Custom Metal `.geometry`, `.surface`, and `.fragment` shader modifiers + `< 0.02 ms` unified-memory `MTLTexture.replace` dirty-subrect uploader + shadow-state uniform guards.

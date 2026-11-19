@@ -135,6 +135,11 @@ export const DIVE_MAX_IONS = 25;
 export const BRUSH_ALONG_FLOSS_IONS = 25;
 export const BRUSH_ALONG_MOUTHWASH_IONS = 25;
 export const BRUSH_ALONG_TIP_IONS = 5;
+/**
+ * The brushing stage counts as the full 2 minutes when it ran to within this many seconds of the
+ * end. Tapping ahead to floss earlier still earns a small "good try" reward, never the full one.
+ */
+export const BRUSH_ALONG_FULL_BRUSH_GRACE_SEC = 2;
 export const MAX_SUPPLY_BEACONS = 4;
 export const MAX_OVERDRIVE_RUNS = 4;
 

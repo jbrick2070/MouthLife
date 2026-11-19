@@ -63,6 +63,8 @@ public struct RootContentView: View {
                     isPaused: coordinator.pacerIsPaused,
                     pacerStage: coordinator.pacerStage,
                     didCompleteFloss: coordinator.pacerCompletedFlossStage,
+                    includeRinse: coordinator.includeRinse,
+                    fullBrush: coordinator.pacerBrushedFullTime,
                     flossToolStyle: coordinator.flossToolStyle,
                     mouthwashDurationStyle: coordinator.mouthwashDurationStyle,
                     mouthwashGyro: coordinator.mouthwashGyro,
@@ -202,6 +204,7 @@ public struct RootContentView: View {
                         voiceCoachEnabled: coordinator.voiceCoachEnabled,
                         coachLanguage: coordinator.coachLanguage,
                         reducedMotion: coordinator.reducedMotion,
+                        includeRinse: coordinator.includeRinse,
                         showProMotionTelemetry: coordinator.showProMotionBadge,
                         onSaveProfile: { name, tone, city in
                             coordinator.updateProfile(name: name, skinTone: tone, homeCity: city)
@@ -213,6 +216,7 @@ public struct RootContentView: View {
                         onChangeVoiceCoach: { enabled in coordinator.setVoiceCoachEnabled(enabled) },
                         onChangeLanguage: { lang in coordinator.setCoachLanguage(lang) },
                         onChangeReducedMotion: { red in coordinator.reducedMotion = red },
+                        onChangeIncludeRinse: { on in coordinator.setIncludeRinse(on) },
                         onToggleProMotionTelemetry: { show in coordinator.showProMotionBadge = show },
                         onReplayCosmicIntro: { coordinator.replayCosmicIntro() }
                     )

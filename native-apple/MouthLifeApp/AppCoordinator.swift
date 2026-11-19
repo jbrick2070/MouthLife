@@ -61,6 +61,11 @@ public final class AppCoordinator {
     // Active 2-Minute Sink Brush-Along Pacer State
     private static let flossToolDefaultsKey = "mouthlife.pacer.flossToolStyle"
     private static let mouthwashDurationDefaultsKey = "mouthlife.pacer.mouthwashDurationStyle"
+    private static let includeRinseDefaultsKey = "mouthlife.pacer.includeRinse"
+    /// A grown-up can leave out the fluoride rinse (ages 6 and up); it is on unless they do.
+    public var includeRinse: Bool = true
+    /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
+    public private(set) var pacerBrushedFullTime: Bool = false
     public var pacerElapsedSec: Double = 0.0
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
@@ -150,6 +155,7 @@ public final class AppCoordinator {
             .flatMap(MouthwashDurationStyle.init(rawValue:)) ?? .totalCare60s
         self.mouthwashDurationStyle = persistedMouthwashStyle
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
+        self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? true
         self.tutorialGate = TutorialGate(
             progress: TutorialProgress(
                 offers: UserDefaults.standard.integer(forKey: Self.tutorialOffersDefaultsKey),
@@ -421,6 +427,12 @@ public final class AppCoordinator {
                 if let language = CoachLanguage(rawValue: String(arg.dropFirst("--lang=".count))) {
                     setCoachLanguage(language)
                 }
+            } else if arg == "--rinse=off" {
+                // For screenshots and testing: brush without the rinse step (not saved).
+                includeRinse = false
+            } else if arg == "--pacer=floss" && mode == .brushAlong {
+                // For screenshots and testing: tap ahead to the floss step straight away (after --mode=brushAlong).
+                enterFlossBonusNow()
             } else if arg.hasPrefix("--sheet=") {
                 let s = String(arg.dropFirst("--sheet=".count))
                 activeSheet = HubSheetKind(rawValue: s)
@@ -713,6 +725,7 @@ public final class AppCoordinator {
         pacerInFlossBonus = false
         pacerStage = .brushing
         pacerCompletedFlossStage = false
+        pacerBrushedFullTime = false
         announcedFlossLowerHalf = false
         lastAnnouncedMouthwashStep = 0
         brushRadioStation = .livingClock
@@ -783,6 +796,13 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.playUiTap()
     }
 
+    public func setIncludeRinse(_ on: Bool) {
+        guard includeRinse != on else { return }
+        includeRinse = on
+        UserDefaults.standard.set(on, forKey: Self.includeRinseDefaultsKey)
+        NativeSoundEngine.shared.playUiTap()
+    }
+
     public func setMouthwashDurationStyle(_ style: MouthwashDurationStyle) {
         guard mouthwashDurationStyle != style else { return }
         let mwStart = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
@@ -810,6 +830,9 @@ public final class AppCoordinator {
     }
 
     public func enterFlossBonusNow() {
+        if pacerStage == .brushing {
+            pacerBrushedFullTime = pacerElapsedSec >= GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec
+        }
         pacerStage = .flossBonus
         pacerInFlossBonus = true
         pacerIsPaused = false
@@ -864,9 +887,11 @@ public final class AppCoordinator {
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         NativeSoundEngine.shared.setPaused(false)
+        let fullBrush = pacerBrushedFullTime
         let outcome = saveSystem.recordBrushAlongCompletion(
             withFlossBonus: withFlossBonus,
-            withMouthwashBonus: withMouthwashBonus
+            withMouthwashBonus: withMouthwashBonus,
+            fullBrush: fullBrush
         )
         save = saveSystem.getSave()
         sceneController.touchSystem.clearAll()
@@ -877,7 +902,14 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.speakCoachingPhrase(
             BrushCoachCopy.spokenStageWord(.done, lang: coachLanguage)
         )
-        if withMouthwashBonus {
+        if !fullBrush {
+            // Tapped ahead before the 2 minutes were up: a kind word and a small tip, never a scolding.
+            if outcome.ionsAwarded > 0 {
+                showHubToast("🌱 Good try! +\(outcome.ionsAwarded) F⁻ • Brush the whole 2 minutes to earn a Habit Stamp.")
+            } else {
+                showHubToast("🌱 Good try! Brush the whole 2 minutes to earn a Habit Stamp.")
+            }
+        } else if withMouthwashBonus {
             showHubToast("💜 Fluoride Rinse Seal! +\(outcome.ionsAwarded) F⁻ • Spit out, no water for 30 min!")
         } else {
             showHubToast("🦷 Fresh Mint Smooth Bask! +\(outcome.ionsAwarded) F⁻\(outcome.stampAwarded ? " & +1 Habit Stamp!" : "")")
@@ -972,8 +1004,12 @@ public final class AppCoordinator {
                 NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .lowerRight, surface: .outerCheek, isNewQuadrant: true)
             }
             if pacerElapsedSec >= flossEnd - 0.05 {
-                // Seamlessly chime & roll hands-free into Stage 3: 60s Purple Total Care Fluoride Rinse Bonus!
-                enterMouthwashBonusNow(completedFloss: true)
+                // Roll hands-free into Stage 3, the fluoride rinse, or finish when a grown-up left it out.
+                if includeRinse {
+                    enterMouthwashBonusNow(completedFloss: true)
+                } else {
+                    completeBrushAlongSession(withFlossBonus: true, withMouthwashBonus: false)
+                }
             }
 
         case .mouthwashBonus:

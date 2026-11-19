@@ -439,6 +439,12 @@ public enum BrushCoachCopy {
         }
     }
 
+    /// "Done (+75 F⁻)" → "Done": after an early tap-through the promised amounts no longer apply.
+    public static func withoutIonAmount(_ label: String) -> String {
+        guard label.hasSuffix(" F⁻)"), let open = label.range(of: " (+", options: .backwards) else { return label }
+        return String(label[..<open.lowerBound])
+    }
+
     public static func mouthwashButtonLabels(didFloss: Bool, lang: CoachLanguage) -> (rinseJump: String, doneRinse: String, skipRinse: String) {
         let fullIons = didFloss ? 100 : 75
         let skipIons = didFloss ? 75 : 50

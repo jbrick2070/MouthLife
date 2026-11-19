@@ -53,10 +53,15 @@ public enum HabitBank {
     /// Pure evaluation of a 2-Minute Sink Brush-Along session reward.
     /// Daily cap: 2 full rewards (`50 + 25 floss + 25 fluoride rinse = 100 F⁻`) + 3 courtesy tips (`5`),
     /// +1 monotonic stamp, +1 Supply Beacon (capped at 4), +1 Overdrive Run (capped at 4).
+    ///
+    /// Only the full 2-minute brush (`fullBrush`, the default) earns that. Tapping ahead to floss
+    /// before the brushing time is up is a "good try": a small courtesy tip of Ions, no stamp, beacon
+    /// or Overdrive run, and it leaves today's full rewards free for a full brush later.
     public static func evaluatePacerReward(
         currentSlot: DailySlotLog,
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
+        fullBrush: Bool = true,
         currentBeacons: Int = 0,
         currentOverdriveRuns: Int = 0,
         dateKey: String = localDateKey()
@@ -68,7 +73,7 @@ public enum HabitBank {
         var overdriveRunsAdded = 0
         var slotType: PacerRewardSlotType = .capped
 
-        if nextSlot.fullRewards < GameConfig.dailyFullRewardCap {
+        if fullBrush && nextSlot.fullRewards < GameConfig.dailyFullRewardCap {
             nextSlot.fullRewards += 1
             slotType = .full
             stampAwarded = true
@@ -105,6 +110,7 @@ public enum HabitBank {
         save: inout MouthLifeSaveV2,
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
+        fullBrush: Bool = true,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -114,6 +120,7 @@ public enum HabitBank {
             currentSlot: currentSlot,
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
+            fullBrush: fullBrush,
             currentBeacons: save.pendingSupplyBeacons,
             currentOverdriveRuns: save.remineralizedOverdriveRuns,
             dateKey: dateKey

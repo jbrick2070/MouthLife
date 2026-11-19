@@ -327,6 +327,10 @@ public struct BrushAlongView: View {
     public let isPaused: Bool
     public let pacerStage: PacerStage
     public let didCompleteFloss: Bool
+    /// Whether the fluoride rinse follows flossing (a grown-up can leave it out in Settings).
+    public let includeRinse: Bool
+    /// Whether brushing ran its full 2 minutes; the Ion amounts on Done / Skip are only shown then.
+    public let fullBrush: Bool
     public let flossToolStyle: FlossToolStyle
     public let mouthwashDurationStyle: MouthwashDurationStyle
     public let mouthwashGyro: GyroSloshSnapshot
@@ -349,6 +353,8 @@ public struct BrushAlongView: View {
         isPaused: Bool,
         pacerStage: PacerStage = .brushing,
         didCompleteFloss: Bool = false,
+        includeRinse: Bool = true,
+        fullBrush: Bool = true,
         flossToolStyle: FlossToolStyle = .flossPick,
         mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s,
         mouthwashGyro: GyroSloshSnapshot = .idle,
@@ -370,6 +376,8 @@ public struct BrushAlongView: View {
         self.isPaused = isPaused
         self.pacerStage = pacerStage
         self.didCompleteFloss = didCompleteFloss
+        self.includeRinse = includeRinse
+        self.fullBrush = fullBrush
         self.flossToolStyle = flossToolStyle
         self.mouthwashDurationStyle = mouthwashDurationStyle
         self.mouthwashGyro = mouthwashGyro
@@ -404,8 +412,12 @@ public struct BrushAlongView: View {
             stage: pacerStage,
             mouthwashDurationSec: mwDur
         )
-        let buttons = BrushCoachCopy.actionButtonLabels(for: coachLanguage)
-        let mwButtons = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
+        // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
+        let amount: (String) -> String = { [fullBrush] label in fullBrush ? label : BrushCoachCopy.withoutIonAmount(label) }
+        let floss = BrushCoachCopy.actionButtonLabels(for: coachLanguage)
+        let buttons = (flossJump: floss.flossJump, doneFloss: amount(floss.doneFloss), skipFloss: amount(floss.skipFloss))
+        let rinse = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
+        let mwButtons = (rinseJump: rinse.rinseJump, doneRinse: amount(rinse.doneRinse), skipRinse: amount(rinse.skipRinse))
         let clockGlow: Color = {
             if isPaused { return MLTheme.fluorapatiteGold }
             if phase.inMouthwashBonus { return totalCarePurple }
@@ -654,21 +666,36 @@ public struct BrushAlongView: View {
                     }
 
                     HStack(spacing: 8) {
-                        Button {
-                            onEnterMouthwashBonusNow(true)
-                        } label: {
-                            Label(L10n.t(flossMwButtons.rinseJump), systemImage: "drop.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
+                        if includeRinse {
+                            Button {
+                                onEnterMouthwashBonusNow(true)
+                            } label: {
+                                Label(L10n.t(flossMwButtons.rinseJump), systemImage: "drop.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(MLPrimaryButtonStyle(accent: totalCareLavender, darkText: true))
 
-                        Button(L10n.t(buttons.doneFloss)) {
-                            onCompleteSession(true, false)
+                            Button(L10n.t(buttons.doneFloss)) {
+                                onCompleteSession(true, false)
+                            }
+                            .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.mintClean))
+                        } else {
+                            // No rinse step: Done is the main way to finish.
+                            Button {
+                                onCompleteSession(true, false)
+                            } label: {
+                                Label(L10n.t(buttons.doneFloss), systemImage: "checkmark.seal.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
                         }
-                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.mintClean))
 
                         Button(L10n.t(buttons.skipFloss)) {
-                            onEnterMouthwashBonusNow(false)
+                            if includeRinse {
+                                onEnterMouthwashBonusNow(false)
+                            } else {
+                                onCompleteSession(false, false)
+                            }
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
                     }

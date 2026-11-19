@@ -794,6 +794,7 @@ public final class SaveSystem {
     public func recordBrushAlongCompletion(
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
+        fullBrush: Bool = true,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -802,6 +803,7 @@ public final class SaveSystem {
             save: &next,
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
+            fullBrush: fullBrush,
             date: date,
             calendar: calendar
         )

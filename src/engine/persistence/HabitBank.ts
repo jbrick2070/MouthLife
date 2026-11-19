@@ -38,24 +38,30 @@ export class HabitBank {
    * Never penalizes missed days; caps daily full rewards at 2 and courtesy tips at 3.
    * A full reward is 50 F-, +25 with the floss stage, +25 with the fluoride rinse stage (100 max),
    * plus one Habit Stamp, one Supply Beacon and one Overdrive run (same as the native app).
+   *
+   * Only the full 2-minute brush (`fullBrush`, the default) earns that. Tapping ahead to floss
+   * before the brushing time is up is a "good try": a small courtesy tip of Ions, no stamp, beacon
+   * or Overdrive run, and it leaves today's full rewards free for a full brush later.
    */
   static completeBrushAlong(
     save: MouthLifeSaveV2,
-    options: { withFlossBonus: boolean; withMouthwashBonus?: boolean; date?: Date }
+    options: { withFlossBonus: boolean; withMouthwashBonus?: boolean; fullBrush?: boolean; date?: Date }
   ): {
     ionsAwarded: number;
     stampAwarded: boolean;
     slotType: 'full' | 'tip' | 'capped';
+    fullBrush: boolean;
   } {
     const now = options.date ?? new Date();
     const dateKey = formatLocalDateKey(now);
     const slot = save.dailySlotsByDate[dateKey] ?? { fullRewards: 0, tips: 0 };
+    const fullBrush = options.fullBrush ?? true;
 
     let ionsAwarded = 0;
     let stampAwarded = false;
     let slotType: 'full' | 'tip' | 'capped' = 'capped';
 
-    if (slot.fullRewards < DAILY_FULL_REWARD_CAP) {
+    if (fullBrush && slot.fullRewards < DAILY_FULL_REWARD_CAP) {
       slot.fullRewards += 1;
       slotType = 'full';
       stampAwarded = true;
@@ -80,7 +86,7 @@ export class HabitBank {
     CompanionArchSim.restoreFullSmoothBask(save.companion, now.getTime());
 
     HabitBank.pruneOldDailyLogs(save, now);
-    return { ionsAwarded, stampAwarded, slotType };
+    return { ionsAwarded, stampAwarded, slotType, fullBrush };
   }
 
   static pruneOldDailyLogs(save: MouthLifeSaveV2, refDate = new Date()): void {

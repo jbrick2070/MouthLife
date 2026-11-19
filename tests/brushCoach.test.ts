@@ -221,6 +221,12 @@ describe('Brush-Along rewards with floss and rinse', () => {
     expect(BrushCoachCopy.mouthwashButtonLabels(false, 'de').doneRinse).toBe('Fertig (+75 F⁻)');
     expect(BrushCoachCopy.mouthwashButtonLabels(false, 'ja').skipRinse).toBe('スキップ (+50 F⁻)');
   });
+
+  it('drops the promised amounts after an early tap-through (it pays only a good-try tip)', () => {
+    expect(BrushCoachCopy.withoutIonAmount('Done (+75 F⁻)')).toBe('Done');
+    expect(BrushCoachCopy.withoutIonAmount('スキップ (+50 F⁻)')).toBe('スキップ');
+    expect(BrushCoachCopy.withoutIonAmount('Floss Pick')).toBe('Floss Pick');
+  });
 });
 
 describe('8-language coach copy', () => {
