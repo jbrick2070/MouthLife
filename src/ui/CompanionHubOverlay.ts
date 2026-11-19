@@ -67,6 +67,11 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** "Accra & Colorado Springs" -> "Accra", "Station Aurora (408 km LEO)" -> "Station Aurora", for a phone button. */
+function shortCityName(city: string): string {
+  return city.split(' & ')[0].replace(/\s*\(.*\)\s*$/, '').trim();
+}
+
 export class CompanionHubOverlay implements OverlayView {
   private disposers = new DisposerBag();
   private container: HTMLElement | null = null;
@@ -618,7 +623,10 @@ export class CompanionHubOverlay implements OverlayView {
     const divePick = pickRecommendedDiveWorld(save.worlds, fallbackHomeWorldId);
     const diveWorldId = isPlayableWorld(divePick.worldId) ? divePick.worldId : fallbackHomeWorldId;
     const diveWorldTitle = getCartridgeById(diveWorldId).title;
-    const diveStageTag = divePick.stageNumber !== null ? `W${divePick.stageNumber}` : '';
+    // Name the city Dive goes to (and where it sits in the campaign), as the native Home does.
+    const diveCity = HOST_CITIES.find((h) => h.worldId === diveWorldId)?.city ?? diveWorldTitle;
+    const diveCityShort = shortCityName(diveCity);
+    const diveStage = divePick.stageNumber;
     const affordableLabCount = countAffordableLockedUpgrades(
       save.fluorideIons,
       save.unlockedUpgrades,
@@ -668,8 +676,8 @@ export class CompanionHubOverlay implements OverlayView {
             ? `<button type="button" id="btn-launch-rescue" class="btn btn-danger">
                 <span class="mob-hide">🚨 90s Pulp Rescue!</span><span class="mob-only">🚨 Rescue!</span>
               </button>`
-            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${diveWorldId}" title="Dive: ${escapeHtml(diveWorldTitle)}">
-                <span class="mob-hide">🚀 Dive${diveStageTag ? ` (${diveStageTag})` : ''}: ${escapeHtml(diveWorldTitle)}</span><span class="mob-only">🚀 Dive${diveStageTag ? ` ${diveStageTag}` : ''}</span>
+            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${diveWorldId}" title="${escapeHtml(diveCity)} • ${escapeHtml(diveWorldTitle)}">
+                <span class="mob-hide"><span>${diveStage !== null ? `🚀 Dive ${diveStage} of 5` : '🚀 Dive'}</span> · <span>${escapeHtml(diveCityShort)}</span></span><span class="mob-only"><span>🚀</span> <span>${escapeHtml(diveCityShort)}</span>${diveStage !== null ? ` <span class="dive-stage">${diveStage}/5</span>` : ''}</span>
               </button>`
         }
         <button

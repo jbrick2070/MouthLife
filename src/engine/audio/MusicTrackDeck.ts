@@ -18,6 +18,27 @@ interface Deck {
   el: HTMLAudioElement;
   gain: GainNode;
   file: string | null;
+  /** The recording has actually started sounding (its first `playing` event since `file` was set). */
+  audible: boolean;
+}
+
+/** An opening recording that started downloading before the first tap (see `preloadOpeningTrack`). */
+export interface PreloadedTrack {
+  el: HTMLAudioElement;
+  file: string;
+}
+
+/**
+ * Starts downloading the first recording the player will hear, at page load, so it is ready by
+ * the first tap (browsers allow no sound before one). The element is handed to the deck later.
+ */
+export function preloadOpeningTrack(baseUrl: string, file: string): PreloadedTrack | null {
+  if (typeof Audio === 'undefined') return null;
+  const el = new Audio();
+  el.loop = true;
+  el.preload = 'auto';
+  el.src = baseUrl + encodeURIComponent(file);
+  return { el, file };
 }
 
 export class MusicTrackDeck {
@@ -27,16 +48,20 @@ export class MusicTrackDeck {
   private unlocked = false;
   /** Fires after a file failed to load or decode, so the caller can fall back to the synth. */
   onTrackFailed: ((file: string) => void) | null = null;
+  /** Fires when the active recording starts sounding, so the synth can hand over to it. */
+  onAudibleChanged: (() => void) | null = null;
 
   constructor(
     private readonly ctx: AudioContext,
     out: AudioNode,
     private readonly baseUrl: string,
-    private readonly files: readonly string[]
+    private readonly files: readonly string[],
+    preloaded: PreloadedTrack | null = null
   ) {
     if (typeof Audio === 'undefined' || files.length === 0) return;
     for (let i = 0; i < 2; i++) {
-      const el = new Audio();
+      const early = i === 0 && preloaded && files.includes(preloaded.file) ? preloaded : null;
+      const el = early?.el ?? new Audio();
       el.loop = true;
       el.preload = 'auto';
       const gain = ctx.createGain();
@@ -48,8 +73,14 @@ export class MusicTrackDeck {
         return;
       }
       gain.connect(out);
-      const deck: Deck = { el, gain, file: null };
+      const deck: Deck = { el, gain, file: early?.file ?? null, audible: false };
       el.addEventListener('error', () => this.markFailed(deck));
+      el.addEventListener('playing', () => {
+        // The silent unlock clip plays with no file set: that is not music.
+        if (deck.file === null || deck.audible) return;
+        deck.audible = true;
+        if (this.decks[this.active] === deck) this.onAudibleChanged?.();
+      });
       this.decks.push(deck);
     }
   }
@@ -71,6 +102,11 @@ export class MusicTrackDeck {
 
   activeFile(): string | null {
     return this.decks[this.active]?.file ?? null;
+  }
+
+  /** True once the active recording is really sounding (not still buffering after a tap). */
+  isAudible(): boolean {
+    return this.decks[this.active]?.audible ?? false;
   }
 
   /** Call synchronously inside a user gesture, so both decks may start later without another tap. */
@@ -104,12 +140,18 @@ export class MusicTrackDeck {
     }
     let deck = this.decks[this.active];
     if (!deck || deck.file !== file) {
-      const nextIdx = this.active === 0 ? 1 : 0;
+      // A deck that already holds this file (the preloaded opener) plays it without reloading.
+      const holding = this.decks.findIndex((d, i) => i !== this.active && d.file === file);
+      const free = this.decks.findIndex((d, i) => i !== this.active && d.file === null);
+      const nextIdx = holding >= 0 ? holding : free >= 0 && this.active < 0 ? free : this.active === 0 ? 1 : 0;
       if (deck) this.fadeOut(deck, now, tau);
       deck = this.decks[nextIdx];
-      deck.file = file;
-      deck.el.src = this.baseUrl + encodeURIComponent(file);
-      deck.el.load();
+      if (deck.file !== file) {
+        deck.file = file;
+        deck.audible = false;
+        deck.el.src = this.baseUrl + encodeURIComponent(file);
+        deck.el.load();
+      }
       deck.gain.gain.cancelScheduledValues(now);
       deck.gain.gain.setValueAtTime(0, now);
       this.active = nextIdx;
@@ -153,6 +195,7 @@ export class MusicTrackDeck {
     this.failed.add(file);
     deck.el.pause();
     deck.file = null;
+    deck.audible = false;
     deck.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
     if (this.decks[this.active] === deck) this.active = -1;
     this.onTrackFailed?.(file);

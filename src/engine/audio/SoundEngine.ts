@@ -1,7 +1,7 @@
 import type { AppMode } from '../types';
 import { MusicSequencer } from './MusicSequencer';
-import { MusicTrackDeck } from './MusicTrackDeck';
-import type { BrushMusicStage } from './musicTracks';
+import { MusicTrackDeck, preloadOpeningTrack, type PreloadedTrack } from './MusicTrackDeck';
+import { resolveMusicTrack, type BrushMusicStage } from './musicTracks';
 import { BUNDLED_MUSIC_FILES } from 'virtual:bundled-music';
 import {
   COSMIC_BEAT_BARS,
@@ -128,6 +128,9 @@ export class SoundEngine {
   private scrubShimGain: GainNode | null = null;
   private scrubLfo: OscillatorNode | null = null;
   private scrubWasActive = false;
+  /** The opening recording, downloading since page load, until the audio graph takes it. */
+  private openingTrack: PreloadedTrack | null = null;
+  private openingPreloadTried = false;
 
   private throttles = new Map<string, number>();
 
@@ -250,8 +253,16 @@ export class SoundEngine {
     this.trackBus = ctx.createGain();
     this.trackBus.gain.value = 0;
     this.trackBus.connect(this.musicFilter);
-    this.trackDeck = new MusicTrackDeck(ctx, this.trackBus, `${import.meta.env.BASE_URL}music/`, BUNDLED_MUSIC_FILES);
+    this.trackDeck = new MusicTrackDeck(
+      ctx,
+      this.trackBus,
+      `${import.meta.env.BASE_URL}music/`,
+      BUNDLED_MUSIC_FILES,
+      this.openingTrack
+    );
+    this.openingTrack = null;
     this.trackDeck.onTrackFailed = () => this.applyPlaybackState();
+    this.trackDeck.onAudibleChanged = () => this.applyPlaybackState();
 
     // A finale's own song: straight to the master, at the music level, never ducked by the finale.
     this.finaleBus = ctx.createGain();
@@ -646,7 +657,9 @@ export class SoundEngine {
     );
     this.trackBus?.gain.setTargetAtTime(trackTarget, now, 0.12);
     const trackLive = (this.trackDeck?.sync(track, wantMusic) ?? false) && wantMusic;
-    this.seq.notesMuted = trackLive;
+    // The synth keeps playing until the recording is really sounding, so the first tap is never
+    // followed by seconds of silence while an 8 MB file downloads.
+    this.seq.notesMuted = trackLive && (this.trackDeck?.isAudible() ?? false);
     if (wantMusic) {
       this.seq.start();
     } else if (silent) {
@@ -659,6 +672,7 @@ export class SoundEngine {
   setAmbientMode(mode: AppMode): void {
     this.currentMode = mode;
     if (mode !== 'ARCADE' && mode !== 'PULP_RESCUE') this.stopScrub();
+    this.preloadOpeningMusic();
     if (mode !== 'BRUSH_ALONG') {
       this.pacerQuadrant = 0;
       this.coda = false;
@@ -670,6 +684,19 @@ export class SoundEngine {
     }
     if (mode !== 'COSMIC_INTRO') this.cosmicBeat = 0;
     this.refreshTheme();
+  }
+
+  /**
+   * Before the first tap (no sound is allowed yet), start downloading the recording that tap will
+   * start, so it is ready in time. Once only, and not when the music is off.
+   */
+  private preloadOpeningMusic(): void {
+    if (this.ctx || this.openingPreloadTried || typeof window === 'undefined') return;
+    this.openingPreloadTried = true;
+    if (this.prefs.muted || this.prefs.musicVolume <= 0.001) return;
+    const theme = selectTheme({ mode: this.currentMode, worldId: this.worldId, hubGlobe: this.hubGlobe, pulpZero: this.pulpZero });
+    const file = resolveMusicTrack(theme, BUNDLED_MUSIC_FILES);
+    if (file) this.openingTrack = preloadOpeningTrack(`${import.meta.env.BASE_URL}music/`, file);
   }
 
   setWorldContext(worldId: string): void {
