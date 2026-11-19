@@ -32,7 +32,9 @@ final class WatchMusic {
         }
         guard let player else { return }
         if r.paused {
+            // quiet while paused, and the watch's audio let go until it carries on
             if player.isPlaying { player.pause() }
+            release()
             return
         }
         // keep the song with the clock (a long stall or a resume moves the clock on)
@@ -93,7 +95,7 @@ final class WatchMusic {
     }
 
     private func release() {
-        guard sessionActive, player == nil, fading.isEmpty else { return }
+        guard sessionActive, !(player?.isPlaying ?? false), fading.isEmpty else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         sessionActive = false
     }

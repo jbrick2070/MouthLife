@@ -445,11 +445,11 @@ public struct MouthMap: View, Animatable {
             ctx.stroke(band, with: .color(WatchLook.outside), style: StrokeStyle(lineWidth: mark * 1.5, lineCap: .round))
         }
 
-        // the quarter being brushed glows
+        // the quarter being brushed glows: two soft wide outlines (no blur, so the zoom stays smooth)
         if surface != nil && !dimmed {
-            var halo = ctx
-            halo.addFilter(.blur(radius: u * 0.022))
-            for t in teeth { halo.fill(Self.outline(t), with: .color(fill.opacity(0.75))) }
+            for (width, alpha) in [(u * 0.05, 0.18), (u * 0.028, 0.32)] {
+                for t in teeth { ctx.stroke(Self.outline(t), with: .color(fill.opacity(alpha)), style: StrokeStyle(lineWidth: width, lineJoin: .round)) }
+            }
         }
 
         let shadow = CGAffineTransform(translationX: 0, y: max(1, u * 0.009))
