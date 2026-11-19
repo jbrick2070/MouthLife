@@ -1060,7 +1060,7 @@ final class MouthLifeCoreTests: XCTestCase {
             XCTAssertEqual(plan.show.rawValue, want.show, "\(host) show")
             XCTAssertEqual(plan.hostOnLeft ? "left" : "right", want.hostSide, "\(host) host side")
             XCTAssertEqual(plan.bursts.count, want.bursts, "\(host) bursts")
-            XCTAssertEqual(CityFinale.notes(plan, finish: .gold, reducedMotion: false).count, want.notes, "\(host) notes")
+            XCTAssertEqual(CityFinale.notes(plan, finishes: CityFinale.checksumFinishes(slot), slotIndex: slot, reducedMotion: false).count, want.notes, "\(host) notes")
             XCTAssertEqual(CityFinale.checksum(plan, emblem: art.emblem, slotIndex: slot, reducedMotion: false), want.checksum, accuracy: 0.01, "\(host) checksum")
             XCTAssertEqual(CityFinale.checksum(plan, emblem: art.emblem, slotIndex: slot, reducedMotion: true), want.reducedChecksum, accuracy: 0.01, "\(host) reduced checksum")
         }
@@ -1079,6 +1079,21 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(CityFinale.finish(for: .s, completed: true), .silver)
         XCTAssertEqual(CityFinale.finish(for: .b, completed: true), .pearl)
         XCTAssertEqual(CityFinale.finish(for: .fluorapatiteGold, completed: false), .empty)
+
+        // Exact lengths for recorded songs, and the climb: each city to its own ledge, the last to the top.
+        XCTAssertEqual(CityFinale.end, 30)
+        XCTAssertEqual(CityFinale.Ending.end, 60)
+        for i in 0..<CityFinale.campaignPieces {
+            let p = CityFinale.probe(CityFinale.climbEnd - 0.01, reducedMotion: false, climbTo: i, summit: false)
+            let l = CityFinale.ledge(i, t: CityFinale.climbEnd - 0.01, reducedMotion: false)
+            XCTAssertLessThan(hypot(p.x - l.x, p.y - l.y), 0.03, "ledge \(i)")
+        }
+        let top = CityFinale.probe(CityFinale.climbEnd - 0.01, reducedMotion: false, climbTo: 4, summit: true)
+        XCTAssertLessThan(hypot(top.x - CityFinale.Mountain.summitStand.x, top.y - CityFinale.Mountain.summitStand.y), 0.03)
+        XCTAssertEqual(CityFinale.climbStatus([.gold, .pearl, .empty, .silver, .empty]).left, 2)
+        XCTAssertEqual(CityFinale.climbStatus([.gold, .pearl, .empty, .silver, .empty]).next, 2)
+        XCTAssertEqual(CityFinale.trackCandidates(0).first, "finale_toronto")
+        XCTAssertEqual(CityFinale.trackCandidates(-1).first, "finale_ending")
 
         // The piece lands exactly in its own cusp, then the molar shows it.
         for i in 0..<CityFinale.campaignPieces {

@@ -111,26 +111,54 @@ public enum CityFinale {
     public static let meet = 17.9
     public static let prizeEnd = 19.7
     public static let slot = 20.9
-    public static let molarEnd = 23.2
-    public static let end = 25.0
+    /// The molar moves to the top of the mountain as it rises.
+    public static let molarEnd = 22.6
+    /// The probe lands on its new ledge...
+    public static let climbHop = 24.6
+    /// ...and, for the city that completes the set, on the summit.
+    public static let summitHop = 25.8
+    public static let climbEnd = 27.4
+    /// Exactly 30 s, so a recorded song can be made to fit.
+    public static let end = 30.0
     /// The Skip button appears after this.
     public static let skipAfter = 1.5
     /// The longest a show runs; a burst must go up inside it.
     public static let showSeconds = 5.5
 
+    /// The ending: exactly 60 s.
     public enum Ending {
         public static let fadeEnd = 1.0
         public static let firstPiece = 1.5
-        public static let pieceGap = 1.0
-        public static let pieceFlight = 0.9
-        public static let snap = 6.5
-        public static let creditsStart = 9.0
-        public static let creditSeconds = 4.0
-        public static let finaleStart = 29.0
-        public static let face = 31.0
-        public static let wink = 32.4
-        public static let end = 36.0
+        public static let pieceGap = 1.2
+        public static let pieceFlight = 1.0
+        public static let snap = 8.0
+        public static let creditsStart = 11.0
+        public static let creditSeconds = 8.0
+        public static let finaleStart = 51.0
+        public static let face = 53.5
+        public static let wink = 55.0
+        public static let end = 60.0
         public static let skipAfter = 1.0
+    }
+
+    // MARK: - Songs
+
+    /// Songs for the finales, by file name without extension, from the shared Music folder. First
+    /// match wins; nothing falls back to another song. Same lists as the web.
+    public static let finaleTrackCandidates: [[String]] = [
+        ["finale_toronto", "finale_world_1"],
+        ["finale_new_orleans", "finale_nola", "finale_world_2"],
+        ["finale_tokyo", "finale_tokyo_chicago", "finale_world_3"],
+        ["finale_accra", "finale_accra_colorado", "finale_world_4"],
+        ["finale_aurora", "finale_orbit", "finale_world_5"],
+    ]
+    public static let endingTrackCandidates = ["finale_ending", "grand_finale", "ending"]
+    /// Score voices that still play over a recorded song: the show's sound effects.
+    public static let effectVoices: Set<FinaleVoice> = [.whistle, .boom, .sparkle, .whoosh]
+
+    /// The candidate names for a city's finale (0...4) or the ending (-1).
+    public static func trackCandidates(_ index: Int) -> [String] {
+        index < 0 ? endingTrackCandidates : (index < finaleTrackCandidates.count ? finaleTrackCandidates[index] : [])
     }
 
     public static let campaignPieces = 5
@@ -308,13 +336,20 @@ public enum CityFinale {
         probeWaveY + 0.5 * sin((Double.pi * 2 * (t - riseEnd)) / 1.6)
     }
 
-    public static func probe(_ t: Double, reducedMotion: Bool) -> Probe {
+    /// The probe's path. `climbTo` is the ledge it climbs to (the city's campaign index); with
+    /// `summit` it goes on to the top of the mountain.
+    public static func probe(_ t: Double, reducedMotion: Bool, climbTo: Int = 0, summit: Bool = false) -> Probe {
         let hidden = Probe(space: .hidden, x: 0, y: 0, alpha: 0)
         if reducedMotion {
             if t < gatherEnd || t >= end { return hidden }
-            let fadeIn = smooth01((t - gatherEnd) / 0.6)
-            let fadeOut = 1 - smooth01((t - molarEnd) / 0.8)
-            return Probe(space: .stage, x: 0, y: 0, alpha: fadeIn * fadeOut)
+            if t < molarEnd {
+                let fadeIn = smooth01((t - gatherEnd) / 0.6)
+                let fadeOut = 1 - smooth01((t - (molarEnd - 0.4)) / 0.4)
+                return Probe(space: .stage, x: 0, y: 0, alpha: fadeIn * fadeOut)
+            }
+            let at = ledge(summit ? campaignPieces : climbTo, t: t, reducedMotion: true)
+            let alpha = smooth01((t - molarEnd - 0.4) / 0.6) * (1 - smooth01((t - climbEnd) / 0.8))
+            return Probe(space: .stage, x: at.x, y: at.y, alpha: alpha)
         }
         if t < hushEnd { return hidden }
         if t < riseEnd {
@@ -343,12 +378,112 @@ public enum CityFinale {
             let s = smooth01((t - prizeEnd) / 0.8)
             return Probe(space: .stage, x: lerp(0, probePark.x, s), y: lerp(0, probePark.y, s) + bob, alpha: 1)
         }
-        if t < end {
-            let s = clamp((t - molarEnd) / (end - molarEnd), 0, 1)
-            let k = pow(s, 2.2)
-            return Probe(space: .stage, x: lerp(probePark.x, 0.25, k), y: lerp(probePark.y, 1.7, k), alpha: 1)
+        if t >= end { return hidden }
+        func climbAt(_ time: Double) -> FinalePoint {
+            let from = ledge(climbTo - 1, t: time, reducedMotion: false)
+            let to = ledge(climbTo, t: time, reducedMotion: false)
+            let hopStart = climbHop - 0.8
+            if time < hopStart {
+                let s = smooth01((time - molarEnd) / (hopStart - molarEnd))
+                return FinalePoint(x: lerp(probePark.x, from.x, s), y: lerp(probePark.y, from.y, s))
+            }
+            if time < climbHop {
+                let s = (time - hopStart) / 0.8
+                let e = smooth01(s)
+                return FinalePoint(x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e) + 0.22 * sin(Double.pi * s))
+            }
+            let summitStart = summitHop - 0.8
+            if !summit || time < summitStart { return to }
+            let top = ledge(campaignPieces, t: time, reducedMotion: false)
+            if time < summitHop {
+                let s = (time - summitStart) / 0.8
+                let e = smooth01(s)
+                return FinalePoint(x: lerp(to.x, top.x, e), y: lerp(to.y, top.y, e) + 0.22 * sin(Double.pi * s))
+            }
+            return top
         }
-        return hidden
+        if t < climbEnd {
+            let p = climbAt(t)
+            let hopping = (t >= climbHop - 0.8 && t < climbHop) || (summit && t >= summitHop - 0.8 && t < summitHop)
+            return Probe(space: .stage, x: p.x, y: p.y + (hopping ? 0 : bob), alpha: 1)
+        }
+        let start = climbAt(climbEnd)
+        let s = clamp((t - climbEnd) / (end - climbEnd), 0, 1)
+        let k = pow(s, 2.2)
+        return Probe(space: .stage, x: lerp(start.x, start.x + 0.25, k), y: lerp(start.y, 1.7, k), alpha: 1)
+    }
+
+    // MARK: - The climb
+
+    /// The mountain the cities climb, in stage units (before it rises into place).
+    public enum Mountain {
+        public static let outline: [FinalePoint] = [
+            FinalePoint(x: -1.5, y: -1.1),
+            FinalePoint(x: -1.0, y: -0.62),
+            FinalePoint(x: -0.78, y: -0.66),
+            FinalePoint(x: -0.42, y: -0.2),
+            FinalePoint(x: -0.2, y: 0.22),
+            FinalePoint(x: 0, y: 0.5),
+            FinalePoint(x: 0.18, y: 0.26),
+            FinalePoint(x: 0.4, y: -0.02),
+            FinalePoint(x: 0.58, y: -0.1),
+            FinalePoint(x: 0.98, y: -0.62),
+            FinalePoint(x: 1.5, y: -1.1),
+        ]
+        public static let snow: [FinalePoint] = [
+            FinalePoint(x: -0.2, y: 0.22),
+            FinalePoint(x: 0, y: 0.5),
+            FinalePoint(x: 0.18, y: 0.26),
+            FinalePoint(x: 0.08, y: 0.31),
+            FinalePoint(x: 0, y: 0.25),
+            FinalePoint(x: -0.1, y: 0.3),
+        ]
+        public static let ledges: [FinalePoint] = [
+            FinalePoint(x: -0.6, y: -0.74),
+            FinalePoint(x: 0.52, y: -0.5),
+            FinalePoint(x: -0.36, y: -0.24),
+            FinalePoint(x: 0.3, y: 0.0),
+            FinalePoint(x: -0.12, y: 0.24),
+        ]
+        public static let foot = FinalePoint(x: 0, y: -0.96)
+        public static let summitStand = FinalePoint(x: 0, y: 0.46)
+        public static let summit = FinalePoint(x: 0, y: 0.66)
+        public static let riseFrom = -1.9
+    }
+
+    /// The molar's size on the summit, relative to Molar.scale.
+    public static let molarOnSummit = 0.34
+
+    public static func mountain(_ t: Double, reducedMotion: Bool) -> (alpha: Double, dy: Double) {
+        if t < molarEnd { return (0, Mountain.riseFrom) }
+        let s = (t - molarEnd) / 0.8
+        if reducedMotion { return (smooth01(s), 0) }
+        return (smooth01(s * 1.5), Mountain.riseFrom * (1 - easeOutCubic(s)))
+    }
+
+    /// A ledge's place as the mountain rises: -1 is the foot, 0...4 the cities, 5 the summit.
+    public static func ledge(_ index: Int, t: Double, reducedMotion: Bool) -> FinalePoint {
+        let p = index < 0 ? Mountain.foot : (index >= campaignPieces ? Mountain.summitStand : Mountain.ledges[index])
+        return FinalePoint(x: p.x, y: p.y + mountain(t, reducedMotion: reducedMotion).dy)
+    }
+
+    /// How many cities are still to clean, and which comes next (campaign index, or -1).
+    public static func climbStatus(_ finishes: [MolarFinish]) -> (left: Int, next: Int) {
+        var left = 0
+        var next = -1
+        for i in 0..<campaignPieces {
+            if (i < finishes.count ? finishes[i] : .empty) == .empty {
+                left += 1
+                if next < 0 { next = i }
+            }
+        }
+        return (left, next)
+    }
+
+    /// The finishes the checksum uses: every city up to `slotIndex` cleaned (gold, silver, pearl in turn).
+    public static func checksumFinishes(_ slotIndex: Int) -> [MolarFinish] {
+        let cycle: [MolarFinish] = [.gold, .silver, .pearl]
+        return (0..<campaignPieces).map { $0 <= slotIndex ? cycle[$0 % 3] : .empty }
     }
 
     /// Radius of the city's piece while the probe holds it (stage units).
@@ -468,11 +603,21 @@ public enum CityFinale {
         return FinalePoint(x: center.x + c.x * scale, y: center.y + c.y * scale)
     }
 
-    public static func molar(_ t: Double, reducedMotion: Bool) -> (alpha: Double, scale: Double) {
-        if t < prizeEnd { return (0, 1) }
+    /// The molar: how visible, its size (multiplier on Molar.scale) and where its centre is.
+    public static func molar(_ t: Double, reducedMotion: Bool) -> (alpha: Double, scale: Double, x: Double, y: Double) {
+        let c = Molar.center
+        if t < prizeEnd { return (0, 1, c.x, c.y) }
         let s = (t - prizeEnd) / 0.5
-        if reducedMotion { return (smooth01(s), 1) }
-        return (smooth01(s), lerp(0.85, 1, backOut(s)))
+        let alpha = smooth01(s)
+        let popped = reducedMotion ? 1 : lerp(0.85, 1, backOut(s))
+        if t < molarEnd { return (alpha, popped, c.x, c.y) }
+        let top = Mountain.summit
+        if reducedMotion {
+            if t < molarEnd + 0.4 { return (1 - smooth01((t - molarEnd) / 0.4), 1, c.x, c.y) }
+            return (smooth01((t - molarEnd - 0.4) / 0.4), molarOnSummit, top.x, top.y)
+        }
+        let m = smooth01((t - molarEnd) / 0.8)
+        return (alpha, lerp(popped, molarOnSummit, m), lerp(c.x, top.x, m), lerp(c.y, top.y, m))
     }
 
     public static func slotShine(_ t: Double) -> Double {
@@ -674,8 +819,10 @@ public enum CityFinale {
 
     /// When each line of text is on screen: [from, to).
     public static let bubbleText = (from: 9.6, to: 12.9)
-    public static let cityText = (from: meet, to: end - 0.3)
-    public static let molarText = (from: slot, to: end - 0.3)
+    public static let cityText = (from: meet, to: molarEnd)
+    public static let molarText = (from: slot, to: molarEnd)
+    /// "2 more to the top" / "You made it to the top!", and the next city.
+    public static let climbText = (from: climbHop, to: end - 0.3)
 
     // MARK: - Music
 
@@ -697,9 +844,11 @@ public enum CityFinale {
         notes.enumerated().sorted { a, b in a.element.t == b.element.t ? a.offset < b.offset : a.element.t < b.element.t }.map(\.element)
     }
 
-    public static func notes(_ plan: CityFinalePlan, finish: MolarFinish, reducedMotion: Bool) -> [FinaleNote] {
+    public static func notes(_ plan: CityFinalePlan, finishes: [MolarFinish], slotIndex: Int, reducedMotion: Bool) -> [FinaleNote] {
         let tonic = plan.tonic
         let v = FinaleVoice(plan.voice)
+        let finish: MolarFinish = slotIndex >= 0 && slotIndex < finishes.count ? finishes[slotIndex] : .pearl
+        let atTop = climbStatus(finishes).left == 0
         var notes: [FinaleNote] = []
         func add(_ t: Double, _ voice: FinaleVoice, _ midi: Int, _ dur: Double, _ vel: Double, _ pan: Double = 0) {
             notes.append(FinaleNote(t: t, voice: voice, midi: midi, dur: dur, vel: vel, pan: pan))
@@ -782,10 +931,34 @@ public enum CityFinale {
             add(slot + 0.4, .bell, tonic + 24, 0.6, 0.38)
         }
 
-        if !reducedMotion { add(molarEnd + 0.05, .whoosh, tonic, 1.0, 0.5) }
-        for k in 0..<6 { add(molarEnd + 0.1 + 0.07 * Double(k), .bell, tonic + 12 + penta(k), 0.5, 0.35) }
-        for iv in [0, 4, 7, 11] { add(molarEnd + 0.8, v, tonic + iv, 1.6, 0.5) }
-        add(molarEnd + 0.8, .pad, tonic - 12, 1.8, 0.35)
+        // the climb: the mountain rises, each ledge rings (cities already cleaned ring brightly)
+        if !reducedMotion { add(molarEnd + 0.05, .whoosh, tonic, 0.9, 0.35) }
+        for k in 0..<campaignPieces {
+            let earned = (k < finishes.count ? finishes[k] : .empty) != .empty && k != slotIndex
+            add(molarEnd + 0.3 + 0.13 * Double(k), .bell, tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + Double(k) * 0.25)
+        }
+        for iv in [0, 4, 7] { add(molarEnd + 0.3, .pad, tonic - 12 + iv, 2.0, 0.22) }
+        if !reducedMotion { add(climbHop - 0.8, .whoosh, tonic, 0.7, 0.3) }
+        add(climbHop - 0.4, v, tonic + 7, 0.3, 0.45)
+        add(climbHop, .kick, tonic, 0.2, 0.4)
+        for iv in [7, 11, 14] { add(climbHop, v, tonic + iv, 0.9, 0.55) }
+        add(climbHop, .bell, tonic + 19, 0.8, 0.4)
+
+        if atTop {
+            if !reducedMotion { add(summitHop - 0.8, .whoosh, tonic, 0.7, 0.35) }
+            add(summitHop, .boom, tonic, 1.2, 0.6)
+            for (k, iv) in [12, 16, 19, 24].enumerated() { add(summitHop + 0.1 * Double(k), .bell, tonic + iv, k == 3 ? 1.4 : 0.3, 0.5) }
+            for iv in [0, 4, 7, 12] { add(summitHop + 0.4, v, tonic + iv, 2.2, 0.6) }
+            add(summitHop + 0.4, .pad, tonic - 12, 3.0, 0.4)
+            add(summitHop + 0.5, .sparkle, tonic, 0.9, 0.5)
+        }
+
+        // liftoff, on a chord that resolves only at the top; until then it hangs, not finished yet
+        if !reducedMotion { add(climbEnd + 0.05, .whoosh, tonic, 1.0, 0.5) }
+        for k in 0..<6 { add(climbEnd + 0.1 + 0.07 * Double(k), .bell, tonic + 12 + penta(k), 0.5, 0.35) }
+        let lastChord = atTop ? [0, 4, 7, 11, 14] : [5, 7, 12, 14]
+        for iv in lastChord { add(climbEnd + 0.6, v, tonic + iv, 1.8, 0.5) }
+        add(climbEnd + 0.6, .pad, tonic - (atTop ? 12 : 5), 2.0, 0.35)
 
         return sortedStable(notes)
     }
@@ -862,6 +1035,10 @@ public enum CityFinale {
         FinaleBurst(t: 2.3, x: 0.8, y: 1.0, kind: .peony, colorHex: 0xf472b6, color2Hex: 0xfde047),
         FinaleBurst(t: 3.0, x: -1.25, y: 0.9, kind: .ring, colorHex: 0x4ade80, color2Hex: 0xfde047),
         FinaleBurst(t: 3.7, x: 1.2, y: 0.4, kind: .peony, colorHex: 0xa78bfa, color2Hex: 0xf8fafc),
+        FinaleBurst(t: 4.4, x: -0.4, y: 1.1, kind: .ring, colorHex: 0xfde047, color2Hex: 0xf8fafc),
+        FinaleBurst(t: 5.0, x: 0.45, y: 1.15, kind: .willow, colorHex: 0xfef3c7, color2Hex: 0xfbbf24),
+        FinaleBurst(t: 5.6, x: -1.2, y: 0.35, kind: .peony, colorHex: 0xf87171, color2Hex: 0xfde047),
+        FinaleBurst(t: 6.2, x: 1.25, y: 0.9, kind: .ring, colorHex: 0x5eead4, color2Hex: 0xfde047),
     ]
     public static let endingBurstScale = 0.12
 
@@ -904,12 +1081,13 @@ public enum CityFinale {
         }
         for iv in [0, 4, 7, 11] { add(Ending.snap + 0.9, .pad, home + iv, 2.4, 0.3) }
         for (i, plan) in plans.enumerated() {
-            let at = Ending.creditsStart + Double(i) * Ending.creditSeconds + 0.3
-            for (k, step) in riff.prefix(8).enumerated() {
+            let at = Ending.creditsStart + Double(i) * Ending.creditSeconds + 0.5
+            for (k, step) in riff.enumerated() {
                 if let step { add(at + Double(k) * Self.step, FinaleVoice(plan.voice), plan.tonic + 12 + step, 0.3, 0.45) }
             }
-            add(at + 2.2, FinaleVoice(plan.voice), plan.tonic + 12, 1.0, 0.45)
-            add(at, .bass, plan.tonic - 24, 0.8, 0.4)
+            add(at + Double(riff.count) * Self.step + 0.2, FinaleVoice(plan.voice), plan.tonic + 12, 1.6, 0.45)
+            add(at + Double(riff.count) * Self.step + 0.2, .bell, plan.tonic + 24, 1.2, 0.3)
+            for k in 0..<6 { add(at + Double(k), .bass, plan.tonic - 24 + (k % 2 == 0 ? 0 : 7), 0.8, 0.4) }
         }
         add(Ending.finaleStart, .boom, home, 1.2, 0.55)
         for iv in [0, 4, 7, 12] { add(Ending.finaleStart + 0.1, .rhodes, home + iv, 2.2, 0.5) }
@@ -944,14 +1122,23 @@ public enum CityFinale {
         var sum = 0.0
         let layers: [FinaleLayer] = [.light, .scenery, .sky]
         let targets = emblemTargets(emblem)
+        // Cities up to this one cleaned (so the last one climbs to the top), the rest still to do.
+        let finishes = checksumFinishes(slotIndex)
+        let atTop = climbStatus(finishes).left == 0
         var t = 0.0
         while t <= end {
-            let p = probe(t, reducedMotion: reducedMotion)
+            let p = probe(t, reducedMotion: reducedMotion, climbTo: slotIndex, summit: atTop)
             sum += p.x * 1.1 + p.y * 1.3 + p.alpha
             let pc = piece(t, slotIndex: slotIndex, reducedMotion: reducedMotion)
             sum += pc.x + pc.y * 1.7 + pc.scale + pc.spin * 0.1 + pc.glow + pc.alpha
             let m = molar(t, reducedMotion: reducedMotion)
-            sum += m.alpha + m.scale
+            sum += m.alpha + m.scale + m.x * 0.7 + m.y * 0.9
+            let mt = mountain(t, reducedMotion: reducedMotion)
+            sum += mt.alpha + mt.dy * 0.3
+            for i in -1...campaignPieces {
+                let l = ledge(i, t: t, reducedMotion: reducedMotion)
+                sum += l.x * 0.05 + l.y * 0.07
+            }
             let cam = camera(t, reducedMotion: reducedMotion)
             sum += cam.cx * 0.01 + cam.viewW * 0.01
             for cx in [-2.0, 10, 30, 50, 66] {
@@ -981,8 +1168,11 @@ public enum CityFinale {
         }
         for target in targets { sum += target.x * 0.5 + target.y * 0.25 + Double(target.colorHex % 997) * 0.001 }
         for finish in [MolarFinish.empty, .pearl, .silver, .gold] {
-            sum += sumNotes(notes(plan, finish: finish, reducedMotion: reducedMotion)) * 0.001
+            let withFinish = finishes.enumerated().map { $0.offset == slotIndex ? finish : $0.element }
+            sum += sumNotes(notes(plan, finishes: withFinish, slotIndex: slotIndex, reducedMotion: reducedMotion)) * 0.001
         }
+        let status = climbStatus(finishes)
+        sum += Double(status.left) * 3 + Double(status.next) * 5
         return (sum * 1000).rounded() / 1000
     }
 

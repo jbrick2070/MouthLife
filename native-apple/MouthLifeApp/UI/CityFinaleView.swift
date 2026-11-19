@@ -157,30 +157,55 @@ final class FinaleClock {
     let notes: [FinaleNote]
     let cityLength: Double
     let total: Double
+    let worldIndex: Int
+    /// Whose song is playing: the city's campaign index, -1 for the ending, nil for none.
+    private var trackPart: Int?
     var onDone: () -> Void = {}
 
     init(request: CityFinaleRequest) {
         let hasCity = request.kind != .ending
         let hasEnding = request.kind != .city
+        worldIndex = request.worldIndex
         cityLength = hasCity ? CityFinale.end : 0
         total = cityLength + (hasEnding ? CityFinale.Ending.end : 0)
+        // With a recorded song for a part, only the score's sound effects play over it.
+        let cityHasTrack = hasCity && NativeSoundEngine.shared.hasFinaleTrack(request.worldIndex)
+        let endingHasTrack = hasEnding && NativeSoundEngine.shared.hasFinaleTrack(-1)
         var all: [FinaleNote] = []
         if hasCity, let city = FinaleModels.city(request.worldIndex) {
-            let finish = request.worldIndex < request.finishes.count ? request.finishes[request.worldIndex] : .pearl
-            all += CityFinale.notes(city.plan, finish: finish, reducedMotion: request.reducedMotion)
+            all += CityFinale.notes(city.plan, finishes: request.finishes, slotIndex: request.worldIndex, reducedMotion: request.reducedMotion)
+                .filter { !cityHasTrack || CityFinale.effectVoices.contains($0.voice) }
         }
         if hasEnding {
             let allGold = request.finishes.count == CityFinale.campaignPieces && request.finishes.allSatisfy { $0 == .gold }
             let offset = cityLength
-            all += CityFinale.endingNotes(CityFinale.campaignPlans(), allGold: allGold).map {
-                FinaleNote(t: $0.t + offset, voice: $0.voice, midi: $0.midi, dur: $0.dur, vel: $0.vel, pan: $0.pan)
-            }
+            all += CityFinale.endingNotes(CityFinale.campaignPlans(), allGold: allGold)
+                .filter { !endingHasTrack || CityFinale.effectVoices.contains($0.voice) }
+                .map { FinaleNote(t: $0.t + offset, voice: $0.voice, midi: $0.midi, dur: $0.dur, vel: $0.vel, pan: $0.pan) }
         }
         notes = all.enumerated().sorted { a, b in a.element.t == b.element.t ? a.offset < b.offset : a.element.t < b.element.t }.map(\.element)
     }
 
     func time(at date: Date) -> Double {
         date.timeIntervalSince(start)
+    }
+
+    /// The show starts now: its clock, and its song (the city's, or the ending's).
+    func begin() {
+        start = Date()
+        lastT = -1
+        startTrack(cityLength > 0 ? worldIndex : -1, offset: 0)
+    }
+
+    private func startTrack(_ part: Int, offset: Double) {
+        guard trackPart != part else { return }
+        trackPart = part
+        NativeSoundEngine.shared.playFinaleTrack(part, offset: offset)
+    }
+
+    func stopTrack() {
+        trackPart = nil
+        NativeSoundEngine.shared.stopFinaleTrack()
     }
 
     func skipAfter(at t: Double) -> Double {
@@ -208,6 +233,10 @@ final class FinaleClock {
                 if n.voice == .marimba { HapticsEngine.shared.playFinaleTap(intensity: 0.85, sharpness: 0.85) }
             }
         }
+        // the last city's song hands over to the ending's
+        if trackPart == worldIndex, cityLength > 0, total > cityLength, t >= cityLength {
+            startTrack(-1, offset: t - cityLength)
+        }
         lastT = t
     }
 
@@ -218,6 +247,7 @@ final class FinaleClock {
             start = date.addingTimeInterval(-cityLength)
             lastT = cityLength
             while noteIdx < notes.count && notes[noteIdx].t < cityLength { noteIdx += 1 }
+            startTrack(-1, offset: 0)
             return
         }
         finish()
@@ -226,6 +256,7 @@ final class FinaleClock {
     private func finish() {
         guard !finished else { return }
         finished = true
+        stopTrack()
         onDone()
     }
 }
@@ -274,6 +305,10 @@ public struct CityFinaleView: View {
         .onAppear {
             clock.onDone = onDone
             NativeSoundEngine.shared.setFinaleDucked(true)
+            clock.begin()
+        }
+        .onDisappear {
+            clock.stopTrack()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(L10n.t(request.kind == .ending ? "The Golden Molar" : (FinaleModels.city(request.worldIndex)?.cityName ?? ""))))
@@ -362,7 +397,8 @@ public struct CityFinaleView: View {
                     }
                     .frame(width: lineWidth)
                     .shadow(color: .black.opacity(0.7), radius: 10, y: 2)
-                    .padding(.top, size.height * 0.3)
+                    // just under the small molar at the top (on a tall phone that is lower than 30% down)
+                    .padding(.top, max(size.height * 0.3, painter.sy(0.44) + 8))
                     .opacity(credit.alpha)
                     .allowsHitTesting(false)
                 }
@@ -390,6 +426,37 @@ public struct CityFinaleView: View {
                 .multilineTextAlignment(.center)
                 .frame(width: lineWidth)
                 .shadow(color: .black.opacity(0.6), radius: 10, y: 2)
+                .padding(.bottom, max(28, size.height * 0.07) + insets.bottom)
+                .allowsHitTesting(false)
+            }
+            }
+            .overlay(alignment: .bottom) {
+            if inCity {
+                let status = CityFinale.climbStatus(request.finishes)
+                let line = status.left == 0
+                    ? L10n.t("You made it to the top!")
+                    : (status.left == 1 ? L10n.t("One more to the top!") : L10n.t("\(status.left) more to the top"))
+                VStack(spacing: 6) {
+                    Text(line)
+                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .foregroundStyle(Color(red: 0.99, green: 0.9, blue: 0.54))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color(red: 0.01, green: 0.02, blue: 0.09).opacity(0.62)))
+                        .opacity(fade(true, from: CityFinale.climbText.from, to: CityFinale.climbText.to, t: t))
+                    if status.left > 0, status.next >= 0, let next = FinaleModels.city(status.next) {
+                        Text(L10n.t("Next stop: \(L10n.t(next.cityName))"))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.89, green: 0.91, blue: 0.94))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color(red: 0.01, green: 0.02, blue: 0.09).opacity(0.55)))
+                            .opacity(fade(true, from: CityFinale.climbText.from + 0.5, to: CityFinale.climbText.to, t: t))
+                    }
+                }
+                .frame(width: lineWidth)
                 .padding(.bottom, max(28, size.height * 0.07) + insets.bottom)
                 .allowsHitTesting(false)
             }
@@ -453,6 +520,8 @@ struct FinalePainter {
     var rm: Bool { request.reducedMotion }
     var city: FinaleCityModel? { request.kind == .ending ? nil : FinaleModels.city(request.worldIndex) }
     var allGold: Bool { request.finishes.count == CityFinale.campaignPieces && request.finishes.allSatisfy { $0 == .gold } }
+    /// Every city is clean once this one is: the probe climbs to the top.
+    var atTop: Bool { CityFinale.climbStatus(request.finishes).left == 0 }
     var hostOnLeft: Bool { city?.plan.hostOnLeft ?? true }
 
     func finish(_ i: Int) -> MolarFinish {
@@ -768,51 +837,99 @@ struct FinalePainter {
         }
     }
 
-    func paintRays(_ ctx: inout GraphicsContext, x: Double, y: Double, radius: Double, t: Double) {
+    /// The mountain the campaign climbs: a ledge per city with its coin once cleaned, a path that
+    /// turns gold as far as the player has climbed, and the Golden Molar waiting on the peak.
+    func paintMountain(_ ctx: inout GraphicsContext, t: Double) {
+        let m = CityFinale.mountain(t, reducedMotion: rm)
+        guard m.alpha > 0.01 else { return }
+        func X(_ x: Double) -> Double { sx(x) }
+        func Y(_ y: Double) -> Double { sy(y + m.dy) }
+        let topReached = atTop && t >= CityFinale.summitHop
+        let blaze = topReached ? min(1, 0.6 + exp(-(t - CityFinale.summitHop) / 0.5)) : 0.35 + (rm ? 0 : 0.1 * sin(t * 3))
+        paintGlow(
+            &ctx,
+            x: X(CityFinale.Mountain.summit.x),
+            y: Y(CityFinale.Mountain.summit.y),
+            radius: (topReached ? 0.9 : 0.5) * unit,
+            color: Color(red: 0.99, green: 0.9, blue: 0.54).opacity(0.55),
+            alpha: m.alpha * blaze
+        )
         var c = ctx
-        c.opacity = 0.28
-        c.concatenate(CGAffineTransform(translationX: x, y: y).rotated(by: t * 0.6))
-        for k in 0..<12 {
-            var ray = Path()
-            ray.move(to: .zero)
-            ray.addLine(to: CGPoint(x: radius, y: -radius * 0.09))
-            ray.addLine(to: CGPoint(x: radius, y: radius * 0.09))
-            ray.closeSubpath()
-            c.fill(ray.applying(CGAffineTransform(rotationAngle: Double(k + 1) * Double.pi * 2 / 12)), with: .color(Color(red: 0.99, green: 0.9, blue: 0.54)))
+        c.opacity = m.alpha
+        var body = Path()
+        for (i, p) in CityFinale.Mountain.outline.enumerated() {
+            if i == 0 { body.move(to: CGPoint(x: X(p.x), y: Y(p.y))) } else { body.addLine(to: CGPoint(x: X(p.x), y: Y(p.y))) }
+        }
+        body.closeSubpath()
+        c.fill(body, with: .linearGradient(
+            Gradient(stops: [
+                .init(color: Color(red: 0.36, green: 0.42, blue: 0.55), location: 0),
+                .init(color: Color(red: 0.15, green: 0.2, blue: 0.3), location: 0.45),
+                .init(color: Color(red: 0.04, green: 0.07, blue: 0.13), location: 1),
+            ]),
+            startPoint: CGPoint(x: 0, y: Y(0.5)),
+            endPoint: CGPoint(x: 0, y: Y(-1.1))
+        ))
+        c.stroke(body, with: .color(Color(red: 0.8, green: 0.84, blue: 0.88).opacity(0.45)), lineWidth: max(1.5, unit * 0.008))
+        var snow = Path()
+        for (i, p) in CityFinale.Mountain.snow.enumerated() {
+            if i == 0 { snow.move(to: CGPoint(x: X(p.x), y: Y(p.y))) } else { snow.addLine(to: CGPoint(x: X(p.x), y: Y(p.y))) }
+        }
+        snow.closeSubpath()
+        c.fill(snow, with: .color(Color(red: 0.89, green: 0.91, blue: 0.94)))
+
+        let here = request.worldIndex
+        func earned(_ i: Int) -> Bool { i == here ? t >= CityFinale.climbHop : finish(i) != .empty }
+        let stops = [CityFinale.Mountain.foot] + CityFinale.Mountain.ledges + [CityFinale.Mountain.summitStand]
+        for k in 0..<(stops.count - 1) {
+            let done = k < CityFinale.campaignPieces ? earned(k) : topReached
+            var seg = Path()
+            seg.move(to: CGPoint(x: X(stops[k].x), y: Y(stops[k].y)))
+            seg.addLine(to: CGPoint(x: X(stops[k + 1].x), y: Y(stops[k + 1].y)))
+            c.stroke(
+                seg,
+                with: .color(done ? Color(red: 0.98, green: 0.75, blue: 0.14) : Color(red: 0.89, green: 0.91, blue: 0.94).opacity(0.45)),
+                style: StrokeStyle(
+                    lineWidth: max(2, unit * (done ? 0.014 : 0.009)),
+                    lineCap: .round,
+                    dash: done ? [] : [max(2, unit * 0.012), max(3, unit * 0.02)]
+                )
+            )
+        }
+
+        let coinR = 0.072 * unit
+        for (i, p) in CityFinale.Mountain.ledges.enumerated() {
+            c.fill(
+                Path(ellipseIn: CGRect(x: X(p.x) - unit * 0.1, y: Y(p.y) + unit * 0.075 - unit * 0.025, width: unit * 0.2, height: unit * 0.05)),
+                with: .color(earned(i) ? Color(red: 0.99, green: 0.9, blue: 0.54) : Color(red: 0.28, green: 0.33, blue: 0.41))
+            )
+            let side: Double = p.x < 0 ? -1 : 1
+            let cx = X(p.x + side * 0.17)
+            let cy = Y(p.y + 0.02)
+            if earned(i) {
+                let pop: Double
+                if i == here && !rm {
+                    let u = max(0, min(1, (t - CityFinale.climbHop) / 0.35)) - 1
+                    pop = 1 + 2.7 * u * u * u + 1.7 * u * u
+                } else {
+                    pop = 1
+                }
+                paintPiece(&ctx, FinaleModels.city(i), finish: finish(i) == .empty ? .pearl : finish(i), x: cx, y: cy, radius: coinR * pop, alpha: m.alpha)
+            } else {
+                c.stroke(
+                    Path(ellipseIn: CGRect(x: cx - coinR * 0.9, y: cy - coinR * 0.9, width: coinR * 1.8, height: coinR * 1.8)),
+                    with: .color(Color(red: 0.89, green: 0.91, blue: 0.94).opacity(0.5)),
+                    style: StrokeStyle(lineWidth: max(1, coinR * 0.12), dash: [max(2, coinR * 0.25), max(2, coinR * 0.2)])
+                )
+            }
         }
     }
 
-    func fillScreen(_ ctx: inout GraphicsContext, color: Color, alpha: Double) {
-        guard alpha > 0.01 else { return }
-        var c = ctx
-        c.opacity = alpha
-        c.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .color(color))
-    }
-
-    // MARK: The city finale
-
-    func drawCity(_ ctx: inout GraphicsContext, t: Double) {
-        guard let city else { return }
+    /// A city's celebration over its skyline: fireworks and its own special (beads, balloons, shooting stars).
+    func paintShow(_ ctx: inout GraphicsContext, _ city: FinaleCityModel, view: CityView, showT: Double, dim: Double) {
         let plan = city.plan
-        paintSky(&ctx, t: t)
-        let cam = CityFinale.camera(t, reducedMotion: rm)
-        let view = cityView(cx: cam.cx, viewW: cam.viewW)
-        let showT = t - CityFinale.blazeEnd
-        paintCity(
-            &ctx,
-            city,
-            view: view,
-            tint: { run in CityFinale.cityTint(t, cx: run.cx, layer: run.layer, show: plan.show, reducedMotion: rm) },
-            motionTime: { run in
-                if rm { return nil }
-                let pass = CityFinale.passTime(run.cx, reducedMotion: false)
-                return t > pass ? t - pass : nil
-            }
-        )
         func toX(_ x: Double) -> Double { view.ox + x * view.s }
         func toY(_ y: Double) -> Double { view.oy - y * view.s }
-        let dim = CityFinale.backdropDim(t)
-
         if showT >= 0 {
             switch plan.show {
             case .beads:
@@ -865,26 +982,80 @@ struct FinalePainter {
                 }
             }
         }
+    }
 
-        // the probe, with a short trail
-        let probe = CityFinale.probe(t, reducedMotion: rm)
-        if probe.space != .hidden {
-            func toScreen(_ p: CityFinale.Probe) -> CGPoint {
-                p.space == .city ? CGPoint(x: toX(p.x), y: toY(p.y)) : CGPoint(x: sx(p.x), y: sy(p.y))
-            }
-            let radius = probe.space == .city ? 0.42 * view.s : 0.075 * unit
-            if !rm {
-                for k in stride(from: 8, through: 1, by: -1) {
-                    let past = CityFinale.probe(t - Double(k) * 0.035, reducedMotion: rm)
-                    if past.space != probe.space { continue }
-                    let p = toScreen(past)
-                    let r = radius * (0.6 - Double(k) * 0.04)
-                    ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(Color(red: 0.37, green: 0.92, blue: 0.83).opacity(0.5 * (1 - Double(k) / 9))))
-                }
-            }
-            let p = toScreen(probe)
-            paintProbe(&ctx, x: p.x, y: p.y, radius: radius, alpha: probe.alpha, t: t)
+    func paintRays(_ ctx: inout GraphicsContext, x: Double, y: Double, radius: Double, t: Double) {
+        var c = ctx
+        c.opacity = 0.28
+        c.concatenate(CGAffineTransform(translationX: x, y: y).rotated(by: t * 0.6))
+        for k in 0..<12 {
+            var ray = Path()
+            ray.move(to: .zero)
+            ray.addLine(to: CGPoint(x: radius, y: -radius * 0.09))
+            ray.addLine(to: CGPoint(x: radius, y: radius * 0.09))
+            ray.closeSubpath()
+            c.fill(ray.applying(CGAffineTransform(rotationAngle: Double(k + 1) * Double.pi * 2 / 12)), with: .color(Color(red: 0.99, green: 0.9, blue: 0.54)))
         }
+    }
+
+    func fillScreen(_ ctx: inout GraphicsContext, color: Color, alpha: Double) {
+        guard alpha > 0.01 else { return }
+        var c = ctx
+        c.opacity = alpha
+        c.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)), with: .color(color))
+    }
+
+    // MARK: The city finale
+
+    func drawCity(_ ctx: inout GraphicsContext, t: Double) {
+        guard let city else { return }
+        let plan = city.plan
+        paintSky(&ctx, t: t)
+        let cam = CityFinale.camera(t, reducedMotion: rm)
+        let view = cityView(cx: cam.cx, viewW: cam.viewW)
+        let showT = t - CityFinale.blazeEnd
+        paintCity(
+            &ctx,
+            city,
+            view: view,
+            tint: { run in CityFinale.cityTint(t, cx: run.cx, layer: run.layer, show: plan.show, reducedMotion: rm) },
+            motionTime: { run in
+                if rm { return nil }
+                let pass = CityFinale.passTime(run.cx, reducedMotion: false)
+                return t > pass ? t - pass : nil
+            }
+        )
+        func toX(_ x: Double) -> Double { view.ox + x * view.s }
+        func toY(_ y: Double) -> Double { view.oy - y * view.s }
+        let dim = CityFinale.backdropDim(t)
+
+        paintShow(&ctx, city, view: view, showT: showT, dim: rm ? 0 : dim)
+
+        // the mountain the cities climb
+        paintMountain(&ctx, t: t)
+
+        // the probe, with a short trail (in front of the molar once it lifts off from the summit)
+        func drawProbe(_ ctx: inout GraphicsContext) {
+            let probe = CityFinale.probe(t, reducedMotion: rm, climbTo: request.worldIndex, summit: atTop)
+            if probe.space != .hidden {
+                func toScreen(_ p: CityFinale.Probe) -> CGPoint {
+                    p.space == .city ? CGPoint(x: toX(p.x), y: toY(p.y)) : CGPoint(x: sx(p.x), y: sy(p.y))
+                }
+                let radius = probe.space == .city ? 0.42 * view.s : 0.075 * unit
+                if !rm {
+                    for k in stride(from: 8, through: 1, by: -1) {
+                        let past = CityFinale.probe(t - Double(k) * 0.035, reducedMotion: rm, climbTo: request.worldIndex, summit: atTop)
+                        if past.space != probe.space { continue }
+                        let p = toScreen(past)
+                        let r = radius * (0.6 - Double(k) * 0.04)
+                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(Color(red: 0.37, green: 0.92, blue: 0.83).opacity(0.5 * (1 - Double(k) / 9))))
+                    }
+                }
+                let p = toScreen(probe)
+                paintProbe(&ctx, x: p.x, y: p.y, radius: radius, alpha: probe.alpha, t: t)
+            }
+        }
+        if t < CityFinale.climbEnd { drawProbe(&ctx) }
 
         let host = CityFinale.host(t, reducedMotion: rm)
         paintHost(&ctx, city, onLeft: plan.hostOnLeft, rise: host.rise, wave: host.wave)
@@ -914,8 +1085,8 @@ struct FinalePainter {
         let molar = CityFinale.molar(t, reducedMotion: rm)
         let finishHere = finish(request.worldIndex)
         if molar.alpha > 0 {
-            let center = CityFinale.Molar.center
-            paintGlow(&ctx, x: sx(center.x), y: sy(center.y), radius: 1.1 * unit, color: Color(red: 0.99, green: 0.9, blue: 0.54).opacity(0.22), alpha: molar.alpha)
+            let center = FinalePoint(x: molar.x, y: molar.y)
+            paintGlow(&ctx, x: sx(center.x), y: sy(center.y), radius: 1.1 * molar.scale * unit, color: Color(red: 0.99, green: 0.9, blue: 0.54).opacity(0.22), alpha: molar.alpha)
             paintMolar(
                 &ctx,
                 cx: center.x,
@@ -939,6 +1110,8 @@ struct FinalePainter {
             paintPiece(&ctx, city, finish: finishHere, x: px, y: py, radius: r, spin: piece.spin, alpha: piece.alpha)
         }
 
+        if t >= CityFinale.climbEnd { drawProbe(&ctx) }
+
         let flash = t >= CityFinale.meet && !rm ? exp(-(t - CityFinale.meet) / 0.12) * 0.7 : 0
         let endingFollows = clock.total > clock.cityLength
         let toLight = endingFollows ? 0 : CityFinale.smooth01((t - (CityFinale.end - 0.8)) / 0.8)
@@ -958,6 +1131,8 @@ struct FinalePainter {
             let within = t - E.creditsStart - Double(credit.index) * E.creditSeconds
             let view = cityView(cx: rm ? 32 : 29 + within * 1.5, viewW: 64)
             paintCity(&ctx, c, view: view, tint: { _ in (credit.alpha, 0) }, motionTime: { _ in rm ? nil : t })
+            // each city's own celebration plays again under its credit
+            paintShow(&ctx, c, view: view, showT: within - 0.6, dim: rm ? 0 : credit.alpha)
             paintHost(&ctx, c, onLeft: c.plan.hostOnLeft, rise: credit.alpha, wave: rm ? 0 : 0.5 * sin(Double.pi * 2 * 1.4 * t))
         }
 

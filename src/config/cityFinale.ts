@@ -14,7 +14,15 @@
  *   gather    the sparks pull together into the city's piece of the Golden Molar
  *   prize     the probe rises to meet it and holds it up, to a fanfare
  *   molar     the piece clicks into its place in the Golden Molar, in pearl, silver or gold
+ *   climb     a mountain rises with a ledge per city and the Golden Molar on its summit; the probe
+ *             hops up to its new ledge ("2 more to the top") and the music stops on a chord that
+ *             is not finished yet. The city that completes the set climbs all the way to the top.
  *   liftoff   the probe flies off, and the score follows
+ *
+ * Exact lengths, so a recorded song can be made to fit: a city's finale is 30 s, the ending 60 s.
+ * A song dropped into the music folder (FINALE_TRACK_CANDIDATES) plays in place of the score's
+ * instruments, starting the moment the last zone seals; the score's effects (booms, whistles,
+ * sparkles) still play over it.
  *
  * A lower first molar has five cusps: one per city. The finish of each piece follows the city's best
  * grade, so a replay can turn a pearl piece silver or gold. Sealing all five plays the ending (see
@@ -51,8 +59,14 @@ export const FINALE_TIMES = {
   meet: 17.9,
   prizeEnd: 19.7,
   slot: 20.9,
-  molarEnd: 23.2,
-  end: 25.0,
+  /** The molar moves to the top of the mountain as it rises. */
+  molarEnd: 22.6,
+  /** The probe lands on its new ledge. */
+  climbHop: 24.6,
+  /** ...and, for the city that completes the set, on the summit. */
+  summitHop: 25.8,
+  climbEnd: 27.4,
+  end: 30.0,
   /** The Skip button appears after this. */
   skipAfter: 1.5,
 } as const;
@@ -61,17 +75,48 @@ export const FINALE_TIMES = {
 export const ENDING_TIMES = {
   fadeEnd: 1.0,
   firstPiece: 1.5,
-  pieceGap: 1.0,
-  pieceFlight: 0.9,
-  snap: 6.5,
-  creditsStart: 9.0,
-  creditSeconds: 4.0,
-  finaleStart: 29.0,
-  face: 31.0,
-  wink: 32.4,
-  end: 36.0,
+  pieceGap: 1.2,
+  pieceFlight: 1.0,
+  snap: 8.0,
+  creditsStart: 11.0,
+  creditSeconds: 8.0,
+  finaleStart: 51.0,
+  face: 53.5,
+  wink: 55.0,
+  end: 60.0,
   skipAfter: 1.0,
 } as const;
+
+/**
+ * Songs for the finales, by file name without extension, from the shared music folder
+ * (native-apple/MouthLifeApp/Music). First match wins; nothing falls back to another song.
+ */
+export const FINALE_TRACK_CANDIDATES: readonly (readonly string[])[] = [
+  ['finale_toronto', 'finale_world_1'],
+  ['finale_new_orleans', 'finale_nola', 'finale_world_2'],
+  ['finale_tokyo', 'finale_tokyo_chicago', 'finale_world_3'],
+  ['finale_accra', 'finale_accra_colorado', 'finale_world_4'],
+  ['finale_aurora', 'finale_orbit', 'finale_world_5'],
+];
+export const ENDING_TRACK_CANDIDATES: readonly string[] = ['finale_ending', 'grand_finale', 'ending'];
+/** Score voices that still play over a recorded song: the show's sound effects. */
+export const FINALE_EFFECT_VOICES: readonly string[] = ['whistle', 'boom', 'sparkle', 'whoosh'];
+
+/** The bundled song for a city's finale (index 0..4) or the ending (index -1), or null. */
+export function resolveFinaleTrack(index: number, files: readonly string[]): string | null {
+  const stems = index < 0 ? ENDING_TRACK_CANDIDATES : FINALE_TRACK_CANDIDATES[index] ?? [];
+  const order = ['m4a', 'mp3', 'aac', 'wav', 'ogg'];
+  for (const stem of stems) {
+    const hits = files.filter((f) => {
+      const dot = f.lastIndexOf('.');
+      return dot > 0 && f.slice(0, dot).toLowerCase() === stem && order.includes(f.slice(dot + 1).toLowerCase());
+    });
+    if (hits.length) {
+      return hits.sort((a, b) => order.indexOf(a.slice(a.lastIndexOf('.') + 1).toLowerCase()) - order.indexOf(b.slice(b.lastIndexOf('.') + 1).toLowerCase()))[0];
+    }
+  }
+  return null;
+}
 
 export const CAMPAIGN_PIECES = 5;
 
@@ -225,13 +270,22 @@ function probeWaveY(t: number): number {
 /** Where the probe hovers while the molar fills. */
 export const PROBE_PARK = { x: 0, y: -0.78 };
 
-export function finaleProbe(t: number, reducedMotion: boolean): FinaleProbe {
+/**
+ * The probe's path. `climbTo` is the ledge it climbs to (the city's campaign index); with
+ * `summit` it goes on to the top of the mountain (the city that completes the set).
+ */
+export function finaleProbe(t: number, reducedMotion: boolean, climbTo = 0, summit = false): FinaleProbe {
   const T = FINALE_TIMES;
   if (reducedMotion) {
     if (t < T.gatherEnd || t >= T.end) return { space: 'hidden', x: 0, y: 0, alpha: 0 };
-    const fadeIn = smooth01((t - T.gatherEnd) / 0.6);
-    const fadeOut = 1 - smooth01((t - T.molarEnd) / 0.8);
-    return { space: 'stage', x: 0, y: 0, alpha: fadeIn * fadeOut };
+    if (t < T.molarEnd) {
+      const fadeIn = smooth01((t - T.gatherEnd) / 0.6);
+      const fadeOut = 1 - smooth01((t - (T.molarEnd - 0.4)) / 0.4);
+      return { space: 'stage', x: 0, y: 0, alpha: fadeIn * fadeOut };
+    }
+    const at = finaleLedge(summit ? CAMPAIGN_PIECES : climbTo, t, true);
+    const alpha = smooth01((t - T.molarEnd - 0.4) / 0.6) * (1 - smooth01((t - T.climbEnd) / 0.8));
+    return { space: 'stage', x: at.x, y: at.y, alpha };
   }
   if (t < T.hushEnd) return { space: 'hidden', x: 0, y: 0, alpha: 0 };
   if (t < T.riseEnd) {
@@ -260,12 +314,100 @@ export function finaleProbe(t: number, reducedMotion: boolean): FinaleProbe {
     const s = smooth01((t - T.prizeEnd) / 0.8);
     return { space: 'stage', x: lerp(0, PROBE_PARK.x, s), y: lerp(0, PROBE_PARK.y, s) + bob, alpha: 1 };
   }
-  if (t < T.end) {
-    const s = clamp((t - T.molarEnd) / (T.end - T.molarEnd), 0, 1);
-    const k = Math.pow(s, 2.2);
-    return { space: 'stage', x: lerp(PROBE_PARK.x, 0.25, k), y: lerp(PROBE_PARK.y, 1.7, k), alpha: 1 };
+  if (t >= T.end) return { space: 'hidden', x: 0, y: 0, alpha: 0 };
+  const climbAt = (time: number): { x: number; y: number } => {
+    const from = finaleLedge(climbTo - 1, time, false);
+    const to = finaleLedge(climbTo, time, false);
+    const hopStart = T.climbHop - 0.8;
+    if (time < hopStart) {
+      const s = smooth01((time - T.molarEnd) / (hopStart - T.molarEnd));
+      return { x: lerp(PROBE_PARK.x, from.x, s), y: lerp(PROBE_PARK.y, from.y, s) };
+    }
+    if (time < T.climbHop) {
+      const s = (time - hopStart) / 0.8;
+      const e = smooth01(s);
+      return { x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e) + 0.22 * Math.sin(Math.PI * s) };
+    }
+    const summitStart = T.summitHop - 0.8;
+    if (!summit || time < summitStart) return to;
+    const top = finaleLedge(CAMPAIGN_PIECES, time, false);
+    if (time < T.summitHop) {
+      const s = (time - summitStart) / 0.8;
+      const e = smooth01(s);
+      return { x: lerp(to.x, top.x, e), y: lerp(to.y, top.y, e) + 0.22 * Math.sin(Math.PI * s) };
+    }
+    return top;
+  };
+  if (t < T.climbEnd) {
+    const p = climbAt(t);
+    const hopping = (t >= T.climbHop - 0.8 && t < T.climbHop) || (summit && t >= T.summitHop - 0.8 && t < T.summitHop);
+    return { space: 'stage', x: p.x, y: p.y + (hopping ? 0 : bob), alpha: 1 };
   }
-  return { space: 'hidden', x: 0, y: 0, alpha: 0 };
+  const start = climbAt(T.climbEnd);
+  const s = clamp((t - T.climbEnd) / (T.end - T.climbEnd), 0, 1);
+  const k = Math.pow(s, 2.2);
+  return { space: 'stage', x: lerp(start.x, start.x + 0.25, k), y: lerp(start.y, 1.7, k), alpha: 1 };
+}
+
+// ------------------------------------------------------------------ the climb
+
+/**
+ * The mountain the cities climb, in stage units (before it rises into place): a ledge per city,
+ * Toronto at the foot, and the Golden Molar on the peak.
+ */
+export const MOUNTAIN = {
+  outline: [
+    { x: -1.5, y: -1.1 },
+    { x: -1.0, y: -0.62 },
+    { x: -0.78, y: -0.66 },
+    { x: -0.42, y: -0.2 },
+    { x: -0.2, y: 0.22 },
+    { x: 0, y: 0.5 },
+    { x: 0.18, y: 0.26 },
+    { x: 0.4, y: -0.02 },
+    { x: 0.58, y: -0.1 },
+    { x: 0.98, y: -0.62 },
+    { x: 1.5, y: -1.1 },
+  ],
+  snow: [
+    { x: -0.2, y: 0.22 },
+    { x: 0, y: 0.5 },
+    { x: 0.18, y: 0.26 },
+    { x: 0.08, y: 0.31 },
+    { x: 0, y: 0.25 },
+    { x: -0.1, y: 0.3 },
+  ],
+  ledges: [
+    { x: -0.6, y: -0.74 },
+    { x: 0.52, y: -0.5 },
+    { x: -0.36, y: -0.24 },
+    { x: 0.3, y: 0.0 },
+    { x: -0.12, y: 0.24 },
+  ],
+  /** Where the probe waits before the first city. */
+  foot: { x: 0, y: -0.96 },
+  /** Where the probe stands at the top, and where the molar sits above it. */
+  summitStand: { x: 0, y: 0.46 },
+  summit: { x: 0, y: 0.66 },
+  /** How far below its place the mountain starts as it rises. */
+  riseFrom: -1.9,
+} as const;
+
+/** The molar's size on the summit, relative to GOLDEN_MOLAR.scale. */
+export const MOLAR_ON_SUMMIT = 0.34;
+
+export function finaleMountain(t: number, reducedMotion: boolean): { alpha: number; dy: number } {
+  const T = FINALE_TIMES;
+  if (t < T.molarEnd) return { alpha: 0, dy: MOUNTAIN.riseFrom };
+  const s = (t - T.molarEnd) / 0.8;
+  if (reducedMotion) return { alpha: smooth01(s), dy: 0 };
+  return { alpha: smooth01(s * 1.5), dy: MOUNTAIN.riseFrom * (1 - easeOutCubic(s)) };
+}
+
+/** A ledge's place as the mountain rises: -1 is the foot, 0..4 the cities, 5 the summit. */
+export function finaleLedge(index: number, t: number, reducedMotion: boolean): { x: number; y: number } {
+  const p = index < 0 ? MOUNTAIN.foot : index >= CAMPAIGN_PIECES ? MOUNTAIN.summitStand : MOUNTAIN.ledges[index];
+  return { x: p.x, y: p.y + finaleMountain(t, reducedMotion).dy };
 }
 
 /** Radius of the city's piece while the probe holds it (stage units). */
@@ -404,16 +546,28 @@ export function finaleSlotPosition(
 
 export interface FinaleMolar {
   alpha: number;
-  /** Multiplier on GOLDEN_MOLAR.scale (it pops in a little small and settles). */
+  /** Multiplier on GOLDEN_MOLAR.scale (it pops in a little small, then shrinks onto the summit). */
   scale: number;
+  /** Where its centre is (stage units). */
+  x: number;
+  y: number;
 }
 
 export function finaleMolar(t: number, reducedMotion: boolean): FinaleMolar {
   const T = FINALE_TIMES;
-  if (t < T.prizeEnd) return { alpha: 0, scale: 1 };
+  const c = GOLDEN_MOLAR.center;
+  if (t < T.prizeEnd) return { alpha: 0, scale: 1, x: c.x, y: c.y };
   const s = (t - T.prizeEnd) / 0.5;
-  if (reducedMotion) return { alpha: smooth01(s), scale: 1 };
-  return { alpha: smooth01(s), scale: lerp(0.85, 1, backOut(s)) };
+  const alpha = smooth01(s);
+  const popped = reducedMotion ? 1 : lerp(0.85, 1, backOut(s));
+  if (t < T.molarEnd) return { alpha, scale: popped, x: c.x, y: c.y };
+  const top = MOUNTAIN.summit;
+  if (reducedMotion) {
+    if (t < T.molarEnd + 0.4) return { alpha: 1 - smooth01((t - T.molarEnd) / 0.4), scale: 1, x: c.x, y: c.y };
+    return { alpha: smooth01((t - T.molarEnd - 0.4) / 0.4), scale: MOLAR_ON_SUMMIT, x: top.x, y: top.y };
+  }
+  const m = smooth01((t - T.molarEnd) / 0.8);
+  return { alpha, scale: lerp(popped, MOLAR_ON_SUMMIT, m), x: lerp(c.x, top.x, m), y: lerp(c.y, top.y, m) };
 }
 
 /** How brightly the newly placed piece shines once it clicks in (a sweep of light across it). */
@@ -668,9 +822,24 @@ export function finaleHost(t: number, reducedMotion: boolean): FinaleHost {
 /** When each line of text is on screen: [from, to) seconds. */
 export const FINALE_TEXT = {
   bubble: [9.6, 12.9],
-  city: [FINALE_TIMES.meet, FINALE_TIMES.end - 0.3],
-  molar: [FINALE_TIMES.slot, FINALE_TIMES.end - 0.3],
+  city: [FINALE_TIMES.meet, FINALE_TIMES.molarEnd],
+  molar: [FINALE_TIMES.slot, FINALE_TIMES.molarEnd],
+  /** "2 more to the top" / "You made it to the top!", and the next city. */
+  climb: [FINALE_TIMES.climbHop, FINALE_TIMES.end - 0.3],
 } as const;
+
+/** How many cities are still to clean, and which comes next (campaign index, or -1). */
+export function finaleClimbStatus(finishes: readonly MolarFinish[]): { left: number; next: number } {
+  let left = 0;
+  let next = -1;
+  for (let i = 0; i < CAMPAIGN_PIECES; i++) {
+    if ((finishes[i] ?? 'empty') === 'empty') {
+      left++;
+      if (next < 0) next = i;
+    }
+  }
+  return { left, next };
+}
 
 export function finaleTextVisible(window: readonly [number, number], t: number): boolean {
   return t >= window[0] && t < window[1];
@@ -706,10 +875,17 @@ function burstPan(x: number): number {
 }
 
 /** Every note of a city's finale, in time order. The same in both editions. */
-export function finaleNotes(plan: CityFinalePlan, finish: MolarFinish, reducedMotion: boolean): FinaleNote[] {
+export function finaleNotes(
+  plan: CityFinalePlan,
+  finishes: readonly MolarFinish[],
+  slotIndex: number,
+  reducedMotion: boolean
+): FinaleNote[] {
   const T = FINALE_TIMES;
   const tonic = plan.tonic;
   const v = plan.voice;
+  const finish = finishes[slotIndex] ?? 'pearl';
+  const atTop = finaleClimbStatus(finishes).left === 0;
   const notes: FinaleNote[] = [];
   const add = (t: number, voice: FinaleVoice, midi: number, dur: number, vel: number, pan = 0): void => {
     notes.push({ t, voice, midi, dur, vel, pan });
@@ -801,11 +977,36 @@ export function finaleNotes(plan: CityFinalePlan, finish: MolarFinish, reducedMo
     add(T.slot + 0.4, 'bell', tonic + 24, 0.6, 0.38);
   }
 
-  // liftoff
-  if (!reducedMotion) add(T.molarEnd + 0.05, 'whoosh', tonic, 1.0, 0.5);
-  for (let k = 0; k < 6; k++) add(T.molarEnd + 0.1 + 0.07 * k, 'bell', tonic + 12 + penta(k), 0.5, 0.35);
-  for (const iv of [0, 4, 7, 11]) add(T.molarEnd + 0.8, v, tonic + iv, 1.6, 0.5);
-  add(T.molarEnd + 0.8, 'pad', tonic - 12, 1.8, 0.35);
+  // the climb: the mountain rises, each ledge rings (cities already cleaned ring brightly)
+  if (!reducedMotion) add(T.molarEnd + 0.05, 'whoosh', tonic, 0.9, 0.35);
+  for (let k = 0; k < CAMPAIGN_PIECES; k++) {
+    const earned = (finishes[k] ?? 'empty') !== 'empty' && k !== slotIndex;
+    add(T.molarEnd + 0.3 + 0.13 * k, 'bell', tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + k * 0.25);
+  }
+  for (const iv of [0, 4, 7]) add(T.molarEnd + 0.3, 'pad', tonic - 12 + iv, 2.0, 0.22);
+  // the hop up to the new ledge
+  if (!reducedMotion) add(T.climbHop - 0.8, 'whoosh', tonic, 0.7, 0.3);
+  add(T.climbHop - 0.4, v, tonic + 7, 0.3, 0.45);
+  add(T.climbHop, 'kick', tonic, 0.2, 0.4);
+  for (const iv of [7, 11, 14]) add(T.climbHop, v, tonic + iv, 0.9, 0.55);
+  add(T.climbHop, 'bell', tonic + 19, 0.8, 0.4);
+
+  if (atTop) {
+    // the top: the whole climb resolves
+    if (!reducedMotion) add(T.summitHop - 0.8, 'whoosh', tonic, 0.7, 0.35);
+    add(T.summitHop, 'boom', tonic, 1.2, 0.6);
+    [12, 16, 19, 24].forEach((iv, k) => add(T.summitHop + 0.1 * k, 'bell', tonic + iv, k === 3 ? 1.4 : 0.3, 0.5));
+    for (const iv of [0, 4, 7, 12]) add(T.summitHop + 0.4, v, tonic + iv, 2.2, 0.6);
+    add(T.summitHop + 0.4, 'pad', tonic - 12, 3.0, 0.4);
+    add(T.summitHop + 0.5, 'sparkle', tonic, 0.9, 0.5);
+  }
+
+  // liftoff, on a chord that resolves only at the top; until then it hangs, not finished yet
+  if (!reducedMotion) add(T.climbEnd + 0.05, 'whoosh', tonic, 1.0, 0.5);
+  for (let k = 0; k < 6; k++) add(T.climbEnd + 0.1 + 0.07 * k, 'bell', tonic + 12 + penta(k), 0.5, 0.35);
+  const lastChord = atTop ? [0, 4, 7, 11, 14] : [5, 7, 12, 14];
+  for (const iv of lastChord) add(T.climbEnd + 0.6, v, tonic + iv, 1.8, 0.5);
+  add(T.climbEnd + 0.6, 'pad', tonic - (atTop ? 12 : 5), 2.0, 0.35);
 
   return notes.sort((a, b) => a.t - b.t);
 }
@@ -894,6 +1095,10 @@ export const ENDING_BURSTS: readonly FinaleBurst[] = [
   { t: 2.3, x: 0.8, y: 1.0, kind: 'peony', color: 0xf472b6, color2: 0xfde047 },
   { t: 3.0, x: -1.25, y: 0.9, kind: 'ring', color: 0x4ade80, color2: 0xfde047 },
   { t: 3.7, x: 1.2, y: 0.4, kind: 'peony', color: 0xa78bfa, color2: 0xf8fafc },
+  { t: 4.4, x: -0.4, y: 1.1, kind: 'ring', color: 0xfde047, color2: 0xf8fafc },
+  { t: 5.0, x: 0.45, y: 1.15, kind: 'willow', color: 0xfef3c7, color2: 0xfbbf24 },
+  { t: 5.6, x: -1.2, y: 0.35, kind: 'peony', color: 0xf87171, color2: 0xfde047 },
+  { t: 6.2, x: 1.25, y: 0.9, kind: 'ring', color: 0x5eead4, color2: 0xfde047 },
 ];
 /** Stage-space bursts are drawn this much smaller than city ones. */
 export const ENDING_BURST_SCALE = 0.12;
@@ -948,12 +1153,13 @@ export function endingNotes(plans: readonly CityFinalePlan[], allGold: boolean):
   for (const iv of [0, 4, 7, 11]) add(E.snap + 0.9, 'pad', home + iv, 2.4, 0.3);
   // the credits: each city plays the start of its tune
   plans.forEach((plan, i) => {
-    const at = E.creditsStart + i * E.creditSeconds + 0.3;
-    RIFF.slice(0, 8).forEach((step, k) => {
+    const at = E.creditsStart + i * E.creditSeconds + 0.5;
+    RIFF.forEach((step, k) => {
       if (step !== null) add(at + k * STEP, plan.voice, plan.tonic + 12 + step, 0.3, 0.45);
     });
-    add(at + 2.2, plan.voice, plan.tonic + 12, 1.0, 0.45);
-    add(at, 'bass', plan.tonic - 24, 0.8, 0.4);
+    add(at + RIFF.length * STEP + 0.2, plan.voice, plan.tonic + 12, 1.6, 0.45);
+    add(at + RIFF.length * STEP + 0.2, 'bell', plan.tonic + 24, 1.2, 0.3);
+    for (let k = 0; k < 6; k++) add(at + k, 'bass', plan.tonic - 24 + (k % 2 === 0 ? 0 : 7), 0.8, 0.4);
   });
   // the last scene
   add(E.finaleStart, 'boom', home, 1.2, 0.55);
@@ -982,6 +1188,12 @@ function sumNotes(notes: readonly FinaleNote[]): number {
   return s;
 }
 
+/** The finishes the checksum uses: every city up to `slotIndex` cleaned (gold, silver, pearl in turn). */
+export function checksumFinishes(slotIndex: number): MolarFinish[] {
+  const cycle: MolarFinish[] = ['gold', 'silver', 'pearl'];
+  return Array.from({ length: CAMPAIGN_PIECES }, (_, i) => (i <= slotIndex ? cycle[i % 3] : 'empty'));
+}
+
 /**
  * One number that changes if any position, brightness or note of a city's finale changes. The
  * Swift edition computes the same (to a hundredth) from the same drawing.
@@ -990,13 +1202,22 @@ export function finaleChecksum(plan: CityFinalePlan, emblem: readonly SkylinePie
   let sum = 0;
   const layers: FinaleLayer[] = ['light', 'scenery', 'sky'];
   const targets = finaleEmblemTargets(emblem);
+  // Cities up to this one cleaned (so the last one climbs to the top), the rest still to do.
+  const finishes = checksumFinishes(slotIndex);
+  const atTop = finaleClimbStatus(finishes).left === 0;
   for (let t = 0; t <= FINALE_TIMES.end; t += 0.37) {
-    const probe = finaleProbe(t, reducedMotion);
+    const probe = finaleProbe(t, reducedMotion, slotIndex, atTop);
     sum += probe.x * 1.1 + probe.y * 1.3 + probe.alpha;
     const piece = finalePiece(t, slotIndex, reducedMotion);
     sum += piece.x + piece.y * 1.7 + piece.scale + piece.spin * 0.1 + piece.glow + piece.alpha;
     const molar = finaleMolar(t, reducedMotion);
-    sum += molar.alpha + molar.scale;
+    sum += molar.alpha + molar.scale + molar.x * 0.7 + molar.y * 0.9;
+    const mountain = finaleMountain(t, reducedMotion);
+    sum += mountain.alpha + mountain.dy * 0.3;
+    for (let i = -1; i <= CAMPAIGN_PIECES; i++) {
+      const ledge = finaleLedge(i, t, reducedMotion);
+      sum += ledge.x * 0.05 + ledge.y * 0.07;
+    }
     const cam = finaleCamera(t, reducedMotion);
     sum += cam.cx * 0.01 + cam.viewW * 0.01;
     for (const cx of [-2, 10, 30, 50, 66]) {
@@ -1027,7 +1248,12 @@ export function finaleChecksum(plan: CityFinalePlan, emblem: readonly SkylinePie
     sum += finaleSlotShine(t) + finaleBackdropDim(t);
   }
   for (const target of targets) sum += target.x * 0.5 + target.y * 0.25 + (target.color % 997) * 0.001;
-  for (const finish of ['empty', 'pearl', 'silver', 'gold'] as const) sum += sumNotes(finaleNotes(plan, finish, reducedMotion)) * 0.001;
+  for (const finish of ['empty', 'pearl', 'silver', 'gold'] as const) {
+    const withFinish = finishes.map((f, i) => (i === slotIndex ? finish : f));
+    sum += sumNotes(finaleNotes(plan, withFinish, slotIndex, reducedMotion)) * 0.001;
+  }
+  const status = finaleClimbStatus(finishes);
+  sum += status.left * 3 + status.next * 5;
   return Math.round(sum * 1000) / 1000;
 }
 

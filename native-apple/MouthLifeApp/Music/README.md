@@ -31,6 +31,68 @@ To test **one** Suno song across the whole app right away, name it:
 | `pulp.m4a` | `pulp_rescue.m4a`, `boss.m4a` | **Pulp Rescue** (90s Endodontic Scramble) | **E Minor Pentatonic** (`Em7`) | `128 BPM` |
 | `report.m4a` | `victory.m4a` | **Mission Report** (Victory Lounge) | **D Major Pentatonic** (`Dmaj9`) | `76 BPM` |
 
+## Finale Songs (optional): exact lengths and cue sheet
+
+Each city's finale and the grand finale can have their own song. Drop them in this folder; both
+editions pick them up. Without a file, the built-in synth score plays (it follows the same cues).
+
+| File | Plays | Length |
+| :--- | :--- | :--- |
+| `finale_toronto.m4a` | Toronto's finale | **30.0 s** |
+| `finale_new_orleans.m4a` | New Orleans' finale | **30.0 s** |
+| `finale_tokyo.m4a` | Tokyo & Chicago's finale | **30.0 s** |
+| `finale_accra.m4a` | Accra & Colorado's finale | **30.0 s** |
+| `finale_aurora.m4a` | Station Aurora's finale | **30.0 s** |
+| `finale_ending.m4a` (or `grand_finale.m4a`) | The grand finale, after the fifth city | **60.0 s** |
+
+The song starts the instant the last zone seals. Over a song, the game still plays its own
+firework booms, whistles and sparkles, so leave room for them rather than adding your own. A
+song that runs long is faded out at the end; one that runs short simply stops. Skip jumps
+straight to the grand finale's song (or ends).
+
+**City finale, 30.0 s** (the same for every city; seconds from the start):
+
+| Time | What happens | Music |
+| :--- | :--- | :--- |
+| 0.0 | The game freezes and fades into the city at night | Soft, held (a breath) |
+| 1.2 | The probe flies up | Lift-off swell |
+| 2.6 – 7.0 | It sweeps the skyline; the lights come on left to right | A climbing build |
+| **7.0** | **The whole city blazes** | **First big hit** |
+| 8.0 – 13.5 | The city celebrates; its host waves (9.2 – 13.4) | The city's theme, at its most triumphant |
+| 13.5 | One last rocket goes up | Riser |
+| **14.1** | **It bursts into the city's sign** | **Hit** |
+| 15.5 – 16.7 | The sparks gather into a coin | Suspense |
+| 16.9 – 17.85 | The probe rises to meet it | Drum roll |
+| **17.9** | **The probe holds the prize up** | **Biggest hit: the fanfare** |
+| 19.7 | The Golden Molar appears | Glow |
+| 20.9 | The piece clicks into place | Small accent |
+| 22.6 | A mountain rises (a ledge per city, the molar on top) | Awe |
+| **24.6** | **The probe hops up to its ledge** | **Accent** |
+| 27.4 – 30.0 | Lift off | **End on a chord that is not finished yet** (for example the V chord): there is more mountain to climb |
+
+For the city that completes the set, the probe also hops onto the summit at **25.8** and the
+grand finale follows straight after. Any city can be the last one, so every city song should
+hang at the end; the grand finale is where the music finally comes home.
+
+**Grand finale, 60.0 s:**
+
+| Time | What happens | Music |
+| :--- | :--- | :--- |
+| 0.0 | Night sky | Hush |
+| 2.5, 3.7, 4.9, 6.1, 7.3 | The five pieces fly in and land, one per city | Five rising accents |
+| **8.0** | **The Golden Molar snaps together** | **The biggest hit of the game** |
+| 8.0 – 11.0 | "The Golden Molar" | Triumphant theme |
+| 11.0 – 51.0 | Credits: Toronto, New Orleans, Tokyo & Chicago, Accra & Colorado, Station Aurora, **8 s each** (11, 19, 27, 35, 43) | A medley: 8 s in each city's flavour |
+| 51.0 | Final scene: fireworks, the five signs circling the molar | Full reprise |
+| 53.5 / 55.0 | (Gold in every city) the molar smiles, then winks | A wink of a sound |
+| 57.4 | Last chord | Resolve home |
+| 59.4 – 60.0 | Fade to dark | Ring out |
+
+Suggested starting points for each city's finale: the city's own prompt below, plus
+`triumphant victory fanfare, brass and choir lift, celebratory, 30 seconds, ends on an
+unresolved chord`; for the grand finale, `heroic orchestral medley of five city themes, 60
+seconds, huge hit at 8 seconds, resolves fully at the end`.
+
 ## Ready-to-Paste Suno Instrumental Prompts ("Solar Bio-Groove")
 
 Toggle **Instrumental** ON in Suno so brushing cues and tactile tooth chimes stay crystal-clear:

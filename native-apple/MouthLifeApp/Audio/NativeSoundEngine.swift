@@ -2087,9 +2087,66 @@ public final class NativeSoundEngine {
         pushMixStateToKernel()
     }
 
+    // MARK: Finale songs
+
+    private var finalePlayer: AVAudioPlayer?
+    private var fadingFinalePlayer: AVAudioPlayer?
+
+    private var finaleTrackVolume: Float {
+        isMuted || musicVolume <= 0.001 ? 0 : min(1.0, musicVolume * 0.72)
+    }
+
+    private func finaleTrackURL(_ index: Int) -> URL? {
+        let bundle = Bundle.main
+        for stem in CityFinale.trackCandidates(index) {
+            for ext in ["m4a", "mp3", "caf", "wav", "aac"] {
+                if let url = bundle.url(forResource: stem, withExtension: ext, subdirectory: "Music")
+                    ?? bundle.url(forResource: stem, withExtension: ext) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+
+    /// True when the Music folder has a song for a city's finale (0...4) or the ending (-1).
+    public func hasFinaleTrack(_ index: Int) -> Bool {
+        finaleTrackURL(index) != nil
+    }
+
+    /// Plays a finale's song from `offset` seconds (where the show already is), in step with it.
+    public func playFinaleTrack(_ index: Int, offset: Double) {
+        stopFinaleTrack(fade: 0.25)
+        guard !isMuted, !isInterrupted, let url = finaleTrackURL(index),
+              let player = try? AVAudioPlayer(contentsOf: url)
+        else { return }
+        guard offset < player.duration else { return }
+        player.numberOfLoops = 0
+        player.volume = finaleTrackVolume
+        player.currentTime = max(0, offset)
+        player.prepareToPlay()
+        player.play()
+        finalePlayer = player
+        pushMixStateToKernel()
+    }
+
+    /// Fades out whatever finale song is playing.
+    public func stopFinaleTrack(fade: Double = 0.6) {
+        fadingFinalePlayer?.stop()
+        fadingFinalePlayer = nil
+        guard let player = finalePlayer else { return }
+        finalePlayer = nil
+        player.setVolume(0, fadeDuration: fade)
+        fadingFinalePlayer = player
+        pushMixStateToKernel()
+    }
+
     private func pushMixStateToKernel() {
         let ducking = isVoiceDucking
-        let duckScale: Float = (ducking ? 0.36 : 1.0) * (finaleDucked ? 0.12 : 1.0)
+        // A finale with its own song silences the game's music; one played by the synth only sinks it.
+        let finaleScale: Float = finaleDucked ? (finalePlayer != nil ? 0.0 : 0.12) : 1.0
+        finalePlayer?.volume = finaleTrackVolume
+        let duckScale: Float = (ducking ? 0.36 : 1.0) * finaleScale
         let hubRadioAtten: Float = (currentMode == .hub && earthRadioActive && !pulpZeroActive) ? 0.86 : 1.0
         let baseMusic = musicVolume <= 0.001 ? Float(0) : (musicVolume * 0.55 * activeTheme.mixGain * hubRadioAtten)
         let effectiveMusic = (isPaused ? (baseMusic * 0.42) : baseMusic) * duckScale
@@ -2113,7 +2170,7 @@ public final class NativeSoundEngine {
             delaySec: dotted8th
         )
 
-        let sunoDuckScale: Float = (ducking ? 0.38 : 1.0) * (finaleDucked ? 0.12 : 1.0)
+        let sunoDuckScale: Float = (ducking ? 0.38 : 1.0) * finaleScale
         let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72 * hubRadioAtten)
         let effectiveSuno: Float
         if isPaused {

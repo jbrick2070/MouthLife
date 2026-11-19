@@ -74,21 +74,21 @@ public enum CitySkylineArt {
 
     public static func expectedFinale(forHost hostId: String) -> FinaleExpected? {
         switch hostId {
-        case "accra": return FinaleExpected(voice: "pluck", tonic: 55, show: "balloons", hostSide: "left", bursts: 6, notes: 143, checksum: 5002.047, reducedChecksum: 4232.633)
-        case "new_orleans": return FinaleExpected(voice: "reed", tonic: 58, show: "beads", hostSide: "left", bursts: 6, notes: 143, checksum: 5152.127, reducedChecksum: 4382.122)
-        case "orbit_aurora": return FinaleExpected(voice: "bell", tonic: 62, show: "meteors", hostSide: "right", bursts: 6, notes: 137, checksum: 4851.207, reducedChecksum: 4081.227)
-        case "tokyo": return FinaleExpected(voice: "celesta", tonic: 64, show: "neon", hostSide: "left", bursts: 7, notes: 146, checksum: 5189.581, reducedChecksum: 4430.342)
-        case "toronto": return FinaleExpected(voice: "rhodes", tonic: 60, show: "fireworks", hostSide: "left", bursts: 9, notes: 152, checksum: 5828.068, reducedChecksum: 5056.909)
+        case "accra": return FinaleExpected(voice: "pluck", tonic: 55, show: "balloons", hostSide: "left", bursts: 6, notes: 159, checksum: 5219, reducedChecksum: 4438.568)
+        case "new_orleans": return FinaleExpected(voice: "reed", tonic: 58, show: "beads", hostSide: "left", bursts: 6, notes: 152, checksum: 5357.859, reducedChecksum: 4575.988)
+        case "orbit_aurora": return FinaleExpected(voice: "bell", tonic: 62, show: "meteors", hostSide: "right", bursts: 6, notes: 159, checksum: 5050.288, reducedChecksum: 4269.635)
+        case "tokyo": return FinaleExpected(voice: "celesta", tonic: 64, show: "neon", hostSide: "left", bursts: 7, notes: 154, checksum: 5390.771, reducedChecksum: 4613.896)
+        case "toronto": return FinaleExpected(voice: "rhodes", tonic: 60, show: "fireworks", hostSide: "left", bursts: 9, notes: 168, checksum: 6008.884, reducedChecksum: 5218)
         default: return nil
         }
     }
 
     /// The ending's checksum for every combination of (all gold, Reduce Motion), and two hash values.
     public static let expectedEnding: [String: Double] = [
-        "gold": 4244.073,
-        "gold-reduced": 4225.616,
-        "mixed": 4241.973,
-        "mixed-reduced": 4223.516,
+        "gold": 7088.219,
+        "gold-reduced": 7066.945,
+        "mixed": 7085.24,
+        "mixed-reduced": 7063.966,
     ]
     public static let expectedHash: [Double] = [0.10232719359919429, 0.7369172223843634, 0.5687719557899982]
 

@@ -9,6 +9,12 @@ import {
   FINALE_HOST_IDS,
   FINALE_TIMES,
   GOLDEN_MOLAR,
+  MOUNTAIN,
+  checksumFinishes,
+  finaleClimbStatus,
+  finaleLedge,
+  resolveFinaleTrack,
+  type MolarFinish,
   endingCredit,
   endingNotes,
   endingPiece,
@@ -74,7 +80,7 @@ describe('city finale drawings', () => {
 describe('city finale timeline', () => {
   it('runs its beats in order', () => {
     const T = FINALE_TIMES;
-    const order = [T.hushEnd, T.riseEnd, T.waveEnd, T.blazeEnd, T.showEnd, T.emblemBurst, T.emblemEnd, T.gatherEnd, T.meet, T.prizeEnd, T.slot, T.molarEnd, T.end];
+    const order = [T.hushEnd, T.riseEnd, T.waveEnd, T.blazeEnd, T.showEnd, T.emblemBurst, T.emblemEnd, T.gatherEnd, T.meet, T.prizeEnd, T.slot, T.molarEnd, T.climbHop, T.summitHop, T.climbEnd, T.end];
     for (let i = 1; i < order.length; i++) expect(order[i]).toBeGreaterThan(order[i - 1]);
     expect(T.blazeEnd + FINALE_SHOW_SECONDS).toBeLessThanOrEqual(T.showEnd);
   });
@@ -152,8 +158,9 @@ describe('city finale music', () => {
   const voices = new Set(['rhodes', 'marimba', 'kalimba', 'celesta', 'bell', 'pad', 'reed', 'pluck', 'bass', 'kick', 'whistle', 'boom', 'sparkle', 'whoosh']);
 
   it.each(FINALE_HOST_IDS.map((h, i) => [h, i] as const))('%s plays a sorted score inside the show', (_host, i) => {
+    const withFinish = (finish: MolarFinish): MolarFinish[] => checksumFinishes(i).map((f, k) => (k === i ? finish : f));
     for (const finish of ['pearl', 'silver', 'gold'] as const) {
-      const notes = finaleNotes(plans[i], finish, false);
+      const notes = finaleNotes(plans[i], withFinish(finish), i, false);
       for (let k = 1; k < notes.length; k++) expect(notes[k].t).toBeGreaterThanOrEqual(notes[k - 1].t);
       for (const n of notes) {
         expect(voices.has(n.voice)).toBe(true);
@@ -165,7 +172,7 @@ describe('city finale music', () => {
       }
     }
     // gold earns a few more notes than pearl
-    expect(finaleNotes(plans[i], 'gold', false).length).toBeGreaterThan(finaleNotes(plans[i], 'pearl', false).length);
+    expect(finaleNotes(plans[i], withFinish('gold'), i, false).length).toBeGreaterThan(finaleNotes(plans[i], withFinish('pearl'), i, false).length);
   });
 
   it('plays the ending inside its length, with the surprise only for all gold', () => {
@@ -189,5 +196,48 @@ describe('the ending', () => {
     for (let t = ENDING_TIMES.creditsStart; t < ENDING_TIMES.finaleStart; t += 0.25) seen.add(endingCredit(t).index);
     expect([...seen].sort()).toEqual([0, 1, 2, 3, 4]);
     expect(endingCredit(ENDING_TIMES.finaleStart + 1).index).toBe(-1);
+  });
+});
+
+describe('the climb', () => {
+  it('runs exactly 30 s a city and 60 s for the ending, so songs can be made to fit', () => {
+    expect(FINALE_TIMES.end).toBe(30);
+    expect(ENDING_TIMES.end).toBe(60);
+    expect(ENDING_TIMES.creditsStart + 5 * ENDING_TIMES.creditSeconds).toBe(ENDING_TIMES.finaleStart);
+  });
+
+  it('puts the probe on its own ledge, and only the city that completes the set on the summit', () => {
+    for (let i = 0; i < CAMPAIGN_PIECES; i++) {
+      const p = finaleProbe(FINALE_TIMES.climbEnd - 0.01, false, i, false);
+      const ledge = finaleLedge(i, FINALE_TIMES.climbEnd - 0.01, false);
+      expect(Math.hypot(p.x - ledge.x, p.y - ledge.y)).toBeLessThan(0.03);
+    }
+    const top = finaleProbe(FINALE_TIMES.climbEnd - 0.01, false, 4, true);
+    expect(Math.hypot(top.x - MOUNTAIN.summitStand.x, top.y - MOUNTAIN.summitStand.y)).toBeLessThan(0.03);
+    // the ledges climb upward
+    for (let i = 1; i < CAMPAIGN_PIECES; i++) expect(MOUNTAIN.ledges[i].y).toBeGreaterThan(MOUNTAIN.ledges[i - 1].y);
+  });
+
+  it('counts the cities still to clean and names the next one', () => {
+    expect(finaleClimbStatus(['gold', 'pearl', 'empty', 'silver', 'empty'])).toEqual({ left: 2, next: 2 });
+    expect(finaleClimbStatus(['gold', 'gold', 'gold', 'gold', 'gold'])).toEqual({ left: 0, next: -1 });
+  });
+
+  it('ends on the home chord only at the top; until then the music hangs', () => {
+    const lastChord = (finishes: MolarFinish[], slot: number) =>
+      finaleNotes(plans[slot], finishes, slot, false).filter((n) => Math.abs(n.t - (FINALE_TIMES.climbEnd + 0.6)) < 1e-9 && n.voice === plans[slot].voice);
+    const tonic = (slot: number) => plans[slot].tonic;
+    const midway = lastChord(checksumFinishes(2), 2);
+    expect(midway.some((n) => n.midi === tonic(2))).toBe(false);
+    const top = lastChord(checksumFinishes(4), 4);
+    expect(top.some((n) => n.midi === tonic(4))).toBe(true);
+  });
+
+  it('finds a finale song by name and never borrows another song', () => {
+    const files = ['toronto.m4a', 'background.m4a', 'finale_toronto.mp3', 'finale_toronto.m4a', 'grand_finale.mp3'];
+    expect(resolveFinaleTrack(0, files)).toBe('finale_toronto.m4a');
+    expect(resolveFinaleTrack(1, files)).toBeNull();
+    expect(resolveFinaleTrack(-1, files)).toBe('grand_finale.mp3');
+    expect(resolveFinaleTrack(-1, ['finale_ending.wav', 'grand_finale.m4a'])).toBe('finale_ending.wav');
   });
 });

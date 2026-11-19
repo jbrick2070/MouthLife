@@ -185,6 +185,11 @@ function bootstrapMouthLife(): void {
       onCovered: (covered) => {
         sceneHidden = covered;
       },
+      hasTrack: (part) => sound.hasFinaleTrack(part === 'ending' ? -1 : worldIndex),
+      onTrack: (part, offsetSec) => {
+        if (part === null) sound.stopFinaleTrack();
+        else sound.playFinaleTrack(part === 'ending' ? -1 : worldIndex, offsetSec);
+      },
       onDone: () => {
         overlay.dispose();
         if (finaleOverlay === overlay) finaleOverlay = null;
@@ -626,6 +631,12 @@ function bootstrapMouthLife(): void {
     lastSynergyRank = -1;
     pendingNewlyCleaned = 0;
     sound.setWorldContext(worldId);
+    // Have this city's finale song (and, near the end of the campaign, the ending's) ready in time.
+    const campaignIndex = CAMPAIGN_WORLD_IDS.indexOf(worldId);
+    if (campaignIndex >= 0) {
+      sound.preloadFinaleTrack(campaignIndex);
+      if (molarFinishes().filter((f) => f === 'empty').length <= 1) sound.preloadFinaleTrack(-1);
+    }
     const cartridge = getCartridgeById(worldId);
     session.loadCartridge(cartridge, saveSys.getSave(), mode);
     sceneMgr.mountCartridgeMesh(cartridge, session);

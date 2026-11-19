@@ -19,10 +19,12 @@ import {
   ENDING_BURSTS,
   ENDING_BURST_SCALE,
   ENDING_TIMES,
+  FINALE_EFFECT_VOICES,
   FINALE_EMBLEM,
   FINALE_TEXT,
   FINALE_TIMES,
   GOLDEN_MOLAR,
+  MOUNTAIN,
   MOLAR_FINISH_COLORS,
   PIECE_RADIUS,
   endingCredit,
@@ -38,6 +40,7 @@ import {
   finaleBurstSparks,
   finaleCamera,
   finaleCityTint,
+  finaleClimbStatus,
   finaleEmblemRocket,
   finaleEmblemShape,
   finaleEmblemSpark,
@@ -45,6 +48,7 @@ import {
   finaleHost,
   finaleMeteors,
   finaleMolar,
+  finaleMountain,
   finaleNotes,
   finalePassTime,
   finalePiece,
@@ -77,6 +81,13 @@ export interface CityFinaleOptions {
   onNotes: (notes: readonly FinaleNote[]) => void;
   /** True once the show fully covers the game (the 3D scene can stop drawing), false as it uncovers. */
   onCovered?: (covered: boolean) => void;
+  /**
+   * A part of the show starts (or, with null, everything stops): play its song from `offsetSec`.
+   * 'city' is the cleaned city's song, 'ending' the grand finale's.
+   */
+  onTrack?: (part: 'city' | 'ending' | null, offsetSec: number) => void;
+  /** Whether a recorded song exists for a part; then only the score's sound effects play over it. */
+  hasTrack?: (part: 'city' | 'ending') => boolean;
   onDone: () => void;
 }
 
@@ -222,6 +233,12 @@ export class CityFinaleOverlay implements OverlayView {
   private readonly notes: FinaleNote[];
   private noteIdx = 0;
   private readonly allGold: boolean;
+  /** Every city is clean once this one is: the probe climbs to the top. */
+  private readonly atTop: boolean;
+  private readonly climbLeft: number;
+  private readonly nextCity: number;
+  /** Which part's song is playing ('city' until the ending starts). */
+  private trackPart: 'city' | 'ending' | null = null;
   private readonly stars: { x: number; y: number; r: number; p: number }[] = [];
   private readonly textEls = new Map<string, HTMLElement>();
   private w = 0;
@@ -245,13 +262,20 @@ export class CityFinaleOverlay implements OverlayView {
     this.total = this.cityLength + (hasEnding ? ENDING_TIMES.end : 0);
     this.allGold = opts.finishes.length === CAMPAIGN_PIECES && opts.finishes.every((f) => f === 'gold');
     const notes: FinaleNote[] = [];
+    // With a recorded song for a part, only the score's sound effects play over it.
+    const effectsOnly = (part: 'city' | 'ending') => (note: FinaleNote) =>
+      !opts.hasTrack?.(part) || FINALE_EFFECT_VOICES.includes(note.voice);
     if (this.city) {
-      notes.push(...finaleNotes(this.city.plan, opts.finishes[opts.worldIndex] ?? 'pearl', opts.reducedMotion));
+      notes.push(...finaleNotes(this.city.plan, opts.finishes, opts.worldIndex, opts.reducedMotion).filter(effectsOnly('city')));
     }
     if (hasEnding) {
       const plans = this.cities.map((c) => c?.plan).filter((p): p is CityFinalePlan => Boolean(p));
-      for (const n of endingNotes(plans, this.allGold)) notes.push({ ...n, t: n.t + this.cityLength });
+      for (const n of endingNotes(plans, this.allGold).filter(effectsOnly('ending'))) notes.push({ ...n, t: n.t + this.cityLength });
     }
+    const status = finaleClimbStatus(opts.finishes);
+    this.atTop = status.left === 0;
+    this.climbLeft = status.left;
+    this.nextCity = status.next;
     this.notes = notes.sort((a, b) => a.t - b.t);
     for (let i = 0; i < 110; i++) {
       // Fixed pattern, so the sky is the same every time.
@@ -271,6 +295,7 @@ export class CityFinaleOverlay implements OverlayView {
     const finish = this.city ? this.opts.finishes[this.opts.worldIndex] ?? 'pearl' : 'pearl';
     const pieces = this.opts.finishes.filter((f) => f !== 'empty').length;
     const city = this.city;
+    const nextName = !this.atTop && this.nextCity >= 0 ? this.cities[this.nextCity]?.cityName ?? '' : '';
     shell.innerHTML = `
       <canvas class="finale-canvas" aria-hidden="true"></canvas>
       <div class="finale-text finale-top">
@@ -285,6 +310,8 @@ export class CityFinaleOverlay implements OverlayView {
         <div class="finale-credit-host"><span class="finale-credit-name" data-no-translate></span> • <span class="finale-credit-role"></span></div>
       </div>
       <div class="finale-text finale-bottom">
+        <div class="finale-line finale-climb" data-text="climb">${this.atTop ? 'You made it to the top!' : this.climbLeft === 1 ? 'One more to the top!' : `${this.climbLeft} more to the top`}</div>
+        <div class="finale-line finale-next" data-text="next">${nextName ? `Next stop: ${escapeHtml(nextName)}` : ''}</div>
         <div class="finale-line finale-thanks" data-text="thanks">Thanks for playing!</div>
         <div class="finale-line finale-perfect" data-text="perfect">Perfect smile!</div>
         <div class="finale-line finale-hint" data-text="hint">Get gold in every city for a surprise.</div>
@@ -299,6 +326,7 @@ export class CityFinaleOverlay implements OverlayView {
     shell.querySelector<HTMLButtonElement>('.finale-skip')?.addEventListener('click', () => this.skip());
     window.addEventListener('keydown', this.onKey, true);
     this.startMs = performance.now();
+    this.startTrack(this.city ? 'city' : 'ending', 0);
     this.shell.focus?.();
     const frame = (): void => {
       this.raf = requestAnimationFrame(frame);
@@ -308,12 +336,20 @@ export class CityFinaleOverlay implements OverlayView {
   }
 
   dispose(): void {
+    if (this.trackPart) this.opts.onTrack?.(null, 0);
+    this.trackPart = null;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKey, true);
     if (this.covered) this.opts.onCovered?.(false);
     this.covered = false;
     this.shell?.remove();
     this.shell = null;
+  }
+
+  private startTrack(part: 'city' | 'ending', offsetSec: number): void {
+    if (this.trackPart === part) return;
+    this.trackPart = part;
+    this.opts.onTrack?.(part, offsetSec);
   }
 
   private elapsed(): number {
@@ -330,6 +366,7 @@ export class CityFinaleOverlay implements OverlayView {
     const t = this.elapsed();
     if (this.city && t < this.cityLength - 0.5 && this.total > this.cityLength) {
       this.startMs = performance.now() - this.cityLength * 1000;
+      this.startTrack('ending', 0);
       this.lastT = this.cityLength;
       while (this.noteIdx < this.notes.length && this.notes[this.noteIdx].t < this.cityLength) this.noteIdx++;
       return;
@@ -359,6 +396,7 @@ export class CityFinaleOverlay implements OverlayView {
       this.noteIdx++;
     }
     if (due.length) this.opts.onNotes(due);
+    if (this.trackPart === 'city' && this.total > this.cityLength && t >= this.cityLength) this.startTrack('ending', t - this.cityLength);
     this.lastT = t;
 
     const cover = this.coverAlpha(t);
@@ -800,7 +838,220 @@ export class CityFinaleOverlay implements OverlayView {
     const dim = finaleBackdropDim(t);
 
     // the show (city space)
-    if (showT >= 0) {
+    this.paintShow(ctx, city, view, showT, rm ? 0 : dim, rm);
+
+    // the mountain the cities climb
+    this.paintMountain(ctx, t);
+
+    // the probe, with a short trail (in front of the molar once it lifts off from the summit)
+    const drawProbe = (): void => {
+      const probe = finaleProbe(t, rm, this.opts.worldIndex, this.atTop);
+      if (probe.space !== 'hidden') {
+        const toScreen = (p: { space: string; x: number; y: number }): { x: number; y: number } =>
+          p.space === 'city' ? { x: toX(p.x), y: toY(p.y) } : { x: this.stageX(p.x), y: this.stageY(p.y) };
+        const radius = probe.space === 'city' ? 0.42 * view.s : 0.075 * this.unit;
+        if (!rm) {
+          ctx.setTransform(d, 0, 0, d, 0, 0);
+          for (let k = 8; k >= 1; k--) {
+            const past = finaleProbe(t - k * 0.035, rm, this.opts.worldIndex, this.atTop);
+            if (past.space !== probe.space) continue;
+            const p = toScreen(past);
+            ctx.globalAlpha = 0.5 * (1 - k / 9);
+            ctx.fillStyle = '#5eead4';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius * (0.6 - k * 0.04), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+        }
+        const p = toScreen(probe);
+        this.paintProbe(ctx, p.x, p.y, radius, probe.alpha, t);
+      }
+    };
+    if (t < T.climbEnd) drawProbe();
+
+    // the host
+    const host = finaleHost(t, rm);
+    const head = this.paintHost(ctx, city, plan.hostSide, host.rise, host.wave);
+    const bubble = this.textEls.get('bubble');
+    if (bubble && head) {
+      bubble.style.left = `${head.x}px`;
+      bubble.style.top = `${head.y}px`;
+      bubble.classList.toggle('finale-bubble-right', plan.hostSide === 'right');
+    }
+
+    // the emblem rocket and its sparks
+    const rocket = finaleEmblemRocket(t);
+    if (rocket && !rm) this.paintGlow(ctx, this.stageX(rocket.x), this.stageY(rocket.y), 0.06 * this.unit, 'rgba(254,243,199,0.95)', 1);
+    if (t >= T.emblemBurst && t < T.gatherEnd) {
+      const shape = finaleEmblemShape(t);
+      if (shape.alpha > 0.01) {
+        const sx = this.stageX(rm ? FINALE_EMBLEM.x : shape.x);
+        const sy = this.stageY(rm ? FINALE_EMBLEM.y : shape.y);
+        const r = (rm ? FINALE_EMBLEM.scale : shape.scale) * this.unit;
+        this.paintGlow(ctx, sx, sy, r * 1.7, 'rgba(255,251,235,0.4)', shape.alpha);
+        this.paintEmblem(ctx, city, sx, sy, r, 1, shape.alpha);
+      }
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.lineCap = 'round';
+      if (!rm) {
+        ctx.globalCompositeOperation = 'lighter';
+        city.targets.forEach((target, i) => {
+          const s = finaleEmblemSpark(target, i, t);
+          if (!s) return;
+          const x = this.stageX(s.x);
+          const y = this.stageY(s.y);
+          this.paintSpark(ctx, x, y, x, y, css(rgb(target.color)), Math.max(1.6, 0.0085 * this.unit), s.alpha);
+        });
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // the molar
+    const molar = finaleMolar(t, rm);
+    const finish = this.opts.finishes[this.opts.worldIndex] ?? 'pearl';
+    if (molar.alpha > 0) {
+      this.paintGlow(ctx, this.stageX(molar.x), this.stageY(molar.y), 1.1 * molar.scale * this.unit, 'rgba(253,230,138,0.22)', molar.alpha);
+      this.paintMolar(
+        ctx,
+        molar.x,
+        molar.y,
+        GOLDEN_MOLAR.scale * molar.scale,
+        molar.alpha,
+        (i) => (i === this.opts.worldIndex ? (t >= T.slot ? finish : 'empty') : this.opts.finishes[i] ?? 'empty'),
+        this.opts.worldIndex,
+        finaleSlotShine(t)
+      );
+    }
+
+    // the piece (stage space)
+    const piece = finalePiece(t, this.opts.worldIndex, rm);
+    if (piece.visible) {
+      const sx = this.stageX(piece.x);
+      const sy = this.stageY(piece.y);
+      const r = PIECE_RADIUS * piece.scale * this.unit;
+      const held = t >= T.meet && t < T.prizeEnd;
+      if (held && !rm) this.paintRays(ctx, sx, sy, r * 3.2, t);
+      this.paintGlow(ctx, sx, sy, r * 2.6 * piece.glow, finish === 'gold' ? 'rgba(253,224,71,0.7)' : 'rgba(226,232,240,0.6)', piece.alpha);
+      this.paintPiece(ctx, city, finish, sx, sy, r, piece.spin, piece.alpha);
+    }
+
+    if (t >= T.climbEnd) drawProbe();
+
+    // the flash as the probe takes the piece, and a fade to light at the end
+    const flash = t >= T.meet && !rm ? Math.exp(-(t - T.meet) / 0.12) * 0.7 : 0;
+    const toLight = this.total > this.cityLength ? 0 : smooth01((t - (T.end - 0.8)) / 0.8);
+    const toDark = this.total > this.cityLength ? smooth01((t - (T.end - 0.8)) / 0.8) : 0;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    if (flash > 0.01) {
+      ctx.globalAlpha = flash;
+      ctx.fillStyle = '#fffbeb';
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+    if (toLight > 0.01) {
+      ctx.globalAlpha = toLight;
+      ctx.fillStyle = '#e6fffa';
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+    if (toDark > 0.01) {
+      ctx.globalAlpha = toDark;
+      ctx.fillStyle = '#01030c';
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The mountain the campaign climbs: a ledge per city with its coin once cleaned, a path that
+   * turns gold as far as the player has climbed, and the Golden Molar waiting on the peak.
+   */
+  private paintMountain(ctx: CanvasRenderingContext2D, t: number): void {
+    const rm = this.opts.reducedMotion;
+    const m = finaleMountain(t, rm);
+    if (m.alpha <= 0.01) return;
+    const d = this.dpr;
+    const T = FINALE_TIMES;
+    const X = (x: number): number => this.stageX(x);
+    const Y = (y: number): number => this.stageY(y + m.dy);
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.globalAlpha = m.alpha;
+    // the goal glows on the peak; at the top it blazes
+    const blaze = this.atTop && t >= T.summitHop ? Math.min(1, 0.6 + Math.exp(-(t - T.summitHop) / 0.5)) : 0.35 + (rm ? 0 : 0.1 * Math.sin(t * 3));
+    this.paintGlow(ctx, X(MOUNTAIN.summit.x), Y(MOUNTAIN.summit.y), (this.atTop && t >= T.summitHop ? 0.9 : 0.5) * this.unit, 'rgba(253,230,138,0.55)', m.alpha * blaze);
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.globalAlpha = m.alpha;
+    ctx.beginPath();
+    MOUNTAIN.outline.forEach((p, i) => (i === 0 ? ctx.moveTo(X(p.x), Y(p.y)) : ctx.lineTo(X(p.x), Y(p.y))));
+    ctx.closePath();
+    const body = ctx.createLinearGradient(0, Y(0.5), 0, Y(-1.1));
+    body.addColorStop(0, '#5b6b8c');
+    body.addColorStop(0.45, '#26324d');
+    body.addColorStop(1, '#0b1222');
+    ctx.fillStyle = body;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, this.unit * 0.008);
+    ctx.strokeStyle = 'rgba(203,213,225,0.45)';
+    ctx.stroke();
+    ctx.beginPath();
+    MOUNTAIN.snow.forEach((p, i) => (i === 0 ? ctx.moveTo(X(p.x), Y(p.y)) : ctx.lineTo(X(p.x), Y(p.y))));
+    ctx.closePath();
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fill();
+
+    // the path: gold as far as the player has climbed
+    const here = this.opts.worldIndex;
+    const earned = (i: number): boolean =>
+      i === here ? t >= T.climbHop : (this.opts.finishes[i] ?? 'empty') !== 'empty';
+    const stops = [MOUNTAIN.foot, ...MOUNTAIN.ledges, MOUNTAIN.summitStand];
+    ctx.lineCap = 'round';
+    for (let k = 0; k + 1 < stops.length; k++) {
+      const done = k < CAMPAIGN_PIECES ? earned(k) : this.atTop && t >= T.summitHop;
+      ctx.setLineDash(done ? [] : [Math.max(2, this.unit * 0.012), Math.max(3, this.unit * 0.02)]);
+      ctx.lineWidth = Math.max(2, this.unit * (done ? 0.014 : 0.009));
+      ctx.strokeStyle = done ? '#fbbf24' : 'rgba(226,232,240,0.45)';
+      ctx.beginPath();
+      ctx.moveTo(X(stops[k].x), Y(stops[k].y));
+      ctx.lineTo(X(stops[k + 1].x), Y(stops[k + 1].y));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // the ledges, each with its city's coin beside it once that city is clean
+    const coinR = 0.072 * this.unit;
+    MOUNTAIN.ledges.forEach((p, i) => {
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.globalAlpha = m.alpha;
+      ctx.fillStyle = earned(i) ? '#fde68a' : '#475569';
+      ctx.beginPath();
+      ctx.ellipse(X(p.x), Y(p.y) + this.unit * 0.075, this.unit * 0.1, this.unit * 0.025, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const side = p.x < 0 ? -1 : 1;
+      const cx = X(p.x + side * 0.17);
+      const cy = Y(p.y + 0.02);
+      if (earned(i)) {
+        const pop = i === here ? (rm ? 1 : backOutPop((t - T.climbHop) / 0.35)) : 1;
+        this.paintPiece(ctx, this.cities[i], this.opts.finishes[i] ?? 'pearl', cx, cy, coinR * pop, 0, m.alpha);
+      } else {
+        ctx.setLineDash([Math.max(2, coinR * 0.25), Math.max(2, coinR * 0.2)]);
+        ctx.lineWidth = Math.max(1, coinR * 0.12);
+        ctx.strokeStyle = 'rgba(226,232,240,0.5)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, coinR * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  /** A city's celebration over its skyline: fireworks and its own special (beads, balloons, shooting stars). */
+  private paintShow(ctx: CanvasRenderingContext2D, city: CityInfo, view: { s: number; ox: number; oy: number }, showT: number, dim: number, rm: boolean): void {
+    const d = this.dpr;
+    const plan = city.plan;
+    const toX = (x: number): number => view.ox + x * view.s;
+    const toY = (y: number): number => view.oy - y * view.s;
+  if (showT >= 0) {
       ctx.setTransform(d, 0, 0, d, 0, 0);
       ctx.lineCap = 'round';
       if (plan.show === 'beads') {
@@ -874,119 +1125,6 @@ export class CityFinaleOverlay implements OverlayView {
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
     }
-
-    // the probe, with a short trail
-    const probe = finaleProbe(t, rm);
-    if (probe.space !== 'hidden') {
-      const toScreen = (p: { space: string; x: number; y: number }): { x: number; y: number } =>
-        p.space === 'city' ? { x: toX(p.x), y: toY(p.y) } : { x: this.stageX(p.x), y: this.stageY(p.y) };
-      const radius = probe.space === 'city' ? 0.42 * view.s : 0.075 * this.unit;
-      if (!rm) {
-        ctx.setTransform(d, 0, 0, d, 0, 0);
-        for (let k = 8; k >= 1; k--) {
-          const past = finaleProbe(t - k * 0.035, rm);
-          if (past.space !== probe.space) continue;
-          const p = toScreen(past);
-          ctx.globalAlpha = 0.5 * (1 - k / 9);
-          ctx.fillStyle = '#5eead4';
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, radius * (0.6 - k * 0.04), 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-      const p = toScreen(probe);
-      this.paintProbe(ctx, p.x, p.y, radius, probe.alpha, t);
-    }
-
-    // the host
-    const host = finaleHost(t, rm);
-    const head = this.paintHost(ctx, city, plan.hostSide, host.rise, host.wave);
-    const bubble = this.textEls.get('bubble');
-    if (bubble && head) {
-      bubble.style.left = `${head.x}px`;
-      bubble.style.top = `${head.y}px`;
-      bubble.classList.toggle('finale-bubble-right', plan.hostSide === 'right');
-    }
-
-    // the emblem rocket and its sparks
-    const rocket = finaleEmblemRocket(t);
-    if (rocket && !rm) this.paintGlow(ctx, this.stageX(rocket.x), this.stageY(rocket.y), 0.06 * this.unit, 'rgba(254,243,199,0.95)', 1);
-    if (t >= T.emblemBurst && t < T.gatherEnd) {
-      const shape = finaleEmblemShape(t);
-      if (shape.alpha > 0.01) {
-        const sx = this.stageX(rm ? FINALE_EMBLEM.x : shape.x);
-        const sy = this.stageY(rm ? FINALE_EMBLEM.y : shape.y);
-        const r = (rm ? FINALE_EMBLEM.scale : shape.scale) * this.unit;
-        this.paintGlow(ctx, sx, sy, r * 1.7, 'rgba(255,251,235,0.4)', shape.alpha);
-        this.paintEmblem(ctx, city, sx, sy, r, 1, shape.alpha);
-      }
-      ctx.setTransform(d, 0, 0, d, 0, 0);
-      ctx.lineCap = 'round';
-      if (!rm) {
-        ctx.globalCompositeOperation = 'lighter';
-        city.targets.forEach((target, i) => {
-          const s = finaleEmblemSpark(target, i, t);
-          if (!s) return;
-          const x = this.stageX(s.x);
-          const y = this.stageY(s.y);
-          this.paintSpark(ctx, x, y, x, y, css(rgb(target.color)), Math.max(1.6, 0.0085 * this.unit), s.alpha);
-        });
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // the molar
-    const molar = finaleMolar(t, rm);
-    const finish = this.opts.finishes[this.opts.worldIndex] ?? 'pearl';
-    if (molar.alpha > 0) {
-      this.paintGlow(ctx, this.stageX(GOLDEN_MOLAR.center.x), this.stageY(GOLDEN_MOLAR.center.y), 1.1 * this.unit, 'rgba(253,230,138,0.22)', molar.alpha);
-      this.paintMolar(
-        ctx,
-        GOLDEN_MOLAR.center.x,
-        GOLDEN_MOLAR.center.y,
-        GOLDEN_MOLAR.scale * molar.scale,
-        molar.alpha,
-        (i) => (i === this.opts.worldIndex ? (t >= T.slot ? finish : 'empty') : this.opts.finishes[i] ?? 'empty'),
-        this.opts.worldIndex,
-        finaleSlotShine(t)
-      );
-    }
-
-    // the piece (stage space)
-    const piece = finalePiece(t, this.opts.worldIndex, rm);
-    if (piece.visible) {
-      const sx = this.stageX(piece.x);
-      const sy = this.stageY(piece.y);
-      const r = PIECE_RADIUS * piece.scale * this.unit;
-      const held = t >= T.meet && t < T.prizeEnd;
-      if (held && !rm) this.paintRays(ctx, sx, sy, r * 3.2, t);
-      this.paintGlow(ctx, sx, sy, r * 2.6 * piece.glow, finish === 'gold' ? 'rgba(253,224,71,0.7)' : 'rgba(226,232,240,0.6)', piece.alpha);
-      this.paintPiece(ctx, city, finish, sx, sy, r, piece.spin, piece.alpha);
-    }
-
-    // the flash as the probe takes the piece, and a fade to light at the end
-    const flash = t >= T.meet && !rm ? Math.exp(-(t - T.meet) / 0.12) * 0.7 : 0;
-    const toLight = this.total > this.cityLength ? 0 : smooth01((t - (T.end - 0.8)) / 0.8);
-    const toDark = this.total > this.cityLength ? smooth01((t - (T.end - 0.8)) / 0.8) : 0;
-    ctx.setTransform(d, 0, 0, d, 0, 0);
-    if (flash > 0.01) {
-      ctx.globalAlpha = flash;
-      ctx.fillStyle = '#fffbeb';
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
-    if (toLight > 0.01) {
-      ctx.globalAlpha = toLight;
-      ctx.fillStyle = '#e6fffa';
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
-    if (toDark > 0.01) {
-      ctx.globalAlpha = toDark;
-      ctx.fillStyle = '#01030c';
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
-    ctx.globalAlpha = 1;
   }
 
   private paintRays(ctx: CanvasRenderingContext2D, sx: number, sy: number, radius: number, t: number): void {
@@ -1024,6 +1162,8 @@ export class CityFinaleOverlay implements OverlayView {
         const within = t - E.creditsStart - credit.index * E.creditSeconds;
         const view = this.cityView(rm ? 32 : 29 + within * 1.5, 64);
         this.paintCity(ctx, city, view, () => ({ level: credit.alpha, flash: 0 }), () => (rm ? null : t));
+        // each city's own celebration plays again under its credit
+        this.paintShow(ctx, city, view, within - 0.6, rm ? 0 : credit.alpha, rm);
         const host = this.paintHost(ctx, city, city.plan.hostSide, credit.alpha, rm ? 0 : 0.5 * Math.sin(Math.PI * 2 * 1.4 * t));
         void host;
       }
@@ -1166,12 +1306,14 @@ export class CityFinaleOverlay implements OverlayView {
       show('molar', finaleTextVisible(FINALE_TEXT.molar, t));
       show('badge', finaleTextVisible(FINALE_TEXT.molar, t - 0.3));
       show('bubble', finaleTextVisible(FINALE_TEXT.bubble, t));
+      show('climb', finaleTextVisible(FINALE_TEXT.climb, t));
+      show('next', finaleTextVisible(FINALE_TEXT.climb, t - 0.5));
       for (const k of ['endingTitle', 'credit', 'thanks', 'perfect', 'hint']) show(k, false);
       return;
     }
     const e = t - this.cityLength;
     const E = ENDING_TIMES;
-    for (const k of ['city', 'molar', 'badge', 'bubble']) show(k, false);
+    for (const k of ['city', 'molar', 'badge', 'bubble', 'climb', 'next']) show(k, false);
     show('endingTitle', e >= E.snap && e < E.creditsStart - 0.3);
     const credit = endingCredit(e);
     const creditEl = this.textEls.get('credit');
@@ -1184,11 +1326,19 @@ export class CityFinaleOverlay implements OverlayView {
         creditEl.querySelector('.finale-credit-name')!.textContent = city.hostName;
         creditEl.querySelector('.finale-credit-role')!.textContent = city.hostRole;
       }
+      // just under the small molar at the top (on a tall phone that is lower than 30% down)
+      creditEl.style.top = `${Math.max(this.h * 0.3, this.stageY(0.44) + 8)}px`;
     }
     show('thanks', e >= E.finaleStart + 0.8 && e < E.end - 0.5);
     show('perfect', this.allGold && e >= E.face + 0.3 && e < E.end - 0.5);
     show('hint', !this.allGold && e >= E.face + 0.5 && e < E.end - 0.5);
   }
+}
+
+/** 0 → 1 with a small overshoot, for a coin popping into place. */
+function backOutPop(x: number): number {
+  const u = Math.max(0, Math.min(1, x)) - 1;
+  return 1 + 2.7 * u * u * u + 1.7 * u * u;
 }
 
 function escapeHtml(s: string): string {

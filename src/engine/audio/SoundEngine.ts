@@ -30,7 +30,7 @@ import {
   softKick,
   type VoiceOut,
 } from './SynthVoices';
-import type { FinaleNote } from '../../config/cityFinale';
+import { resolveFinaleTrack, type FinaleNote } from '../../config/cityFinale';
 
 const MASTER_GAIN = 0.85;
 const MUSIC_SCALE = 0.55;
@@ -106,6 +106,11 @@ export class SoundEngine {
   /** True while the voice coach is speaking: music sits about 8 dB lower so the words stay clear. */
   private voiceDucked = false;
   private finaleDucked = false;
+  private finaleBus: GainNode | null = null;
+  private finaleVoice: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private readonly finaleBuffers = new Map<string, Promise<AudioBuffer | null>>();
+  /** Bumped on every start/stop, so a song that finishes loading late never starts out of turn. */
+  private finaleToken = 0;
   private hidden = false;
   private urgency = false;
   private acidTension = false;
@@ -244,6 +249,11 @@ export class SoundEngine {
     this.trackBus.connect(this.musicFilter);
     this.trackDeck = new MusicTrackDeck(ctx, this.trackBus, `${import.meta.env.BASE_URL}music/`, BUNDLED_MUSIC_FILES);
     this.trackDeck.onTrackFailed = () => this.applyPlaybackState();
+
+    // A finale's own song: straight to the master, at the music level, never ducked by the finale.
+    this.finaleBus = ctx.createGain();
+    this.finaleBus.gain.value = this.prefs.muted ? 0 : this.prefs.musicVolume * TRACK_SCALE;
+    this.finaleBus.connect(this.masterGain);
 
     this.sfxBus = ctx.createGain();
     this.sfxBus.gain.value = this.prefs.sfxVolume * SFX_SCALE;
@@ -483,6 +493,82 @@ export class SoundEngine {
     this.applyPlaybackState();
   }
 
+  /** True when the music folder has a song for a city's finale (0..4) or the ending (-1). */
+  hasFinaleTrack(index: number): boolean {
+    return resolveFinaleTrack(index, BUNDLED_MUSIC_FILES) !== null;
+  }
+
+  /** Starts loading a finale's song, so it is ready the moment the last zone seals. */
+  preloadFinaleTrack(index: number): void {
+    const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
+    if (file) void this.loadFinaleBuffer(file);
+  }
+
+  private loadFinaleBuffer(file: string): Promise<AudioBuffer | null> {
+    let pending = this.finaleBuffers.get(file);
+    if (!pending) {
+      const ctx = this.ctx;
+      pending = ctx
+        ? fetch(`${import.meta.env.BASE_URL}music/${file}`)
+            .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+            .then((data) => ctx.decodeAudioData(data))
+            .catch(() => null)
+        : Promise.resolve(null);
+      if (ctx) this.finaleBuffers.set(file, pending);
+    }
+    return pending;
+  }
+
+  /**
+   * Plays a finale's song from `offsetSec` (where the show already is). If it is still loading it
+   * starts as soon as it can, at the right place, so the music stays on the show's beats.
+   */
+  playFinaleTrack(index: number, offsetSec: number): void {
+    this.stopFinaleTrack(0.25);
+    const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
+    if (!file || this.prefs.muted) return;
+    this.unlockOnGesture();
+    const token = ++this.finaleToken;
+    const startedAt = performance.now() - offsetSec * 1000;
+    void this.loadFinaleBuffer(file).then((buf) => {
+      const ctx = this.ctx;
+      if (!buf || !ctx || !this.finaleBus || token !== this.finaleToken) return;
+      const offset = (performance.now() - startedAt) / 1000;
+      if (offset >= buf.duration) return;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      gain.gain.value = 1;
+      src.connect(gain);
+      gain.connect(this.finaleBus);
+      src.start(ctx.currentTime + 0.01, Math.max(0, offset));
+      this.finaleVoice = { src, gain };
+      src.onended = () => {
+        if (this.finaleVoice?.src === src) {
+          this.finaleVoice = null;
+          this.applyPlaybackState();
+        }
+      };
+      this.applyPlaybackState();
+    });
+  }
+
+  /** Fades out whatever finale song is playing. */
+  stopFinaleTrack(fadeSec = 0.6): void {
+    this.finaleToken++;
+    const voice = this.finaleVoice;
+    this.finaleVoice = null;
+    if (!voice || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    voice.gain.gain.setTargetAtTime(0, now, Math.max(0.02, fadeSec / 4));
+    try {
+      voice.src.stop(now + fadeSec + 0.05);
+    } catch {
+      /* already stopped */
+    }
+    this.applyPlaybackState();
+  }
+
   /** Bus gains/filter + scheduler on/off for pause + hidden-tab ducking (no backlog on resume). */
   private applyPlaybackState(): void {
     if (!this.ctx || !this.musicBus || !this.musicFilter || !this.seq) return;
@@ -503,7 +589,14 @@ export class SoundEngine {
       this.stopScrub();
       return;
     }
-    const voiceDuck = (this.voiceDucked ? VOICE_DUCK_GAIN : 1) * (this.finaleDucked ? FINALE_DUCK_GAIN : 1);
+    // A finale with its own song silences the game's music; one played by the synth only sinks it.
+    const finaleDuck = this.finaleDucked ? (this.finaleVoice ? FLOOR : FINALE_DUCK_GAIN) : 1;
+    const voiceDuck = (this.voiceDucked ? VOICE_DUCK_GAIN : 1) * finaleDuck;
+    this.finaleBus?.gain.setTargetAtTime(
+      this.hidden || this.prefs.muted ? FLOOR : Math.max(FLOOR, this.prefs.musicVolume * TRACK_SCALE),
+      now,
+      0.08
+    );
     const dryTarget = silent ? 0 : Math.max(FLOOR, (this.paused ? base * 0.45 : base) * voiceDuck);
     const wetDuck = this.paused ? 0.3 : this.acidTension && this.seq.theme.id === 'world_3' ? 0.65 : 1;
     const wetTarget = silent ? 0 : wetBase * wetDuck * voiceDuck;

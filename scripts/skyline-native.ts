@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseCityArt, type CityFinalePlan, type SkylinePiece } from '../src/config/citySkylineGeometry';
 import { CITY_SKYLINE_TEXT } from '../src/config/citySkylines';
-import { FINALE_HOST_IDS, endingChecksum, finaleChecksum, finaleHash, finaleNotes } from '../src/config/cityFinale';
+import { FINALE_HOST_IDS, checksumFinishes, endingChecksum, finaleChecksum, finaleHash, finaleNotes } from '../src/config/cityFinale';
 
 export const SKYLINE_SWIFT_PATH = join(
   process.cwd(),
@@ -53,7 +53,7 @@ function finaleSummary(hostId: string): string {
   const slot = (FINALE_HOST_IDS as readonly string[]).indexOf(hostId);
   return (
     `FinaleExpected(voice: "${plan.voice}", tonic: ${plan.tonic}, show: "${plan.show}", hostSide: "${plan.hostSide}", ` +
-    `bursts: ${plan.bursts.length}, notes: ${finaleNotes(plan, 'gold', false).length}, ` +
+    `bursts: ${plan.bursts.length}, notes: ${finaleNotes(plan, checksumFinishes(slot), slot, false).length}, ` +
     `checksum: ${finaleChecksum(plan, art.emblem, slot, false)}, reducedChecksum: ${finaleChecksum(plan, art.emblem, slot, true)})`
   );
 }
