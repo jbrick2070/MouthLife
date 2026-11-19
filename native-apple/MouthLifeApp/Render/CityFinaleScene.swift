@@ -843,6 +843,13 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
     private var fractalMaterials: [SCNMaterial] = []
     private var fractalLastFx: [SIMD2<Float>] = []
     private var fractalFor = -1
+    /// The wormhole to the next city: one node per tooth, one porcelain tint per ring, and gold.
+    private var wormholeNodes: [SCNNode] = []
+    private var wormholeRingGeos: [SCNGeometry] = []
+    private var wormholeGoldGeo: SCNGeometry?
+    /// Each city's colour down the wormhole that leads to it (gold for the way to the Golden Molar),
+    /// as on the web.
+    private static let wormholeTints: [UInt32] = [0xF87171, 0xC084FC, 0xF472B6, 0xFBBF24, 0x67E8F9]
     private var emblemGeometries: [Int: SCNGeometry] = [:]
     private var orbitNodes: [SCNNode] = []
 
@@ -972,6 +979,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         buildProbe()
         buildCoinAndRays()
         buildMolar()
+        buildWormhole()
         buildMountain()
         buildBulb()
         buildShowProps()
@@ -1216,6 +1224,71 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         }
         molar.isHidden = true
         scene.rootNode.addChildNode(molar)
+    }
+
+    /// The wormhole to the next city: rings of little porcelain and gold teeth, crowns pointing in
+    /// (Finale3D places every tooth; the window at the far end is drawn by the 2D layer).
+    private func buildWormhole() {
+        guard request.kind != .ending, let base = meshGeometry(Finale3D.wormholeToothMesh()) else { return }
+        let next = (0..<CityFinale.campaignPieces).first { finish($0) == .empty } ?? -1
+        let tint: UInt32 = next >= 0 && next < Self.wormholeTints.count ? Self.wormholeTints[next] : 0xFDE047
+        func mix(_ a: UInt32, _ b: UInt32, _ k: Double) -> UInt32 {
+            func ch(_ v: UInt32, _ s: UInt32) -> Double { Double((v >> s) & 255) }
+            func m(_ s: UInt32) -> UInt32 { UInt32((ch(a, s) + (ch(b, s) - ch(a, s)) * k).rounded()) << s }
+            return m(16) | m(8) | m(0)
+        }
+        let gold = SCNMaterial()
+        pbr(gold, hex: 0xE8B23E, metal: 1, rough: 0.22)
+        gold.clearCoat.contents = 0.5
+        gold.emission.contents = RenderBridge.color(hex: 0x2A1D06)
+        if let g = base.copy() as? SCNGeometry {
+            g.materials = [gold]
+            wormholeGoldGeo = g
+        }
+        for k in 0...(Finale3D.Wormhole.rings + 1) {
+            let depth = min(1, Double(k) / Double(Finale3D.Wormhole.rings))
+            let shade = mix(0xF4EEE0, tint, 0.6 * depth)
+            let mat = SCNMaterial()
+            pbr(mat, hex: shade, metal: 0, rough: 0.32)
+            mat.clearCoat.contents = 0.85
+            mat.clearCoatRoughness.contents = 0.15
+            mat.emission.contents = RenderBridge.color(hex: mix(0x000000, shade, 0.16))
+            if let g = base.copy() as? SCNGeometry {
+                g.materials = [mat]
+                wormholeRingGeos.append(g)
+            }
+        }
+        for _ in 0..<(Finale3D.Wormhole.teeth * (Finale3D.Wormhole.rings + 2)) {
+            let n = SCNNode()
+            n.isHidden = true
+            scene.rootNode.addChildNode(n)
+            wormholeNodes.append(n)
+        }
+    }
+
+    /// The wormhole's teeth, each crown turned toward the tunnel's middle.
+    private func placeWormhole(_ t: Double) {
+        let teeth = Finale3D.wormholeTeeth(t, reducedMotion: reducedMotion)
+        for (i, node) in wormholeNodes.enumerated() {
+            guard i < teeth.count, teeth[i].scale > 1e-4, !wormholeRingGeos.isEmpty else {
+                node.isHidden = true
+                continue
+            }
+            let w = teeth[i]
+            let geo = w.gold ? wormholeGoldGeo : wormholeRingGeos[min(w.ring, wormholeRingGeos.count - 1)]
+            if node.geometry !== geo { node.geometry = geo }
+            // y = z x x keeps the frame right-handed (crown along z, roots spreading along x)
+            let x = SIMD3<Float>(w.tangent) * Float(w.scale)
+            let z = SIMD3<Float>(w.inward) * Float(w.scale)
+            let y = simd_cross(SIMD3<Float>(w.inward), SIMD3<Float>(w.tangent)) * Float(w.scale)
+            node.simdTransform = float4x4(
+                SIMD4<Float>(x, 0),
+                SIMD4<Float>(y, 0),
+                SIMD4<Float>(z, 0),
+                SIMD4<Float>(SIMD3<Float>(w.pos), 1)
+            )
+            node.isHidden = false
+        }
     }
 
     private func buildMountain() {
@@ -1688,6 +1761,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
         bulb.isHidden = true
         for n in orbitNodes { n.isHidden = true }
         for n in fractalNodes { n.isHidden = true }
+        for n in wormholeNodes { n.isHidden = true }
     }
 
     private func placeMolar(_ pose: FinaleMolarPose, alpha: Double, placed: (Int) -> MolarFinish, shineIndex: Int, shine: Double, gold: Bool) {
@@ -1840,7 +1914,9 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             s = max(-1, min(1, (now.x - prev.x) / (p.space == .city ? 1.6 : 0.5)))
         }
         if let craft = probeRig?.rootNode {
-            craft.simdEulerAngles = SIMD3<Float>(0, Float(-Double.pi / 2 + Double.pi / 2 * s), Float(-0.25 * abs(s) + (reducedMotion ? 0 : 0.05 * sin(t * 3.1))))
+            // a nod hello at the wormhole's ring of teeth (its tiny double in the next city nods back)
+            let nod = CityFinale.nod(t, at: CityFinale.hello, reducedMotion: reducedMotion)
+            craft.simdEulerAngles = SIMD3<Float>(0, Float(-Double.pi / 2 + Double.pi / 2 * s), Float(-0.25 * abs(s) + (reducedMotion ? 0 : 0.05 * sin(t * 3.1)) - 0.55 * nod))
             craft.simdPosition = SIMD3<Float>(0, reducedMotion ? 0 : Float(0.06 * sin(t * 2.3)), 0)
         }
         let spin = Float(reducedMotion ? 0 : t * 7)
@@ -1960,6 +2036,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             shineIndex: worldIndex, shine: slotShine, gold: false
         )
         placeProbe(t, mountainDy: dy)
+        placeWormhole(t)
     }
 
     private func renderEnding(_ t: Double, w: Double, h: Double) {
@@ -2295,13 +2372,28 @@ extension FinalePainter {
             paintTouchdown(at: CityFinale.climbHop, ledgeIdx: request.worldIndex)
             if atTop { paintTouchdown(at: CityFinale.summitHop, ledgeIdx: CityFinale.campaignPieces) }
         }
+        // the window at the end of the wormhole: the next city, with little wormholes in its sky
+        if let win = Finale3D.wormholeWindow(t, reducedMotion: rm) {
+            let cover = hypot(w, h)
+            let next = CityFinale.climbStatus(request.finishes).next
+            if let s = lens.project(win.center), s.depth > 0.08 {
+                paintWormholeWindow(&ctx, x: s.x, y: s.y, r: min(lens.pixels(win.radius, depth: s.depth), cover * 4), cityIndex: next, depth: 2, t: t, alpha: win.alpha, withProbe: true)
+            } else {
+                paintWormholeWindow(&ctx, x: w / 2, y: h / 2, r: cover, cityIndex: next, depth: 2, t: t, alpha: win.alpha, withProbe: true)
+            }
+            // Reduce Motion: the next city cross-fades up to fill the screen instead of the dive
+            if win.fill > 0.01 {
+                paintWormholeWindow(&ctx, x: w / 2, y: h / 2, r: cover, cityIndex: next, depth: 2, t: t, alpha: win.fill, withProbe: true)
+            }
+        }
         let host = CityFinale.host(t, reducedMotion: rm)
         paintHost(&ctx, city, onLeft: plan.hostOnLeft, rise: host.rise, wave: host.wave)
         // in 3D the bloom carries the moment the probe takes the piece; only a soft flash
         let flash = t >= CityFinale.meet && !rm ? exp(-(t - CityFinale.meet) / 0.12) * 0.22 : 0
         let endingFollows = clock.total > clock.cityLength
-        let toLight = endingFollows ? 0 : CityFinale.smooth01((t - (CityFinale.end - 0.8)) / 0.8)
-        let toDark = endingFollows ? CityFinale.smooth01((t - (CityFinale.end - 0.8)) / 0.8) : 0
+        // only the last moment fades, so the next city at the end of the wormhole stays in sight
+        let toLight = endingFollows ? 0 : CityFinale.smooth01((t - (CityFinale.end - 0.3)) / 0.3)
+        let toDark = endingFollows ? CityFinale.smooth01((t - (CityFinale.end - 0.3)) / 0.3) : 0
         fillScreen(&ctx, color: Color(red: 1, green: 0.98, blue: 0.92), alpha: flash)
         fillScreen(&ctx, color: Color(red: 0.9, green: 1, blue: 0.98), alpha: toLight)
         fillScreen(&ctx, color: Color(red: 0.004, green: 0.012, blue: 0.047), alpha: toDark)
@@ -2338,6 +2430,27 @@ extension FinalePainter {
                 paintMeteors(&glow, lens: lens, showT: within - 0.6, alpha: credit.alpha)
             }
             paintHost(&ctx, c, onLeft: c.plan.hostOnLeft, rise: credit.alpha, wave: rm ? 0 : 0.5 * sin(Double.pi * 2 * 1.4 * t))
+        }
+        // every city the child cleaned, in a little bubble over its own piece: all five inside one tooth
+        let homes = CityFinale.endingCityBubbles(t)
+        if homes > 0.01 {
+            let place = CityFinale.endingMolarPlace(t)
+            let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: allGold), turn: true, reducedMotion: rm)
+            var bubbles: [(index: Int, x: Double, y: Double, r: Double)] = []
+            for i in 0..<CityFinale.campaignPieces {
+                guard let s = lens.project(pose.world(Finale3D.cuspBubbleLocal(i))) else { continue }
+                bubbles.append((i, s.x, s.y, lens.pixels(CityFinale.Molar.cuspRadius * Finale3D.cuspBubble.radius * pose.scale, depth: s.depth)))
+            }
+            // on a narrow screen the crown of bubbles draws in toward the middle so none is cut off
+            let mid = bubbles.reduce(0) { $0 + $1.x } / Double(max(1, bubbles.count))
+            let reach = max(1, bubbles.map { abs($0.x - mid) }.max() ?? 1)
+            let widest = bubbles.map { $0.r }.max() ?? 0
+            let fit = max(0.3, min(1, (min(mid, w - mid) - widest * 1.1 - 6) / reach))
+            for b in bubbles {
+                let x = mid + (b.x - mid) * fit
+                paintWormholeWindow(&ctx, x: x, y: b.y, r: b.r, cityIndex: b.index, depth: 0, t: t, alpha: homes)
+                paintBubbleRim(&ctx, x: x, y: b.y, r: b.r, alpha: homes)
+            }
         }
         if t >= E.finaleStart {
             let local = t - E.finaleStart

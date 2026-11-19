@@ -74,11 +74,11 @@ public enum CitySkylineArt {
 
     public static func expectedFinale(forHost hostId: String) -> FinaleExpected? {
         switch hostId {
-        case "accra": return FinaleExpected(voice: "pluck", tonic: 55, show: "balloons", hostSide: "left", bursts: 6, notes: 155, checksum: 5425.533, reducedChecksum: 4615.739)
-        case "new_orleans": return FinaleExpected(voice: "reed", tonic: 58, show: "beads", hostSide: "left", bursts: 6, notes: 148, checksum: 5566.998, reducedChecksum: 4755.575)
-        case "orbit_aurora": return FinaleExpected(voice: "bell", tonic: 62, show: "meteors", hostSide: "right", bursts: 6, notes: 155, checksum: 5258.993, reducedChecksum: 4449.425)
-        case "tokyo": return FinaleExpected(voice: "celesta", tonic: 64, show: "neon", hostSide: "left", bursts: 7, notes: 150, checksum: 5595.395, reducedChecksum: 4788.076)
-        case "toronto": return FinaleExpected(voice: "rhodes", tonic: 60, show: "fireworks", hostSide: "left", bursts: 9, notes: 164, checksum: 6213.393, reducedChecksum: 5391.854)
+        case "accra": return FinaleExpected(voice: "pluck", tonic: 55, show: "balloons", hostSide: "left", bursts: 6, notes: 155, checksum: 5417.331, reducedChecksum: 4615.739)
+        case "new_orleans": return FinaleExpected(voice: "reed", tonic: 58, show: "beads", hostSide: "left", bursts: 6, notes: 148, checksum: 5560.338, reducedChecksum: 4755.575)
+        case "orbit_aurora": return FinaleExpected(voice: "bell", tonic: 62, show: "meteors", hostSide: "right", bursts: 6, notes: 155, checksum: 5250.142, reducedChecksum: 4449.425)
+        case "tokyo": return FinaleExpected(voice: "celesta", tonic: 64, show: "neon", hostSide: "left", bursts: 7, notes: 150, checksum: 5593.97, reducedChecksum: 4788.076)
+        case "toronto": return FinaleExpected(voice: "rhodes", tonic: 60, show: "fireworks", hostSide: "left", bursts: 9, notes: 164, checksum: 6217.137, reducedChecksum: 5391.854)
         default: return nil
         }
     }
@@ -94,11 +94,11 @@ public enum CitySkylineArt {
 
     /// The 3D finale's checksum for each city (see src/config/finale3d.ts and Finale3D.swift).
     public static let expectedFinale3D: [String: Double] = [
-        "toronto": 16227.717,
-        "new_orleans": 15576.727,
-        "tokyo": 14622.865,
-        "accra": 13936.216,
-        "orbit_aurora": 13272.933,
+        "toronto": 17944.999,
+        "new_orleans": 17294.01,
+        "tokyo": 16340.147,
+        "accra": 15653.498,
+        "orbit_aurora": 14990.215,
     ]
 
     static let accra = #"""

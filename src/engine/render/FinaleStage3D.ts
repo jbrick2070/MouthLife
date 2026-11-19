@@ -30,6 +30,7 @@ import {
   finaleMeteors,
   finaleMolar,
   finaleMountain,
+  finaleNod,
   finalePassTime,
   finalePiece,
   finaleProbe,
@@ -39,9 +40,15 @@ import {
   type MolarFinish,
 } from '../../config/cityFinale';
 import {
+  CUSP_BUBBLE,
   EMBLEM_WORLD,
   RELIEF_DEPTH,
   STAGE,
+  WORMHOLE,
+  cuspBubbleLocal,
+  wormholeTeeth,
+  wormholeToothMesh,
+  wormholeWindow,
   burstSparks3D,
   burstWorld,
   emblemFractal,
@@ -1115,6 +1122,10 @@ const BULB_FRAG = /* glsl */ `
 
 // ---------------------------------------------------------------------------------- the stage
 
+/** Each city's colour down the wormhole that leads to it (and gold for the way to the Golden Molar). */
+const WORMHOLE_TINTS = [0xf87171, 0xc084fc, 0xf472b6, 0xfbbf24, 0x67e8f9] as const;
+const WORMHOLE_TINT_ENDING = 0xfde047;
+
 function meshGeometry(m: MeshData): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(m.positions, 3));
@@ -1249,6 +1260,9 @@ export class FinaleStage3D {
   private faceTilt = 0;
   private readonly molar = new THREE.Group();
   private readonly molarFx = { value: new THREE.Vector4(0, -3, 0, 0) };
+  /** The wormhole to the next city: its rings of porcelain and gold teeth. */
+  private readonly wormholePorcelain: THREE.InstancedMesh;
+  private readonly wormholeGold: THREE.InstancedMesh;
   private readonly molarBodyGlass: THREE.MeshPhysicalMaterial;
   private readonly molarBodyGold: THREE.MeshPhysicalMaterial;
   private readonly molarBody: THREE.Mesh;
@@ -1585,6 +1599,37 @@ export class FinaleStage3D {
     }
     this.molar.visible = false;
     this.scene.add(this.molar);
+
+    // the wormhole to the next city: rings of little porcelain and gold teeth, crowns pointing in
+    // (finale3d.ts places every tooth; the window at the far end is drawn by the 2D layer)
+    const toothGeo = meshGeometry(wormholeToothMesh());
+    const toothPorcelain = new THREE.MeshPhysicalMaterial({
+      color: 0xf4eee0,
+      roughness: 0.32,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.15,
+      sheen: 0.3,
+      sheenColor: new THREE.Color(0xffe7c2),
+      emissive: 0xffffff,
+      emissiveIntensity: 0.16,
+      envMap: this.env,
+      envMapIntensity: 0.8,
+    });
+    const toothGold = new THREE.MeshPhysicalMaterial({ color: 0xe8b23e, metalness: 1, roughness: 0.22, clearcoat: 0.5, emissive: 0x7a5410, emissiveIntensity: 0.35, envMap: this.env, envMapIntensity: 1.2 });
+    for (const d of [toothGeo, toothPorcelain, toothGold]) this.track(d);
+    // the mouth, the tunnel's rings and the ring round the window
+    const maxTeeth = WORMHOLE.teeth * (WORMHOLE.rings + 2);
+    this.wormholePorcelain = new THREE.InstancedMesh(toothGeo, toothPorcelain, maxTeeth);
+    this.wormholeGold = new THREE.InstancedMesh(toothGeo, toothGold, maxTeeth);
+    for (const m of [this.wormholePorcelain, this.wormholeGold]) {
+      m.count = 0;
+      m.frustumCulled = false;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.scene.add(m);
+    }
+    // the porcelain teeth take on the next city's colour toward the far end of the tunnel
+    this.wormholePorcelain.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.wormholePorcelain.instanceColor?.setUsage(THREE.DynamicDrawUsage);
 
     // the mountain: a spire of hexagonal crystal columns, ivory at the peak like enamel
     const columns = mountainColumns();
@@ -2043,7 +2088,9 @@ export class FinaleStage3D {
     }
     const craft = this.probe.getObjectByName('craft');
     if (craft) {
-      craft.rotation.set(0, -Math.PI / 2 + (Math.PI / 2) * s, -0.25 * Math.abs(s) + (this.reducedMotion ? 0 : 0.05 * Math.sin(t * 3.1)));
+      // a nod hello at the wormhole's ring of teeth (its tiny double in the next city nods back)
+      const nod = finaleNod(t, T.hello, this.reducedMotion);
+      craft.rotation.set(0, -Math.PI / 2 + (Math.PI / 2) * s, -0.25 * Math.abs(s) + (this.reducedMotion ? 0 : 0.05 * Math.sin(t * 3.1)) - 0.55 * nod);
       craft.position.y = this.reducedMotion ? 0 : 0.06 * Math.sin(t * 2.3);
     }
     const spin = this.reducedMotion ? 0 : t * 7;
@@ -2241,6 +2288,61 @@ export class FinaleStage3D {
     this.bulb.visible = false;
     for (const o of this.orbitEmblems) o.visible = false;
     for (const { inst } of this.fractals.values()) inst.count = 0;
+    this.wormholePorcelain.count = 0;
+    this.wormholeGold.count = 0;
+  }
+
+  /** The wormhole's teeth, each crown turned toward the tunnel's middle. */
+  private placeWormhole(t: number): void {
+    const teeth = wormholeTeeth(t, this.reducedMotion);
+    const next = finaleClimbStatus(this.finishes).next;
+    const tint = WORMHOLE_TINTS[next] ?? WORMHOLE_TINT_ENDING;
+    const m = new THREE.Matrix4();
+    const col = new THREE.Color();
+    let porcelain = 0;
+    let gold = 0;
+    for (const w of teeth) {
+      const s = w.scale;
+      if (s <= 1e-4) continue;
+      const x = w.tangent;
+      const z = w.inward;
+      // y = z x x keeps the frame right-handed (crown along z, roots spreading along x)
+      const y: Vec3 = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+      m.set(x[0] * s, y[0] * s, z[0] * s, w.pos[0], x[1] * s, y[1] * s, z[1] * s, w.pos[1], x[2] * s, y[2] * s, z[2] * s, w.pos[2], 0, 0, 0, 1);
+      if (w.gold) {
+        this.wormholeGold.setMatrixAt(gold++, m);
+      } else {
+        this.wormholePorcelain.setMatrixAt(porcelain, m);
+        col.setRGB(1, 1, 1).lerp(col.clone().setHex(tint), 0.6 * w.depth);
+        this.wormholePorcelain.setColorAt(porcelain, col);
+        porcelain++;
+      }
+    }
+    this.wormholePorcelain.count = porcelain;
+    this.wormholeGold.count = gold;
+    this.wormholePorcelain.instanceMatrix.needsUpdate = true;
+    this.wormholeGold.instanceMatrix.needsUpdate = true;
+    if (this.wormholePorcelain.instanceColor) this.wormholePorcelain.instanceColor.needsUpdate = true;
+  }
+
+  /**
+   * Where the window onto the next city is on screen (CSS pixels): its middle and radius. Once the
+   * camera reaches it, it covers the whole screen.
+   */
+  wormholeWindowOnScreen(t: number, w: number, h: number): { x: number; y: number; r: number; alpha: number; fill: number } | null {
+    const win = wormholeWindow(t, this.reducedMotion);
+    if (!win) return null;
+    const cover = Math.hypot(w, h);
+    const c = new THREE.Vector3(...win.center);
+    const view = c.clone().applyMatrix4(this.camera.matrixWorldInverse);
+    if (-view.z < 0.08) return { x: w / 2, y: h / 2, r: cover, alpha: win.alpha, fill: win.fill };
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const p = c.clone().project(this.camera);
+    const e = c.clone().addScaledVector(right, win.radius).project(this.camera);
+    const x = (p.x * 0.5 + 0.5) * w;
+    const y = (-p.y * 0.5 + 0.5) * h;
+    const r = Math.hypot((e.x * 0.5 + 0.5) * w - x, (-e.y * 0.5 + 0.5) * h - y);
+    return { x, y, r: Math.min(r, cover * 4), alpha: win.alpha, fill: win.fill };
   }
 
   /** One frame of a city's finale, `t` seconds in. */
@@ -2321,6 +2423,7 @@ export class FinaleStage3D {
       t < T.molarEnd
     );
     this.placeProbe(t, dy);
+    this.placeWormhole(t);
     // the probe's trail
     if (this.probe.visible && !this.reducedMotion) {
       for (let k = 1; k <= 7; k++) {
@@ -2519,6 +2622,27 @@ export class FinaleStage3D {
    * Where the ending's face goes on screen (CSS pixels): the middle of the molar's front wall once it
    * has stood up, and how many pixels one molar unit spans there.
    */
+  /** Where each city's bubble over the molar's pieces is on screen (CSS pixels), with its radius. */
+  cuspBubblesOnScreen(w: number, h: number): { index: number; x: number; y: number; r: number }[] {
+    if (!this.molar.visible) return [];
+    this.molar.updateMatrixWorld(true);
+    const out: { index: number; x: number; y: number; r: number }[] = [];
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const radiusLocal = GOLDEN_MOLAR.cuspRadius * CUSP_BUBBLE.radius;
+    for (let i = 0; i < CAMPAIGN_PIECES; i++) {
+      const c = this.molar.localToWorld(new THREE.Vector3(...cuspBubbleLocal(i)));
+      // a bubble is round from every side: its screen radius is its world radius at that distance
+      const worldRadius = radiusLocal * this.molar.scale.x;
+      const p = c.clone().project(this.camera);
+      if (p.z > 1) continue;
+      const e = c.clone().addScaledVector(right, worldRadius).project(this.camera);
+      const x = (p.x * 0.5 + 0.5) * w;
+      const y = (-p.y * 0.5 + 0.5) * h;
+      out.push({ index: i, x, y, r: Math.hypot((e.x * 0.5 + 0.5) * w - x, (-e.y * 0.5 + 0.5) * h - y) });
+    }
+    return out;
+  }
+
   molarFaceOnScreen(w: number, h: number): { x: number; y: number; u: number } | null {
     if (!this.molar.visible) return null;
     this.molar.updateMatrixWorld(true);

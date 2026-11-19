@@ -27,6 +27,8 @@ import {
   MOUNTAIN,
   MOLAR_FINISH_COLORS,
   PIECE_RADIUS,
+  PORTAL_STAGE,
+  endingCityBubbles,
   endingCredit,
   endingEmblemOrbit,
   endingFace,
@@ -45,6 +47,8 @@ import {
   finaleEmblemShape,
   finaleEmblemSpark,
   finaleEmblemTargets,
+  finaleHash,
+  finaleHelloBack,
   finaleHost,
   finaleMeteors,
   finaleMolar,
@@ -69,6 +73,16 @@ import { FinaleStage3D } from '../engine/render/FinaleStage3D';
 
 /** The five campaign cities, in order. */
 export const FINALE_WORLD_IDS = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'] as const;
+
+function lerpN(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/** Overshoots a little and settles: a pop. */
+function backOutN(x: number): number {
+  const u = Math.max(0, Math.min(1, x)) - 1;
+  return 1 + 2.7 * u * u * u + 1.7 * u * u;
+}
 
 export interface CityFinaleOptions {
   /** 'city': one city's finale. 'ending': the ending alone. 'city+ending': the last city, then the ending. */
@@ -463,7 +477,7 @@ export class CityFinaleOverlay implements OverlayView {
     if (stage) {
       if (this.city && t < this.cityLength) {
         stage.renderCity(t, this.w, this.h);
-        this.drawCityOver3D(ctx, t);
+        this.drawCityOver3D(ctx, stage, t);
       } else {
         stage.renderEnding(t - this.cityLength, this.w, this.h, this.allGold);
         this.drawEndingOver3D(ctx, stage, t - this.cityLength);
@@ -1012,16 +1026,194 @@ export class CityFinaleOverlay implements OverlayView {
     }
 
     if (t >= T.climbEnd) drawProbe();
+    this.paintFlatWormhole(ctx, t);
     this.paintCityVeils(ctx, t, 0.7);
   }
 
-  /** The 2D layer over the 3D show: the host and their words; the 3D stage draws the rest. */
-  private drawCityOver3D(ctx: CanvasRenderingContext2D, t: number): void {
+  /**
+   * The 2D layer over the 3D show: the window at the end of the wormhole, the host and their words;
+   * the 3D stage draws the rest.
+   */
+  private drawCityOver3D(ctx: CanvasRenderingContext2D, stage: FinaleStage3D, t: number): void {
     const city = this.city!;
+    const win = stage.wormholeWindowOnScreen(t, this.w, this.h);
+    if (win) {
+      this.paintWormholeWindow(ctx, win.x, win.y, win.r, this.nextCity, 2, t, win.alpha, 3, true);
+      // Reduce Motion: the next city cross-fades up to fill the screen instead of the dive
+      if (win.fill > 0.01) this.paintWormholeWindow(ctx, this.w / 2, this.h / 2, Math.hypot(this.w, this.h), this.nextCity, 2, t, win.fill, 3, true);
+    }
     const host = finaleHost(t, this.opts.reducedMotion);
     this.placeBubble(this.paintHost(ctx, city, city.plan.hostSide, host.rise, host.wave), city.plan.hostSide);
     // in 3D the bloom carries the moment the probe takes the piece; only a soft flash
     this.paintCityVeils(ctx, t, 0.22);
+  }
+
+  /**
+   * The flat show's wormhole (no 3D): a ring of teeth opens high over the mountain with the next
+   * city inside, then from the dive the picture zooms until that city fills the screen.
+   */
+  private paintFlatWormhole(ctx: CanvasRenderingContext2D, t: number): void {
+    const T = FINALE_TIMES;
+    if (t < T.portalOpen || t >= T.end) return;
+    const rm = this.opts.reducedMotion;
+    const open = rm ? smooth01((t - T.portalOpen) / 0.6) : backOutN((t - T.portalOpen) / 0.6);
+    const cover = Math.hypot(this.w, this.h);
+    const r0 = 0.32 * this.unit;
+    const x0 = this.stageX(PORTAL_STAGE.x);
+    const y0 = Math.max(r0 * 1.4, this.stageY(PORTAL_STAGE.y));
+    const zoom = rm ? 0 : smooth01((t - T.dive) / (T.end - T.dive));
+    const r = r0 * Math.pow(cover / r0, zoom);
+    const x = lerpN(x0, this.w / 2, zoom);
+    const y = lerpN(y0, this.h / 2, zoom);
+    const alpha = smooth01((t - (T.portalOpen + 0.5)) / 0.5);
+    this.paintWormholeWindow(ctx, x, y, r * 0.8 * Math.max(0, open), this.nextCity, 2, t, alpha, 3, true);
+    this.paintToothRing(ctx, x, y, r * Math.max(0, open), rm ? 0 : (t - T.portalOpen) * 0.8, 1);
+    const fill = rm ? smooth01((t - (T.dive + 0.5)) / 1.0) : 0;
+    if (fill > 0.01) this.paintWormholeWindow(ctx, this.w / 2, this.h / 2, cover, this.nextCity, 2, t, fill, 3, true);
+  }
+
+  /**
+   * A round window onto city `cityIndex` (-1: the way to the Golden Molar), lit up under its own
+   * sky. In that sky floats a little ring of teeth holding the city after it, which holds the next,
+   * `depth` rings down: the wormhole goes on and on.
+   */
+  private paintWormholeWindow(
+    ctx: CanvasRenderingContext2D,
+    cx: number,
+    cy: number,
+    r: number,
+    cityIndex: number,
+    depth: number,
+    t: number,
+    alpha: number,
+    branches = 3,
+    withProbe = false
+  ): void {
+    if (r < 1.5 || alpha <= 0.01) return;
+    const d = this.dpr;
+    const city = cityIndex >= 0 ? this.cities[cityIndex] : null;
+    ctx.save();
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    // once the window is bigger than the screen the picture inside stops growing: we have arrived
+    const rc = Math.min(r, Math.max(this.w, this.h) * 0.6);
+    const glow = city ? city.accent : { r: 0.99, g: 0.88, b: 0.28 };
+    const sky = ctx.createLinearGradient(0, cy - rc, 0, cy + rc);
+    sky.addColorStop(0, '#020617');
+    sky.addColorStop(0.5, '#0b1a3a');
+    sky.addColorStop(0.74, `rgb(${Math.round(30 + glow.r * 90)},${Math.round(30 + glow.g * 70)},${Math.round(60 + glow.b * 80)})`);
+    sky.addColorStop(1, '#030712');
+    ctx.fillStyle = sky;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    for (let k = 0; k < 28; k++) {
+      const sx = cx + (finaleHash(k, 31) * 2 - 1) * rc;
+      const sy = cy - rc + finaleHash(k, 37) * rc * 1.1;
+      const size = Math.min(2, Math.max(1, rc * 0.006));
+      ctx.fillStyle = '#e2e8f0';
+      ctx.globalAlpha = alpha * (0.4 + 0.5 * finaleHash(k, 41));
+      ctx.fillRect(sx, sy, size, size);
+    }
+    ctx.globalAlpha = alpha;
+    if (city) {
+      if (r >= 8) {
+        const s = (rc * 2) / 46;
+        const view = { s, ox: cx - 32 * s, oy: cy + rc * 0.52 };
+        this.paintCity(ctx, city, view, () => ({ level: 1, flash: 0 }), () => (this.opts.reducedMotion ? null : t));
+      }
+    } else {
+      // the last city leads to the Golden Molar: a warm golden light at the end
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      this.paintGlow(ctx, cx, cy, rc * 0.9, 'rgba(253,224,71,0.85)', alpha);
+      this.paintGlow(ctx, cx, cy, rc * 0.35, 'rgba(255,251,235,0.95)', alpha);
+    }
+    if (depth > 0 && city) {
+      // little wormholes in this city's sky: to the next city, and (at the top) the ones after it
+      const spots = [
+        { dx: 0.32, dy: -0.36, size: 0.17 },
+        { dx: -0.4, dy: -0.42, size: 0.12 },
+        { dx: 0.0, dy: -0.66, size: 0.09 },
+      ].slice(0, Math.max(1, branches));
+      const spin = this.opts.reducedMotion ? 0 : t * 0.9;
+      spots.forEach((spot, n) => {
+        const ir = rc * spot.size;
+        if (ir < 3) return;
+        const ix = cx + rc * spot.dx;
+        const iy = cy + rc * spot.dy;
+        this.paintWormholeWindow(ctx, ix, iy, ir * 0.8, (cityIndex + 1 + n) % CAMPAIGN_PIECES, depth - 1, t, alpha, 1);
+        this.paintToothRing(ctx, ix, iy, ir, n % 2 === 0 ? spin : -spin, alpha);
+      });
+    }
+    if (withProbe && city) {
+      // our probe's tiny double, waiting in the next city's sky: it nods back as we fly in
+      const nod = finaleHelloBack(t, this.opts.reducedMotion);
+      this.paintProbe(ctx, cx - rc * 0.14, cy - rc * 0.05 + nod * rc * 0.03, rc * 0.07, alpha, t);
+    }
+    ctx.restore();
+  }
+
+  /** The glassy edge of a city bubble: a gold-and-pearl rim and a little shine at the top left. */
+  private paintBubbleRim(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, alpha: number): void {
+    if (r < 2 || alpha <= 0.01) return;
+    const d = this.dpr;
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = Math.max(1, r * 0.09);
+    const rim = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+    rim.addColorStop(0, '#fff7d6');
+    rim.addColorStop(0.5, '#f3c04f');
+    rim.addColorStop(1, '#fde68a');
+    ctx.strokeStyle = rim;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.55;
+    ctx.lineWidth = Math.max(1, r * 0.07);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.72, Math.PI * 1.08, Math.PI * 1.42);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /** A ring of little teeth, crowns pointing in, every third one gold. */
+  private paintToothRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, spin: number, alpha: number): void {
+    if (r < 2 || alpha <= 0.01) return;
+    const d = this.dpr;
+    const u = r * 0.3;
+    ctx.globalAlpha = alpha;
+    for (let j = 0; j < 12; j++) {
+      const a = spin + (j / 12) * Math.PI * 2;
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+      ctx.rotate(a - Math.PI / 2);
+      ctx.scale(u, u);
+      ctx.beginPath();
+      ctx.moveTo(-0.5, 0.05);
+      ctx.lineTo(-0.5, -0.32);
+      ctx.quadraticCurveTo(-0.5, -0.62, -0.24, -0.6);
+      ctx.quadraticCurveTo(0, -0.44, 0.24, -0.6);
+      ctx.quadraticCurveTo(0.5, -0.62, 0.5, -0.32);
+      ctx.lineTo(0.5, 0.05);
+      ctx.quadraticCurveTo(0.46, 0.55, 0.26, 0.68);
+      ctx.quadraticCurveTo(0.12, 0.36, 0, 0.26);
+      ctx.quadraticCurveTo(-0.12, 0.36, -0.26, 0.68);
+      ctx.quadraticCurveTo(-0.46, 0.55, -0.5, 0.05);
+      ctx.closePath();
+      const gold = j % 3 === 0;
+      const g = ctx.createLinearGradient(0, -0.6, 0, 0.7);
+      g.addColorStop(0, gold ? '#fde68a' : '#ffffff');
+      g.addColorStop(1, gold ? '#b7791f' : '#cbd5e1');
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.lineWidth = 0.06;
+      ctx.strokeStyle = gold ? 'rgba(120,80,10,0.7)' : 'rgba(100,116,139,0.6)';
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   private placeBubble(head: { x: number; y: number } | null, side: 'left' | 'right'): void {
@@ -1039,8 +1231,9 @@ export class CityFinaleOverlay implements OverlayView {
     const rm = this.opts.reducedMotion;
     const d = this.dpr;
     const flash = t >= T.meet && !rm ? Math.exp(-(t - T.meet) / 0.12) * flashStrength : 0;
-    const toLight = this.total > this.cityLength ? 0 : smooth01((t - (T.end - 0.8)) / 0.8);
-    const toDark = this.total > this.cityLength ? smooth01((t - (T.end - 0.8)) / 0.8) : 0;
+    // only the last moment fades, so the next city at the end of the wormhole stays in sight
+    const toLight = this.total > this.cityLength ? 0 : smooth01((t - (T.end - 0.3)) / 0.3);
+    const toDark = this.total > this.cityLength ? smooth01((t - (T.end - 0.3)) / 0.3) : 0;
     ctx.setTransform(d, 0, 0, d, 0, 0);
     if (flash > 0.01) {
       ctx.globalAlpha = flash;
@@ -1342,6 +1535,21 @@ export class CityFinaleOverlay implements OverlayView {
     const credit = endingCredit(t);
     const city = credit.index >= 0 ? this.cities[credit.index] : null;
     if (city) this.paintHost(ctx, city, city.plan.hostSide, credit.alpha, rm ? 0 : 0.5 * Math.sin(Math.PI * 2 * 1.4 * t));
+    // every city the child cleaned, in a little bubble over its own piece: all five inside one tooth
+    const homes = endingCityBubbles(t);
+    if (homes > 0.01) {
+      const bubbles = stage.cuspBubblesOnScreen(this.w, this.h);
+      // on a narrow screen the crown of bubbles draws in toward the middle so none is cut off
+      const mid = bubbles.reduce((s, b) => s + b.x, 0) / Math.max(1, bubbles.length);
+      const reach = Math.max(1, ...bubbles.map((b) => Math.abs(b.x - mid)));
+      const widest = Math.max(0, ...bubbles.map((b) => b.r));
+      const fit = Math.max(0.3, Math.min(1, (Math.min(mid, this.w - mid) - widest * 1.1 - 6) / reach));
+      for (const b of bubbles) {
+        const x = mid + (b.x - mid) * fit;
+        this.paintWormholeWindow(ctx, x, b.y, b.r, b.index, 0, t, homes);
+        this.paintBubbleRim(ctx, x, b.y, b.r, homes);
+      }
+    }
     if (this.allGold && t >= E.finaleStart) {
       const face = endingFace(t);
       const spot = face.alpha > 0 ? stage.molarFaceOnScreen(this.w, this.h) : null;

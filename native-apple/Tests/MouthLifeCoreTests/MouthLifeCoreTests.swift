@@ -1183,12 +1183,26 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(CityFinale.end, 30)
         XCTAssertEqual(CityFinale.Ending.end, 60)
         for i in 0..<CityFinale.campaignPieces {
-            let p = CityFinale.probe(CityFinale.climbEnd - 0.01, reducedMotion: false, climbTo: i, summit: false)
-            let l = CityFinale.ledge(i, t: CityFinale.climbEnd - 0.01, reducedMotion: false)
+            let p = CityFinale.probe(CityFinale.portalLift - 0.01, reducedMotion: false, climbTo: i, summit: false)
+            let l = CityFinale.ledge(i, t: CityFinale.portalLift - 0.01, reducedMotion: false)
             XCTAssertLessThan(hypot(p.x - l.x, p.y - l.y), 0.03, "ledge \(i)")
         }
-        let top = CityFinale.probe(CityFinale.climbEnd - 0.01, reducedMotion: false, climbTo: 4, summit: true)
+        let top = CityFinale.probe(CityFinale.portalLift - 0.01, reducedMotion: false, climbTo: 4, summit: true)
         XCTAssertLessThan(hypot(top.x - CityFinale.Mountain.summitStand.x, top.y - CityFinale.Mountain.summitStand.y), 0.03)
+        // then up into the wormhole's ring of teeth, and in through it as the camera dives
+        let atRing = CityFinale.probe(CityFinale.dive - 0.01, reducedMotion: false, climbTo: 2, summit: false)
+        XCTAssertLessThan(hypot(atRing.x - CityFinale.portalStage.x, atRing.y - CityFinale.portalStage.y), 0.03)
+        XCTAssertEqual(CityFinale.probe(CityFinale.dive + 0.4, reducedMotion: false, climbTo: 2, summit: false).space, .hidden)
+        // the wormhole: every tooth's crown points at the tunnel's middle; the camera arrives at the window
+        let teeth = Finale3D.wormholeTeeth(CityFinale.dive, reducedMotion: false)
+        XCTAssertEqual(teeth.count, Finale3D.Wormhole.teeth * (Finale3D.Wormhole.rings + 2))
+        for w in teeth { XCTAssertEqual((w.inward * w.tangent).sum(), 0, accuracy: 1e-9) }
+        if let win = Finale3D.wormholeWindow(CityFinale.end - 0.001, reducedMotion: false) {
+            let gap = Finale3D.finaleCamera(CityFinale.end - 0.001, reducedMotion: false).pos - win.center
+            XCTAssertLessThan((gap * gap).sum().squareRoot(), 0.05)
+        } else {
+            XCTFail("the window onto the next city should be there at the end")
+        }
         XCTAssertEqual(CityFinale.climbStatus([.gold, .pearl, .empty, .silver, .empty]).left, 2)
         XCTAssertEqual(CityFinale.climbStatus([.gold, .pearl, .empty, .silver, .empty]).next, 2)
         XCTAssertEqual(CityFinale.trackCandidates(0).first, "finale_toronto")

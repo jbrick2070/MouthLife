@@ -117,6 +117,16 @@ public enum CityFinale {
     public static let climbHop = 24.0
     /// ...and, for the city that completes the set, on the summit.
     public static let summitHop = 26.0
+    /// A ring of teeth opens in the sky: the wormhole to the next city (Finale3D draws it).
+    public static let portalOpen = 26.0
+    /// The probe flies up into the ring as the camera lifts to it.
+    public static let portalLift = 27.0
+    /// The probe goes in and the camera dives through the tunnel of teeth (with the whoosh).
+    public static let dive = 28.0
+    /// The probe nods hello at the ring of teeth...
+    public static let hello = 26.5
+    /// ...and its tiny double in the next city's sky nods back on these beats as we fly in.
+    public static let helloBack = 28.5
     public static let climbEnd = 28.0
     /// Exactly 30 s, so a recorded song can be made to fit.
     public static let end = 30.0
@@ -331,6 +341,27 @@ public enum CityFinale {
     static let riseP1 = FinalePoint(x: 20, y: 11)
     static let riseP2 = FinalePoint(x: -3.0 + 1.2, y: 6.8)
     public static let probePark = FinalePoint(x: 0, y: -0.78)
+    /// The middle of the wormhole's ring of teeth, high over the mountain: the probe flies into it.
+    public static let portalStage = FinalePoint(x: 0, y: 1.6)
+
+    /// One quick nod (0 up to 1 and back over 0.45 s) starting at `at`; none with Reduce Motion.
+    public static func nod(_ t: Double, at: Double, reducedMotion: Bool) -> Double {
+        if reducedMotion { return 0 }
+        let s = (t - at) / 0.45
+        return s <= 0 || s >= 1 ? 0 : sin(Double.pi * s)
+    }
+
+    /// How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1).
+    public static func endingCityBubbles(_ t: Double) -> Double {
+        smooth01((t - (Ending.finaleStart + 0.6)) / 0.8)
+    }
+
+    /// The tiny probe in the next city's sky nodding back, once on each of three beats as we fly in.
+    public static func helloBack(_ t: Double, reducedMotion: Bool) -> Double {
+        var n = 0.0
+        for k in 0..<3 { n = max(n, nod(t, at: helloBack + 0.5 * Double(k), reducedMotion: reducedMotion)) }
+        return n
+    }
 
     static func probeWaveY(_ t: Double) -> Double {
         probeWaveY + 0.5 * sin((Double.pi * 2 * (t - riseEnd)) / 1.6)
@@ -402,15 +433,25 @@ public enum CityFinale {
             }
             return top
         }
-        if t < climbEnd {
+        if t < portalLift {
             let p = climbAt(t)
             let hopping = (t >= climbHop - 0.8 && t < climbHop) || (summit && t >= summitHop - 0.8 && t < summitHop)
             return Probe(space: .stage, x: p.x, y: p.y + (hopping ? 0 : bob), alpha: 1)
         }
-        let start = climbAt(climbEnd)
-        let s = clamp((t - climbEnd) / (end - climbEnd), 0, 1)
-        let k = pow(s, 2.2)
-        return Probe(space: .stage, x: lerp(start.x, start.x + 0.25, k), y: lerp(start.y, 1.7, k), alpha: 1)
+        // up into the wormhole's ring of teeth, then in through it as the camera dives after it
+        let start = climbAt(portalLift)
+        if t < dive {
+            let s = smooth01((t - portalLift) / (dive - portalLift))
+            return Probe(
+                space: .stage,
+                x: lerp(start.x, portalStage.x, s) + 0.2 * sin(Double.pi * s),
+                y: lerp(start.y, portalStage.y, s),
+                alpha: 1
+            )
+        }
+        let inside = 1 - smooth01((t - dive) / 0.3)
+        if inside <= 0 { return hidden }
+        return Probe(space: .stage, x: portalStage.x, y: portalStage.y, alpha: inside)
     }
 
     // MARK: - The climb
@@ -822,7 +863,8 @@ public enum CityFinale {
     public static let cityText = (from: meet, to: molarEnd)
     public static let molarText = (from: slot, to: molarEnd)
     /// "2 more to the top" / "You made it to the top!", and the next city.
-    public static let climbText = (from: climbHop, to: end - 0.3)
+    /// Gone before the dive, so the wormhole is wordless.
+    public static let climbText = (from: climbHop, to: dive)
 
     // MARK: - Music
 

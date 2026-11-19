@@ -60,6 +60,149 @@ public enum Finale3D {
     public static let emblemCenter = Vec3(0, 15, 2)
     public static let emblemUnit = 3.4
 
+    // MARK: - The dental wormhole to the next city
+
+    /// The end of every city's finale: a ring of teeth pops open in the sky over the mountain, the
+    /// probe flies up into it and the camera dives after it down a tunnel of turning rings of teeth.
+    /// At the far end a round window shows the next city, whose sky holds another little ring with the
+    /// city after it inside, and so on. The renderers draw the teeth in 3D and the window in 2D.
+    public enum Wormhole {
+        /// The tunnel runs up and away from the viewer at 45 degrees, into the sky.
+        public static let axis = Vec3(0, 0.7071067811865476, -0.7071067811865476)
+        /// How far in front of the ring the camera waits before it dives.
+        public static let approach = 13.0
+        /// The ring of teeth's radius (world units), and each tunnel ring's share of it.
+        public static let radius = 2.0
+        public static let ringShrink = 0.025
+        public static let teeth = 12
+        /// Tunnel rings behind the first, and the gap between them.
+        public static let rings = 8
+        public static let spacing = 2.2
+        /// The window onto the next city sits one gap past the last ring.
+        public static let windowRadius = 1.75
+        /// A tooth's size: the tooth mesh is about two molar units tall.
+        public static let toothScale = 0.34
+    }
+
+    /// The middle of the ring of teeth (world units), where the probe flies in.
+    public static func wormholeCenter() -> Vec3 {
+        stageWorld(CityFinale.portalStage.x, CityFinale.portalStage.y, 0.45)
+    }
+
+    static func alongWormhole(_ p: Vec3, _ d: Double) -> Vec3 { p + Wormhole.axis * d }
+
+    /// How far down the tunnel the window onto the next city is.
+    public static func wormholeWindowDistance() -> Double { Double(Wormhole.rings + 1) * Wormhole.spacing }
+
+    /// The camera's view of the ring just before the dive: straight down the tunnel.
+    static func wormholeFrame() -> CameraShot {
+        let c = wormholeCenter()
+        return CameraShot(pos: alongWormhole(c, -Wormhole.approach), target: c, fov: 46)
+    }
+
+    public struct WormholeTooth: Equatable, Sendable {
+        public let pos: Vec3
+        /// Unit vector from the tooth toward the tunnel's middle: the crown points this way.
+        public let inward: Vec3
+        /// Unit vector along the ring: the tooth's roots spread this way.
+        public let tangent: Vec3
+        /// Includes the pop-in (renderers scale the tooth mesh by it; 0 hides the tooth).
+        public let scale: Double
+        /// Every third tooth is gold, the rest porcelain.
+        public let gold: Bool
+        /// 0 at the mouth of the tunnel, 1 at its far end: renderers tint toward the next city by it.
+        public let depth: Double
+        /// Which ring: 0 the mouth, then the tunnel's rings, and the last one round the window.
+        public let ring: Int
+    }
+
+    /// Every tooth of the wormhole at time t (the web's wormholeTeeth, number for number).
+    public static func wormholeTeeth(_ t: Double, reducedMotion: Bool) -> [WormholeTooth] {
+        typealias W = Wormhole
+        if t < CityFinale.portalOpen || t >= CityFinale.end { return [] }
+        let center = wormholeCenter()
+        let a = W.axis
+        let e1 = Vec3(1, 0, 0)
+        let e2 = Vec3(a.y * e1.z - a.z * e1.y, a.z * e1.x - a.x * e1.z, a.x * e1.y - a.y * e1.x)
+        var out: [WormholeTooth] = []
+        // the tunnel's rings, then one more round the window itself, framing the next city to the end
+        let rings = reducedMotion ? 0 : W.rings + 1
+        for k in 0...rings {
+            let ringFade = k == 0 ? 1 : CityFinale.smooth01((t - (CityFinale.portalOpen + 0.6 + 0.08 * Double(k))) / 0.5)
+            if ringFade <= 0 { continue }
+            let middle = alongWormhole(center, Double(k) * W.spacing)
+            let turn = reducedMotion ? 0 : (k % 2 == 0 ? 1.0 : -1.0) * 0.8 * (t - CityFinale.portalOpen) + Double(k) * 0.26
+            let frame = k == W.rings + 1
+            let radius = frame ? W.windowRadius + 0.35 : W.radius * (1 - W.ringShrink * Double(k))
+            for j in 0..<W.teeth {
+                var grow = ringFade
+                if k == 0 {
+                    grow = reducedMotion
+                        ? CityFinale.smooth01((t - CityFinale.portalOpen) / 0.6)
+                        : backOut((t - (CityFinale.portalOpen + Double(j) / Double(W.teeth))) / 0.3)
+                    if grow <= 0 { continue }
+                }
+                let th = turn + (Double(j) / Double(W.teeth)) * Double.pi * 2
+                let cs = cos(th)
+                let sn = sin(th)
+                let radial = e1 * cs + e2 * sn
+                out.append(WormholeTooth(
+                    pos: middle + radial * radius,
+                    inward: -radial,
+                    tangent: e1 * -sn + e2 * cs,
+                    scale: W.toothScale * grow * (1 - W.ringShrink * Double(min(k, W.rings))),
+                    gold: (j + k) % 3 == 0,
+                    depth: min(1, Double(k) / Double(max(1, W.rings))),
+                    ring: k
+                ))
+            }
+        }
+        return out
+    }
+
+    public struct WormholeWindow: Equatable, Sendable {
+        public let center: Vec3
+        public let radius: Double
+        public let alpha: Double
+        /// Reduce Motion: how far the next city has cross-faded up to fill the screen.
+        public let fill: Double
+    }
+
+    /// The round window onto the next city: the bright end of the tunnel, filling the screen as the
+    /// camera arrives. With Reduce Motion it sits still inside the ring and `fill` cross-fades instead.
+    public static func wormholeWindow(_ t: Double, reducedMotion: Bool) -> WormholeWindow? {
+        let appear = CityFinale.portalOpen + 0.5
+        if t < appear || t >= CityFinale.end { return nil }
+        let alpha = CityFinale.smooth01((t - appear) / 0.5)
+        if reducedMotion {
+            return WormholeWindow(center: wormholeCenter(), radius: Wormhole.radius * 0.8, alpha: alpha, fill: CityFinale.smooth01((t - (CityFinale.dive + 0.5)) / 1.0))
+        }
+        return WormholeWindow(center: alongWormhole(wormholeCenter(), wormholeWindowDistance()), radius: Wormhole.windowRadius, alpha: alpha, fill: 0)
+    }
+
+    /// The tooth the wormhole is built from: the Golden Molar's crown and roots at low detail, centred
+    /// on its middle (molar units, crown toward +z, roots spreading along x).
+    public static func wormholeToothMesh() -> MeshData {
+        let parts = [goldenMolarMesh(segments: 24, rings: 6), molarRootMesh(side: -1, segments: 8, rings: 5), molarRootMesh(side: 1, segments: 8, rings: 5)]
+        let o = CityFinale.Molar.bodyCenter
+        var positions: [Double] = []
+        var normals: [Double] = []
+        var indices: [Int] = []
+        for part in parts {
+            let base = positions.count / 3
+            var i = 0
+            while i < part.positions.count {
+                positions.append(part.positions[i] - o.x)
+                positions.append(part.positions[i + 1] - o.y)
+                positions.append(part.positions[i + 2] + 0.6)
+                i += 3
+            }
+            normals.append(contentsOf: part.normals)
+            indices.append(contentsOf: part.indices.map { base + $0 })
+        }
+        return MeshData(positions: positions, normals: normals, indices: indices)
+    }
+
     // MARK: - The camera
 
     public struct CameraShot: Equatable, Sendable {
@@ -90,11 +233,12 @@ public enum Finale3D {
         (30.0, Vec3(0, 9, 31), Vec3(0, 22, 10), 50),
     ]
 
-    /// With Reduce Motion the camera holds still and simply cuts between three framings.
+    /// With Reduce Motion the camera holds still and simply cuts between four framings.
     static let stillShots: [(at: Double, shot: CameraShot)] = [
         (0, CameraShot(pos: Vec3(0, 9, 46), target: Vec3(0, 11, 0), fov: 48)),
         (CityFinale.showEnd, CameraShot(pos: Vec3(0, 10, 32), target: Vec3(0, 15, 2), fov: 50)),
         (CityFinale.gatherEnd, CameraShot(pos: Vec3(0, 10, 25), target: Vec3(0, 9.5, 10), fov: 46)),
+        (CityFinale.portalOpen, wormholeFrame()),
     ]
 
     /// One coordinate of the camera between keys 1 and 2: a Hermite curve whose speed at each key is
@@ -114,6 +258,25 @@ public enum Finale3D {
             for s in stillShots where t >= s.at { shot = s.shot }
             return shot
         }
+        let keyed = keyedCamera(t)
+        if t < CityFinale.portalOpen { return keyed }
+        let frame = wormholeFrame()
+        if t < CityFinale.dive {
+            // lift from the mountain up to the ring of teeth opening in the sky
+            let k = CityFinale.smooth01((t - CityFinale.portalOpen) / (CityFinale.dive - CityFinale.portalOpen))
+            return CameraShot(
+                pos: Vec3(lerp(keyed.pos.x, frame.pos.x, k), lerp(keyed.pos.y, frame.pos.y, k), lerp(keyed.pos.z, frame.pos.z, k)),
+                target: Vec3(lerp(keyed.target.x, frame.target.x, k), lerp(keyed.target.y, frame.target.y, k), lerp(keyed.target.z, frame.target.z, k)),
+                fov: lerp(keyed.fov, frame.fov, k)
+            )
+        }
+        // the dive: in through the ring and down the tunnel, arriving at the next city's window at the end
+        let s = clamp((t - CityFinale.dive) / (CityFinale.end - CityFinale.dive), 0, 1)
+        let pos = alongWormhole(frame.pos, (Wormhole.approach + wormholeWindowDistance()) * CityFinale.smooth01(s))
+        return CameraShot(pos: pos, target: alongWormhole(pos, Wormhole.approach), fov: frame.fov + 12 * sin(Double.pi * s))
+    }
+
+    static func keyedCamera(_ t: Double) -> CameraShot {
         let keys = cameraKeys
         let last = keys.count - 1
         if t <= keys[0].t { return CameraShot(pos: keys[0].pos, target: keys[0].target, fov: keys[0].fov) }
@@ -559,6 +722,16 @@ public enum Finale3D {
         return Vec3(p.x, p.y, molarHeight(p.x, p.y))
     }
 
+    /// The grand finale's last scene: each city floats in a little bubble over its own piece, fanned
+    /// out from the crown's middle like a crown of their own (as the web's CUSP_BUBBLE).
+    public static let cuspBubble = (spread: 1.6, lift: 0.45, radius: 0.62)
+
+    public static func cuspBubbleLocal(_ index: Int) -> Vec3 {
+        let top = molarCuspTop(index)
+        let o = CityFinale.Molar.bodyCenter
+        return Vec3(o.x + (top.x - o.x) * cuspBubble.spread, o.y + (top.y - o.y) * cuspBubble.spread, top.z + cuspBubble.lift)
+    }
+
     /// One of the molar's two roots (side -1 or 1) in molar units: a tube that leaves the underside of
     /// the crown, bows outward and tapers to a rounded tip.
     public static func molarRootMesh(side: Double, segments: Int = 18, rings: Int = 12) -> MeshData {
@@ -727,6 +900,12 @@ public enum Finale3D {
                 for e in emblemFractal(cityIndex, t, reducedMotion: rm) {
                     sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha + e.glint * 0.1
                 }
+                for w in wormholeTeeth(t, reducedMotion: rm) {
+                    sum += w.pos.x * 0.01 + w.pos.y * 0.02 + w.pos.z * 0.03 + w.inward.y * 0.04 + w.tangent.z * 0.05 + w.scale + (w.gold ? 0.1 : 0) + w.depth * 0.2
+                }
+                if let win = wormholeWindow(t, reducedMotion: rm) {
+                    sum += win.center.x * 0.1 + win.center.y * 0.2 + win.center.z * 0.3 + win.radius + win.alpha + win.fill * 2
+                }
             }
             let showT = t - CityFinale.blazeEnd
             for (b, burst) in bursts.enumerated() {
@@ -750,6 +929,7 @@ public enum Finale3D {
         }
         sum += sumMesh(goldenMolarMesh())
         sum += sumMesh(molarRootMesh(side: -1)) + sumMesh(molarRootMesh(side: 1)) * 2
+        sum += sumMesh(wormholeToothMesh()) * 3
         for c in mountainColumns() { sum += c.x * 0.01 + c.z * 0.02 + c.top * 0.03 + c.radius + c.height * 0.001 }
         for i in -1...CityFinale.campaignPieces {
             let l = ledge(i)

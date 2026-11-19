@@ -666,6 +666,116 @@ struct FinalePainter {
         }
     }
 
+    /// A round window onto city `cityIndex` (-1: the way to the Golden Molar), lit up under its own
+    /// sky. In that sky float little rings of teeth, each holding another city with its own ring:
+    /// wormholes to every city, `depth` rings down. The web's paintWormholeWindow draws the same.
+    func paintWormholeWindow(_ ctx: inout GraphicsContext, x cx: Double, y cy: Double, r: Double, cityIndex: Int, depth: Int, t: Double, alpha: Double, branches: Int = 3, withProbe: Bool = false) {
+        guard r >= 1.5, alpha > 0.01 else { return }
+        let model = cityIndex >= 0 ? FinaleModels.city(cityIndex) : nil
+        var c = ctx
+        c.opacity = alpha
+        c.clip(to: Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)))
+        // once the window is bigger than the screen the picture inside stops growing: we have arrived
+        let rc = min(r, max(w, h) * 0.6)
+        let glowRGB = model?.accent ?? SIMD3(0.99, 0.88, 0.28)
+        c.fill(Path(CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)), with: .linearGradient(
+            Gradient(stops: [
+                .init(color: Color(red: 0.008, green: 0.024, blue: 0.09), location: 0),
+                .init(color: Color(red: 0.043, green: 0.102, blue: 0.227), location: 0.5),
+                .init(color: Color(red: (30 + glowRGB.x * 90) / 255, green: (30 + glowRGB.y * 70) / 255, blue: (60 + glowRGB.z * 80) / 255), location: 0.74),
+                .init(color: Color(red: 0.012, green: 0.027, blue: 0.071), location: 1),
+            ]),
+            startPoint: CGPoint(x: cx, y: cy - rc),
+            endPoint: CGPoint(x: cx, y: cy + rc)
+        ))
+        for k in 0..<28 {
+            let sx = cx + (CityFinale.hash(k, 31) * 2 - 1) * rc
+            let sy = cy - rc + CityFinale.hash(k, 37) * rc * 1.1
+            let size = min(2, max(1, rc * 0.006))
+            var s = c
+            s.opacity = alpha * (0.4 + 0.5 * CityFinale.hash(k, 41))
+            s.fill(Path(CGRect(x: sx, y: sy, width: size, height: size)), with: .color(Color(red: 0.89, green: 0.91, blue: 0.94)))
+        }
+        if let model {
+            if r >= 8 {
+                let s = rc * 2 / 46
+                paintCity(&c, model, view: CityView(s: s, ox: cx - 32 * s, oy: cy + rc * 0.52), tint: { _ in (level: 1, flash: 0) }, motionTime: { _ in rm ? nil : t })
+            }
+        } else {
+            // the last city leads to the Golden Molar: a warm golden light at the end
+            paintGlow(&c, x: cx, y: cy, radius: rc * 0.9, color: Color(red: 0.99, green: 0.88, blue: 0.28), alpha: 0.85)
+            paintGlow(&c, x: cx, y: cy, radius: rc * 0.35, color: Color(red: 1, green: 0.98, blue: 0.92), alpha: 0.95)
+        }
+        if depth > 0, cityIndex >= 0 {
+            // little wormholes in this city's sky: to the next city, and (at the top) the ones after it
+            let spots: [(dx: Double, dy: Double, size: Double)] = [(0.32, -0.36, 0.17), (-0.4, -0.42, 0.12), (0.0, -0.66, 0.09)]
+            let spin = rm ? 0 : t * 0.9
+            for (n, spot) in spots.prefix(max(1, branches)).enumerated() {
+                let ir = rc * spot.size
+                guard ir >= 3 else { continue }
+                let ix = cx + rc * spot.dx
+                let iy = cy + rc * spot.dy
+                paintWormholeWindow(&c, x: ix, y: iy, r: ir * 0.8, cityIndex: (cityIndex + 1 + n) % CityFinale.campaignPieces, depth: depth - 1, t: t, alpha: alpha, branches: 1)
+                paintToothRing(&c, x: ix, y: iy, r: ir, spin: n % 2 == 0 ? spin : -spin, alpha: alpha)
+            }
+        }
+        if withProbe, model != nil {
+            // our probe's tiny double, waiting in the next city's sky: it nods back as we fly in
+            let nod = CityFinale.helloBack(t, reducedMotion: rm)
+            paintProbe(&c, x: cx - rc * 0.14, y: cy - rc * 0.05 + nod * rc * 0.03, radius: rc * 0.07, alpha: alpha, t: t)
+        }
+    }
+
+    /// The glassy edge of a city bubble: a gold-and-pearl rim and a little shine at the top left.
+    func paintBubbleRim(_ ctx: inout GraphicsContext, x: Double, y: Double, r: Double, alpha: Double) {
+        guard r >= 2, alpha > 0.01 else { return }
+        var c = ctx
+        c.opacity = alpha
+        let circle = Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+        c.stroke(circle, with: .linearGradient(
+            Gradient(colors: [Color(red: 1, green: 0.97, blue: 0.84), Color(red: 0.95, green: 0.75, blue: 0.31), Color(red: 0.99, green: 0.9, blue: 0.54)]),
+            startPoint: CGPoint(x: x - r, y: y - r),
+            endPoint: CGPoint(x: x + r, y: y + r)
+        ), lineWidth: max(1, r * 0.09))
+        var shine = Path()
+        shine.addArc(center: CGPoint(x: x, y: y), radius: r * 0.72, startAngle: .radians(Double.pi * 1.08), endAngle: .radians(Double.pi * 1.42), clockwise: false)
+        c.opacity = alpha * 0.55
+        c.stroke(shine, with: .color(.white), style: StrokeStyle(lineWidth: max(1, r * 0.07), lineCap: .round))
+    }
+
+    /// A ring of little teeth, crowns pointing in, every third one gold.
+    func paintToothRing(_ ctx: inout GraphicsContext, x cx: Double, y cy: Double, r: Double, spin: Double, alpha: Double) {
+        guard r >= 2, alpha > 0.01 else { return }
+        var tooth = Path()
+        tooth.move(to: CGPoint(x: -0.5, y: 0.05))
+        tooth.addLine(to: CGPoint(x: -0.5, y: -0.32))
+        tooth.addQuadCurve(to: CGPoint(x: -0.24, y: -0.6), control: CGPoint(x: -0.5, y: -0.62))
+        tooth.addQuadCurve(to: CGPoint(x: 0.24, y: -0.6), control: CGPoint(x: 0, y: -0.44))
+        tooth.addQuadCurve(to: CGPoint(x: 0.5, y: -0.32), control: CGPoint(x: 0.5, y: -0.62))
+        tooth.addLine(to: CGPoint(x: 0.5, y: 0.05))
+        tooth.addQuadCurve(to: CGPoint(x: 0.26, y: 0.68), control: CGPoint(x: 0.46, y: 0.55))
+        tooth.addQuadCurve(to: CGPoint(x: 0, y: 0.26), control: CGPoint(x: 0.12, y: 0.36))
+        tooth.addQuadCurve(to: CGPoint(x: -0.26, y: 0.68), control: CGPoint(x: -0.12, y: 0.36))
+        tooth.addQuadCurve(to: CGPoint(x: -0.5, y: 0.05), control: CGPoint(x: -0.46, y: 0.55))
+        tooth.closeSubpath()
+        let u = r * 0.3
+        for j in 0..<12 {
+            let a = spin + Double(j) / 12 * Double.pi * 2
+            var c = ctx
+            c.opacity = alpha
+            c.concatenate(CGAffineTransform(translationX: cx + cos(a) * r, y: cy + sin(a) * r).rotated(by: a - Double.pi / 2).scaledBy(x: u, y: u))
+            let gold = j % 3 == 0
+            c.fill(tooth, with: .linearGradient(
+                Gradient(colors: gold
+                    ? [Color(red: 0.99, green: 0.9, blue: 0.54), Color(red: 0.72, green: 0.47, blue: 0.12)]
+                    : [Color.white, Color(red: 0.8, green: 0.84, blue: 0.88)]),
+                startPoint: CGPoint(x: 0, y: -0.6),
+                endPoint: CGPoint(x: 0, y: 0.7)
+            ))
+            c.stroke(tooth, with: .color(gold ? Color(red: 0.47, green: 0.31, blue: 0.04).opacity(0.7) : Color(red: 0.39, green: 0.45, blue: 0.55).opacity(0.6)), lineWidth: 0.06)
+        }
+    }
+
     func paintEmblem(_ ctx: inout GraphicsContext, _ city: FinaleCityModel, x: Double, y: Double, radius: Double, widthScale: Double = 1, alpha: Double = 1) {
         guard alpha > 0.01 else { return }
         var c = ctx

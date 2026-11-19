@@ -10,6 +10,7 @@ import {
   FINALE_TIMES,
   GOLDEN_MOLAR,
   MOUNTAIN,
+  PORTAL_STAGE,
   checksumFinishes,
   finaleClimbStatus,
   finaleLedge,
@@ -213,12 +214,16 @@ describe('the climb', () => {
 
   it('puts the probe on its own ledge, and only the city that completes the set on the summit', () => {
     for (let i = 0; i < CAMPAIGN_PIECES; i++) {
-      const p = finaleProbe(FINALE_TIMES.climbEnd - 0.01, false, i, false);
-      const ledge = finaleLedge(i, FINALE_TIMES.climbEnd - 0.01, false);
+      const p = finaleProbe(FINALE_TIMES.portalLift - 0.01, false, i, false);
+      const ledge = finaleLedge(i, FINALE_TIMES.portalLift - 0.01, false);
       expect(Math.hypot(p.x - ledge.x, p.y - ledge.y)).toBeLessThan(0.03);
     }
-    const top = finaleProbe(FINALE_TIMES.climbEnd - 0.01, false, 4, true);
+    const top = finaleProbe(FINALE_TIMES.portalLift - 0.01, false, 4, true);
     expect(Math.hypot(top.x - MOUNTAIN.summitStand.x, top.y - MOUNTAIN.summitStand.y)).toBeLessThan(0.03);
+    // then it flies up into the wormhole's ring and goes in as the camera dives
+    const atRing = finaleProbe(FINALE_TIMES.dive - 0.01, false, 2, false);
+    expect(Math.hypot(atRing.x - PORTAL_STAGE.x, atRing.y - PORTAL_STAGE.y)).toBeLessThan(0.03);
+    expect(finaleProbe(FINALE_TIMES.dive + 0.4, false, 2, false).space).toBe('hidden');
     // the ledges climb upward
     for (let i = 1; i < CAMPAIGN_PIECES; i++) expect(MOUNTAIN.ledges[i].y).toBeGreaterThan(MOUNTAIN.ledges[i - 1].y);
   });

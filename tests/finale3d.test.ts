@@ -16,6 +16,11 @@ import {
   mountainColumns,
   mountainFront,
   MOUNTAIN_3D,
+  WORMHOLE,
+  wormholeCenter,
+  wormholeTeeth,
+  wormholeToothMesh,
+  wormholeWindow,
 } from '../src/config/finale3d';
 
 describe('3D finale maths', () => {
@@ -32,11 +37,44 @@ describe('3D finale maths', () => {
     }
     const still = new Set<string>();
     for (let t = 0; t <= FINALE_TIMES.end; t += 0.25) still.add(JSON.stringify(finaleCamera3D(t, true)));
-    expect(still.size).toBe(3);
+    expect(still.size).toBe(4);
     for (let t = 0; t <= ENDING_TIMES.end; t += 0.5) {
       const shot = endingCamera3D(t, false);
       expect(shot.pos.every(Number.isFinite)).toBe(true);
     }
+  });
+
+  it('opens a ring of teeth, dives down the tunnel and arrives at the next city', () => {
+    const T = FINALE_TIMES;
+    expect(wormholeTeeth(T.portalOpen - 0.01, false)).toHaveLength(0);
+    // the first ring's teeth pop in one after another
+    const opening = wormholeTeeth(T.portalOpen + 0.5, false).length;
+    expect(opening).toBeGreaterThan(0);
+    expect(opening).toBeLessThan(WORMHOLE.teeth);
+    // by the dive the whole tunnel is there
+    // (the mouth, the tunnel's rings and one more framing the window)
+    const full = wormholeTeeth(T.dive, false);
+    expect(full).toHaveLength(WORMHOLE.teeth * (WORMHOLE.rings + 2));
+    expect(full.filter((w) => w.gold).length).toBe((WORMHOLE.teeth * (WORMHOLE.rings + 2)) / 3);
+    for (const w of full) {
+      // each crown points at the tunnel's middle, square to its ring
+      expect(Math.hypot(...w.inward)).toBeCloseTo(1, 6);
+      expect(w.inward[0] * w.tangent[0] + w.inward[1] * w.tangent[1] + w.inward[2] * w.tangent[2]).toBeCloseTo(0, 6);
+    }
+    expect(wormholeTeeth(T.end, false)).toHaveLength(0);
+    // Reduce Motion: only the first ring, still
+    expect(wormholeTeeth(T.dive, true)).toHaveLength(WORMHOLE.teeth);
+    expect(JSON.stringify(wormholeTeeth(T.dive, true))).toBe(JSON.stringify(wormholeTeeth(T.dive + 1, true)));
+    // the camera waits straight down the tunnel, then arrives right at the window as the show ends
+    const before = finaleCamera3D(T.dive, false);
+    before.target.forEach((v, i) => expect(v).toBeCloseTo(wormholeCenter()[i], 9));
+    const win = wormholeWindow(T.end - 0.001, false)!;
+    const last = finaleCamera3D(T.end - 0.001, false);
+    expect(Math.hypot(last.pos[0] - win.center[0], last.pos[1] - win.center[1], last.pos[2] - win.center[2])).toBeLessThan(0.05);
+    expect(wormholeWindow(T.end - 0.5, true)!.fill).toBeGreaterThan(0.9);
+    const tooth = wormholeToothMesh();
+    expect(tooth.positions.length).toBe(tooth.normals.length);
+    expect(Math.max(...tooth.indices)).toBeLessThan(tooth.positions.length / 3);
   });
 
   it('grows each city its own fractal sign, then folds it into the coin', () => {

@@ -26,6 +26,7 @@ import {
   FINALE_TIMES,
   GOLDEN_MOLAR,
   MOUNTAIN,
+  PORTAL_STAGE,
   finaleHash,
   smooth01,
 } from './cityFinale';
@@ -91,6 +92,157 @@ export function burstWorld(burst: FinaleBurst, b: number): Vec3 {
 /** Where each city's sign blooms: high over the middle of the city. */
 export const EMBLEM_WORLD = { center: [0, 15, 2] as Vec3, unit: 3.4 } as const;
 
+// ------------------------------------------------------------------ the dental wormhole to the next city
+
+/**
+ * The end of every city's finale: a ring of teeth pops open in the sky over the mountain, the probe
+ * flies up into it and the camera dives after it, down a tunnel of turning rings of teeth. At the
+ * far end a round window shows the next city, and that city's sky holds another little ring with
+ * the city after it inside, and so on: a recursive dental wormhole from one city to the next.
+ * The renderers draw the teeth in 3D and the window (a picture of the next city) in 2D.
+ */
+export const WORMHOLE = {
+  /** The tunnel runs up and away from the viewer at 45 degrees, into the sky. */
+  axis: [0, Math.SQRT1_2, -Math.SQRT1_2] as Vec3,
+  /** How far in front of the ring the camera waits before it dives. */
+  approach: 13,
+  /** The ring of teeth's radius (world units), and each tunnel ring's share of it. */
+  radius: 2.0,
+  ringShrink: 0.025,
+  teeth: 12,
+  /** Tunnel rings behind the first, and the gap between them. */
+  rings: 8,
+  spacing: 2.2,
+  /** The window onto the next city sits one gap past the last ring. */
+  windowRadius: 1.75,
+  /** A tooth's size: the tooth mesh is about two molar units tall. */
+  toothScale: 0.34,
+} as const;
+
+/** The middle of the ring of teeth (world units), where the probe flies in. */
+export function wormholeCenter(): Vec3 {
+  return stageWorld(PORTAL_STAGE.x, PORTAL_STAGE.y, 0.45);
+}
+
+function alongWormhole(p: Vec3, d: number): Vec3 {
+  const a = WORMHOLE.axis;
+  return [p[0] + a[0] * d, p[1] + a[1] * d, p[2] + a[2] * d];
+}
+
+/** How far down the tunnel the window onto the next city is. */
+export function wormholeWindowDistance(): number {
+  return (WORMHOLE.rings + 1) * WORMHOLE.spacing;
+}
+
+/** The camera's view of the ring just before the dive: straight down the tunnel. */
+function wormholeFrame(): CameraShot {
+  const c = wormholeCenter();
+  return { pos: alongWormhole(c, -WORMHOLE.approach), target: c, fov: 46 };
+}
+
+export interface WormholeTooth {
+  pos: Vec3;
+  /** Unit vector from the tooth toward the tunnel's middle: the crown points this way. */
+  inward: Vec3;
+  /** Unit vector along the ring: the tooth's roots spread this way. */
+  tangent: Vec3;
+  /** Includes the pop-in (renderers scale the tooth mesh by it; 0 hides the tooth). */
+  scale: number;
+  /** Every third tooth is gold, the rest porcelain. */
+  gold: boolean;
+  /** 0 at the mouth of the tunnel, 1 at its far end: renderers tint toward the next city by it. */
+  depth: number;
+  /** Which ring: 0 the mouth, then the tunnel's rings, and the last one round the window. */
+  ring: number;
+}
+
+/**
+ * Every tooth of the wormhole at time t. The first ring's teeth pop in one after another as it
+ * opens; the tunnel's rings fade in behind it, each turning the other way from its neighbours and
+ * a little twisted from the last, so the tunnel spirals. With Reduce Motion only the first ring
+ * shows, still, fading in.
+ */
+export function wormholeTeeth(t: number, reducedMotion: boolean): WormholeTooth[] {
+  const T = FINALE_TIMES;
+  const W = WORMHOLE;
+  if (t < T.portalOpen || t >= T.end) return [];
+  const center = wormholeCenter();
+  const a = W.axis;
+  // a right-handed frame across the tunnel: e1 sideways, e2 = axis x e1
+  const e1: Vec3 = [1, 0, 0];
+  const e2: Vec3 = [a[1] * e1[2] - a[2] * e1[1], a[2] * e1[0] - a[0] * e1[2], a[0] * e1[1] - a[1] * e1[0]];
+  const out: WormholeTooth[] = [];
+  // the tunnel's rings, then one more round the window itself, framing the next city to the end
+  const rings = reducedMotion ? 0 : W.rings + 1;
+  for (let k = 0; k <= rings; k++) {
+    const ringFade = k === 0 ? 1 : smooth01((t - (T.portalOpen + 0.6 + 0.08 * k)) / 0.5);
+    if (ringFade <= 0) continue;
+    const middle = alongWormhole(center, k * W.spacing);
+    const turn = reducedMotion ? 0 : (k % 2 === 0 ? 1 : -1) * 0.8 * (t - T.portalOpen) + k * 0.26;
+    const frame = k === W.rings + 1;
+    const radius = frame ? W.windowRadius + 0.35 : W.radius * (1 - W.ringShrink * k);
+    for (let j = 0; j < W.teeth; j++) {
+      let grow = ringFade;
+      if (k === 0) {
+        grow = reducedMotion
+          ? smooth01((t - T.portalOpen) / 0.6)
+          : backOut((t - (T.portalOpen + j / W.teeth)) / 0.3);
+        if (grow <= 0) continue;
+      }
+      const th = turn + (j / W.teeth) * Math.PI * 2;
+      const cs = Math.cos(th);
+      const sn = Math.sin(th);
+      const radial: Vec3 = [cs * e1[0] + sn * e2[0], cs * e1[1] + sn * e2[1], cs * e1[2] + sn * e2[2]];
+      out.push({
+        pos: [middle[0] + radial[0] * radius, middle[1] + radial[1] * radius, middle[2] + radial[2] * radius],
+        inward: [-radial[0], -radial[1], -radial[2]],
+        tangent: [-sn * e1[0] + cs * e2[0], -sn * e1[1] + cs * e2[1], -sn * e1[2] + cs * e2[2]],
+        scale: W.toothScale * grow * (1 - W.ringShrink * Math.min(k, W.rings)),
+        gold: (j + k) % 3 === 0,
+        depth: Math.min(1, k / Math.max(1, W.rings)),
+        ring: k,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The round window onto the next city: where it is in the world and how big. Before the dive it is
+ * the bright end of the tunnel seen through the ring; as the camera arrives it fills the screen.
+ * With Reduce Motion it sits still inside the ring and `fill` (0..1) cross-fades the next city up to
+ * full screen instead.
+ */
+export function wormholeWindow(t: number, reducedMotion: boolean): { center: Vec3; radius: number; alpha: number; fill: number } | null {
+  const T = FINALE_TIMES;
+  const appear = T.portalOpen + 0.5;
+  if (t < appear || t >= T.end) return null;
+  const alpha = smooth01((t - appear) / 0.5);
+  if (reducedMotion) {
+    return { center: wormholeCenter(), radius: WORMHOLE.radius * 0.8, alpha, fill: smooth01((t - (T.dive + 0.5)) / 1.0) };
+  }
+  return { center: alongWormhole(wormholeCenter(), wormholeWindowDistance()), radius: WORMHOLE.windowRadius, alpha, fill: 0 };
+}
+
+/**
+ * The tooth the wormhole is built from: the Golden Molar's crown and roots at low detail, centred on
+ * its middle (molar units, crown toward +z, roots spreading along x).
+ */
+export function wormholeToothMesh(): MeshData {
+  const parts = [goldenMolarMesh(24, 6), molarRootMesh(-1, 8, 5), molarRootMesh(1, 8, 5)];
+  const o = GOLDEN_MOLAR.bodyCenter;
+  const mesh: MeshData = { positions: [], normals: [], indices: [] };
+  for (const part of parts) {
+    const base = mesh.positions.length / 3;
+    for (let i = 0; i < part.positions.length; i += 3) {
+      mesh.positions.push(part.positions[i] - o.x, part.positions[i + 1] - o.y, part.positions[i + 2] + 0.6);
+    }
+    mesh.normals.push(...part.normals);
+    for (const idx of part.indices) mesh.indices.push(base + idx);
+  }
+  return mesh;
+}
+
 // ------------------------------------------------------------------ the camera
 
 export interface CameraShot {
@@ -121,11 +273,12 @@ export const CAMERA_KEYS: readonly (readonly [number, Vec3, Vec3, number])[] = [
   [30.0, [0, 9, 31], [0, 22, 10], 50],
 ];
 
-/** With Reduce Motion the camera holds still and simply cuts between three framings. */
+/** With Reduce Motion the camera holds still and simply cuts between four framings. */
 const STILL_SHOTS: readonly [number, CameraShot][] = [
   [0, { pos: [0, 9, 46], target: [0, 11, 0], fov: 48 }],
   [FINALE_TIMES.showEnd, { pos: [0, 10, 32], target: [0, 15, 2], fov: 50 }],
   [FINALE_TIMES.gatherEnd, { pos: [0, 10, 25], target: [0, 9.5, 10], fov: 46 }],
+  [FINALE_TIMES.portalOpen, wormholeFrame()],
 ];
 
 /**
@@ -148,6 +301,30 @@ export function finaleCamera3D(t: number, reducedMotion: boolean): CameraShot {
     for (const [at, s] of STILL_SHOTS) if (t >= at) shot = s;
     return { pos: [...shot.pos] as Vec3, target: [...shot.target] as Vec3, fov: shot.fov };
   }
+  const keyed = keyedCamera(t);
+  const T = FINALE_TIMES;
+  if (t < T.portalOpen) return keyed;
+  const frame = wormholeFrame();
+  if (t < T.dive) {
+    // lift from the mountain up to the ring of teeth opening in the sky
+    const k = smooth01((t - T.portalOpen) / (T.dive - T.portalOpen));
+    return {
+      pos: [lerp(keyed.pos[0], frame.pos[0], k), lerp(keyed.pos[1], frame.pos[1], k), lerp(keyed.pos[2], frame.pos[2], k)],
+      target: [
+        lerp(keyed.target[0], frame.target[0], k),
+        lerp(keyed.target[1], frame.target[1], k),
+        lerp(keyed.target[2], frame.target[2], k),
+      ],
+      fov: lerp(keyed.fov, frame.fov, k),
+    };
+  }
+  // the dive: in through the ring and down the tunnel, arriving at the next city's window at the end
+  const s = clamp((t - T.dive) / (T.end - T.dive), 0, 1);
+  const pos = alongWormhole(frame.pos, (WORMHOLE.approach + wormholeWindowDistance()) * smooth01(s));
+  return { pos, target: alongWormhole(pos, WORMHOLE.approach), fov: frame.fov + 12 * Math.sin(Math.PI * s) };
+}
+
+function keyedCamera(t: number): CameraShot {
   const keys = CAMERA_KEYS;
   const last = keys.length - 1;
   if (t <= keys[0][0]) return { pos: [...keys[0][1]] as Vec3, target: [...keys[0][2]] as Vec3, fov: keys[0][3] };
@@ -605,6 +782,20 @@ export function goldenMolarMesh(segments = 72, rings = 14): MeshData {
   return mesh;
 }
 
+/**
+ * In the grand finale's last scene each city floats in a little bubble over its own piece, so the
+ * Golden Molar holds every place the child cleaned. The bubbles fan out from the crown's middle like
+ * a crown of their own: how far out (times the cusp's distance), how high (molar units, up out of
+ * the crown) and how big (in cusp radii).
+ */
+export const CUSP_BUBBLE = { spread: 1.6, lift: 0.45, radius: 0.62 } as const;
+
+export function cuspBubbleLocal(index: number): Vec3 {
+  const top = molarCuspTop(index);
+  const o = GOLDEN_MOLAR.bodyCenter;
+  return [o.x + (top[0] - o.x) * CUSP_BUBBLE.spread, o.y + (top[1] - o.y) * CUSP_BUBBLE.spread, top[2] + CUSP_BUBBLE.lift];
+}
+
 /** Where a cusp's top is on the crown (molar units), for setting a coin into it. */
 export function molarCuspTop(index: number): Vec3 {
   const p = GOLDEN_MOLAR.cusps[clamp(index, 0, CAMPAIGN_PIECES - 1)];
@@ -776,6 +967,11 @@ export function finale3DChecksum(bursts: readonly FinaleBurst[], show: FinaleSho
       const cam = finaleCamera3D(t, rm);
       sum += cam.pos[0] * 0.1 + cam.pos[1] * 0.2 + cam.pos[2] * 0.03 + cam.target[0] * 0.05 + cam.target[1] * 0.07 + cam.fov * 0.01;
       for (const e of emblemFractal(cityIndex, t, rm)) sum += e.x * 0.01 + e.y * 0.02 + e.z * 0.03 + e.roll * 0.001 + e.scale + e.alpha + e.glint * 0.1;
+      for (const w of wormholeTeeth(t, rm)) {
+        sum += w.pos[0] * 0.01 + w.pos[1] * 0.02 + w.pos[2] * 0.03 + w.inward[1] * 0.04 + w.tangent[2] * 0.05 + w.scale + (w.gold ? 0.1 : 0) + w.depth * 0.2;
+      }
+      const win = wormholeWindow(t, rm);
+      if (win) sum += win.center[0] * 0.1 + win.center[1] * 0.2 + win.center[2] * 0.3 + win.radius + win.alpha + win.fill * 2;
     }
     const showT = t - FINALE_TIMES.blazeEnd;
     bursts.forEach((burst, b) => {
@@ -796,6 +992,7 @@ export function finale3DChecksum(bursts: readonly FinaleBurst[], show: FinaleSho
   }
   sum += sumMesh(goldenMolarMesh());
   sum += sumMesh(molarRootMesh(-1)) + sumMesh(molarRootMesh(1)) * 2;
+  sum += sumMesh(wormholeToothMesh()) * 3;
   for (const c of mountainColumns()) sum += c.x * 0.01 + c.z * 0.02 + c.top * 0.03 + c.radius + c.height * 0.001;
   for (let i = -1; i <= CAMPAIGN_PIECES; i++) {
     const l = ledge3D(i);

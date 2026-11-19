@@ -66,6 +66,16 @@ export const FINALE_TIMES = {
   climbHop: 24.0,
   /** ...and, for the city that completes the set, on the summit. */
   summitHop: 26.0,
+  /** A ring of teeth opens in the sky: the wormhole to the next city (finale3d.ts draws it). */
+  portalOpen: 26.0,
+  /** The probe flies up into the ring as the camera lifts to it. */
+  portalLift: 27.0,
+  /** The probe goes in and the camera dives through the tunnel of teeth (with the whoosh). */
+  dive: 28.0,
+  /** The probe nods hello at the ring of teeth... */
+  hello: 26.5,
+  /** ...and its tiny double in the next city's sky nods back on these beats as we fly in. */
+  helloBack: 28.5,
   climbEnd: 28.0,
   end: 30.0,
   /** The Skip button appears after this. */
@@ -270,6 +280,27 @@ function probeWaveY(t: number): number {
 }
 /** Where the probe hovers while the molar fills. */
 export const PROBE_PARK = { x: 0, y: -0.78 };
+/** The middle of the wormhole's ring of teeth, high over the mountain: the probe flies into it. */
+export const PORTAL_STAGE = { x: 0, y: 1.6 };
+
+/** One quick nod (0 up to 1 and back over 0.45 s) starting at `at`; none with Reduce Motion. */
+export function finaleNod(t: number, at: number, reducedMotion: boolean): number {
+  if (reducedMotion) return 0;
+  const s = (t - at) / 0.45;
+  return s <= 0 || s >= 1 ? 0 : Math.sin(Math.PI * s);
+}
+
+/** How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1). */
+export function endingCityBubbles(t: number): number {
+  return smooth01((t - (ENDING_TIMES.finaleStart + 0.6)) / 0.8);
+}
+
+/** The tiny probe in the next city's sky nodding back, once on each of three beats as we fly in. */
+export function finaleHelloBack(t: number, reducedMotion: boolean): number {
+  let nod = 0;
+  for (let k = 0; k < 3; k++) nod = Math.max(nod, finaleNod(t, FINALE_TIMES.helloBack + 0.5 * k, reducedMotion));
+  return nod;
+}
 
 /**
  * The probe's path. `climbTo` is the ledge it climbs to (the city's campaign index); with
@@ -339,15 +370,25 @@ export function finaleProbe(t: number, reducedMotion: boolean, climbTo = 0, summ
     }
     return top;
   };
-  if (t < T.climbEnd) {
+  if (t < T.portalLift) {
     const p = climbAt(t);
     const hopping = (t >= T.climbHop - 0.8 && t < T.climbHop) || (summit && t >= T.summitHop - 0.8 && t < T.summitHop);
     return { space: 'stage', x: p.x, y: p.y + (hopping ? 0 : bob), alpha: 1 };
   }
-  const start = climbAt(T.climbEnd);
-  const s = clamp((t - T.climbEnd) / (T.end - T.climbEnd), 0, 1);
-  const k = Math.pow(s, 2.2);
-  return { space: 'stage', x: lerp(start.x, start.x + 0.25, k), y: lerp(start.y, 1.7, k), alpha: 1 };
+  // up into the wormhole's ring of teeth, then in through it as the camera dives after it
+  const start = climbAt(T.portalLift);
+  if (t < T.dive) {
+    const s = smooth01((t - T.portalLift) / (T.dive - T.portalLift));
+    return {
+      space: 'stage',
+      x: lerp(start.x, PORTAL_STAGE.x, s) + 0.2 * Math.sin(Math.PI * s),
+      y: lerp(start.y, PORTAL_STAGE.y, s),
+      alpha: 1,
+    };
+  }
+  const inside = 1 - smooth01((t - T.dive) / 0.3);
+  if (inside <= 0) return { space: 'hidden', x: 0, y: 0, alpha: 0 };
+  return { space: 'stage', x: PORTAL_STAGE.x, y: PORTAL_STAGE.y, alpha: inside };
 }
 
 // ------------------------------------------------------------------ the climb
@@ -825,8 +866,8 @@ export const FINALE_TEXT = {
   bubble: [9.9, 12.9],
   city: [FINALE_TIMES.meet, FINALE_TIMES.molarEnd],
   molar: [FINALE_TIMES.slot, FINALE_TIMES.molarEnd],
-  /** "2 more to the top" / "You made it to the top!", and the next city. */
-  climb: [FINALE_TIMES.climbHop, FINALE_TIMES.end - 0.3],
+  /** "2 more to the top" / "You made it to the top!", and the next city; gone before the dive. */
+  climb: [FINALE_TIMES.climbHop, FINALE_TIMES.dive],
 } as const;
 
 /** How many cities are still to clean, and which comes next (campaign index, or -1). */
