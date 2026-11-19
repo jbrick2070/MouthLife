@@ -200,6 +200,11 @@ describe('the ending', () => {
 });
 
 describe('the climb', () => {
+  it('puts every cue on a 120 BPM beat, so songs can be written to the bar', () => {
+    for (const v of Object.values(FINALE_TIMES)) expect((v * 2) % 1).toBe(0);
+    for (const k of ['snap', 'creditsStart', 'creditSeconds', 'finaleStart', 'face', 'wink', 'end'] as const) expect((ENDING_TIMES[k] * 2) % 1).toBe(0);
+  });
+
   it('runs exactly 30 s a city and 60 s for the ending, so songs can be made to fit', () => {
     expect(FINALE_TIMES.end).toBe(30);
     expect(ENDING_TIMES.end).toBe(60);
@@ -225,7 +230,7 @@ describe('the climb', () => {
 
   it('ends on the home chord only at the top; until then the music hangs', () => {
     const lastChord = (finishes: MolarFinish[], slot: number) =>
-      finaleNotes(plans[slot], finishes, slot, false).filter((n) => Math.abs(n.t - (FINALE_TIMES.climbEnd + 0.6)) < 1e-9 && n.voice === plans[slot].voice);
+      finaleNotes(plans[slot], finishes, slot, false).filter((n) => Math.abs(n.t - FINALE_TIMES.climbEnd) < 1e-9 && n.voice === plans[slot].voice);
     const tonic = (slot: number) => plans[slot].tonic;
     const midway = lastChord(checksumFinishes(2), 2);
     expect(midway.some((n) => n.midi === tonic(2))).toBe(false);

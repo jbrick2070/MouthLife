@@ -31,67 +31,134 @@ To test **one** Suno song across the whole app right away, name it:
 | `pulp.m4a` | `pulp_rescue.m4a`, `boss.m4a` | **Pulp Rescue** (90s Endodontic Scramble) | **E Minor Pentatonic** (`Em7`) | `128 BPM` |
 | `report.m4a` | `victory.m4a` | **Mission Report** (Victory Lounge) | **D Major Pentatonic** (`Dmaj9`) | `76 BPM` |
 
-## Finale Songs (optional): exact lengths and cue sheet
+## Finale Songs (optional): exact lengths, cue sheet and prompts
 
 Each city's finale and the grand finale can have their own song. Drop them in this folder; both
 editions pick them up. Without a file, the built-in synth score plays (it follows the same cues).
 
-| File | Plays | Length |
-| :--- | :--- | :--- |
-| `finale_toronto.m4a` | Toronto's finale | **30.0 s** |
-| `finale_new_orleans.m4a` | New Orleans' finale | **30.0 s** |
-| `finale_tokyo.m4a` | Tokyo & Chicago's finale | **30.0 s** |
-| `finale_accra.m4a` | Accra & Colorado's finale | **30.0 s** |
-| `finale_aurora.m4a` | Station Aurora's finale | **30.0 s** |
-| `finale_ending.m4a` (or `grand_finale.m4a`) | The grand finale, after the fifth city | **60.0 s** |
+| File | Plays | Length | At 120 BPM, 4/4 |
+| :--- | :--- | :--- | :--- |
+| `finale_toronto.m4a` | Toronto's finale | **30.0 s** | 15 bars |
+| `finale_new_orleans.m4a` | New Orleans' finale | **30.0 s** | 15 bars |
+| `finale_tokyo.m4a` | Tokyo & Chicago's finale | **30.0 s** | 15 bars |
+| `finale_accra.m4a` | Accra & Colorado's finale | **30.0 s** | 15 bars |
+| `finale_aurora.m4a` | Station Aurora's finale | **30.0 s** | 15 bars (or 7½ bars of half time at 60) |
+| `finale_ending.m4a` (or `grand_finale.m4a`) | The grand finale, after the fifth city | **60.0 s** | 30 bars |
 
-The song starts the instant the last zone seals. Over a song, the game still plays its own
-firework booms, whistles and sparkles, so leave room for them rather than adding your own. A
-song that runs long is faded out at the end; one that runs short simply stops. Skip jumps
-straight to the grand finale's song (or ends).
+Every cue sits on a beat of a **120 BPM grid**: one 4/4 bar = 2.0 s, one beat = 0.5 s. Write at
+120 (or 60 half time) and every hit lands on the bar lines below. The song starts the instant
+the last zone seals. Over a song the game still plays its own firework booms, whistles and
+sparkles, so leave a little air for them. A song that runs long is faded out; one that runs
+short simply stops. Skip jumps straight to the grand finale's song (or ends).
 
-**City finale, 30.0 s** (the same for every city; seconds from the start):
+**City finale, 15 bars** (the same in every city; bar.beat, then seconds):
 
-| Time | What happens | Music |
-| :--- | :--- | :--- |
-| 0.0 | The game freezes and fades into the city at night | Soft, held (a breath) |
-| 1.2 | The probe flies up | Lift-off swell |
-| 2.6 – 7.0 | It sweeps the skyline; the lights come on left to right | A climbing build |
-| **7.0** | **The whole city blazes** | **First big hit** |
-| 8.0 – 13.5 | The city celebrates; its host waves (9.2 – 13.4) | The city's theme, at its most triumphant |
-| 13.5 | One last rocket goes up | Riser |
-| **14.1** | **It bursts into the city's sign** | **Hit** |
-| 15.5 – 16.7 | The sparks gather into a coin | Suspense |
-| 16.9 – 17.85 | The probe rises to meet it | Drum roll |
-| **17.9** | **The probe holds the prize up** | **Biggest hit: the fanfare** |
-| 19.7 | The Golden Molar appears | Glow |
-| 20.9 | The piece clicks into place | Small accent |
-| 22.6 | A mountain rises (a ledge per city, the molar on top) | Awe |
-| **24.6** | **The probe hops up to its ledge** | **Accent** |
-| 27.4 – 30.0 | Lift off | **End on a chord that is not finished yet** (for example the V chord): there is more mountain to climb |
+| Bar.beat | Time | What happens | Music |
+| :--- | :--- | :--- | :--- |
+| 1.1 | 0.0 | The game freezes and fades into the city at night | A breath: one held chord, no drums |
+| 1.3 | 1.0 | The probe flies up | Lift-off swell |
+| 2.2 – 4.2 | 2.5 – 6.5 | The lights come on left to right, a step every beat | A climbing line, one note per beat |
+| **4.3** | **7.0** | **The whole city blazes** | **First big hit (a push into bar 5)** |
+| 5.1 – 7.4 | 8.0 – 13.9 | The celebration; the host pops up to wave (5.4 – 7.3) | The city's theme, at its most triumphant |
+| 7.4 | 13.5 | One last rocket goes up | One-beat riser |
+| **8.1** | **14.0** | **It bursts into the city's sign** | **Hit** |
+| 8.4 – 9.2 | 15.5 – 16.5 | The sparks gather into a coin | Suspense, thinning out |
+| 9.3 – 9.4 | 17.0 – 17.9 | The probe rises to meet it | Sixteenth-note drum roll |
+| **10.1** | **18.0** | **The probe holds the coin up** | **The fanfare: the biggest hit** |
+| 10.4 | 19.5 | The Golden Molar appears | Glow |
+| 11.3 | 21.0 | The piece clicks into place | Small accent |
+| 12.1 | 22.0 | A mountain rises: a ledge per city, the molar on top | Awe, a new colour |
+| **13.1** | **24.0** | **The probe hops up to its ledge** | **Accent** |
+| (14.1) | (26.0) | (The city that completes the set reaches the summit) | (Only matters for the grand finale's hand-over) |
+| **15.1 – 15.4** | **28.0 – 30.0** | **Lift off** | **Last chord on the downbeat of bar 15, and it must not resolve** (for example the V or a sus chord): there is more mountain to climb |
 
-For the city that completes the set, the probe also hops onto the summit at **25.8** and the
-grand finale follows straight after. Any city can be the last one, so every city song should
-hang at the end; the grand finale is where the music finally comes home.
+Any city can be the last one, so every city song should hang at the end. The grand finale is
+where the music finally comes home.
 
-**Grand finale, 60.0 s:**
+**Grand finale, 30 bars:**
 
-| Time | What happens | Music |
-| :--- | :--- | :--- |
-| 0.0 | Night sky | Hush |
-| 2.5, 3.7, 4.9, 6.1, 7.3 | The five pieces fly in and land, one per city | Five rising accents |
-| **8.0** | **The Golden Molar snaps together** | **The biggest hit of the game** |
-| 8.0 – 11.0 | "The Golden Molar" | Triumphant theme |
-| 11.0 – 51.0 | Credits: Toronto, New Orleans, Tokyo & Chicago, Accra & Colorado, Station Aurora, **8 s each** (11, 19, 27, 35, 43) | A medley: 8 s in each city's flavour |
-| 51.0 | Final scene: fireworks, the five signs circling the molar | Full reprise |
-| 53.5 / 55.0 | (Gold in every city) the molar smiles, then winks | A wink of a sound |
-| 57.4 | Last chord | Resolve home |
-| 59.4 – 60.0 | Fade to dark | Ring out |
+| Bar.beat | Time | What happens | Music |
+| :--- | :--- | :--- | :--- |
+| 1.1 | 0.0 | Night sky | Hush |
+| 2.2, 2.4, 3.2, 3.4, 4.2 | 2.5, 3.5, 4.5, 5.5, 6.5 | The five pieces land, one per city | Five rising accents, every two beats |
+| **5.1** | **8.0** | **The Golden Molar snaps together** | **The biggest hit of the game** |
+| 5.1 – 6.4 | 8.0 – 11.9 | "The Golden Molar" | The triumphant theme, full |
+| 7.1 – 26.4 | 12.0 – 51.9 | Credits, **4 bars per city**: Toronto 7–10, New Orleans 11–14, Tokyo & Chicago 15–18, Accra & Colorado 19–22, Station Aurora 23–26 | A medley: each city's groove and instruments for its 4 bars |
+| **27.1** | **52.0** | Final scene: fireworks, the five signs circling the molar | Full reprise, a key change up |
+| 28.1 / 28.4 | 54.0 / 55.5 | (Gold in every city) the molar smiles, then winks | A wink of a sound on 28.4 |
+| **30.1** | **58.0** | Last chord | **Resolve home**, and let it ring |
+| 30.4 | 59.4 – 60.0 | Fade to dark | Ring out |
 
-Suggested starting points for each city's finale: the city's own prompt below, plus
-`triumphant victory fanfare, brass and choir lift, celebratory, 30 seconds, ends on an
-unresolved chord`; for the grand finale, `heroic orchestral medley of five city themes, 60
-seconds, huge hit at 8 seconds, resolves fully at the end`.
+### Music direction and prompts
+
+Each finale is a victory version of that city's own song (same key family, same instruments),
+played by a real band or orchestra, at 120 BPM so it locks to the cues. The prompts are written
+for Suno: paste the **Style** line into the style box (Instrumental on) and the **Structure**
+block into the lyrics box; then trim to the exact length in an editor.
+
+**1. `finale_toronto.m4a` — "Morning Glass, Victory Lap" (C Lydian, 120 BPM, 30.0 s)**
+- Harmony: C Lydian, built on Cmaj7 and D/C (the raised 4th, F#, is the sparkle). Climb in bars
+  2–4 up the C major pentatonic; bars 5–7 on Cmaj7 – D/C – Em7 – D/C; fanfare in bar 10 on
+  C – D – E – G over a Cmaj9; bars 12–14 move to Am9 – Fmaj7#11; end in bar 15 on **Gsus4**
+  (unresolved).
+- Real instruments: marimba and vibraphone carrying the melody, glockenspiel doubling it, Fender
+  Rhodes chords, a string section, two French horns for the fanfare, upright bass, brushed snare
+  and timpani for the hits.
+- **Style:** `triumphant cinematic indie-orchestral, C Lydian, 120 BPM, live marimba and vibraphone melody, glockenspiel sparkle, warm Fender Rhodes, string section, French horn fanfare, upright bass, brushed snare, timpani hits, bright sunrise, joyful victory lap, instrumental`
+- **Structure:** `[Intro: held Cmaj7, strings and Rhodes, 2 bars] [Build: marimba climbs one note per beat, 2 bars] [Hit] [Chorus: full band triumphant theme, 3 bars] [Riser] [Hit] [Breakdown: suspense, 2 bars] [Drum roll] [Horn fanfare, 2 bars] [Bridge: Am9 to Fmaj7#11, awe, 3 bars] [Ending: Gsus4 left hanging]`
+
+**2. `finale_new_orleans.m4a` — "Second Line to the Summit" (B♭ major blues, 120 BPM swung, 30.0 s)**
+- Harmony: B♭ blues, B♭7 – E♭7 – B♭7 – F7 shout chorus; fanfare in bar 10 as a trumpet shout on
+  B♭ – C – D – F over B♭6/9; bars 12–14 a softer clarinet line over Gm7 – C7; end in bar 15 on
+  **F7sus4** (unresolved).
+- Real instruments: a New Orleans brass band: two trumpets, trombone, clarinet, tenor sax,
+  sousaphone on the bass line, snare and bass drum playing a second-line beat, tambourine,
+  Fender Rhodes comping. Swung sixteenths.
+- **Style:** `New Orleans second-line brass band victory parade, B-flat major blues, 120 BPM swung, live trumpets trombone clarinet tenor sax, sousaphone bass, second-line snare and bass drum, tambourine, Rhodes comping, joyful Mardi Gras celebration, trumpet shout chorus, instrumental`
+- **Structure:** `[Intro: one held horn chord, 2 bars] [Build: sousaphone and snare walk up, 2 bars] [Hit] [Shout chorus: full brass band, 3 bars] [Riser] [Hit] [Breakdown: clarinet alone, 2 bars] [Snare roll] [Trumpet fanfare, 2 bars] [Bridge: soft clarinet over Gm7 to C7, 3 bars] [Ending: F7sus4 held, unresolved]`
+
+**3. `finale_tokyo.m4a` — "Neon to Daybreak" (A Dorian, 120 BPM, 30.0 s)**
+- Harmony: A Dorian, Am9 – D9 (the major IV is the Dorian colour); fanfare in bar 10 on
+  A – B – C – E over Fmaj7#11 resolving to Am9 for one bar; bars 12–14 Cmaj9 – Bm7♭5 (a nod to
+  1940s Chicago jazz); end in bar 15 on **Esus4** (unresolved).
+- Real instruments: Fender Rhodes and upright piano, alto sax and flugelhorn (Chicago jazz),
+  koto glissandi and shakuhachi for Tokyo, taiko and shime-daiko for the big hits, a live funk
+  drummer playing four on the floor, electric bass with a warm deep-house line.
+- **Style:** `Tokyo meets Chicago jazz-house victory anthem, A Dorian, 120 BPM, live four-on-the-floor drums, warm electric bass, Fender Rhodes, upright piano, alto saxophone and flugelhorn melody, koto glissando, shakuhachi breath, taiko drum hits, neon city at dawn, triumphant, instrumental`
+- **Structure:** `[Intro: Rhodes Am9, shakuhachi breath, 2 bars] [Build: koto climbs one note per beat, 2 bars] [Taiko hit] [Chorus: sax and flugelhorn theme over house groove, 3 bars] [Riser] [Taiko hit] [Breakdown: piano alone, 2 bars] [Drum roll] [Brass fanfare, 2 bars] [Bridge: Cmaj9 to Bm7b5, 3 bars] [Ending: Esus4 hanging]`
+
+**4. `finale_accra.m4a` — "Black Star, High Peak" (G major pentatonic, 120 BPM, 30.0 s)**
+- Harmony: G major, highlife cycle G – C – D – G; the bell pattern is the 12/8 Ewe gankogui line
+  over 4/4; fanfare in bar 10 as horns on G – A – B – D over G6/9; bars 12–14 open up for the
+  Rockies (Em7 – Cadd9, acoustic guitar and fiddle); end in bar 15 on **D7sus4** (unresolved).
+- Real instruments: two interlocking clean electric highlife guitars, a horn section (trumpet
+  and tenor sax), electric bass, kpanlogo drums and djembe, talking drum for the hits, gankogui
+  bell and shekere; for the Colorado bars, acoustic guitar and fiddle.
+- **Style:** `Ghanaian highlife victory celebration, G major pentatonic, 120 BPM, interlocking clean electric highlife guitars, trumpet and tenor sax horn section, warm electric bass, kpanlogo drums, djembe, talking drum hits, gankogui bell and shekere, bright and joyful, opening into a mountain sunrise with acoustic guitar and fiddle, instrumental`
+- **Structure:** `[Intro: guitars and bell only, 2 bars] [Build: talking drum climbs, 2 bars] [Hit] [Chorus: full highlife band, horns lead, 3 bars] [Riser] [Talking drum hit] [Breakdown: bell and shekere, 2 bars] [Drum roll] [Horn fanfare, 2 bars] [Bridge: acoustic guitar and fiddle, wide open, Em7 to Cadd9, 3 bars] [Ending: D7sus4 hanging]`
+
+**5. `finale_aurora.m4a` — "Overview" (E Lydian, 120 BPM or 60 half time, 30.0 s)**
+- Harmony: E Lydian, Emaj9 – F#/E (the raised 4th, A#, is the weightless colour); fanfare in
+  bar 10 as horns on E – F# – G# – B over Emaj9; bars 12–14 C#m9 – Amaj7#11 – F#; end in bar 15
+  on **F#/E** (the Lydian II over the root), floating and unresolved.
+- Real instruments: a full string orchestra (divisi), celesta, harp, glass harmonica, French horns
+  and a trumpet for the fanfare, soft choir on "ah", timpani, and a gentle heartbeat bass drum.
+- **Style:** `cinematic orchestral space awe, E Lydian, 120 BPM half-time feel, divisi string orchestra, celesta and harp, glass harmonica, soft choir ahs, French horn and trumpet fanfare, timpani, heartbeat bass drum, weightless sunrise over Earth, triumphant and tender, instrumental`
+- **Structure:** `[Intro: glass harmonica and strings, held Emaj9, 2 bars] [Build: harp climbs one note per beat, 2 bars] [Timpani hit] [Theme: strings and choir soar, 3 bars] [Riser] [Hit] [Breakdown: celesta alone, 2 bars] [Timpani roll] [Horn and trumpet fanfare, 2 bars] [Bridge: C#m9 to Amaj7#11 to F#, 3 bars] [Ending: F# over E, floating, unresolved]`
+
+**6. `finale_ending.m4a` — "The Golden Molar" (C → D → E major, 120 BPM, 60.0 s)**
+- Harmony and key plan: bars 1–4 hush in C major as the pieces land (five rising accents on
+  2.2, 2.4, 3.2, 3.4, 4.2); **bar 5, the snap: lift to D major**, full orchestra on the main
+  theme (D – A/C# – Bm7 – G – A sus – A). Credits, bars 7–26, stay in D major but each 4 bars
+  takes on a city's band and groove: Toronto (marimba, glockenspiel, horns), New Orleans (brass
+  band second line), Tokyo & Chicago (Rhodes, alto sax, taiko), Accra & Colorado (highlife
+  guitars, talking drum, fiddle), Station Aurora (celesta, harp, choir). **Bar 27: key change up
+  to E major** for the final reprise with everyone playing; bar 28.4 a celesta and glockenspiel
+  "wink"; **bar 30: resolve on E major (add 9)** and let it ring to 60.0.
+- Real instruments: full symphony orchestra (strings, horns, trumpets, trombones, timpani,
+  cymbals) plus each city's featured instruments in its credit.
+- **Style:** `heroic orchestral grand finale medley, 120 BPM, starts hushed in C major, huge hit and lift to D major at 8 seconds, then four bars each of marimba and horns, New Orleans brass band, Rhodes with alto sax and taiko, highlife guitars with talking drum and fiddle, celesta harp and choir, final key change up to E major, full symphony orchestra, joyful triumphant resolution, instrumental`
+- **Structure:** `[Intro: hush, five rising accents, 4 bars] [Huge hit: theme in D major, 2 bars] [Medley: Toronto 4 bars] [New Orleans brass band 4 bars] [Tokyo and Chicago 4 bars] [Accra highlife 4 bars] [Station Aurora 4 bars] [Key change to E major: final reprise, 2 bars] [Wink] [Final chord: E major add9, ring out]`
 
 ## Ready-to-Paste Suno Instrumental Prompts ("Solar Bio-Groove")
 

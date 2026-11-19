@@ -99,25 +99,25 @@ public struct FinalePoint: Equatable, Sendable {
 public enum CityFinale {
     // MARK: - Timing (seconds from the moment the last zone seals)
 
-    public static let hushEnd = 1.2
-    public static let riseEnd = 2.6
+    public static let hushEnd = 1.0
+    public static let riseEnd = 2.5
     public static let waveEnd = 7.0
     /// The show starts here; a burst's `t` counts from this moment.
     public static let blazeEnd = 8.0
     public static let showEnd = 13.5
-    public static let emblemBurst = 14.1
+    public static let emblemBurst = 14.0
     public static let emblemEnd = 15.5
-    public static let gatherEnd = 16.7
-    public static let meet = 17.9
-    public static let prizeEnd = 19.7
-    public static let slot = 20.9
+    public static let gatherEnd = 16.5
+    public static let meet = 18.0
+    public static let prizeEnd = 19.5
+    public static let slot = 21.0
     /// The molar moves to the top of the mountain as it rises.
-    public static let molarEnd = 22.6
+    public static let molarEnd = 22.0
     /// The probe lands on its new ledge...
-    public static let climbHop = 24.6
+    public static let climbHop = 24.0
     /// ...and, for the city that completes the set, on the summit.
-    public static let summitHop = 25.8
-    public static let climbEnd = 27.4
+    public static let summitHop = 26.0
+    public static let climbEnd = 28.0
     /// Exactly 30 s, so a recorded song can be made to fit.
     public static let end = 30.0
     /// The Skip button appears after this.
@@ -129,14 +129,14 @@ public enum CityFinale {
     public enum Ending {
         public static let fadeEnd = 1.0
         public static let firstPiece = 1.5
-        public static let pieceGap = 1.2
+        public static let pieceGap = 1.0
         public static let pieceFlight = 1.0
         public static let snap = 8.0
-        public static let creditsStart = 11.0
+        public static let creditsStart = 12.0
         public static let creditSeconds = 8.0
-        public static let finaleStart = 51.0
-        public static let face = 53.5
-        public static let wink = 55.0
+        public static let finaleStart = 52.0
+        public static let face = 54.0
+        public static let wink = 55.5
         public static let end = 60.0
         public static let skipAfter = 1.0
     }
@@ -808,7 +808,7 @@ public enum CityFinale {
         return out
     }
 
-    static let hostUp = 9.2
+    static let hostUp = 9.5
     static let hostDown = 13.0
 
     public static func host(_ t: Double, reducedMotion: Bool) -> (rise: Double, wave: Double) {
@@ -818,7 +818,7 @@ public enum CityFinale {
     }
 
     /// When each line of text is on screen: [from, to).
-    public static let bubbleText = (from: 9.6, to: 12.9)
+    public static let bubbleText = (from: 9.9, to: 12.9)
     public static let cityText = (from: meet, to: molarEnd)
     public static let molarText = (from: slot, to: molarEnd)
     /// "2 more to the top" / "You made it to the top!", and the next city.
@@ -834,7 +834,7 @@ public enum CityFinale {
 
     static let riff: [Int?] = [0, nil, 4, 7, 9, nil, 7, 4, 7, nil, 9, 12, 14, 12, 9, 7]
     static let step = 0.25
-    static let riffStart = 8.5
+    static let riffStart = 8.0
 
     static func burstPan(_ x: Double) -> Double {
         clamp((x - 32) / 40, -0.9, 0.9)
@@ -861,9 +861,9 @@ public enum CityFinale {
         if !reducedMotion { add(hushEnd + 0.05, .whoosh, tonic, 1.2, 0.5) }
         for k in 0..<5 { add(hushEnd + 0.09 * Double(k), .bell, tonic + 12 + penta(k), 0.5, 0.42, -0.4 + 0.1 * Double(k)) }
 
-        for k in 0..<12 {
-            let t = riseEnd + ((Double(k) + 0.5) * (waveEnd - riseEnd)) / 12
-            let pan = reducedMotion ? 0 : -0.8 + (1.6 * Double(k)) / 11
+        for k in 0..<9 {
+            let t = riseEnd + 0.5 * Double(k)
+            let pan = reducedMotion ? 0 : -0.8 + (1.6 * Double(k)) / 8
             add(t, v, tonic + penta(k), 0.6, 0.62, pan)
             if k % 3 == 2 { add(t, .bell, tonic + 12 + penta(k), 0.5, 0.3, pan) }
         }
@@ -907,16 +907,16 @@ public enum CityFinale {
 
         for k in 0..<7 { add(emblemEnd + 0.08 * Double(k), .bell, tonic + 36 - penta(k), 0.4, 0.3) }
         add(emblemEnd + 0.8, .sparkle, tonic, 0.8, 0.4)
-        for (k, t) in [16.9, 17.2, 17.45, 17.62, 17.75, 17.85].enumerated() { add(t, .kick, tonic, 0.18, 0.25 + 0.05 * Double(k)) }
+        for (k, t) in [17.0, 17.25, 17.5, 17.625, 17.75, 17.875].enumerated() { add(t, .kick, tonic, 0.18, 0.25 + 0.05 * Double(k)) }
 
         let fan = [7, 9, 11, 12]
         for (k, iv) in fan.enumerated() {
             let last = k == fan.count - 1
-            add(meet + 0.14 * Double(k), v, tonic + iv, last ? 1.4 : 0.16, 0.8)
-            add(meet + 0.14 * Double(k), .bell, tonic + 12 + iv, last ? 1.2 : 0.16, 0.4)
+            add(meet + 0.125 * Double(k), v, tonic + iv, last ? 1.4 : 0.16, 0.8)
+            add(meet + 0.125 * Double(k), .bell, tonic + 12 + iv, last ? 1.2 : 0.16, 0.4)
         }
         add(meet, .boom, tonic, 1.0, 0.55)
-        for iv in [0, 4, 7] { add(meet + 0.42, .pad, tonic + iv, 2.2, 0.32) }
+        for iv in [0, 4, 7] { add(meet + 0.375, .pad, tonic + iv, 2.2, 0.32) }
 
         add(slot, .marimba, tonic + 12, 0.2, 0.7)
         add(slot + 0.05, .bell, tonic + 19, 0.6, 0.5)
@@ -935,11 +935,11 @@ public enum CityFinale {
         if !reducedMotion { add(molarEnd + 0.05, .whoosh, tonic, 0.9, 0.35) }
         for k in 0..<campaignPieces {
             let earned = (k < finishes.count ? finishes[k] : .empty) != .empty && k != slotIndex
-            add(molarEnd + 0.3 + 0.13 * Double(k), .bell, tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + Double(k) * 0.25)
+            add(molarEnd + 0.25 + 0.125 * Double(k), .bell, tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + Double(k) * 0.25)
         }
-        for iv in [0, 4, 7] { add(molarEnd + 0.3, .pad, tonic - 12 + iv, 2.0, 0.22) }
+        for iv in [0, 4, 7] { add(molarEnd + 0.25, .pad, tonic - 12 + iv, 2.0, 0.22) }
         if !reducedMotion { add(climbHop - 0.8, .whoosh, tonic, 0.7, 0.3) }
-        add(climbHop - 0.4, v, tonic + 7, 0.3, 0.45)
+        add(climbHop - 0.5, v, tonic + 7, 0.3, 0.45)
         add(climbHop, .kick, tonic, 0.2, 0.4)
         for iv in [7, 11, 14] { add(climbHop, v, tonic + iv, 0.9, 0.55) }
         add(climbHop, .bell, tonic + 19, 0.8, 0.4)
@@ -957,8 +957,8 @@ public enum CityFinale {
         if !reducedMotion { add(climbEnd + 0.05, .whoosh, tonic, 1.0, 0.5) }
         for k in 0..<6 { add(climbEnd + 0.1 + 0.07 * Double(k), .bell, tonic + 12 + penta(k), 0.5, 0.35) }
         let lastChord = atTop ? [0, 4, 7, 11, 14] : [5, 7, 12, 14]
-        for iv in lastChord { add(climbEnd + 0.6, v, tonic + iv, 1.8, 0.5) }
-        add(climbEnd + 0.6, .pad, tonic - (atTop ? 12 : 5), 2.0, 0.35)
+        for iv in lastChord { add(climbEnd, v, tonic + iv, 1.9, 0.5) }
+        add(climbEnd, .pad, tonic - (atTop ? 12 : 5), 2.0, 0.35)
 
         return sortedStable(notes)
     }
@@ -1081,12 +1081,12 @@ public enum CityFinale {
         }
         for iv in [0, 4, 7, 11] { add(Ending.snap + 0.9, .pad, home + iv, 2.4, 0.3) }
         for (i, plan) in plans.enumerated() {
-            let at = Ending.creditsStart + Double(i) * Ending.creditSeconds + 0.5
+            let at = Ending.creditsStart + Double(i) * Ending.creditSeconds
             for (k, step) in riff.enumerated() {
                 if let step { add(at + Double(k) * Self.step, FinaleVoice(plan.voice), plan.tonic + 12 + step, 0.3, 0.45) }
             }
-            add(at + Double(riff.count) * Self.step + 0.2, FinaleVoice(plan.voice), plan.tonic + 12, 1.6, 0.45)
-            add(at + Double(riff.count) * Self.step + 0.2, .bell, plan.tonic + 24, 1.2, 0.3)
+            add(at + Double(riff.count) * Self.step, FinaleVoice(plan.voice), plan.tonic + 12, 1.6, 0.45)
+            add(at + Double(riff.count) * Self.step, .bell, plan.tonic + 24, 1.2, 0.3)
             for k in 0..<6 { add(at + Double(k), .bass, plan.tonic - 24 + (k % 2 == 0 ? 0 : 7), 0.8, 0.4) }
         }
         add(Ending.finaleStart, .boom, home, 1.2, 0.55)
@@ -1102,8 +1102,8 @@ public enum CityFinale {
             add(Ending.wink + 0.05, .kalimba, home + 24, 0.4, 0.55)
             add(Ending.wink + 0.2, .kalimba, home + 31, 0.6, 0.55)
         }
-        for iv in [0, 4, 7, 11, 14] { add(Ending.end - 2.6, .rhodes, home + iv, 2.4, 0.45) }
-        add(Ending.end - 2.6, .pad, home - 12, 2.6, 0.35)
+        for iv in [0, 4, 7, 11, 14] { add(Ending.end - 2.0, .rhodes, home + iv, 1.9, 0.45) }
+        add(Ending.end - 2.0, .pad, home - 12, 2.0, 0.35)
         return sortedStable(notes)
     }
 

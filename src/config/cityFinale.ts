@@ -19,7 +19,8 @@
  *             is not finished yet. The city that completes the set climbs all the way to the top.
  *   liftoff   the probe flies off, and the score follows
  *
- * Exact lengths, so a recorded song can be made to fit: a city's finale is 30 s, the ending 60 s.
+ * Exact lengths, so a recorded song can be made to fit: a city's finale is 30 s, the ending 60 s,
+ * and every cue sits on a 120 BPM grid (a 4/4 bar every 2 s): 15 bars a city, 30 for the ending.
  * A song dropped into the music folder (FINALE_TRACK_CANDIDATES) plays in place of the score's
  * instruments, starting the moment the last zone seals; the score's effects (booms, whistles,
  * sparkles) still play over it.
@@ -47,25 +48,25 @@ export type FinaleGrade = 'NONE' | 'C' | 'B' | 'A' | 'S' | 'FLUORAPATITE_GOLD';
 
 /** Seconds from the moment the last zone seals. */
 export const FINALE_TIMES = {
-  hushEnd: 1.2,
-  riseEnd: 2.6,
+  hushEnd: 1.0,
+  riseEnd: 2.5,
   waveEnd: 7.0,
   /** The show starts here; a burst's `t` counts from this moment. */
   blazeEnd: 8.0,
   showEnd: 13.5,
-  emblemBurst: 14.1,
+  emblemBurst: 14.0,
   emblemEnd: 15.5,
-  gatherEnd: 16.7,
-  meet: 17.9,
-  prizeEnd: 19.7,
-  slot: 20.9,
+  gatherEnd: 16.5,
+  meet: 18.0,
+  prizeEnd: 19.5,
+  slot: 21.0,
   /** The molar moves to the top of the mountain as it rises. */
-  molarEnd: 22.6,
+  molarEnd: 22.0,
   /** The probe lands on its new ledge. */
-  climbHop: 24.6,
+  climbHop: 24.0,
   /** ...and, for the city that completes the set, on the summit. */
-  summitHop: 25.8,
-  climbEnd: 27.4,
+  summitHop: 26.0,
+  climbEnd: 28.0,
   end: 30.0,
   /** The Skip button appears after this. */
   skipAfter: 1.5,
@@ -75,14 +76,14 @@ export const FINALE_TIMES = {
 export const ENDING_TIMES = {
   fadeEnd: 1.0,
   firstPiece: 1.5,
-  pieceGap: 1.2,
+  pieceGap: 1.0,
   pieceFlight: 1.0,
   snap: 8.0,
-  creditsStart: 11.0,
+  creditsStart: 12.0,
   creditSeconds: 8.0,
-  finaleStart: 51.0,
-  face: 53.5,
-  wink: 55.0,
+  finaleStart: 52.0,
+  face: 54.0,
+  wink: 55.5,
   end: 60.0,
   skipAfter: 1.0,
 } as const;
@@ -809,7 +810,7 @@ export interface FinaleHost {
   wave: number;
 }
 
-const HOST_UP = 9.2;
+const HOST_UP = 9.5;
 const HOST_DOWN = 13.0;
 
 /** The city's host pops up at the edge of the screen to wave and say thank you. */
@@ -821,7 +822,7 @@ export function finaleHost(t: number, reducedMotion: boolean): FinaleHost {
 
 /** When each line of text is on screen: [from, to) seconds. */
 export const FINALE_TEXT = {
-  bubble: [9.6, 12.9],
+  bubble: [9.9, 12.9],
   city: [FINALE_TIMES.meet, FINALE_TIMES.molarEnd],
   molar: [FINALE_TIMES.slot, FINALE_TIMES.molarEnd],
   /** "2 more to the top" / "You made it to the top!", and the next city. */
@@ -868,7 +869,7 @@ function penta(k: number): number {
 /** The city's party tune: 16 steps, null for a rest. Built on the city's tonic. */
 const RIFF: readonly (number | null)[] = [0, null, 4, 7, 9, null, 7, 4, 7, null, 9, 12, 14, 12, 9, 7];
 const STEP = 0.25;
-const RIFF_START = 8.5;
+const RIFF_START = 8.0;
 
 function burstPan(x: number): number {
   return clamp((x - 32) / 40, -0.9, 0.9);
@@ -901,9 +902,9 @@ export function finaleNotes(
   for (let k = 0; k < 5; k++) add(T.hushEnd + 0.09 * k, 'bell', tonic + 12 + penta(k), 0.5, 0.42, -0.4 + 0.1 * k);
 
   // wave: one note per light-up step, climbing left to right with the probe
-  for (let k = 0; k < 12; k++) {
-    const t = T.riseEnd + ((k + 0.5) * (T.waveEnd - T.riseEnd)) / 12;
-    const pan = reducedMotion ? 0 : -0.8 + (1.6 * k) / 11;
+  for (let k = 0; k < 9; k++) {
+    const t = T.riseEnd + 0.5 * k;
+    const pan = reducedMotion ? 0 : -0.8 + (1.6 * k) / 8;
     add(t, v, tonic + penta(k), 0.6, 0.62, pan);
     if (k % 3 === 2) add(t, 'bell', tonic + 12 + penta(k), 0.5, 0.3, pan);
   }
@@ -952,17 +953,17 @@ export function finaleNotes(
   // gather, then a drum roll as the probe rises to meet the piece
   for (let k = 0; k < 7; k++) add(T.emblemEnd + 0.08 * k, 'bell', tonic + 36 - penta(k), 0.4, 0.3);
   add(T.emblemEnd + 0.8, 'sparkle', tonic, 0.8, 0.4);
-  [16.9, 17.2, 17.45, 17.62, 17.75, 17.85].forEach((t, k) => add(t, 'kick', tonic, 0.18, 0.25 + 0.05 * k));
+  [17.0, 17.25, 17.5, 17.625, 17.75, 17.875].forEach((t, k) => add(t, 'kick', tonic, 0.18, 0.25 + 0.05 * k));
 
   // the fanfare: up to the tonic and hold
   const fan = [7, 9, 11, 12];
   fan.forEach((iv, k) => {
     const last = k === fan.length - 1;
-    add(T.meet + 0.14 * k, v, tonic + iv, last ? 1.4 : 0.16, 0.8);
-    add(T.meet + 0.14 * k, 'bell', tonic + 12 + iv, last ? 1.2 : 0.16, 0.4);
+    add(T.meet + 0.125 * k, v, tonic + iv, last ? 1.4 : 0.16, 0.8);
+    add(T.meet + 0.125 * k, 'bell', tonic + 12 + iv, last ? 1.2 : 0.16, 0.4);
   });
   add(T.meet, 'boom', tonic, 1.0, 0.55);
-  for (const iv of [0, 4, 7]) add(T.meet + 0.42, 'pad', tonic + iv, 2.2, 0.32);
+  for (const iv of [0, 4, 7]) add(T.meet + 0.375, 'pad', tonic + iv, 2.2, 0.32);
 
   // the piece clicks into the molar
   add(T.slot, 'marimba', tonic + 12, 0.2, 0.7);
@@ -981,12 +982,12 @@ export function finaleNotes(
   if (!reducedMotion) add(T.molarEnd + 0.05, 'whoosh', tonic, 0.9, 0.35);
   for (let k = 0; k < CAMPAIGN_PIECES; k++) {
     const earned = (finishes[k] ?? 'empty') !== 'empty' && k !== slotIndex;
-    add(T.molarEnd + 0.3 + 0.13 * k, 'bell', tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + k * 0.25);
+    add(T.molarEnd + 0.25 + 0.125 * k, 'bell', tonic + 12 + penta(k), 0.45, earned ? 0.42 : 0.16, -0.5 + k * 0.25);
   }
-  for (const iv of [0, 4, 7]) add(T.molarEnd + 0.3, 'pad', tonic - 12 + iv, 2.0, 0.22);
+  for (const iv of [0, 4, 7]) add(T.molarEnd + 0.25, 'pad', tonic - 12 + iv, 2.0, 0.22);
   // the hop up to the new ledge
   if (!reducedMotion) add(T.climbHop - 0.8, 'whoosh', tonic, 0.7, 0.3);
-  add(T.climbHop - 0.4, v, tonic + 7, 0.3, 0.45);
+  add(T.climbHop - 0.5, v, tonic + 7, 0.3, 0.45);
   add(T.climbHop, 'kick', tonic, 0.2, 0.4);
   for (const iv of [7, 11, 14]) add(T.climbHop, v, tonic + iv, 0.9, 0.55);
   add(T.climbHop, 'bell', tonic + 19, 0.8, 0.4);
@@ -1005,8 +1006,8 @@ export function finaleNotes(
   if (!reducedMotion) add(T.climbEnd + 0.05, 'whoosh', tonic, 1.0, 0.5);
   for (let k = 0; k < 6; k++) add(T.climbEnd + 0.1 + 0.07 * k, 'bell', tonic + 12 + penta(k), 0.5, 0.35);
   const lastChord = atTop ? [0, 4, 7, 11, 14] : [5, 7, 12, 14];
-  for (const iv of lastChord) add(T.climbEnd + 0.6, v, tonic + iv, 1.8, 0.5);
-  add(T.climbEnd + 0.6, 'pad', tonic - (atTop ? 12 : 5), 2.0, 0.35);
+  for (const iv of lastChord) add(T.climbEnd, v, tonic + iv, 1.9, 0.5);
+  add(T.climbEnd, 'pad', tonic - (atTop ? 12 : 5), 2.0, 0.35);
 
   return notes.sort((a, b) => a.t - b.t);
 }
@@ -1153,12 +1154,12 @@ export function endingNotes(plans: readonly CityFinalePlan[], allGold: boolean):
   for (const iv of [0, 4, 7, 11]) add(E.snap + 0.9, 'pad', home + iv, 2.4, 0.3);
   // the credits: each city plays the start of its tune
   plans.forEach((plan, i) => {
-    const at = E.creditsStart + i * E.creditSeconds + 0.5;
+    const at = E.creditsStart + i * E.creditSeconds;
     RIFF.forEach((step, k) => {
       if (step !== null) add(at + k * STEP, plan.voice, plan.tonic + 12 + step, 0.3, 0.45);
     });
-    add(at + RIFF.length * STEP + 0.2, plan.voice, plan.tonic + 12, 1.6, 0.45);
-    add(at + RIFF.length * STEP + 0.2, 'bell', plan.tonic + 24, 1.2, 0.3);
+    add(at + RIFF.length * STEP, plan.voice, plan.tonic + 12, 1.6, 0.45);
+    add(at + RIFF.length * STEP, 'bell', plan.tonic + 24, 1.2, 0.3);
     for (let k = 0; k < 6; k++) add(at + k, 'bass', plan.tonic - 24 + (k % 2 === 0 ? 0 : 7), 0.8, 0.4);
   });
   // the last scene
@@ -1175,8 +1176,8 @@ export function endingNotes(plans: readonly CityFinalePlan[], allGold: boolean):
     add(E.wink + 0.05, 'kalimba', home + 24, 0.4, 0.55);
     add(E.wink + 0.2, 'kalimba', home + 31, 0.6, 0.55);
   }
-  for (const iv of [0, 4, 7, 11, 14]) add(E.end - 2.6, 'rhodes', home + iv, 2.4, 0.45);
-  add(E.end - 2.6, 'pad', home - 12, 2.6, 0.35);
+  for (const iv of [0, 4, 7, 11, 14]) add(E.end - 2.0, 'rhodes', home + iv, 1.9, 0.45);
+  add(E.end - 2.0, 'pad', home - 12, 2.0, 0.35);
   return notes.sort((a, b) => a.t - b.t);
 }
 
