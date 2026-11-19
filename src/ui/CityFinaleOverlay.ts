@@ -65,6 +65,7 @@ import {
 import { HOST_CITIES } from '../config/hostsAndHistory';
 import { getCartridgeById } from '../worlds/worldRegistry';
 import type { OverlayView } from '../engine/types';
+import { FinaleStage3D } from '../engine/render/FinaleStage3D';
 
 /** The five campaign cities, in order. */
 export const FINALE_WORLD_IDS = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'] as const;
@@ -220,6 +221,9 @@ export class CityFinaleOverlay implements OverlayView {
   private shell: HTMLDivElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  /** The show in 3D (WebGL), under the 2D canvas; null where WebGL is missing (the 2D show plays). */
+  private stage3d: FinaleStage3D | null = null;
+  private canvas3d: HTMLCanvasElement | null = null;
   private raf = 0;
   private startMs = 0;
   private lastT = -1;
@@ -297,7 +301,8 @@ export class CityFinaleOverlay implements OverlayView {
     const city = this.city;
     const nextName = !this.atTop && this.nextCity >= 0 ? this.cities[this.nextCity]?.cityName ?? '' : '';
     shell.innerHTML = `
-      <canvas class="finale-canvas" aria-hidden="true"></canvas>
+      <canvas class="finale-canvas finale-canvas3d" aria-hidden="true"></canvas>
+      <canvas class="finale-canvas finale-canvas2d" aria-hidden="true"></canvas>
       <div class="finale-text finale-top">
         <div class="finale-line finale-city" data-text="city">${city ? escapeHtml(city.cityName) : ''}</div>
         <div class="finale-line finale-sub" data-text="molar">Golden Molar: ${pieces} of 5</div>
@@ -320,8 +325,29 @@ export class CityFinaleOverlay implements OverlayView {
     `;
     root.appendChild(shell);
     this.shell = shell;
-    this.canvas = shell.querySelector('canvas');
+    this.canvas = shell.querySelector('.finale-canvas2d');
     this.ctx = this.canvas?.getContext('2d') ?? null;
+    this.canvas3d = shell.querySelector('.finale-canvas3d');
+    if (this.canvas3d) {
+      try {
+        const stage = new FinaleStage3D(
+          this.canvas3d,
+          this.cities.map((c) => (c ? { art: c.art, plan: c.plan } : null)),
+          Math.max(0, Math.min(CAMPAIGN_PIECES - 1, this.opts.worldIndex)),
+          this.opts.finishes,
+          this.opts.reducedMotion
+        );
+        if (stage.ok) this.stage3d = stage;
+        else stage.dispose();
+      } catch (err) {
+        console.warn('[finale] 3D stage unavailable, drawing the 2D show', err);
+        this.stage3d = null;
+      }
+      if (!this.stage3d) {
+        this.canvas3d.remove();
+        this.canvas3d = null;
+      }
+    }
     shell.querySelectorAll<HTMLElement>('[data-text]').forEach((el) => this.textEls.set(el.dataset.text as string, el));
     shell.querySelector<HTMLButtonElement>('.finale-skip')?.addEventListener('click', () => this.skip());
     window.addEventListener('keydown', this.onKey, true);
@@ -342,6 +368,8 @@ export class CityFinaleOverlay implements OverlayView {
     window.removeEventListener('keydown', this.onKey, true);
     if (this.covered) this.opts.onCovered?.(false);
     this.covered = false;
+    this.stage3d?.dispose();
+    this.stage3d = null;
     this.shell?.remove();
     this.shell = null;
   }
@@ -415,7 +443,17 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.clearRect(0, 0, this.canvas!.width, this.canvas!.height);
     ctx.globalAlpha = 1;
     if (this.canvas) this.canvas.style.opacity = cover.toFixed(3);
-    if (this.city && t < this.cityLength) this.drawCityFinale(ctx, t);
+    if (this.canvas3d) this.canvas3d.style.opacity = cover.toFixed(3);
+    const stage = this.stage3d;
+    if (stage) {
+      if (this.city && t < this.cityLength) {
+        stage.renderCity(t, this.w, this.h);
+        this.drawCityOver3D(ctx, t);
+      } else {
+        stage.renderEnding(t - this.cityLength, this.w, this.h, this.allGold);
+        this.drawEndingOver3D(ctx, stage, t - this.cityLength);
+      }
+    } else if (this.city && t < this.cityLength) this.drawCityFinale(ctx, t);
     else this.drawEnding(ctx, t - this.cityLength);
     this.updateText(t);
   }
@@ -740,7 +778,10 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.fill();
   }
 
-  /** A host (or two) popping up at the bottom edge to wave. */
+  /**
+   * A host (or two) rising at the bottom edge in a gold-rimmed cameo, one hand waving out past its
+   * frame. The native app draws the same in FinalePainter.paintHost.
+   */
   private paintHost(ctx: CanvasRenderingContext2D, city: CityInfo, side: 'left' | 'right', rise: number, wave: number): { x: number; y: number } | null {
     if (rise <= 0.01) return null;
     const d = this.dpr;
@@ -750,61 +791,85 @@ export class CityFinaleOverlay implements OverlayView {
     const baseX = side === 'left' ? -halfW + 0.42 : halfW - 0.42;
     const baseY = -halfH - (1 - rise) * 0.8;
     let head: { x: number; y: number } | null = null;
-    for (let p = 0; p < city.people; p++) {
-      const x = baseX + (side === 'left' ? 1 : -1) * p * 0.34;
-      const scale = p === 0 ? 1 : 0.9;
-      const sx = this.stageX(x);
-      const footY = this.stageY(baseY);
-      const s = u * scale;
-      ctx.setTransform(d, 0, 0, d, 0, 0);
-      // body
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    for (let p = city.people - 1; p >= 0; p--) {
+      // the one who waves stands nearer the middle; a second host stands behind, nearer the edge
+      const x = baseX + (side === 'left' ? 1 : -1) * (city.people - 1 - p) * 0.34;
+      const s = u * (p === 0 ? 1 : 0.9);
+      const cx = this.stageX(x);
+      const foot = this.stageY(baseY);
+      const cy = foot - 0.4 * s;
+      const r = 0.3 * s;
+      ctx.fillStyle = '#0b1530';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      const glow = ctx.createRadialGradient(cx, cy - 0.08 * s, 0, cx, cy - 0.08 * s, r);
+      glow.addColorStop(0, css(city.accent, 1, 0, 0.55));
+      glow.addColorStop(1, css(city.accent, 1, 0, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      // the portrait, inside the frame
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.96, 0, Math.PI * 2);
+      ctx.clip();
       ctx.fillStyle = css(city.accent);
       ctx.beginPath();
-      ctx.roundRect(sx - 0.16 * s, footY - 0.42 * s, 0.32 * s, 0.46 * s, 0.08 * s);
+      ctx.roundRect(cx - 0.2 * s, cy + 0.08 * s, 0.4 * s, 0.4 * s, 0.14 * s);
       ctx.fill();
-      // the arm down
+      const headY = cy - 0.04 * s;
+      ctx.fillStyle = css(city.skin);
+      ctx.beginPath();
+      ctx.arc(cx, headY, 0.12 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1f2937';
+      ctx.beginPath();
+      ctx.arc(cx, headY - 0.02 * s, 0.125 * s, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(cx - 0.042 * s, headY + 0.019 * s, 0.015 * s, 0, Math.PI * 2);
+      ctx.arc(cx + 0.042 * s, headY + 0.019 * s, 0.015 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 0.017 * s;
+      ctx.beginPath();
+      ctx.arc(cx, headY + 0.042 * s, 0.046 * s, 0.15 * Math.PI, 0.85 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
+      // the frame
+      ctx.strokeStyle = '#f2bf4f';
+      ctx.lineWidth = 0.035 * s;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,247,214,0.6)';
+      ctx.lineWidth = 0.008 * s;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 0.03 * s, 0, Math.PI * 2);
+      ctx.stroke();
+      // the waving arm, reaching out past the frame toward the middle of the screen
+      const toward = (side === 'left' ? 1 : -1) * (p === 0 ? 1 : -1);
+      const shx = cx + toward * 0.17 * s;
+      const shy = cy + 0.14 * s;
+      const a = -1.0 + (p === 0 ? wave : -wave * 0.8);
+      const hx = shx + toward * Math.cos(a) * 0.3 * s;
+      const hy = shy + Math.sin(a) * 0.3 * s;
       ctx.strokeStyle = css(city.skin);
       ctx.lineCap = 'round';
       ctx.lineWidth = 0.07 * s;
-      const shoulderY = footY - 0.36 * s;
-      const away = side === 'left' ? -1 : 1;
       ctx.beginPath();
-      ctx.moveTo(sx + away * 0.15 * s, shoulderY);
-      ctx.lineTo(sx + away * 0.2 * s, shoulderY + 0.24 * s);
-      ctx.stroke();
-      // the waving arm (towards the middle of the screen)
-      const toward = -away;
-      const a = -1.15 + (p === 0 ? wave : -wave * 0.8);
-      const hx = sx + toward * 0.15 * s + toward * Math.cos(a) * 0.28 * s;
-      const hy = shoulderY + Math.sin(a) * 0.28 * s;
-      ctx.beginPath();
-      ctx.moveTo(sx + toward * 0.15 * s, shoulderY);
+      ctx.moveTo(shx, shy);
       ctx.lineTo(hx, hy);
       ctx.stroke();
       ctx.fillStyle = css(city.skin);
       ctx.beginPath();
       ctx.arc(hx, hy, 0.05 * s, 0, Math.PI * 2);
       ctx.fill();
-      // head, hair, face
-      const headY = footY - 0.56 * s;
-      ctx.beginPath();
-      ctx.arc(sx, headY, 0.13 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#1f2937';
-      ctx.beginPath();
-      ctx.arc(sx, headY - 0.02 * s, 0.135 * s, Math.PI, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(sx - 0.045 * s, headY + 0.02 * s, 0.016 * s, 0, Math.PI * 2);
-      ctx.arc(sx + 0.045 * s, headY + 0.02 * s, 0.016 * s, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 0.018 * s;
-      ctx.beginPath();
-      ctx.arc(sx, headY + 0.045 * s, 0.05 * s, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-      if (p === 0) head = { x: sx, y: headY - 0.2 * s };
+      if (p === 0) head = { x: cx, y: foot - 0.76 * s };
     }
     return head;
   }
@@ -872,13 +937,7 @@ export class CityFinaleOverlay implements OverlayView {
 
     // the host
     const host = finaleHost(t, rm);
-    const head = this.paintHost(ctx, city, plan.hostSide, host.rise, host.wave);
-    const bubble = this.textEls.get('bubble');
-    if (bubble && head) {
-      bubble.style.left = `${head.x}px`;
-      bubble.style.top = `${head.y}px`;
-      bubble.classList.toggle('finale-bubble-right', plan.hostSide === 'right');
-    }
+    this.placeBubble(this.paintHost(ctx, city, plan.hostSide, host.rise, host.wave), plan.hostSide);
 
     // the emblem rocket and its sparks
     const rocket = finaleEmblemRocket(t);
@@ -938,9 +997,33 @@ export class CityFinaleOverlay implements OverlayView {
     }
 
     if (t >= T.climbEnd) drawProbe();
+    this.paintCityVeils(ctx, t, 0.7);
+  }
 
-    // the flash as the probe takes the piece, and a fade to light at the end
-    const flash = t >= T.meet && !rm ? Math.exp(-(t - T.meet) / 0.12) * 0.7 : 0;
+  /** The 2D layer over the 3D show: the host and their words; the 3D stage draws the rest. */
+  private drawCityOver3D(ctx: CanvasRenderingContext2D, t: number): void {
+    const city = this.city!;
+    const host = finaleHost(t, this.opts.reducedMotion);
+    this.placeBubble(this.paintHost(ctx, city, city.plan.hostSide, host.rise, host.wave), city.plan.hostSide);
+    // in 3D the bloom carries the moment the probe takes the piece; only a soft flash
+    this.paintCityVeils(ctx, t, 0.22);
+  }
+
+  private placeBubble(head: { x: number; y: number } | null, side: 'left' | 'right'): void {
+    const bubble = this.textEls.get('bubble');
+    if (bubble && head) {
+      bubble.style.left = `${head.x}px`;
+      bubble.style.top = `${head.y}px`;
+      bubble.classList.toggle('finale-bubble-right', side === 'right');
+    }
+  }
+
+  /** The flash as the probe takes the piece, and the fade at the end (to light, or to the ending). */
+  private paintCityVeils(ctx: CanvasRenderingContext2D, t: number, flashStrength: number): void {
+    const T = FINALE_TIMES;
+    const rm = this.opts.reducedMotion;
+    const d = this.dpr;
+    const flash = t >= T.meet && !rm ? Math.exp(-(t - T.meet) / 0.12) * flashStrength : 0;
     const toLight = this.total > this.cityLength ? 0 : smooth01((t - (T.end - 0.8)) / 0.8);
     const toDark = this.total > this.cityLength ? smooth01((t - (T.end - 0.8)) / 0.8) : 0;
     ctx.setTransform(d, 0, 0, d, 0, 0);
@@ -1234,7 +1317,29 @@ export class CityFinaleOverlay implements OverlayView {
       }
     }
 
-    const snapFlash = t >= E.snap && !rm ? Math.exp(-(t - E.snap) / 0.15) * 0.75 : 0;
+    this.paintEndingVeils(ctx, t, 0.75);
+  }
+
+  /** The 2D layer over the 3D ending: each host under their credit, and the molar's face. */
+  private drawEndingOver3D(ctx: CanvasRenderingContext2D, stage: FinaleStage3D, t: number): void {
+    const E = ENDING_TIMES;
+    const rm = this.opts.reducedMotion;
+    const credit = endingCredit(t);
+    const city = credit.index >= 0 ? this.cities[credit.index] : null;
+    if (city) this.paintHost(ctx, city, city.plan.hostSide, credit.alpha, rm ? 0 : 0.5 * Math.sin(Math.PI * 2 * 1.4 * t));
+    if (this.allGold && t >= E.finaleStart) {
+      const face = endingFace(t);
+      const spot = face.alpha > 0 ? stage.molarFaceOnScreen(this.w, this.h) : null;
+      if (spot) this.paintFaceAt(ctx, spot.x, spot.y, spot.u * 0.78, face.alpha, face.wink);
+    }
+    this.paintEndingVeils(ctx, t, 0.3);
+  }
+
+  /** The flash as the molar snaps together, and the fade out at the very end. */
+  private paintEndingVeils(ctx: CanvasRenderingContext2D, t: number, flashStrength: number): void {
+    const E = ENDING_TIMES;
+    const d = this.dpr;
+    const snapFlash = t >= E.snap && !this.opts.reducedMotion ? Math.exp(-(t - E.snap) / 0.15) * flashStrength : 0;
     const fadeOut = smooth01((t - (E.end - 0.6)) / 0.6);
     ctx.setTransform(d, 0, 0, d, 0, 0);
     if (snapFlash > 0.01) {
@@ -1251,10 +1356,14 @@ export class CityFinaleOverlay implements OverlayView {
   }
 
   private paintFace(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number, alpha: number, wink: boolean): void {
-    const d = this.dpr;
-    const u = this.unit * scale;
     const x = this.stageX(cx + GOLDEN_MOLAR.bodyCenter.x * scale);
     const y = this.stageY(cy + GOLDEN_MOLAR.bodyCenter.y * scale);
+    this.paintFaceAt(ctx, x, y, this.unit * scale, alpha, wink);
+  }
+
+  /** The molar's face round screen point (x, y); `u` is one molar unit in CSS pixels. */
+  private paintFaceAt(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, alpha: number, wink: boolean): void {
+    const d = this.dpr;
     ctx.setTransform(d, 0, 0, d, 0, 0);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#422006';

@@ -160,6 +160,8 @@ final class FinaleClock {
     let worldIndex: Int
     /// Whose song is playing: the city's campaign index, -1 for the ending, nil for none.
     private var trackPart: Int?
+    /// The same clock for the 3D scene's render thread.
+    let sceneClock = FinaleSceneClock()
     var onDone: () -> Void = {}
 
     init(request: CityFinaleRequest) {
@@ -193,6 +195,7 @@ final class FinaleClock {
     /// The show starts now: its clock, and its song (the city's, or the ending's).
     func begin() {
         start = Date()
+        sceneClock.setStart(start)
         lastT = -1
         startTrack(cityLength > 0 ? worldIndex : -1, offset: 0)
     }
@@ -245,6 +248,7 @@ final class FinaleClock {
         let t = time(at: date)
         if cityLength > 0 && t < cityLength - 0.5 && total > cityLength {
             start = date.addingTimeInterval(-cityLength)
+            sceneClock.setStart(start)
             lastT = cityLength
             while noteIdx < notes.count && notes[noteIdx].t < cityLength { noteIdx += 1 }
             startTrack(-1, offset: 0)
@@ -269,6 +273,8 @@ public struct CityFinaleView: View {
     public let request: CityFinaleRequest
     public let onDone: () -> Void
     @State private var clock: FinaleClock
+    /// The show in 3D (SceneKit), built as the finale opens; the 2D layer draws over it.
+    @State private var stage: FinaleScene3D?
 
     public init(request: CityFinaleRequest, onDone: @escaping () -> Void) {
         self.request = request
@@ -286,8 +292,15 @@ public struct CityFinaleView: View {
                 GeometryReader { geo in
                     let painter = FinalePainter(request: request, size: geo.size, clock: clock)
                     ZStack {
+                        if let stage {
+                            FinaleSceneView(stage: stage)
+                                .opacity(painter.coverAlpha(t))
+                        }
                         Canvas(opaque: false, colorMode: .nonLinear) { ctx, size in
-                            FinalePainter(request: request, size: size, clock: clock).draw(&ctx, t: t)
+                            clock.sceneClock.setSize(size)
+                            // Until the 3D scene is ready (a moment, during the fade in) nothing is drawn.
+                            guard stage != nil else { return }
+                            FinalePainter(request: request, size: size, clock: clock).draw3DOverlay(&ctx, t: t)
                         }
                         .opacity(painter.coverAlpha(t))
                         words(painter: painter, t: t, size: geo.size, insets: insets)
@@ -306,6 +319,14 @@ public struct CityFinaleView: View {
             clock.onDone = onDone
             NativeSoundEngine.shared.setFinaleDucked(true)
             clock.begin()
+            if stage == nil {
+                let request = request
+                let sceneClock = clock.sceneClock
+                Task.detached(priority: .userInitiated) {
+                    let built = FinaleScene3D(request: request, clock: sceneClock)
+                    await MainActor.run { stage = built }
+                }
+            }
         }
         .onDisappear {
             clock.stopTrack()
@@ -788,52 +809,70 @@ struct FinalePainter {
         let halfH = h / 2 / unit
         let baseX = hostOnLeft ? -halfW + 0.42 : halfW - 0.42
         let baseY = -halfH - (1 - host.rise) * 0.8
-        return CGPoint(x: sx(baseX), y: sy(baseY) - 0.76 * unit)
+        let inner = (hostOnLeft ? 1 : -1) * Double((city?.people ?? 1) - 1) * 0.34
+        return CGPoint(x: sx(baseX + inner), y: sy(baseY) - 0.76 * unit)
     }
 
+    /// A host (or two) rising at the bottom edge in a gold-rimmed cameo, one hand waving out past
+    /// its frame. The web draws the same in CityFinaleOverlay.paintHost.
     func paintHost(_ ctx: inout GraphicsContext, _ city: FinaleCityModel, onLeft: Bool, rise: Double, wave: Double) {
         guard rise > 0.01 else { return }
         let halfW = w / 2 / unit
         let halfH = h / 2 / unit
         let baseX = onLeft ? -halfW + 0.42 : halfW - 0.42
         let baseY = -halfH - (1 - rise) * 0.8
-        for p in 0..<city.people {
-            let x = baseX + (onLeft ? 1 : -1) * Double(p) * 0.34
+        let navy = Color(red: 0.043, green: 0.082, blue: 0.188)
+        let gold = Color(red: 0.95, green: 0.75, blue: 0.31)
+        for p in (0..<city.people).reversed() {
+            // the one who waves stands nearer the middle; a second host stands behind, nearer the edge
+            let x = baseX + (onLeft ? 1 : -1) * Double(city.people - 1 - p) * 0.34
             let s = unit * (p == 0 ? 1 : 0.9)
             let cx = sx(x)
             let foot = sy(baseY)
-            ctx.fill(
-                Path(roundedRect: CGRect(x: cx - 0.16 * s, y: foot - 0.42 * s, width: 0.32 * s, height: 0.46 * s), cornerRadius: 0.08 * s),
+            let cy = foot - 0.4 * s
+            let r = 0.3 * s
+            let disc = Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+            ctx.fill(disc, with: .color(navy))
+            ctx.fill(disc, with: .radialGradient(
+                Gradient(colors: [finaleColor(city.accent).opacity(0.55), finaleColor(city.accent).opacity(0)]),
+                center: CGPoint(x: cx, y: cy - 0.08 * s), startRadius: 0, endRadius: r
+            ))
+            // the portrait, inside the frame
+            var inner = ctx
+            inner.clip(to: Path(ellipseIn: CGRect(x: cx - r * 0.96, y: cy - r * 0.96, width: r * 1.92, height: r * 1.92)))
+            inner.fill(
+                Path(roundedRect: CGRect(x: cx - 0.2 * s, y: cy + 0.08 * s, width: 0.4 * s, height: 0.4 * s), cornerRadius: 0.14 * s),
                 with: .color(finaleColor(city.accent))
             )
             let skin = finaleColor(city.skin)
-            let away: Double = onLeft ? -1 : 1
-            let shoulderY = foot - 0.36 * s
-            var down = Path()
-            down.move(to: CGPoint(x: cx + away * 0.15 * s, y: shoulderY))
-            down.addLine(to: CGPoint(x: cx + away * 0.2 * s, y: shoulderY + 0.24 * s))
-            ctx.stroke(down, with: .color(skin), style: StrokeStyle(lineWidth: 0.07 * s, lineCap: .round))
-            let toward = -away
-            let a = -1.15 + (p == 0 ? wave : -wave * 0.8)
-            let hx = cx + toward * 0.15 * s + toward * cos(a) * 0.28 * s
-            let hy = shoulderY + sin(a) * 0.28 * s
-            var up = Path()
-            up.move(to: CGPoint(x: cx + toward * 0.15 * s, y: shoulderY))
-            up.addLine(to: CGPoint(x: hx, y: hy))
-            ctx.stroke(up, with: .color(skin), style: StrokeStyle(lineWidth: 0.07 * s, lineCap: .round))
-            ctx.fill(Path(ellipseIn: CGRect(x: hx - 0.05 * s, y: hy - 0.05 * s, width: 0.1 * s, height: 0.1 * s)), with: .color(skin))
-            let headY = foot - 0.56 * s
-            ctx.fill(Path(ellipseIn: CGRect(x: cx - 0.13 * s, y: headY - 0.13 * s, width: 0.26 * s, height: 0.26 * s)), with: .color(skin))
+            let headY = cy - 0.04 * s
+            inner.fill(Path(ellipseIn: CGRect(x: cx - 0.12 * s, y: headY - 0.12 * s, width: 0.24 * s, height: 0.24 * s)), with: .color(skin))
             var hair = Path()
-            hair.addArc(center: CGPoint(x: cx, y: headY - 0.02 * s), radius: 0.135 * s, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
+            hair.addArc(center: CGPoint(x: cx, y: headY - 0.02 * s), radius: 0.125 * s, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
             hair.closeSubpath()
-            ctx.fill(hair, with: .color(Color(red: 0.12, green: 0.16, blue: 0.22)))
+            inner.fill(hair, with: .color(Color(red: 0.12, green: 0.16, blue: 0.22)))
             let eye = Color(red: 0.06, green: 0.09, blue: 0.16)
-            ctx.fill(Path(ellipseIn: CGRect(x: cx - 0.061 * s, y: headY + 0.004 * s, width: 0.032 * s, height: 0.032 * s)), with: .color(eye))
-            ctx.fill(Path(ellipseIn: CGRect(x: cx + 0.029 * s, y: headY + 0.004 * s, width: 0.032 * s, height: 0.032 * s)), with: .color(eye))
+            inner.fill(Path(ellipseIn: CGRect(x: cx - 0.057 * s, y: headY + 0.004 * s, width: 0.03 * s, height: 0.03 * s)), with: .color(eye))
+            inner.fill(Path(ellipseIn: CGRect(x: cx + 0.027 * s, y: headY + 0.004 * s, width: 0.03 * s, height: 0.03 * s)), with: .color(eye))
             var smile = Path()
-            smile.addArc(center: CGPoint(x: cx, y: headY + 0.045 * s), radius: 0.05 * s, startAngle: .degrees(27), endAngle: .degrees(153), clockwise: false)
-            ctx.stroke(smile, with: .color(eye), lineWidth: 0.018 * s)
+            smile.addArc(center: CGPoint(x: cx, y: headY + 0.042 * s), radius: 0.046 * s, startAngle: .degrees(27), endAngle: .degrees(153), clockwise: false)
+            inner.stroke(smile, with: .color(eye), lineWidth: 0.017 * s)
+            // the frame
+            ctx.stroke(disc, with: .color(gold), lineWidth: 0.035 * s)
+            ctx.stroke(
+                Path(ellipseIn: CGRect(x: cx - r + 0.03 * s, y: cy - r + 0.03 * s, width: (r - 0.03 * s) * 2, height: (r - 0.03 * s) * 2)),
+                with: .color(Color(red: 1, green: 0.97, blue: 0.84).opacity(0.6)), lineWidth: 0.008 * s
+            )
+            // the waving arm, reaching out past the frame toward the middle of the screen
+            let toward: Double = (onLeft ? 1 : -1) * (p == 0 ? 1 : -1)
+            let shoulder = CGPoint(x: cx + toward * 0.17 * s, y: cy + 0.14 * s)
+            let a = -1.0 + (p == 0 ? wave : -wave * 0.8)
+            let hand = CGPoint(x: shoulder.x + toward * cos(a) * 0.3 * s, y: shoulder.y + sin(a) * 0.3 * s)
+            var arm = Path()
+            arm.move(to: shoulder)
+            arm.addLine(to: hand)
+            ctx.stroke(arm, with: .color(skin), style: StrokeStyle(lineWidth: 0.07 * s, lineCap: .round))
+            ctx.fill(Path(ellipseIn: CGRect(x: hand.x - 0.05 * s, y: hand.y - 0.05 * s, width: 0.1 * s, height: 0.1 * s)), with: .color(skin))
         }
     }
 
@@ -1193,9 +1232,11 @@ struct FinalePainter {
     }
 
     func paintFace(_ ctx: inout GraphicsContext, cx: Double, cy: Double, scale: Double, alpha: Double, wink: Bool) {
-        let u = unit * scale
-        let x = sx(cx + CityFinale.Molar.bodyCenter.x * scale)
-        let y = sy(cy + CityFinale.Molar.bodyCenter.y * scale)
+        paintFaceAt(&ctx, x: sx(cx + CityFinale.Molar.bodyCenter.x * scale), y: sy(cy + CityFinale.Molar.bodyCenter.y * scale), u: unit * scale, alpha: alpha, wink: wink)
+    }
+
+    /// The molar's face round screen point (x, y); `u` is one molar unit in points.
+    func paintFaceAt(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, alpha: Double, wink: Bool) {
         let brown = Color(red: 0.26, green: 0.13, blue: 0.02)
         var c = ctx
         c.opacity = alpha

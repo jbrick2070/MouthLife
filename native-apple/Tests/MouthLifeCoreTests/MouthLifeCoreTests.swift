@@ -1038,6 +1038,25 @@ final class MouthLifeCoreTests: XCTestCase {
         }
     }
 
+    func testFinale3DMatchesTheWebNumberForNumber() {
+        // The 3D finale's camera path, fireworks, fractal signs, molar and crystal mountain: the same
+        // numbers as src/config/finale3d.ts, so both editions film the same movie.
+        for (index, host) in CityFinale.hostIds.enumerated() {
+            guard let plan = CitySkyline.art(forHost: host)?.finale, let want = CitySkylineArt.expectedFinale3D[host] else {
+                XCTFail("\(host): no 3D finale checksum")
+                continue
+            }
+            XCTAssertEqual(Finale3D.checksum(bursts: plan.bursts, show: plan.show, cityIndex: index), want, accuracy: 0.01, "\(host) 3D checksum")
+        }
+        // The fractal signs have the shapes the web draws: a maple tree, rosettes, clocks, stars, a galaxy.
+        XCTAssertEqual(Finale3D.emblemFractalNodes(0).count, 40)
+        XCTAssertEqual(Finale3D.emblemFractalNodes(1).count, 259)
+        XCTAssertEqual(Finale3D.emblemFractalNodes(2).count, 157)
+        XCTAssertEqual(Finale3D.emblemFractalNodes(3).count, 156)
+        XCTAssertEqual(Finale3D.emblemFractalNodes(4).count, 145)
+        XCTAssertGreaterThan(Finale3D.mountainColumns().count, 300)
+    }
+
     func testCityFinaleMatchesTheWebNumberForNumber() {
         // CitySkylineArt carries the web edition's checksum over every position, brightness and note
         // of each city's finale. Matching it means both editions put on the same show.

@@ -301,7 +301,7 @@ export const HYDRA_COLORS = {
 } as const;
 
 /** Detailed HYDRA-1 micro-dental craft hull merged into ONE vertex-colored geometry. */
-function buildHydraHullGeometry(): THREE.BufferGeometry {
+export function buildHydraHullGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
 
   const hull = new THREE.SphereGeometry(0.6, 22, 14);
@@ -369,7 +369,7 @@ function buildHydraHullGeometry(): THREE.BufferGeometry {
 }
 
 /** Toothed sonic bristle ring (axis = local X) used for both counter-rotating emitter rings. */
-function buildSonicRingGeometry(radius: number, teeth: number, hex: number, toothHex: number): THREE.BufferGeometry {
+export function buildSonicRingGeometry(radius: number, teeth: number, hex: number, toothHex: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const ring = new THREE.TorusGeometry(radius, 0.035, 6, 20);
   ring.rotateY(Math.PI / 2);

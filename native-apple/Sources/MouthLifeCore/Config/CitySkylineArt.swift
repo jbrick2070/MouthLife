@@ -92,6 +92,15 @@ public enum CitySkylineArt {
     ]
     public static let expectedHash: [Double] = [0.10232719359919429, 0.7369172223843634, 0.5687719557899982]
 
+    /// The 3D finale's checksum for each city (see src/config/finale3d.ts and Finale3D.swift).
+    public static let expectedFinale3D: [String: Double] = [
+        "toronto": 16081.653,
+        "new_orleans": 15442.029,
+        "tokyo": 14558.265,
+        "accra": 13808.009,
+        "orbit_aurora": 13123.777,
+    ]
+
     static let accra = #"""
 ; Accra's coast on the west, Colorado's Rockies on the east: sunset over Labadi Beach, swaying
 ; palms and a fishing canoe, Jamestown Lighthouse sweeping its beam, the Nkrumah Mausoleum, Ghana's

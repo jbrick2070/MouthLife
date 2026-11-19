@@ -25,6 +25,7 @@
 		8925FC778E80747D37F530E8 /* DentalChartSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B58A49FD759014C0A76CDB8 /* DentalChartSheet.swift */; };
 		9B4C63EB690FDDAB5A71A19C /* MissionReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D893AF0797D7CF7E367F84B /* MissionReportView.swift */; };
 		5F1A11E0C1D2E3F405A6B7C1 /* CityFinaleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1A11E0C1D2E3F405A6B7C2 /* CityFinaleView.swift */; };
+		6E2B22F1D2E3F405A6B7C8D1 /* CityFinaleScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2B22F1D2E3F405A6B7C8D2 /* CityFinaleScene.swift */; };
 		BD73DEFA5F53F745C560E3CE /* UpgradeLabSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */; };
 		BF0A74C950467B0EF624455F /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E8B699A74FCE0C18B43F3C /* DesignSystem.swift */; };
 		C7B3DE9A04EE7CFE33FAA7AF /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645A9F1D82F3A2C3C2D24EB2 /* AppCoordinator.swift */; };
@@ -70,6 +71,7 @@
 		D112FCD387C76EDFFE8955B0 /* MouthLifeSceneController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeSceneController.swift; path = MouthLifeApp/Render/MouthLifeSceneController.swift; sourceTree = "<group>"; };
 		D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProceduralMeshBuilder.swift; path = MouthLifeApp/Render/ProceduralMeshBuilder.swift; sourceTree = "<group>"; };
 		7A11C0DE5EED4B1DA5E2F011 /* CitySkylineBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CitySkylineBuilder.swift; path = MouthLifeApp/Render/CitySkylineBuilder.swift; sourceTree = "<group>"; };
+		6E2B22F1D2E3F405A6B7C8D2 /* CityFinaleScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CityFinaleScene.swift; path = MouthLifeApp/Render/CityFinaleScene.swift; sourceTree = "<group>"; };
 		D3D407A6E8675D5FDEA5235D /* MouthLife.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MouthLife.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -104,6 +106,7 @@
 				BDF01B776316DF155BF702FA /* EnamelShaders.swift */,
 				D16DB5DC829672F83FC7CD3D /* ProceduralMeshBuilder.swift */,
 				7A11C0DE5EED4B1DA5E2F011 /* CitySkylineBuilder.swift */,
+				6E2B22F1D2E3F405A6B7C8D2 /* CityFinaleScene.swift */,
 				D112FCD387C76EDFFE8955B0 /* MouthLifeSceneController.swift */,
 				850EA58EF72EEF9D81393447 /* MouthLife3DViewport.swift */,
 				C1E8B699A74FCE0C18B43F3C /* DesignSystem.swift */,
@@ -224,6 +227,7 @@
 				30D871BD9D66AB593D75DAF8 /* EnamelShaders.swift in Sources */,
 				33A73CC66232DBF41B238274 /* ProceduralMeshBuilder.swift in Sources */,
 				7A11C0DE5EED4B1DA5E2F012 /* CitySkylineBuilder.swift in Sources */,
+				6E2B22F1D2E3F405A6B7C8D1 /* CityFinaleScene.swift in Sources */,
 				DDD149B2013498F5D0C4E544 /* MouthLifeSceneController.swift in Sources */,
 				79B3B73E78A6A68D18090C87 /* MouthLife3DViewport.swift in Sources */,
 				BF0A74C950467B0EF624455F /* DesignSystem.swift in Sources */,

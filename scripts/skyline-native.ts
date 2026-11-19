@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { parseCityArt, type CityFinalePlan, type SkylinePiece } from '../src/config/citySkylineGeometry';
 import { CITY_SKYLINE_TEXT } from '../src/config/citySkylines';
 import { FINALE_HOST_IDS, checksumFinishes, endingChecksum, finaleChecksum, finaleHash, finaleNotes } from '../src/config/cityFinale';
+import { finale3DChecksum } from '../src/config/finale3d';
 
 export const SKYLINE_SWIFT_PATH = join(
   process.cwd(),
@@ -56,6 +57,11 @@ function finaleSummary(hostId: string): string {
     `bursts: ${plan.bursts.length}, notes: ${finaleNotes(plan, checksumFinishes(slot), slot, false).length}, ` +
     `checksum: ${finaleChecksum(plan, art.emblem, slot, false)}, reducedChecksum: ${finaleChecksum(plan, art.emblem, slot, true)})`
   );
+}
+
+function finale3DSummary(hostId: string, cityIndex: number): number {
+  const plan = parseCityArt(CITY_SKYLINE_TEXT[hostId]).finale as CityFinalePlan;
+  return finale3DChecksum(plan.bursts, plan.show, cityIndex);
 }
 
 function endingPlans(): CityFinalePlan[] {
@@ -137,6 +143,11 @@ ${hosts.map((h) => `        case "${h}": return ${finaleSummary(h)}`).join('\n')
         "mixed-reduced": ${endingChecksum(endingPlans(), false, true)},
     ]
     public static let expectedHash: [Double] = [${finaleHash(1, 2)}, ${finaleHash(77, 301)}, ${finaleHash(0, 0)}]
+
+    /// The 3D finale's checksum for each city (see src/config/finale3d.ts and Finale3D.swift).
+    public static let expectedFinale3D: [String: Double] = [
+${FINALE_HOST_IDS.map((h, i) => `        "${h}": ${finale3DSummary(h, i)},`).join('\n')}
+    ]
 `;
   for (const host of hosts) {
     const text = CITY_SKYLINE_TEXT[host].replace(/\r\n/g, '\n').replace(/\s+$/, '');
