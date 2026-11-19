@@ -850,12 +850,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             dt: dtFloat,
             nowSec: sceneNowSec,
             probeSpeed: Float(snap.probeSpeed),
-            isScrubbing: snap.scrubActive,
+            isScrubbing: snap.scrubActive && !arcadePaused,
             surgeFraction01: Float(snap.surgeMeter / GameConfig.surgeMax),
             audioBass: smoothedAudioBands.x
         )
 
-        if snap.scrubActive && sceneNowSec - lastFoamSampleSec > 0.09 {
+        // No brushing foam behind the pause card (web twin: scrubbingActive in main.ts).
+        if snap.scrubActive && !arcadePaused && sceneNowSec - lastFoamSampleSec > 0.09 {
             lastFoamSampleSec = sceneNowSec
             foamTrail.insert(
                 FoamTrailSample(

@@ -181,6 +181,11 @@ export class TelemetryHudOverlay implements OverlayView {
     return isCompactViewport(window.innerWidth, window.innerHeight);
   }
 
+  /** A phone-sized screen or a touch screen: tips talk about buttons, never keys. */
+  private isTouchUi(): boolean {
+    return this.isCompactScreen() || this.input.isCoarsePointer();
+  }
+
   private releaseThumbPad: (() => void) | null = null;
   /** What the round Scan / Surge buttons last showed (the page translator rewrites their text). */
   private scanHtmlShown = '';
@@ -372,8 +377,8 @@ export class TelemetryHudOverlay implements OverlayView {
 
           <div class="actuator-cluster ui-interactive">
             <div class="row-wrap actuator-secondary-row">
-              <button type="button" id="btn-mob-scan" class="btn btn-sm" aria-label="Dye Scan"><span class="act-icon">🔍</span> <span class="act-label mob-hide">Dye Scan</span><span class="act-label mob-only">SCAN</span></button>
-              <button type="button" id="btn-mob-surge" class="btn btn-sm" aria-label="Surge">🌊 Surge 0%</button>
+              <button type="button" id="btn-mob-scan" class="btn btn-sm"><span class="act-icon">🔍</span> <span class="act-label mob-hide">Dye Scan</span><span class="act-label mob-only">SCAN</span></button>
+              <button type="button" id="btn-mob-surge" class="btn btn-sm">🌊 Surge 0%</button>
             </div>
             <button
               type="button"
@@ -469,9 +474,8 @@ export class TelemetryHudOverlay implements OverlayView {
 
   /** Spawns a crisp floating callout anchored to a world position (rises & fades). */
   spawnCallout(text: string, pos: Vec2, tone: CalloutTone = 'mint', life = 1.25, yOffset = 1.6): void {
-    const compact = this.isCompactScreen();
     // translate first, then shorten: the shortened English is not in the language files
-    const displayMsg = compactToastText(uiTranslator.t(text), compact);
+    const displayMsg = compactToastText(uiTranslator.t(text), this.isTouchUi());
     const slot =
       this.callouts.find((c) => c.active && c.el.textContent === displayMsg) ??
       this.callouts.find((c) => !c.active) ??
@@ -479,7 +483,7 @@ export class TelemetryHudOverlay implements OverlayView {
     const cart = this.session.cartridge;
     slot.active = true;
     slot.age = 0;
-    slot.life = compact ? Math.min(life, 1.05) : life;
+    slot.life = this.isCompactScreen() ? Math.min(life, 1.05) : life;
     slot.wx = pos.x;
     slot.wz = pos.z;
     slot.wy = (cart ? sampleTerrainHeight(cart, pos.x, pos.z) : 0.5) + yOffset;
@@ -595,8 +599,7 @@ export class TelemetryHudOverlay implements OverlayView {
         : findNearestZipMouth(this.session.probePos, cart.interdentalAlleys, cart.wallBoxes);
     const show = Boolean(hint && hint.blockedToWalking);
     if (hint && show) {
-      const compact = this.isCompactScreen();
-      const wantText = formatZipPromptText(hint.inZipRange, compact, ZIP_PROMPT_TEXT);
+      const wantText = formatZipPromptText(hint.inZipRange, this.isTouchUi(), ZIP_PROMPT_TEXT);
       if (this.zipPromptEl.textContent !== wantText) {
         this.zipPromptEl.textContent = wantText;
       }
@@ -868,7 +871,12 @@ export class TelemetryHudOverlay implements OverlayView {
     this.disposers.add(
       this.bus.on('eps:deflected', () => {
         if (!this.usedFloss && !this.usedSurge) {
-          this.maybeHint('eps', '🛡️ Slime dome blocks the brush! Crack it with Floss (E) or Surge (Q).');
+          this.maybeHint(
+            'eps',
+            this.isTouchUi()
+              ? '🛡️ Slime dome blocks the brush! Crack it with Floss or Surge.'
+              : '🛡️ Slime dome blocks the brush! Crack it with Floss (E) or Surge (Q).'
+          );
         }
       })
     );
@@ -895,7 +903,9 @@ export class TelemetryHudOverlay implements OverlayView {
           this.maybeHint(
             this.session.hasErosionChallenge() ? 'acid_erosion' : 'acid',
             this.session.hasErosionChallenge()
-              ? '🌺 Acid pool! Touch a Miswak Spring or fire Surge [Q] to add fluoride.'
+              ? this.isTouchUi()
+                ? '🌺 Acid pool! Touch a Miswak Spring or tap Surge to add fluoride.'
+                : '🌺 Acid pool! Touch a Miswak Spring or fire Surge [Q] to add fluoride.'
               : '⚠️ Acid attack! Wait it out, or hit a Saliva Spring.'
           );
         }
@@ -1025,7 +1035,7 @@ export class TelemetryHudOverlay implements OverlayView {
       return;
     }
     const compact = this.isCompactScreen();
-    this.toastEl.textContent = compactToastText(uiTranslator.t(msg), compact);
+    this.toastEl.textContent = compactToastText(uiTranslator.t(msg), this.isTouchUi());
     this.toastEl.style.opacity = '1';
     this.toastTimerSec = compact ? Math.min(durationSec, 2.35) : durationSec;
   }
@@ -1055,7 +1065,7 @@ export class TelemetryHudOverlay implements OverlayView {
           // Touch screens get their own words (the shortened keyboard line is English only).
           this.maybeHint(
             'first_dive',
-            this.isCompactScreen() || this.input.isCoarsePointer()
+            this.isTouchUi()
               ? '🕹️ Use the stick or drag on the tooth to scrub • 🧵 Floss cleans the narrow gaps!'
               : '🕹️ Drag on the tooth (or WASD + Space) to scrub • E / 🧵 Floss cleans the narrow gaps!'
           );
@@ -1255,7 +1265,7 @@ export class TelemetryHudOverlay implements OverlayView {
     if (surgeReady && !this.lastSurgeReady && !this.usedSurge) {
       this.maybeHint(
         'surge',
-        this.isCompactScreen() || this.input.isCoarsePointer()
+        this.isTouchUi()
           ? '🌊 Surge is full! Tap Surge to blast a fluoride wave.'
           : '🌊 Surge is full! Press Q or tap Surge to blast a fluoride wave.'
       );

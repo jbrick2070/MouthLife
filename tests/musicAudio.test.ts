@@ -385,4 +385,37 @@ describe('new gameplay audio events', () => {
       }
     }
   });
+
+  it('the brushing sound cannot be switched on over a finale, the score screen or a pause', () => {
+    const sound = new SoundEngine(memStore());
+    const targets: number[] = [];
+    const param = () => ({ setTargetAtTime: (v: number) => void targets.push(v), value: 0 });
+    const quiet = () => ({ setTargetAtTime: () => undefined, value: 0 });
+    const internals = sound as unknown as Record<string, unknown>;
+    internals.ctx = { state: 'running', currentTime: 0, sampleRate: 44100 };
+    internals.scrubGain = { gain: param() };
+    internals.scrubBp = { frequency: quiet() };
+    internals.scrubLfo = { frequency: quiet() };
+    internals.scrubShimGain = { gain: quiet() };
+    const brush = { active: true, probeSpeed: 3, newlyCleaned: 0, cleanRatio: 0.5 };
+    const lastTarget = () => targets[targets.length - 1];
+
+    sound.setAmbientMode('ARCADE');
+    sound.updateScrub(brush);
+    expect(lastTarget()).toBeGreaterThan(0); // brushing in a stage is heard
+
+    sound.setFinaleDucked(true); // the last zone was sealed: the finale starts
+    sound.updateScrub(brush); // a late update with the button still held
+    expect(lastTarget()).toBe(0);
+    sound.setFinaleDucked(false);
+
+    sound.setAmbientMode('REPORT');
+    sound.updateScrub(brush);
+    expect(lastTarget()).toBe(0);
+
+    sound.setAmbientMode('ARCADE');
+    sound.setPaused(true);
+    sound.updateScrub(brush);
+    expect(lastTarget()).toBe(0);
+  });
 });

@@ -1379,32 +1379,35 @@ textarea:focus-visible {
     white-space: normal;
     text-align: center;
     line-height: 1.05;
-    font-size: 0.56rem;
+    font-size: 0.52rem;
     font-weight: 800;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
   }
   #btn-mob-scan {
-    width: 54px;
-    height: 54px;
-    min-height: 54px;
+    width: 58px;
+    height: 58px;
+    min-height: 58px;
     background: rgba(8, 30, 46, 0.82);
   }
   #btn-mob-surge {
-    width: 60px;
-    height: 60px;
-    min-height: 60px;
+    width: 62px;
+    height: 62px;
+    min-height: 62px;
     background: rgba(8, 30, 46, 0.82);
   }
   .floss-ring {
-    width: 68px;
-    min-width: 68px;
-    height: 68px;
-    min-height: 68px;
+    width: 70px;
+    min-width: 70px;
+    height: 70px;
+    min-height: 70px;
     background: radial-gradient(circle, rgba(16, 78, 98, 0.86), rgba(6, 24, 38, 0.9));
   }
   .act-icon {
-    font-size: 1.1rem;
+    font-size: 0.98rem;
     line-height: 1;
+  }
+  .act-label {
+    max-width: 88%;
   }
   .floss-ring .floss-sub {
     display: none;
@@ -1570,6 +1573,18 @@ textarea:focus-visible {
     padding: 6px 8px;
     font-size: 0.75rem;
     white-space: nowrap;
+  }
+  /* The Dive button names a city: a long one (Japanese "Station Aurora") wraps inside the button
+     and the campaign count sits on its own small line, instead of spilling over its neighbours. */
+  .hub-dock-row #btn-launch-arcade {
+    white-space: normal;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+  .hub-dock-row #btn-launch-arcade .dive-stage {
+    display: block;
+    font-size: 0.66rem;
+    opacity: 0.85;
   }
   .city-strip {
     gap: 5px;

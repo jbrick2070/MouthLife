@@ -118,6 +118,47 @@ function buildReachability(cart: WorldCartridge, zips = true): (p: Vec2, tol: nu
   };
 }
 
+/** How many separate walking regions each city's dividers make (each needs the floss to cross). */
+const WALK_REGIONS: Record<string, number> = { world_1: 2, world_2: 3, world_3: 2, world_4: 3, world_5: 3 };
+
+/** Splits the walkable enamel (gum solid, no floss) into regions and counts those holding a colony or sugar. */
+function walkRegionsHoldingTargets(cart: WorldCartridge): number {
+  const walls = [...cart.wallBoxes, ...buildAlleyWalls(cart), ...buildGumWalls(cart)];
+  const step = 0.5;
+  const nx = Math.floor(cart.worldWidth / step);
+  const nz = Math.floor(cart.worldDepth / step);
+  const ok = (x: number, z: number) =>
+    x >= PROBE_RADIUS + 0.5 &&
+    z >= PROBE_RADIUS + 0.5 &&
+    x <= cart.worldWidth - PROBE_RADIUS - 0.5 &&
+    z <= cart.worldDepth - PROBE_RADIUS - 0.5 &&
+    !walls.some((w) => circleIntersectsAABB(x, z, PROBE_RADIUS, w));
+  const region = new Int32Array(nx * nz).fill(-1);
+  let count = 0;
+  for (let k = 0; k < nx * nz; k++) {
+    if (region[k] >= 0 || !ok((k % nx) * step, Math.floor(k / nx) * step)) continue;
+    const stack = [k];
+    region[k] = count;
+    while (stack.length > 0) {
+      const c = stack.pop()!;
+      const ix = c % nx;
+      const iz = Math.floor(c / nx);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const jx = ix + dx;
+        const jz = iz + dz;
+        if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+        const j = jz * nx + jx;
+        if (region[j] >= 0 || !ok(jx * step, jz * step)) continue;
+        region[j] = count;
+        stack.push(j);
+      }
+    }
+    count++;
+  }
+  const targets = [...cart.commensalSiteSpawns.map((t) => t.pos), ...cart.sucroseSpawns.map((t) => t.pos)];
+  return new Set(targets.map((p) => region[Math.round(p.z / step) * nx + Math.round(p.x / step)])).size;
+}
+
 describe('Multi-City Cartridge Registry', () => {
   it('registers all 5 playable worlds (Toronto, New Orleans, Tokyo/Chicago, Accra/Colorado, Station Aurora) and wires them to globe cities', () => {
     expect(isPlayableWorld('world_2')).toBe(true);
@@ -185,10 +226,13 @@ describe('Multi-City Cartridge Registry', () => {
     orbitalBiofilmDomeCartridge,
   ]) {
     it(`${cart.title}: the gum is solid, so the far side of a divider needs the floss`, () => {
-      const walkOnly = buildReachability(cart, false);
+      // Every full divider splits the walkable enamel; one that could be walked round (on the gum,
+      // say) would merge two of these regions.
+      expect(walkRegionsHoldingTargets(cart), 'walking-only regions with colonies or sugar').toBe(
+        WALK_REGIONS[cart.id]
+      );
       const withFloss = buildReachability(cart);
       const targets = cart.commensalSiteSpawns.map((s) => s.pos);
-      expect(targets.some((p) => !walkOnly(p, 1.5)), 'some colony lies beyond a floss gap').toBe(true);
       expect(targets.every((p) => withFloss(p, 1.5)), 'flossing reaches every colony').toBe(true);
       // Every floss gap lands back on the tooth surface, clear of the gum.
       const b = playableBounds(cart);
@@ -237,6 +281,32 @@ describe('Multi-City Cartridge Registry', () => {
     expect(maxZ + 0.45).toBeLessThanOrEqual(b.maxZ + 1e-6);
     expect(germ.vel.z).toBeLessThan(0); // it turned round rather than sticking to the edge
     expect(germ.pos.z).toBeLessThan(b.maxZ - 1);
+  });
+
+  it('a germ knocked back by the brush cannot be pushed onto the gum', () => {
+    const { session } = makeSession(plaqueCityCartridge);
+    const b = playableBounds(plaqueCityCartridge);
+    session.mutans.length = 0;
+    // Stunned, so only the brush moves it: right between HYDRA-1 and the gum edge.
+    session.mutans.push({
+      id: 998,
+      pos: { x: 12, z: b.maxZ - 0.6 },
+      vel: { x: 0, z: 0 },
+      hopPhase: 0,
+      hp: 999,
+      stunRemaining: 999,
+      acidDropCooldown: 99,
+      parentSucroseId: 'none',
+    });
+    const germ = session.mutans[0];
+    let maxZ = 0;
+    for (let i = 0; i < 120; i++) {
+      session.probePos = { x: 12, z: b.maxZ - 1.5 };
+      session.step(1 / 60, { ...IDLE, scrubHeld: true });
+      maxZ = Math.max(maxZ, germ.pos.z);
+    }
+    expect(germ.hp).toBeLessThan(999); // the brush really hit it
+    expect(maxZ + 0.45).toBeLessThanOrEqual(b.maxZ + 1e-6);
   });
 
   it('findNearestZipMouth reports the near-side alley mouth, zip range and walking blockage', () => {

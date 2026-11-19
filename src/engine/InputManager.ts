@@ -89,6 +89,7 @@ export class InputManager {
   private virtualMoveX = 0;
   private virtualMoveZ = 0;
   private virtualScrubHeld = false;
+  private lastPointerType = '';
   private virtualFlossAim: Vec2 | null = null;
   private virtualFlossSmartAim = false;
 
@@ -236,6 +237,15 @@ export class InputManager {
     });
 
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Double-click with a mouse flosses, as How to Play teaches and as in the Mac app. Touch has its
+    // own double-tap above, so a touch-made dblclick is ignored.
+    this.canvas.addEventListener('dblclick', () => {
+      const mode = this.currentModeGetter();
+      if ((mode !== 'ARCADE' && mode !== 'PULP_RESCUE') || this.lastPointerType !== 'mouse') return;
+      this.pendingFloss = true;
+      this.virtualFlossAim = null;
+      this.virtualFlossSmartAim = true;
+    });
 
     this.canvas.addEventListener('pointerdown', (e) => {
       this.onUserGesture?.();
@@ -244,16 +254,17 @@ export class InputManager {
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
         if (e.pointerType !== 'mouse' && this.steerPointerId !== null) return;
-        // Double-tap (or double-click, as How to Play teaches and the Mac app does) anywhere on the
-        // tooth: auto-aimed Floss (snaps to the nearest alley mouth)
+        // Double-tap anywhere on the tooth: auto-aimed Floss (snaps to the nearest alley mouth).
+        // A mouse double-click does the same through the browser's own dblclick (below), so it
+        // follows the player's double-click speed.
+        this.lastPointerType = e.pointerType;
         const tapNow = { t: performance.now(), x: e.clientX, y: e.clientY };
-        const countsAsTap = e.pointerType !== 'mouse' || e.button === 0;
-        if (countsAsTap && isDoubleTap(this.lastTap, tapNow)) {
+        if (e.pointerType !== 'mouse' && isDoubleTap(this.lastTap, tapNow)) {
           this.pendingFloss = true;
           this.virtualFlossAim = null;
           this.virtualFlossSmartAim = true;
           this.lastTap = null;
-        } else if (countsAsTap) {
+        } else {
           this.lastTap = tapNow;
         }
         const shouldSteer = resolvePointerSteerForType(this.steerPref, e.pointerType);

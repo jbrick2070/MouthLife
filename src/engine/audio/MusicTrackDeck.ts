@@ -60,7 +60,10 @@ export class MusicTrackDeck {
   ) {
     if (typeof Audio === 'undefined' || files.length === 0) return;
     for (let i = 0; i < 2; i++) {
-      const early = i === 0 && preloaded && files.includes(preloaded.file) ? preloaded : null;
+      // A preload that already failed (offline, say) is not adopted: the synth plays that theme.
+      if (i === 0 && preloaded?.el.error) this.failed.add(preloaded.file);
+      const early =
+        i === 0 && preloaded && !preloaded.el.error && files.includes(preloaded.file) ? preloaded : null;
       const el = early?.el ?? new Audio();
       el.loop = true;
       el.preload = 'auto';
@@ -79,6 +82,12 @@ export class MusicTrackDeck {
         // The silent unlock clip plays with no file set: that is not music.
         if (deck.file === null || deck.audible) return;
         deck.audible = true;
+        if (this.decks[this.active] === deck) this.onAudibleChanged?.();
+      });
+      // Out of buffered audio mid-song (a slow connection): the synth fills in until it plays again.
+      el.addEventListener('waiting', () => {
+        if (!deck.audible) return;
+        deck.audible = false;
         if (this.decks[this.active] === deck) this.onAudibleChanged?.();
       });
       this.decks.push(deck);
@@ -114,7 +123,17 @@ export class MusicTrackDeck {
     if (this.unlocked || !this.hasTracks()) return;
     this.unlocked = true;
     for (const deck of this.decks) {
-      if (deck.file !== null) continue;
+      if (deck.file !== null) {
+        // The preloaded opener: start it inside this tap too (its gain is still 0, so it is silent),
+        // or iOS may refuse to play it later. sync() keeps it going if it is the one wanted.
+        const p = deck.el.paused ? deck.el.play() : undefined;
+        if (p) {
+          p.then(() => {
+            if (this.decks[this.active] !== deck) deck.el.pause();
+          }).catch(() => {});
+        }
+        continue;
+      }
       deck.el.src = SILENT_WAV;
       const p = deck.el.play();
       if (p) {
@@ -161,6 +180,8 @@ export class MusicTrackDeck {
       deck.gain.gain.setTargetAtTime(1, now, tau);
       if (deck.el.paused) {
         const target = deck;
+        // Resuming a paused deck: it counts as sounding again only once it really plays.
+        deck.audible = false;
         const p = deck.el.play();
         if (p) {
           p.catch((err: unknown) => {

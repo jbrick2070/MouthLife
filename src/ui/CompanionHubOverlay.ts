@@ -676,7 +676,7 @@ export class CompanionHubOverlay implements OverlayView {
             ? `<button type="button" id="btn-launch-rescue" class="btn btn-danger">
                 <span class="mob-hide">🚨 90s Pulp Rescue!</span><span class="mob-only">🚨 Rescue!</span>
               </button>`
-            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${diveWorldId}" title="${escapeHtml(diveCity)} • ${escapeHtml(diveWorldTitle)}">
+            : `<button type="button" id="btn-launch-arcade" class="btn btn-primary" data-world-id="${diveWorldId}" title="${escapeHtml(diveWorldTitle)}">
                 <span class="mob-hide"><span>${diveStage !== null ? `🚀 Dive ${diveStage} of 5` : '🚀 Dive'}</span> · <span>${escapeHtml(diveCityShort)}</span></span><span class="mob-only"><span>🚀</span> <span>${escapeHtml(diveCityShort)}</span>${diveStage !== null ? ` <span class="dive-stage">${diveStage}/5</span>` : ''}</span>
               </button>`
         }

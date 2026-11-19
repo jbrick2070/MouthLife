@@ -77,4 +77,31 @@ final class QAFixTests: XCTestCase {
         XCTAssertLessThan(germ?.vel.z ?? 1, 0)
         XCTAssertLessThan(germ?.pos.z ?? b.maxZ, b.maxZ - 1)
     }
+
+    func testBrushKnockbackCannotPushAGermOntoTheGum() {
+        let save = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_000_000)
+        let session = WorldSession(cartridge: WorldRegistry.world1, save: save, mode: .arcade, events: EventBus())
+        let b = playableBounds(WorldRegistry.world1)
+        // Stunned, so only the brush moves it: right between HYDRA-1 and the gum edge.
+        session.mutans = [
+            MutansEntity(
+                id: 998,
+                pos: Vec2(x: 12, z: b.maxZ - 0.6),
+                vel: Vec2(x: 0, z: 0),
+                hopPhase: 0,
+                hp: 999,
+                stunRemaining: 999,
+                acidDropCooldown: 99,
+                parentSucroseId: "none"
+            )
+        ]
+        var maxZ = 0.0
+        for _ in 0..<120 {
+            session.probePos = Vec2(x: 12, z: b.maxZ - 1.5)
+            session.step(dt: 1.0 / 60.0, input: SessionInputCommand(scrubHeld: true))
+            if let germ = session.mutans.first(where: { $0.id == 998 }) { maxZ = max(maxZ, germ.pos.z) }
+        }
+        XCTAssertLessThan(session.mutans.first(where: { $0.id == 998 })?.hp ?? 999, 999) // the brush hit it
+        XCTAssertLessThanOrEqual(maxZ + 0.45, b.maxZ + 1e-6)
+    }
 }
