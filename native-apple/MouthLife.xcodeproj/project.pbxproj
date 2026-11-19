@@ -15,6 +15,7 @@
 		7C0A12000000000000000015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000005 /* PrivacyInfo.xcprivacy */; };
 		7C0A12000000000000000021 /* MouthLifeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7C0A12000000000000000031 /* MouthLifeCore */; };
 		7C0A12000000000000000022 /* MouthLifeWatchUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C0A12000000000000000032 /* MouthLifeWatchUI */; };
+		7C0A12000000000000000081 /* MouthLifeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000006 /* MouthLifeWatch.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		04C1B02BBE00EAA1A6EF11ED /* CompanionHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87DE4132E4982A9110761AA /* CompanionHubView.swift */; };
 		06C97DB9354A31AB771A4B6F /* SyncSaveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */; };
 		1142B09836D2B7D1D1B90140 /* HapticsEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B233D855B398BD62F8D4023 /* HapticsEngine.swift */; };
@@ -47,6 +48,30 @@
 		F6149BBFDAF55354A865C00B /* BrushAlongView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9396B3C7425C92956AD99A31 /* BrushAlongView.swift */; };
 		FA422C8939196D341AB49DF7 /* ProfileAndSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB3D2C8E1B5ABFA1741026 /* ProfileAndSettingsSheet.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7C0A12000000000000000083 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A65CFAD9E01942B5491E400 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7C0A12000000000000000051;
+			remoteInfo = MouthLifeWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7C0A12000000000000000082 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				7C0A12000000000000000081 /* MouthLifeWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		7C0A11000000000000000002 /* PhoneWatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhoneWatchBridge.swift; path = MouthLifeApp/Sync/PhoneWatchBridge.swift; sourceTree = "<group>"; };
@@ -192,10 +217,12 @@
 				96C2508950CDDC66B57850EB /* Sources */,
 				762EDBE61C850C53E34CDCAE /* Frameworks */,
 				94F0942D46E7CA816EBD9050 /* Resources */,
+				7C0A12000000000000000082 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7C0A12000000000000000084 /* PBXTargetDependency */,
 			);
 			name = MouthLife;
 			packageProductDependencies = (
@@ -335,6 +362,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7C0A12000000000000000084 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = 7C0A12000000000000000051 /* MouthLifeWatch */;
+			targetProxy = 7C0A12000000000000000083 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0B233D7B7E76E4667CFC286A /* Debug */ = {

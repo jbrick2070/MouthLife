@@ -2,6 +2,7 @@
 .build/
 .swiftpm/
 DerivedData/
+DerivedDataWatch/
 build/
 
 # User-specific Xcode workspace state
