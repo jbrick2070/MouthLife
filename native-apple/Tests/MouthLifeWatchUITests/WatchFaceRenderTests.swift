@@ -63,6 +63,11 @@ final class WatchFaceRenderTests: XCTestCase {
             try render("rinse-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 175, includeRinse: true)), onMore: {}))
             try render("rinse-between-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true)), onMore: {}))
             try render("rinse-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true), dimmed: true), onMore: {}))
+            // each stage names itself as it starts
+            try render("brush-start-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 0.5)), onMore: {}))
+            try render("floss-start-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 121)), onMore: {}))
+            try render("floss-start-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 121), dimmed: true), onMore: {}))
+            try render("rinse-start-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 166, includeRinse: true)), onMore: {}))
             var paused = ritual(at: 40)
             _ = paused.setPaused(true)
             try render("brush-paused-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: paused), onMore: {}))
@@ -107,5 +112,44 @@ final class WatchFaceRenderTests: XCTestCase {
         XCTAssertEqual(MouthMap.contactIndex(gap: -1, right: true), 6)
         XCTAssertEqual(MouthMap.contactIndex(gap: 0, right: false), 7)
         XCTAssertEqual(MouthMap.contactIndex(gap: 5, right: false), 12)
+    }
+
+    /// The camera never leaves the mouth's frame, and does nothing at zoom 0.
+    func testTheCameraStaysInsideTheMouth() {
+        for (_, face) in Self.sizes {
+            let size = CGSize(width: face.width, height: face.height * 0.54)
+            for q in BrushQuadrant.allCases {
+                XCTAssertEqual(MouthMap.camera(.quarter(q), zoom: 0, size: size), .identity)
+                for zoom in [0.25, 0.5, 1.0] {
+                    let t = MouthMap.camera(.quarter(q), zoom: zoom, size: size)
+                    // the view's corners, taken back into the mouth's own drawing
+                    let back = t.inverted()
+                    for corner in [CGPoint.zero, CGPoint(x: size.width, y: size.height)] {
+                        let p = corner.applying(back)
+                        XCTAssertTrue(p.x.isFinite && p.y.isFinite)
+                        XCTAssertGreaterThanOrEqual(p.x, -0.5, "\(q) \(zoom)")
+                        XCTAssertLessThanOrEqual(p.x, size.width + 0.5, "\(q) \(zoom)")
+                        XCTAssertGreaterThanOrEqual(p.y, -0.5, "\(q) \(zoom)")
+                        XCTAssertLessThanOrEqual(p.y, size.height + 0.5, "\(q) \(zoom)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// On screen, the floss pick's path runs from the back right (screen right, as in a mirror)
+    /// across the front to the back left, on both arches.
+    func testTheFlossPathRunsRightToLeftOnScreen() {
+        let size = CGSize(width: 176, height: 116)
+        let u = min(size.width, size.height * 1.15)
+        for upper in [true, false] {
+            let gaps = FlossPacer.gapsInOrder(upper: upper, size: size, unit: u)
+            XCTAssertEqual(gaps.count, 13)
+            let xs = gaps.map(\.outer.x)
+            XCTAssertGreaterThan(xs[0], size.width * 0.8)
+            XCTAssertLessThan(xs[12], size.width * 0.2)
+            XCTAssertEqual(xs[6], size.width / 2, accuracy: 2)
+            for i in 1..<13 { XCTAssertLessThan(xs[i], xs[i - 1]) }
+        }
     }
 }

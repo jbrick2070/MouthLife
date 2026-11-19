@@ -51,7 +51,11 @@ struct WatchRootView: View {
                         onClose: { controller.closeControls() }
                     )
                 } else {
-                    WatchActiveFace(state: state, onMore: { controller.openControls() }, onResume: { controller.togglePause() })
+                    // a timeline that ticks every second keeps the face moving in Always On too
+                    // (with the wrist down watchOS only redraws an app that asks for it)
+                    TimelineView(.periodic(from: ritual.startedAt, by: 1)) { _ in
+                        WatchActiveFace(state: state, onMore: { controller.openControls() }, onResume: { controller.togglePause() })
+                    }
                 }
             } else {
                 WatchReadyFace(state: state, onStart: { controller.start() }, onResume: { controller.resume() })

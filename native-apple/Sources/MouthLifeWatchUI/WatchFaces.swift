@@ -214,7 +214,7 @@ public struct MouthMap: View, Animatable {
         let u = min(size.width, size.height * 1.15)
         var box = CGRect.null
         for t in teeth(q, in: size, unit: u) { box = box.union(outline(t).boundingRect) }
-        box = box.insetBy(dx: -u * 0.07, dy: -u * 0.07)
+        box = box.insetBy(dx: -u * 0.1, dy: -u * 0.1)
         let close = min(2.4, max(1, min(size.width / box.width, size.height / box.height)))
         let halfW = size.width / (2 * close), halfH = size.height / (2 * close)
         let fx = min(max(box.midX, halfW), size.width - halfW)
@@ -499,8 +499,9 @@ public struct MouthMap: View, Animatable {
         for t in teeth {
             let path = Self.outline(t)
             if dimmed {
-                // Always On: only the quarter being brushed is bright (done quarters look idle)
-                ctx.stroke(path, with: .color(line), lineWidth: lineWidth)
+                // Always On: only the quarter being brushed is bright (done quarters look idle), in a
+                // bold line so it still reads at arm's length
+                ctx.stroke(path, with: .color(line), lineWidth: lit ? lineWidth * 1.5 : lineWidth)
             } else {
                 // a solid little tooth: a darker edge below for thickness, a light top
                 ctx.fill(path.applying(shadow), with: .color(.black.opacity(0.45)))
@@ -534,26 +535,21 @@ public struct MouthMap: View, Animatable {
             for t in teeth { ctx.stroke(Self.outline(t), with: .color(WatchLook.gold.opacity(dimmed ? 0.5 : 0.6)), style: style) }
         }
 
-        // floss: a thread in every gap (gold once flossed, white where the pick is, faint ahead) and
-        // the pick itself; the middle gap belongs to the right-hand quarter
+        // floss: a thread in every gap (gold once flossed, white where the pick is, faint ahead); the
+        // pick itself is the FlossPacer overlay; the middle gap belongs to the right-hand quarter
         if let contact = flossContact {
             let thread = StrokeStyle(lineWidth: max(1.6, u * 0.018), lineCap: .round)
             let over = max(1.5, u * 0.014)
             let isRight = q == .upperRight || q == .lowerRight
             for gap in Self.gaps(q, teeth: teeth, arch: arch, over: over) {
                 let k = Self.contactIndex(gap: gap.index, right: isRight)
-                let color: Color
-                if dimmed {
-                    color = k == 6 ? .white : WatchLook.gold.opacity(0.7)
-                } else {
-                    color = k < contact ? WatchLook.gold : k == contact ? .white : WatchLook.gold.opacity(0.32)
-                }
+                // (in Always On too, a little dimmer, so the dimmed face still shows the way)
+                let color: Color = k < contact ? WatchLook.gold.opacity(dimmed ? 0.75 : 1)
+                    : k == contact ? .white : WatchLook.gold.opacity(dimmed ? 0.25 : 0.32)
                 var g = Path()
                 g.move(to: gap.outer)
                 g.addLine(to: gap.inner)
                 ctx.stroke(g, with: .color(color), style: thread)
-                // in Always On the pick rests still on the middle gap
-                if k == (dimmed ? 6 : contact) { drawFlossPick(gap, ctx: &ctx, u: u) }
             }
         }
 
@@ -607,9 +603,9 @@ public struct MouthMap: View, Animatable {
         return right ? 5 - gap : 7 + gap
     }
 
-    /// A floss pick on a gap: the thread bright, a little prong at each end, and the handle reaching
-    /// in toward the tongue.
-    private func drawFlossPick(_ gap: Gap, ctx: inout GraphicsContext, u: Double) {
+    /// A floss pick on a gap: a little prong at each end of the thread, and the handle reaching in
+    /// toward the tongue.
+    static func drawFlossPick(_ gap: Gap, dimmed: Bool, ctx: inout GraphicsContext, u: Double) {
         let dx = gap.inner.x - gap.outer.x, dy = gap.inner.y - gap.outer.y
         let len = max(1e-6, (dx * dx + dy * dy).squareRoot())
         let dir = CGVector(dx: dx / len, dy: dy / len)
@@ -660,7 +656,7 @@ public struct MouthMap: View, Animatable {
 /// and in every 10 s surface it reaches the back molar (0, 1 ... 6, then 5, 4, 3). Seen from the side
 /// on the outside and the inside (bristles against the teeth) and from above on the chewing tops. It
 /// is drawn apart from the mouth, so the mouth itself is only redrawn when the quarter or the surface
-/// changes, and it follows the mouth's camera. In Always On it rests still, as an outline.
+/// changes, and it follows the mouth's camera. In Always On it is an outline that steps without gliding.
 public struct MouthPacer: View, Animatable {
     let quadrant: BrushQuadrant
     let surface: BrushSurface
@@ -761,7 +757,7 @@ public struct MouthPacer: View, Animatable {
             }
             let neckW = s * 0.22, bristleW = s * 0.15
             if dimmed {
-                let line = max(1, u * 0.01)
+                let line = max(1.3, u * 0.015)
                 ctx.stroke(head, with: .color(.white), lineWidth: line)
                 ctx.stroke(neck, with: .color(.white), style: StrokeStyle(lineWidth: line, lineCap: .round))
                 ctx.stroke(bristles, with: .color(.white), style: StrokeStyle(lineWidth: line, lineCap: .round))
@@ -793,6 +789,56 @@ public struct MouthPacer: View, Animatable {
     /// The tooth's own frame at the brush: x toward the back, y in toward the tongue.
     static func frame(_ edge: CGPoint, _ along: CGVector, _ inward: CGVector) -> CGAffineTransform {
         CGAffineTransform(a: along.dx, b: along.dy, c: inward.dx, d: inward.dy, tx: edge.x, ty: edge.y)
+    }
+}
+
+/// The floss pick: it glides from gap to gap along the arch being flossed, from the back right to the
+/// back left, as `BrushPhaseState.flossContactIndex` moves (about one gap every 1.7 s). Drawn apart
+/// from the mouth like the brush; in Always On it is an outline that steps without gliding.
+public struct FlossPacer: View, Animatable {
+    let upper: Bool
+    /// The gap (0 back right ... 6 middle ... 12 back left), in between while gliding.
+    var position: Double
+    let dimmed: Bool
+
+    public var animatableData: Double {
+        get { position }
+        set { position = newValue }
+    }
+
+    public init(upper: Bool, position: Double, dimmed: Bool = false) {
+        self.upper = upper
+        self.position = position
+        self.dimmed = dimmed
+    }
+
+    /// The arch's 13 gaps in floss order.
+    static func gapsInOrder(upper: Bool, size: CGSize, unit u: Double) -> [MouthMap.Gap] {
+        let over = max(1.5, u * 0.014)
+        var byContact: [Int: MouthMap.Gap] = [:]
+        for q in BrushQuadrant.allCases where q.isUpper == upper {
+            let right = q == .upperRight || q == .lowerRight
+            let arch = MouthMap.arch(upper, in: size, unit: u)
+            for gap in MouthMap.gaps(q, teeth: MouthMap.teeth(q, in: size, unit: u), arch: arch, over: over) {
+                byContact[MouthMap.contactIndex(gap: gap.index, right: right)] = gap
+            }
+        }
+        return (0...12).compactMap { byContact[$0] }
+    }
+
+    public var body: some View {
+        Canvas { ctx, size in
+            let u = min(size.width, size.height * 1.15)
+            let gaps = Self.gapsInOrder(upper: upper, size: size, unit: u)
+            guard gaps.count == 13 else { return }
+            let p = min(12, max(0, position))
+            let i0 = Int(p.rounded(.down)), i1 = min(12, i0 + 1), f = p - Double(i0)
+            func mix(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f) }
+            let gap = MouthMap.Gap(index: 0, outer: mix(gaps[i0].outer, gaps[i1].outer), inner: mix(gaps[i0].inner, gaps[i1].inner))
+            MouthMap.drawFlossPick(gap, dimmed: dimmed, ctx: &ctx, u: u)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -980,6 +1026,47 @@ public struct WatchReadyFace: View {
     }
 }
 
+/// The card that names a stage as it starts: its picture and one big word.
+struct StageCard: View {
+    let word: WatchWord
+    let lang: CoachLanguage
+    let width: CGFloat
+    let dimmed: Bool
+
+    var color: Color {
+        switch word {
+        case .floss: return WatchLook.brightPurple
+        case .rinse: return WatchLook.rinse
+        default: return WatchLook.gold
+        }
+    }
+
+    var body: some View {
+        let w = width
+        VStack(spacing: w * 0.015) {
+            Group {
+                switch word {
+                case .floss: FlossPick()
+                case .rinse: RinseCup()
+                default: Toothbrush()
+                }
+            }
+            .frame(width: w * 0.2, height: w * 0.2)
+            .opacity(dimmed ? 0.7 : 1)
+            Text(WatchCopy.word(word, lang))
+                .font(WatchLook.font(w * 0.16))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .padding(.vertical, w * 0.03)
+        .padding(.horizontal, w * 0.07)
+        .background(RoundedRectangle(cornerRadius: w * 0.08, style: .continuous).fill(dimmed ? Color.black : WatchLook.background.opacity(0.9)))
+        .overlay(RoundedRectangle(cornerRadius: w * 0.08, style: .continuous).strokeBorder(color, lineWidth: 2))
+        .frame(maxWidth: w * 0.8)
+    }
+}
+
 /// The running face: brushing, flossing or rinsing. It takes no taps except the "…" button (and,
 /// while paused, a big Resume).
 public struct WatchActiveFace: View {
@@ -1001,8 +1088,8 @@ public struct WatchActiveFace: View {
                 let phase = ritual.phase
                 let lang = state.language
                 let dim = state.dimmed
-                // the big 3-2-1 only when the wrist taps it (never in Always On)
-                let digit = dim ? nil : ritual.countdownDigit
+                // the big 3-2-1 only when the wrist taps it (also in Always On, without the pop)
+                let digit = ritual.countdownDigit
                 let button = max(44, w * 0.2)
                 VStack(spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
@@ -1020,13 +1107,14 @@ public struct WatchActiveFace: View {
                     .padding(.horizontal, w * 0.04)
                     // one line for VoiceOver: where and how to brush, and the time left
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(accessibility(ritual, phase, lang) + ", " + clock(ritual.remainingSec))
+                    .accessibilityLabel((ritual.paused ? WatchCopy.word(.pause, lang) + ", " : "") + accessibility(ritual, phase, lang) + ", " + clock(ritual.remainingSec))
                     let mouthSize = CGSize(width: w, height: h * 0.54)
                     let zoomed = zoomedIn(ritual)
                     let focus = cameraFocus(ritual, phase)
                     let zoom: Double = zoomed ? 1 : 0
                     let cameraMove: Animation? = dim ? nil : .easeInOut(duration: state.reduceMotion ? 0.35 : 0.7)
                     let position = brushTooth(ritual, phase).map(Double.init)
+                    let glide: Animation? = dim || state.reduceMotion ? nil : .easeInOut(duration: 0.3)
                     ZStack {
                         // the mouth: close on the teeth being brushed, pulled back to the whole mouth
                         // (tipped away a little, for depth) around each new quarter
@@ -1036,8 +1124,16 @@ public struct WatchActiveFace: View {
                                 // Reduce Motion); the camera's own move wins when both change at once
                                 MouthPacer(quadrant: phase.quadrant, surface: phase.surface, position: position, focus: focus, zoom: zoom, dimmed: dim)
                                     .animation(cameraMove, value: zoomed)
-                                    .animation(dim || state.reduceMotion ? nil : .easeInOut(duration: 0.3), value: position)
+                                    .animation(glide, value: position)
                                     .id(phase.quadrant.rawValue * 3 + phase.surface.rawValue)
+                                    .transition(.identity)
+                                if ritual.stage == .floss {
+                                    // the floss pick glides gap to gap (it jumps to the other arch)
+                                    FlossPacer(upper: phase.flossIsUpper, position: Double(phase.flossContactIndex), dimmed: dim)
+                                        .animation(glide, value: phase.flossContactIndex)
+                                        .id(phase.flossIsUpper)
+                                        .transition(.identity)
+                                }
                             }
                             .clipped()
                             .rotation3DEffect(.degrees(zoomed ? 0 : 8), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
@@ -1052,7 +1148,12 @@ public struct WatchActiveFace: View {
                                 .foregroundStyle(WatchLook.gold)
                                 .shadow(color: .black.opacity(0.9), radius: 3)
                                 .offset(y: -mouthSize.height * 0.04)
-                                .transition(state.reduceMotion ? .identity : .scale.combined(with: .opacity))
+                                .transition(state.reduceMotion || dim ? .identity : AnyTransition.scale.combined(with: .opacity).animation(.easeInOut(duration: 0.2)))
+                        }
+                        if let card = stageCard(ritual) {
+                            // each stage announces itself: "Brush", "Floss", "Rinse", with its picture
+                            StageCard(word: card, lang: lang, width: w, dimmed: dim)
+                                .transition(state.reduceMotion || dim ? .identity : AnyTransition.scale(scale: 0.8).combined(with: .opacity).animation(.easeInOut(duration: 0.25)))
                         }
                     }
                     .frame(width: mouthSize.width, height: mouthSize.height)
@@ -1135,6 +1236,17 @@ public struct WatchActiveFace: View {
         return t >= 2 && t < quarter - 3
     }
 
+    /// The first moments of each stage show its name in a card, so floss never just "starts".
+    func stageCard(_ r: WatchRitual) -> WatchWord? {
+        guard !r.paused, r.stageElapsed < 2.5 else { return nil }
+        switch r.stage {
+        case .brushing: return .brush
+        case .floss: return .floss
+        case .rinse: return .rinse
+        case .done: return nil
+        }
+    }
+
     func cameraFocus(_ r: WatchRitual, _ p: BrushPhaseState) -> MouthMap.Focus {
         r.stage == .brushing ? .quarter(p.quadrant) : .whole
     }
@@ -1170,11 +1282,11 @@ public struct WatchActiveFace: View {
         }
     }
 
-    /// The brush's tooth: one a second through each 10 s surface, reaching the back molar every time;
-    /// in Always On it rests on the middle tooth.
+    /// The brush's tooth: one a second through each 10 s surface, reaching the back molar every time.
+    /// It keeps stepping in Always On (the dimmed face is what a brushing child sees most), just
+    /// without the glide.
     func brushTooth(_ r: WatchRitual, _ p: BrushPhaseState) -> Int? {
         guard r.stage == .brushing else { return nil }
-        if state.dimmed { return 3 }
         return MouthPacer.tooth(atSurfaceSecond: p.phaseElapsedSec)
     }
 

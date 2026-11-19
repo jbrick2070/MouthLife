@@ -33,6 +33,8 @@ final class WatchController: NSObject {
     private var armTask: Task<Void, Never>?
     /// The phone's brush, floss and rinse songs, following the ritual.
     @ObservationIgnored private let music = WatchMusic()
+    /// One spoken word per change, like the phone's coach.
+    @ObservationIgnored private let voice = WatchVoice()
 
     private static let ritualKey = "mouthlife.watch.ritual"
     private static let savedAtKey = "mouthlife.watch.ritualSavedAt"
@@ -58,6 +60,7 @@ final class WatchController: NSObject {
         clearCheckpoint()
         set(WatchRitual(includeRinse: settings.includeRinse, rinseSec: settings.rinseSec))
         play(.stageStart(.brushing))
+        speak(.stageStart(.brushing))
         run()
     }
 
@@ -169,6 +172,7 @@ final class WatchController: NSObject {
     private func handle(_ cue: WatchCue?) {
         guard let cue else { return }
         play(cue)
+        speak(cue)
         if case .stageStart = cue { checkpoint(force: true) }
         if case .done = cue { finish() }
     }
@@ -206,6 +210,25 @@ final class WatchController: NSObject {
         case .done: device.play(.success)
         case .pause: device.play(.stop)
         }
+    }
+
+    /// The spoken word for a change: "Brush" at the start (the card says it too), the quarter
+    /// numbers, then "Floss", "Rinse", "Done". The song dips while it speaks.
+    private func speak(_ cue: WatchCue) {
+        let lang = language
+        let text: String
+        switch cue {
+        case .stageStart(.brushing): text = WatchCopy.word(.brush, lang)
+        case .quadrant:
+            guard let q = engine?.phase.quadrant else { return }
+            text = BrushCoachCopy.spokenQuadrantNumber(q, lang: lang)
+        case .stageStart(.floss): text = BrushCoachCopy.spokenStageWord(.floss, lang: lang)
+        case .stageStart(.rinse): text = BrushCoachCopy.spokenStageWord(.rinse, lang: lang)
+        case .done: text = BrushCoachCopy.spokenStageWord(.done, lang: lang)
+        default: return
+        }
+        music.duck()
+        voice.say(text, lang)
     }
 
     // MARK: - Runtime with the wrist down (the "self care" session Apple lists for tooth-brushing)

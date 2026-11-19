@@ -12,6 +12,7 @@
 		7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000001 /* MouthLifeWatchApp.swift */; };
 		7C0A12000000000000000012 /* WatchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000002 /* WatchController.swift */; };
 		7C0A120000000000000000B1 /* WatchMusic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A1 /* WatchMusic.swift */; };
+		7C0A120000000000000000B5 /* WatchVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A5 /* WatchVoice.swift */; };
 		7C0A120000000000000000B2 /* watch_brush.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A2 /* watch_brush.m4a */; };
 		7C0A120000000000000000B3 /* watch_floss.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A3 /* watch_floss.m4a */; };
 		7C0A120000000000000000B4 /* watch_rinse.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A4 /* watch_rinse.m4a */; };
@@ -83,6 +84,7 @@
 		7C0A12000000000000000001 /* MouthLifeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeWatchApp.swift; path = MouthLifeWatch/MouthLifeWatchApp.swift; sourceTree = "<group>"; };
 		7C0A12000000000000000002 /* WatchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchController.swift; path = MouthLifeWatch/WatchController.swift; sourceTree = "<group>"; };
 		7C0A120000000000000000A1 /* WatchMusic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchMusic.swift; path = MouthLifeWatch/WatchMusic.swift; sourceTree = "<group>"; };
+		7C0A120000000000000000A5 /* WatchVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchVoice.swift; path = MouthLifeWatch/WatchVoice.swift; sourceTree = "<group>"; };
 		7C0A120000000000000000A2 /* watch_brush.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; name = watch_brush.m4a; path = MouthLifeWatch/Music/watch_brush.m4a; sourceTree = "<group>"; };
 		7C0A120000000000000000A3 /* watch_floss.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; name = watch_floss.m4a; path = MouthLifeWatch/Music/watch_floss.m4a; sourceTree = "<group>"; };
 		7C0A120000000000000000A4 /* watch_rinse.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; name = watch_rinse.m4a; path = MouthLifeWatch/Music/watch_rinse.m4a; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				7C0A12000000000000000001 /* MouthLifeWatchApp.swift */,
 				7C0A12000000000000000002 /* WatchController.swift */,
 				7C0A120000000000000000A1 /* WatchMusic.swift */,
+				7C0A120000000000000000A5 /* WatchVoice.swift */,
 				7C0A120000000000000000A2 /* watch_brush.m4a */,
 				7C0A120000000000000000A3 /* watch_floss.m4a */,
 				7C0A120000000000000000A4 /* watch_rinse.m4a */,
@@ -374,6 +377,7 @@
 				7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */,
 				7C0A12000000000000000012 /* WatchController.swift in Sources */,
 				7C0A120000000000000000B1 /* WatchMusic.swift in Sources */,
+				7C0A120000000000000000B5 /* WatchVoice.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

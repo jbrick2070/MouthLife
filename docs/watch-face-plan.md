@@ -35,8 +35,23 @@ The draft below was reviewed by Astra. These are the decisions being built.
 9. **Always On covers the whole running face (new): built.**
    - The bar, pill and button are drawn as outlines.
    - There is no 3-2-1 animation while dimmed.
+   - After the wrist test (the watch dims quickly while a child brushes), the dimmed face keeps
+     guiding: the brush and the floss pick keep stepping once a second (no glide), the 3-2-1
+     shows (no pop), and the lit quarter is drawn in a bolder line.
 10. **VoiceOver (new): built.** There is still one summary line for location, action and time. The
     Resume button reads its real action.
+
+11. **Stage start (from the wrist test): built.** Floss used to "just start". Now each stage opens
+    with a card for about 3 s showing "Brush", "Floss" or "Rinse" and its picture. The watch also
+    speaks one word per change, like the phone's coach: "Brush" at the start, the quarter numbers,
+    then "Floss", "Rinse" and "Done". The song dips while it speaks.
+12. **Sonnet QA fixes: built.**
+    - Audio is re-activated whenever a song starts, so it survives calls and Siri.
+    - The brush and pick do not fade on identity changes, and the 3-2-1 pops in 0.2 s.
+    - Camera padding is `u*0.10`, so the brush head is not clipped.
+    - VoiceOver says "Pause" first while paused.
+    - The face ticks on a 1 s `TimelineView`, so it keeps redrawing in Always On.
+    - New tests: the camera stays inside the mouth, and the floss path runs right to left on screen.
 
 Not done this pass: coalescing the mid-second floss-halfway update, and caching tooth geometry
 between frames. Both are small, and can be revisited if the wrist shows any stutter.

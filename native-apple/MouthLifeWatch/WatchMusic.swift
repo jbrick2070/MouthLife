@@ -12,6 +12,7 @@ final class WatchMusic {
     /// Players fading out after a stage change, kept until their fade ends.
     private var fading: [AVAudioPlayer] = []
     private var sessionActive = false
+    private var duckTask: Task<Void, Never>?
 
     /// The song for each stage (nil: quiet).
     static func song(_ stage: WatchRitualStage) -> String? {
@@ -85,9 +86,22 @@ final class WatchMusic {
         }
     }
 
+    /// The song dips for a moment while the coach says its one word.
+    func duck(for seconds: TimeInterval = 1.4) {
+        guard let p = player, p.isPlaying else { return }
+        p.setVolume(0.35, fadeDuration: 0.12)
+        duckTask?.cancel()
+        duckTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let self, let now = self.player, now === p, now.isPlaying else { return }
+            now.setVolume(1, fadeDuration: 0.4)
+        }
+    }
+
     /// Short in-app audio plays on the watch speaker, or on Bluetooth earbuds when they are on.
+    /// Activated again every time a song starts (a call, Siri or an alarm may have taken the audio
+    /// away in between; setting it active again is cheap).
     private func activate() {
-        guard !sessionActive else { return }
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .default, policy: .default, options: [])
         try? session.setActive(true)
