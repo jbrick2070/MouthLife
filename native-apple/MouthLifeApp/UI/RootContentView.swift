@@ -72,7 +72,8 @@ public struct RootContentView: View {
                 CosmicIntroView(
                     beatIndex: $coordinator.cosmicBeatIndex,
                     hasSeenBefore: coordinator.save.hasSeenCosmicIntro,
-                    onComplete: { coordinator.completeCosmicIntro() }
+                    onComplete: { coordinator.completeCosmicIntro() },
+                    onRestoreCode: { coordinator.activeSheet = .restoreCode }
                 )
                 .transition(.opacity)
 
@@ -242,6 +243,8 @@ public struct RootContentView: View {
                         exportedCode: SaveSystem.encodeSaveToSyncCode(coordinator.save),
                         onImportCode: { code in coordinator.importSyncCode(code) }
                     )
+                case .restoreCode:
+                    SyncRestoreSheet(onImportCode: { code in coordinator.restoreFromPrologue(code) })
                 case .charity:
                     CharitySheet()
                 case .settings:

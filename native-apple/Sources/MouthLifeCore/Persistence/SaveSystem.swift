@@ -99,10 +99,9 @@ public enum SyncCodeError: LocalizedError, Equatable, Sendable {
         switch self {
         case .missingPrefix:
             return "This is not a MouthLife code. It should start with ML2:"
-        case .malformedPayload:
-            return "Malformed Base64URL Sync Code payload."
-        case .invalidUtf8:
-            return "Sync Code payload is not valid UTF-8."
+        // A code cut short or mistyped gets one plain message, the same as on the web.
+        case .malformedPayload, .invalidUtf8:
+            return "This code is damaged and can’t be read."
         case .invalidJson:
             return "This code is damaged and can’t be read."
         case .missingSchemaVersion:

@@ -356,24 +356,31 @@ export function decodeSaveFromSyncCode(
   // Codes get line-wrapped by mail and chat apps, and some tools re-pad them: strip whitespace,
   // allow trailing '=' padding and the standard Base64 '+' '/' alphabet as well as Base64URL.
   const compact = trimmed.slice(SYNC_CODE_PREFIX.length).replace(/\s+/g, '');
+  // A code cut short or mistyped gets one plain message (as in the native app), never a decoder's.
+  const damaged = 'This code is damaged and can’t be read.';
   if (compact.length === 0 || compact.length > 65536 || !/^[A-Za-z0-9\-_+/]+=*$/.test(compact)) {
-    throw new Error('Malformed Base64URL Sync Code payload.');
+    throw new Error(damaged);
   }
   const body = compact.replace(/=+$/, '');
   if (body.length % 4 === 1) {
-    throw new Error('Malformed Base64URL Sync Code payload.');
+    throw new Error(damaged);
   }
   let stdB64 = body.replace(/-/g, '+').replace(/_/g, '/');
   while (stdB64.length % 4 !== 0) {
     stdB64 += '=';
   }
-  const bin = atob(stdB64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) {
-    bytes[i] = bin.charCodeAt(i);
+  let parsed: unknown;
+  try {
+    const bin = atob(stdB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      bytes[i] = bin.charCodeAt(i);
+    }
+    const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error(damaged);
   }
-  const jsonText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  const parsed: unknown = JSON.parse(jsonText);
   if (!parsed || typeof parsed !== 'object' || !('schemaVersion' in parsed)) {
     throw new Error('This code is missing its version number.');
   }

@@ -90,6 +90,7 @@ export class InputManager {
   private virtualMoveZ = 0;
   private virtualScrubHeld = false;
   private lastPointerType = '';
+  private touchSeen = false;
   private virtualFlossAim: Vec2 | null = null;
   private virtualFlossSmartAim = false;
 
@@ -224,6 +225,16 @@ export class InputManager {
     window.addEventListener('keyup', (e) => {
       this.keysDown.delete(e.code);
     });
+
+    // A touch laptop (a Surface, say) often reports its trackpad as the main pointer, and a page
+    // cannot tell tablet mode from laptop mode; the first real touch says it all.
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType === 'touch') this.touchSeen = true;
+      },
+      { capture: true, passive: true }
+    );
 
     window.addEventListener('blur', () => {
       this.keysDown.clear();
@@ -398,6 +409,11 @@ export class InputManager {
     this.virtualMoveX = moveX;
     this.virtualMoveZ = moveZ;
     this.virtualScrubHeld = held;
+  }
+
+  /** The screen has been touched since the page opened (the thumbstick then appears there too). */
+  hasSeenTouch(): boolean {
+    return this.touchSeen;
   }
 
   /** A touch screen (the thumbstick is shown there). */

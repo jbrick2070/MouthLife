@@ -104,4 +104,11 @@ final class QAFixTests: XCTestCase {
         XCTAssertLessThan(session.mutans.first(where: { $0.id == 998 })?.hp ?? 999, 999) // the brush hit it
         XCTAssertLessThanOrEqual(maxZ + 0.45, b.maxZ + 1e-6)
     }
+
+    // A damaged code reads the same plain message as on the web (shown on the Prologue's restore sheet).
+    func testDamagedSyncCodesGetOnePlainMessage() {
+        XCTAssertEqual(SyncCodeError.malformedPayload.errorDescription, "This code is damaged and can’t be read.")
+        XCTAssertEqual(SyncCodeError.invalidUtf8.errorDescription, "This code is damaged and can’t be read.")
+        XCTAssertThrowsError(try SaveSystem.decodeSaveFromSyncCode("ML2:abc$$"))
+    }
 }

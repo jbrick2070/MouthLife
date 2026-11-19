@@ -5,6 +5,8 @@ public struct CosmicIntroView: View {
     @Binding public var beatIndex: Int
     public let hasSeenBefore: Bool
     public let onComplete: () -> Void
+    /// A new device: "Have a Sync Code?" on the first part opens the restore sheet.
+    public let onRestoreCode: (() -> Void)?
 
     private struct BeatContent {
         let kicker: String
@@ -40,10 +42,16 @@ public struct CosmicIntroView: View {
         )
     ]
 
-    public init(beatIndex: Binding<Int>, hasSeenBefore: Bool = false, onComplete: @escaping () -> Void) {
+    public init(
+        beatIndex: Binding<Int>,
+        hasSeenBefore: Bool = false,
+        onComplete: @escaping () -> Void,
+        onRestoreCode: (() -> Void)? = nil
+    ) {
         self._beatIndex = beatIndex
         self.hasSeenBefore = hasSeenBefore
         self.onComplete = onComplete
+        self.onRestoreCode = onRestoreCode
     }
 
     public var body: some View {
@@ -94,6 +102,19 @@ public struct CosmicIntroView: View {
 
                 if beat.mohsHighlight {
                     mohsScaleBar
+                }
+
+                // Only a brand-new save is offered this: a returning player already has their progress.
+                if idx == 0, !hasSeenBefore, let onRestoreCode {
+                    Button {
+                        onRestoreCode()
+                    } label: {
+                        Label(L10n.t("Have a Sync Code?"), systemImage: "icloud.and.arrow.down")
+                            .font(.system(.footnote, design: .rounded, weight: .semibold))
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(MLTheme.cyanAccent)
                 }
 
                 HStack(spacing: 12) {

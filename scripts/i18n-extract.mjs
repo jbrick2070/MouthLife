@@ -219,7 +219,9 @@ function isTextLike(s) {
   if (/=>|;\s*$|\bfunction\b|\brgba?\(|\bvar\(--|^[.#][\w-]+\s*\{|px\b|\b(querySelector|innerHTML)\b/.test(s)) return false;
   if (/[{}]/.test(s.replace(/\{\d+\}/g, ''))) return false;
   // CSS selectors and media queries, e.g. "button, a, input" or "(prefers-reduced-motion: reduce)".
-  if (/^[\[(=]/.test(s) || /="/.test(s)) return false;
+  // A key hint such as "[F] Full Screen" or "(E) Floss" is text.
+  const keyHint = /^[[(][A-Z0-9][\])]\s/.test(s);
+  if ((!keyHint && /^[\[(=]/.test(s)) || /="/.test(s)) return false;
   if (/^[a-z]+(, ?[a-z\[\]="-]+)+$/.test(s)) return false;
   const tokens = s.split(' ');
   // CSS class lists such as "btn btn-sm hub-drawer-toggle".

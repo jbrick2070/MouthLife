@@ -58,4 +58,16 @@ describe('Sync Code import resilience', () => {
     a.importSyncCode(oldCode);
     expect(a.getSave().totalBrushStamps).toBeGreaterThanOrEqual(9);
   });
+
+  it('a damaged or mistyped code gets one plain message and changes nothing', () => {
+    const sys = new SaveSystem(new EventBus());
+    sys.load(1_700_000_000_000);
+    const before = JSON.stringify(sys.getSave());
+    const notJson = 'ML2:' + btoa('{"schemaVersion": 2, "worlds": ').replace(/=+$/, '');
+    for (const bad of ['ML2:abc$$', 'ML2:', 'ML2:QUJD�', notJson]) {
+      expect(() => sys.importSyncCode(bad)).toThrow('This code is damaged and can’t be read.');
+    }
+    expect(() => sys.importSyncCode('hello')).toThrow('It should start with ML2:');
+    expect(JSON.stringify(sys.getSave())).toBe(before);
+  });
 });

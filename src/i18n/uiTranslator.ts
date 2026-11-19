@@ -221,6 +221,11 @@ export class UiTranslator {
       if (n.nodeType === Node.TEXT_NODE) this.translateText(n as Text, true);
       else this.translateAttrs(n as Element);
     }
+    // A text box's contents are the player's own words and stay untouched, but its placeholder and
+    // label are ours ("Paste ML2:... code here").
+    root.querySelectorAll('textarea').forEach((box) => {
+      if (!box.closest('[data-no-translate]')) this.translateAttrs(box);
+    });
   }
 
   private translateText(node: Text, parentChecked = false): void {

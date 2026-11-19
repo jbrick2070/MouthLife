@@ -6,6 +6,8 @@ public enum HubSheetKind: String, Identifiable {
     case upgradeLab
     case historyAlmanac
     case syncSave
+    /// The Prologue's "Have a Sync Code?" for a returning player on a new device.
+    case restoreCode
     case charity
     case settings
 

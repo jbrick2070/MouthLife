@@ -1266,6 +1266,18 @@ public final class AppCoordinator {
         }
     }
 
+    /// "Have a Sync Code?" on the Prologue: bring the other device's progress across (merged, never
+    /// overwritten), then straight Home. Web twin: `restoreSyncCode` in main.ts.
+    public func restoreFromPrologue(_ code: String) -> Result<Void, Error> {
+        let result = importSyncCode(code)
+        if case .success = result {
+            activeSheet = nil
+            completeCosmicIntro()
+            showHubToast("Code imported! Your save is updated.")
+        }
+        return result
+    }
+
     private func showHubToast(_ text: String) {
         hubToast = L10n.t(text)
         toastClearTask?.cancel()

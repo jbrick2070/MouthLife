@@ -717,6 +717,23 @@ function bootstrapMouthLife(): void {
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
         bus,
+        // Only a brand-new save is offered this: a returning player already has their progress here.
+        restoreSyncCode: saveSys.getSave().hasSeenCosmicIntro
+          ? undefined
+          : (code) => {
+              try {
+                saveSys.importSyncCode(code);
+              } catch (err) {
+                return err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.';
+              }
+              const s = saveSys.getSave();
+              s.hasSeenCosmicIntro = true;
+              saveSys.save(s);
+              sound.playSmoothBaskSparkle();
+              switchMode('HUB');
+              activeHub?.setStatusBanner('Code imported! Your save is updated.');
+              return null;
+            },
       });
     } else if (next === 'HUB') {
       sound.setHubFocus('companion');

@@ -139,3 +139,86 @@ public struct SyncSaveSheet: View {
         #endif
     }
 }
+
+/// The Prologue's "Have a Sync Code?": a returning player on a new device pastes the code from their
+/// other device and their progress comes across (merged, never overwritten), then the game goes
+/// Home. Web twin: the restore sheet in `src/ui/CosmicIntroOverlay.ts`.
+public struct SyncRestoreSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    public let onImportCode: (String) -> Result<Void, Error>
+
+    @State private var importInput: String = ""
+    @State private var errorMessage: String?
+
+    public init(onImportCode: @escaping (String) -> Result<Void, Error>) {
+        self.onImportCode = onImportCode
+    }
+
+    public var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L10n.t("Paste the Sync Code from your other phone or computer to bring your progress here."))
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(MLTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                TextField(L10n.t("Paste ML2:... sync code here"), text: $importInput, axis: .vertical)
+                    .lineLimit(3...6)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(MLTheme.textPrimary)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.06)))
+
+                HStack(spacing: 10) {
+                    Button(L10n.t("Paste Clipboard")) {
+                        if let str = readClipboard() { importInput = str }
+                    }
+                    .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
+
+                    Button {
+                        if case .failure(let err) = onImportCode(importInput) {
+                            errorMessage = L10n.t(err.localizedDescription) + " " + L10n.t("Your current progress was not changed.")
+                        }
+                    } label: {
+                        Label(L10n.t("Apply Sync Code"), systemImage: "arrow.down.doc.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
+                    .disabled(importInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .foregroundStyle(MLTheme.coralGum)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(MLTheme.deepOcean.ignoresSafeArea())
+            .navigationTitle(L10n.t("Have a Sync Code?"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("Not now")) { dismiss() }
+                        .foregroundStyle(MLTheme.cyanAccent)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .preferredColorScheme(.dark)
+    }
+
+    private func readClipboard() -> String? {
+        #if canImport(UIKit)
+        return UIPasteboard.general.string
+        #elseif canImport(AppKit)
+        return NSPasteboard.general.string(forType: .string)
+        #else
+        return nil
+        #endif
+    }
+}

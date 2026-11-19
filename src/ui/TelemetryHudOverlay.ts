@@ -183,22 +183,26 @@ export class TelemetryHudOverlay implements OverlayView {
 
   /** A phone-sized screen or a touch screen: tips talk about buttons, never keys. */
   private isTouchUi(): boolean {
-    return this.isCompactScreen() || this.input.isCoarsePointer();
+    return this.isCompactScreen() || this.input.isCoarsePointer() || this.input.hasSeenTouch();
   }
 
   private releaseThumbPad: (() => void) | null = null;
+  private touchPadSynced = false;
   /** What the round Scan / Surge buttons last showed (the page translator rewrites their text). */
   private scanHtmlShown = '';
   private surgeLabelShown = '';
 
   private syncThumbPadVisibility(): void {
     if (!this.thumbDeckEl) return;
+    const touch = this.input.isCoarsePointer() || this.input.hasSeenTouch();
     const showPad = shouldShowVirtualThumbPad({
       pointerSteerEnabled: this.input.isPointerSteerEnabled(),
       compactViewport: this.isCompactScreen(),
-      coarsePointer: this.input.isCoarsePointer(),
+      coarsePointer: touch,
     });
     this.thumbDeckEl.classList.toggle('pad-hidden', !showPad);
+    // On a wide touch laptop the stick joins the desktop button bar (see main.css).
+    this.thumbDeckEl.classList.toggle('touch-capable', touch);
   }
 
   constructor(
@@ -1041,6 +1045,11 @@ export class TelemetryHudOverlay implements OverlayView {
   }
 
   tickHud(frameDt: number): void {
+    // The first touch on a touch laptop brings the thumbstick in, mid-stage.
+    if (!this.touchPadSynced && this.input.hasSeenTouch()) {
+      this.touchPadSynced = true;
+      this.syncThumbPadVisibility();
+    }
     // Show controller buttons instead of keys as soon as a controller is in use.
     const padConnected = this.input.isGamepadConnected();
     if (padConnected !== this.lastPadConnected) {

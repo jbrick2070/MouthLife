@@ -109,11 +109,22 @@ export class CosmicIntroOverlay implements OverlayView {
       isMuted: () => boolean;
       onToggleMute: () => void;
       bus?: EventBus;
+      /**
+       * A new device: offer to restore progress with a Sync Code on the first part. Returns null when
+       * the code was imported (the game then goes Home), or what went wrong.
+       */
+      restoreSyncCode?: (code: string) => string | null;
     }
   ) {}
 
+  private restoreOpen = false;
+
   private keyHandler = (e: KeyboardEvent): void => {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (this.restoreOpen) {
+      if (e.key === 'Escape') this.closeRestore();
+      return; // typing a code must not turn the pages
+    }
     if (e.key === 'ArrowRight') {
       if (this.beatIndex < COSMIC_BEATS.length - 1) {
         this.beatIndex++;
@@ -258,6 +269,11 @@ export class CosmicIntroOverlay implements OverlayView {
         ${mohsHtml}
         </div>
 
+        ${
+          this.beatIndex === 0 && this.callbacks.restoreSyncCode
+            ? '<button type="button" id="btn-cosmic-restore" class="cosmic-restore-link">☁️ Have a Sync Code?</button>'
+            : ''
+        }
         <div class="row-between cosmic-beat-actions" style="margin-top:12px;">
           <button
             type="button"
@@ -313,6 +329,8 @@ export class CosmicIntroOverlay implements OverlayView {
       .querySelector('#btn-finish-cosmic')
       ?.addEventListener('click', () => this.callbacks.onFinishOrSkip());
 
+    this.container.querySelector('#btn-cosmic-restore')?.addEventListener('click', () => this.openRestore());
+
     const specimenButtons = this.container.querySelectorAll<HTMLButtonElement>('[data-mohs-idx]');
     const specimenDetail = this.container.querySelector('#mohs-detail');
     specimenButtons.forEach((btn) => {
@@ -327,6 +345,74 @@ export class CosmicIntroOverlay implements OverlayView {
         if (specimenDetail) specimenDetail.innerHTML = mohsDetailHtml(MOHS_SPECIMENS[this.selectedMohsIdx]);
       });
     });
+  }
+
+  /**
+   * A small sheet over the Prologue for a returning player on a new device: paste the Sync Code from
+   * the other device and the progress comes across (merged, never overwritten), then Home.
+   */
+  private openRestore(): void {
+    if (!this.container || this.restoreOpen) return;
+    this.restoreOpen = true;
+    const sheet = document.createElement('div');
+    sheet.className = 'modal-backdrop ui-interactive';
+    sheet.id = 'cosmic-restore';
+    sheet.innerHTML = `
+      <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="cosmic-restore-title" style="max-width:440px;">
+        <div class="row-between" style="margin-bottom:8px;">
+          <h3 id="cosmic-restore-title" style="margin:0;font-size:1rem;">☁️ Have a Sync Code?</h3>
+          <button type="button" id="btn-restore-close" class="btn btn-sm" aria-label="Close Dialog">✕ Close</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 8px 0;">Paste the Sync Code from your other phone or computer to bring your progress here.</p>
+        <textarea id="txt-restore-code" placeholder="Paste ML2:... code here" rows="3" aria-label="Import ML2 Sync Code"
+          style="width:100%;border-radius:10px;border:1px solid var(--glass-border);background:#041320;color:#fff;font-size:1rem;padding:8px;"></textarea>
+        <div id="restore-status" role="alert" style="min-height:1.1em;margin-top:6px;font-size:0.76rem;color:#fca5a5;"></div>
+        <div class="row-wrap" style="justify-content:flex-end;gap:6px;margin-top:8px;">
+          <button type="button" id="btn-restore-paste" class="btn btn-sm">📋 Paste</button>
+          <button type="button" id="btn-restore-apply" class="btn btn-gold btn-sm">Import & Merge</button>
+        </div>
+      </div>`;
+    this.container.appendChild(sheet);
+    const txt = sheet.querySelector<HTMLTextAreaElement>('#txt-restore-code');
+    const status = sheet.querySelector<HTMLElement>('#restore-status');
+    sheet.addEventListener('click', (e) => {
+      if (e.target === sheet) this.closeRestore();
+    });
+    sheet.querySelector('#btn-restore-close')?.addEventListener('click', () => this.closeRestore());
+    sheet.querySelector('#btn-restore-paste')?.addEventListener('click', () => {
+      const clip = navigator.clipboard;
+      if (!clip?.readText) {
+        txt?.focus();
+        return;
+      }
+      clip
+        .readText()
+        .then((v) => {
+          if (txt && v.trim()) txt.value = v.trim();
+          txt?.focus();
+        })
+        .catch(() => txt?.focus());
+    });
+    sheet.querySelector('#btn-restore-apply')?.addEventListener('click', () => {
+      const problem = this.callbacks.restoreSyncCode?.(txt?.value.trim() ?? '') ?? null;
+      if (problem === null) return; // imported: the game has moved on to Home
+      if (status) {
+        // two text runs, so each one is translated
+        const what = document.createElement('span');
+        what.textContent = problem;
+        const kept = document.createElement('span');
+        kept.textContent = 'Your current progress was not changed.';
+        status.replaceChildren(what, ' ', kept);
+      }
+      txt?.focus();
+    });
+    txt?.focus();
+  }
+
+  private closeRestore(): void {
+    this.restoreOpen = false;
+    this.container?.querySelector('#cosmic-restore')?.remove();
+    this.container?.querySelector<HTMLElement>('#btn-cosmic-restore')?.focus({ preventScroll: true });
   }
 
   dispose(): void {

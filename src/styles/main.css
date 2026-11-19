@@ -523,6 +523,28 @@ textarea:focus-visible {
   outline: 2px solid var(--cyan);
 }
 
+/* The Prologue's quiet offer to a returning player on a new device. */
+.cosmic-restore-link {
+  margin-top: 10px;
+  padding: 6px 2px;
+  min-height: 36px;
+  background: none;
+  border: none;
+  color: #7dd3fc;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cosmic-restore-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* Modal Sheet */
 .modal-backdrop {
   position: fixed;
@@ -746,6 +768,16 @@ textarea:focus-visible {
     animation: hotkey-hint-retire 0.7s ease 14s forwards;
   }
   .thumb-deck {
+    display: none;
+  }
+  /* A touch laptop (touched, or reporting touch): the thumbstick appears bottom-left; the desktop
+     button bar above already works by touch, so the round buttons stay hidden. */
+  .thumb-deck.touch-capable:not(.pad-hidden) {
+    display: flex;
+    justify-content: flex-start;
+    max-width: none;
+  }
+  .thumb-deck.touch-capable .actuator-cluster {
     display: none;
   }
 }
