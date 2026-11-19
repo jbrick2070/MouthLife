@@ -26,7 +26,17 @@ import {
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import { readIncludeRinse, writeIncludeRinse } from '../engine/persistence/pacerPrefs';
+import { readIncludeRinse, readReminders, writeIncludeRinse, writeReminders } from '../engine/persistence/pacerPrefs';
+import {
+  brushCount,
+  brushWeek,
+  clockToMinutes,
+  dateKeyOf,
+  dueReminder,
+  minutesToClock,
+  REMINDER_TEXT,
+  type ReminderSlot,
+} from '../config/brushDays';
 import { truncateDisplayName, type SaveSystem } from '../engine/persistence/SaveSystem';
 import type { HubCameraFocus } from '../engine/render/SceneManager';
 import type { OverlayView } from '../engine/types';
@@ -64,6 +74,8 @@ export class CompanionHubOverlay implements OverlayView {
   private selectedCityId = 'toronto';
   private activeModal: ActiveModal = 'none';
   private statusBanner = '';
+  /** The brush reminder showing on the Home screen (web: only while the page is open). */
+  private shownReminder: ReminderSlot | null = null;
   private modalOpenerSelector: string | null = null;
   private chartSystem: ToothNumberingSystem = 'universal';
   private viewOffCenter = false;
@@ -164,6 +176,11 @@ export class CompanionHubOverlay implements OverlayView {
       })
     );
     this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
+    // A brush reminder appears on the Home screen when its time comes (checked twice a minute).
+    const reminderTimer = window.setInterval(() => {
+      if (this.activeModal === 'none' && !this.tutorial && this.dueReminderSlot() !== this.shownReminder) this.render();
+    }, 30_000);
+    this.disposers.add(() => window.clearInterval(reminderTimer));
     this.disposers.add(this.bus.on('motion:changed', () => this.syncReducedMotionUi()));
     window.addEventListener('keydown', this.keyHandler);
 
@@ -228,6 +245,15 @@ export class CompanionHubOverlay implements OverlayView {
     btn.textContent = on ? '✓ Reduced Shake: ON' : 'Reduced Shake: OFF';
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.classList.toggle('btn-primary', on);
+  }
+
+  /** The reminder due now, if a grown-up turned reminders on and that brush is not done yet. */
+  private dueReminderSlot(): ReminderSlot | null {
+    const prefs = readReminders();
+    if (!prefs.on) return null;
+    const now = new Date();
+    const today = this.saveSys.getSave().dailySlotsByDate[dateKeyOf(now)];
+    return dueReminder(now, prefs, today?.fullRewards ?? 0);
   }
 
   private openModal(modal: Exclude<ActiveModal, 'none'>, openerSel: string): void {
@@ -463,7 +489,13 @@ export class CompanionHubOverlay implements OverlayView {
         : '';
     const muted = this.actions.isMuted();
     const hasToothReadout = this.tab === 'companion' && this.lastTouchedCrownIdx !== null;
-    const showStatusPill = !(splatHint && !needsPulpRescue) && !welcomeTipHtml && !(this.tab === 'globe' && globeHint);
+    const reminderSlot = this.dueReminderSlot();
+    this.shownReminder = reminderSlot;
+    const reminderHtml = reminderSlot
+      ? `<button type="button" id="btn-reminder-brush" class="btn btn-gold btn-sm hub-reminder-pill ui-interactive"><span aria-hidden="true">⏰</span> <span>${REMINDER_TEXT[reminderSlot]}</span></button>`
+      : '';
+    const showStatusPill =
+      !reminderSlot && !(splatHint && !needsPulpRescue) && !welcomeTipHtml && !(this.tab === 'globe' && globeHint);
 
     const bottomDeckHtml =
       this.tab === 'companion'
@@ -541,6 +573,7 @@ export class CompanionHubOverlay implements OverlayView {
       </div>
 
       <div class="hub-center-callout${hasToothReadout ? ' has-tooth-readout' : ''}">
+        ${reminderHtml}
         ${showStatusPill ? `<div class="bask-floating-pill">
           ${floatingStatusText}
         </div>` : ''}
@@ -779,6 +812,15 @@ export class CompanionHubOverlay implements OverlayView {
     if (this.activeModal === 'profile') {
       const reduced = Boolean(this.actions.isReducedMotion?.());
       const rinseOn = readIncludeRinse();
+      const reminders = readReminders();
+      const week = brushWeek(save.dailySlotsByDate);
+      const brushes = brushCount(week);
+      let dayFormat: Intl.DateTimeFormat;
+      try {
+        dayFormat = new Intl.DateTimeFormat(this.actions.getLanguage?.() ?? 'en', { weekday: 'narrow' });
+      } catch {
+        dayFormat = new Intl.DateTimeFormat('en', { weekday: 'narrow' });
+      }
       const muted = this.actions.isMuted();
       return `
         <div class="modal-backdrop" id="modal-bg">
@@ -862,6 +904,40 @@ export class CompanionHubOverlay implements OverlayView {
                 </button>
               </div>
               <div id="note-rinse-step" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">For grown-ups: ages 6 and up. Follow the label.</div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:10px;">This week</div>
+              <div class="brush-week" role="img" aria-label="${brushes === 1 ? '1 brush this week' : `${brushes} brushes this week`}">
+                ${week
+                  .map(
+                    (d) => `<div class="brush-day${d.isToday ? ' is-today' : ''}">
+                      <span class="brush-day-letter">${escapeHtml(dayFormat.format(d.date))}</span>
+                      <i class="${d.full >= 1 ? 'on' : ''}"></i><i class="${d.full >= 2 ? 'on' : ''}"></i>
+                    </div>`
+                  )
+                  .join('')}
+              </div>
+              <div style="font-size:0.75rem;color:#e0f2fe;margin-top:2px;" aria-hidden="true">${brushes === 1 ? '1 brush this week' : `${brushes} brushes this week`}</div>
+              <div class="row-between" style="margin-top:10px;">
+                <span id="lbl-reminders" style="font-size:0.78rem;color:#e0f2fe;">⏰ Brush Reminders</span>
+                <button
+                  type="button"
+                  id="btn-toggle-reminders"
+                  aria-labelledby="lbl-reminders"
+                  aria-describedby="note-reminders"
+                  aria-pressed="${reminders.on ? 'true' : 'false'}"
+                  class="btn btn-sm ${reminders.on ? 'btn-primary' : ''}"
+                >
+                  ${reminders.on ? '✓ On' : 'Off'}
+                </button>
+              </div>
+              ${
+                reminders.on
+                  ? `<div class="row-wrap reminder-times">
+                      <label>☀️ Morning <input id="inp-reminder-morning" type="time" value="${minutesToClock(reminders.morning)}" /></label>
+                      <label>🌙 Evening <input id="inp-reminder-evening" type="time" value="${minutesToClock(reminders.evening)}" /></label>
+                    </div>`
+                  : ''
+              }
+              <div id="note-reminders" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">For grown-ups. Shows while MouthLife is open.</div>
             </div>
             <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Audio</div>
             <div style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
@@ -1497,6 +1573,11 @@ export class CompanionHubOverlay implements OverlayView {
       this.actions.onLaunchBrushAlong();
     });
 
+    this.container.querySelector('#btn-reminder-brush')?.addEventListener('click', () => {
+      this.dismissTutorialOffer();
+      this.actions.onLaunchBrushAlong();
+    });
+
     this.container.querySelector<HTMLButtonElement>('#btn-launch-arcade')?.addEventListener('click', (e) => {
       this.dismissTutorialOffer();
       const wid = (e.currentTarget as HTMLButtonElement).dataset.worldId ?? 'world_1';
@@ -1715,11 +1796,39 @@ export class CompanionHubOverlay implements OverlayView {
       }, 'Only for brushers aged 6 and up.');
     });
 
+    this.container.querySelector('#btn-toggle-reminders')?.addEventListener('click', () => {
+      syncPendingName();
+      this.actions.onPlayUiTap();
+      const prefs = readReminders();
+      if (prefs.on) {
+        writeReminders({ ...prefs, on: false });
+        this.rerenderModalKeepingScroll('#btn-toggle-reminders');
+        return;
+      }
+      // Reminders are a grown-up's choice.
+      askGrownUp(() => {
+        writeReminders({ ...readReminders(), on: true });
+        if (this.activeModal === 'profile') this.rerenderModalKeepingScroll('#btn-toggle-reminders');
+      }, 'Reminders are set by a grown-up.');
+    });
+
+    for (const [sel, slot] of [
+      ['#inp-reminder-morning', 'morning'],
+      ['#inp-reminder-evening', 'evening'],
+    ] as const) {
+      this.container.querySelector<HTMLInputElement>(sel)?.addEventListener('change', (e) => {
+        const minutes = clockToMinutes((e.target as HTMLInputElement).value);
+        if (minutes !== null) writeReminders({ ...readReminders(), [slot]: minutes });
+      });
+    }
+
     this.container.querySelector<HTMLSelectElement>('#sel-app-language')?.addEventListener('change', (e) => {
       const value = (e.target as HTMLSelectElement).value;
       if (isCoachLanguage(value)) {
         this.actions.setLanguage?.(value);
         this.actions.onPlayUiTap();
+        // the weekday letters in "This week" come in the new language
+        this.rerenderModalKeepingScroll('#sel-app-language');
       }
     });
 

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A11000000000000000002 /* PhoneWatchBridge.swift */; };
+		7C0A13000000000000000001 /* BrushReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A13000000000000000002 /* BrushReminderScheduler.swift */; };
 		7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000001 /* MouthLifeWatchApp.swift */; };
 		7C0A12000000000000000012 /* WatchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000002 /* WatchController.swift */; };
 		7C0A12000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000004 /* Assets.xcassets */; };
@@ -49,6 +50,7 @@
 
 /* Begin PBXFileReference section */
 		7C0A11000000000000000002 /* PhoneWatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhoneWatchBridge.swift; path = MouthLifeApp/Sync/PhoneWatchBridge.swift; sourceTree = "<group>"; };
+		7C0A13000000000000000002 /* BrushReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrushReminderScheduler.swift; path = MouthLifeApp/Sync/BrushReminderScheduler.swift; sourceTree = "<group>"; };
 		7C0A12000000000000000001 /* MouthLifeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeWatchApp.swift; path = MouthLifeWatch/MouthLifeWatchApp.swift; sourceTree = "<group>"; };
 		7C0A12000000000000000002 /* WatchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WatchController.swift; path = MouthLifeWatch/WatchController.swift; sourceTree = "<group>"; };
 		7C0A12000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = MouthLifeWatch/Info.plist; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 				A7C464F541F76BF11934DC2D /* SyncSaveSheet.swift */,
 				0151FCF4B3CD9B5A0C19AAFB /* UpgradeLabSheet.swift */,
 				7C0A11000000000000000002 /* PhoneWatchBridge.swift */,
+				7C0A13000000000000000002 /* BrushReminderScheduler.swift */,
 				8738225AC4938AA2222183FA /* Assets.xcassets */,
 				59C4D8B12E7A3094C61B8E23 /* Music */,
 				7A11C0DE5EED4B1DA5E2F005 /* guide */,
@@ -318,6 +321,7 @@
 				06C97DB9354A31AB771A4B6F /* SyncSaveSheet.swift in Sources */,
 				BD73DEFA5F53F745C560E3CE /* UpgradeLabSheet.swift in Sources */,
 				7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */,
+				7C0A13000000000000000001 /* BrushReminderScheduler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

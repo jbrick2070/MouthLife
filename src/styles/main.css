@@ -323,6 +323,68 @@ textarea:focus-visible {
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
 }
 
+/* Brush reminder on the Home screen: one gold button that starts the Brush-Along. */
+.hub-reminder-pill {
+  pointer-events: auto;
+  font-size: 0.85rem;
+  padding: 7px 16px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* "This week" in Settings: a column per day, two marks for the morning and evening brush. */
+.brush-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+}
+.brush-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 0;
+  border-radius: 8px;
+}
+.brush-day.is-today {
+  background: rgba(94, 234, 212, 0.12);
+  outline: 1px solid rgba(94, 234, 212, 0.45);
+}
+.brush-day-letter {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.brush-day i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(148, 184, 204, 0.45);
+}
+.brush-day i.on {
+  background: #5eead4;
+  border-color: #5eead4;
+}
+.reminder-times {
+  gap: 12px;
+  margin-top: 6px;
+}
+.reminder-times label {
+  font-size: 0.75rem;
+  color: #e0f2fe;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.reminder-times input {
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: #041320;
+  color: #fff;
+  font-size: 0.85rem;
+  color-scheme: dark;
+}
+
 .hub-bottom-deck {
   padding: 12px;
   max-width: 680px;

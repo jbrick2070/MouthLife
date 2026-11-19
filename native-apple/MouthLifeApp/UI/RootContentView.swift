@@ -204,6 +204,10 @@ public struct RootContentView: View {
                         coachLanguage: coordinator.coachLanguage,
                         reducedMotion: coordinator.reducedMotion,
                         includeRinse: coordinator.includeRinse,
+                        brushWeek: coordinator.brushWeek,
+                        remindersOn: coordinator.remindersOn,
+                        reminderMorning: coordinator.reminderMorning,
+                        reminderEvening: coordinator.reminderEvening,
                         showProMotionTelemetry: coordinator.showProMotionBadge,
                         onSaveProfile: { name, tone, city in
                             coordinator.updateProfile(name: name, skinTone: tone, homeCity: city)
@@ -216,6 +220,8 @@ public struct RootContentView: View {
                         onChangeLanguage: { lang in coordinator.setCoachLanguage(lang) },
                         onChangeReducedMotion: { red in coordinator.reducedMotion = red },
                         onChangeIncludeRinse: { on in coordinator.setIncludeRinse(on) },
+                        onSetReminders: { on, done in coordinator.setReminders(on, done: done) },
+                        onSetReminderTimes: { morning, evening in coordinator.setReminderTimes(morning: morning, evening: evening) },
                         onToggleProMotionTelemetry: { show in coordinator.showProMotionBadge = show },
                         onReplayCosmicIntro: { coordinator.replayCosmicIntro() }
                     )

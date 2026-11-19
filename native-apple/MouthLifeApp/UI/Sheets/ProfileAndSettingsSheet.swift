@@ -15,9 +15,15 @@ public struct ProfileAndSettingsSheet: View {
     @State private var coachLanguage: CoachLanguage
     @State private var reducedMotion: Bool
     @State private var includeRinse: Bool
+    @State private var remindersOn: Bool
+    @State private var reminderMorning: Int
+    @State private var reminderEvening: Int
+    @State private var remindersBlocked = false
     @State private var showProMotionTelemetry: Bool
     @State private var showPrivacyPolicy = false
     @State private var showRinseGate = false
+    @State private var showReminderGate = false
+    private let brushWeek: [BrushDays.Day]
 
     public let onSaveProfile: (String, Int, String) -> Void
     public let onChangeQuality: (QualityPreference) -> Void
@@ -26,6 +32,8 @@ public struct ProfileAndSettingsSheet: View {
     public let onChangeLanguage: (CoachLanguage) -> Void
     public let onChangeReducedMotion: (Bool) -> Void
     public let onChangeIncludeRinse: (Bool) -> Void
+    public let onSetReminders: (Bool, @escaping (Bool) -> Void) -> Void
+    public let onSetReminderTimes: (Int, Int) -> Void
     public let onToggleProMotionTelemetry: (Bool) -> Void
     public let onReplayCosmicIntro: () -> Void
 
@@ -39,6 +47,10 @@ public struct ProfileAndSettingsSheet: View {
         coachLanguage: CoachLanguage = .english,
         reducedMotion: Bool,
         includeRinse: Bool = true,
+        brushWeek: [BrushDays.Day] = [],
+        remindersOn: Bool = false,
+        reminderMorning: Int = BrushDays.defaultMorning,
+        reminderEvening: Int = BrushDays.defaultEvening,
         showProMotionTelemetry: Bool,
         onSaveProfile: @escaping (String, Int, String) -> Void,
         onChangeQuality: @escaping (QualityPreference) -> Void,
@@ -47,6 +59,8 @@ public struct ProfileAndSettingsSheet: View {
         onChangeLanguage: @escaping (CoachLanguage) -> Void = { _ in },
         onChangeReducedMotion: @escaping (Bool) -> Void,
         onChangeIncludeRinse: @escaping (Bool) -> Void = { _ in },
+        onSetReminders: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, done in done(false) },
+        onSetReminderTimes: @escaping (Int, Int) -> Void = { _, _ in },
         onToggleProMotionTelemetry: @escaping (Bool) -> Void,
         onReplayCosmicIntro: @escaping () -> Void
     ) {
@@ -61,6 +75,10 @@ public struct ProfileAndSettingsSheet: View {
         _coachLanguage = State(initialValue: coachLanguage)
         _reducedMotion = State(initialValue: reducedMotion)
         _includeRinse = State(initialValue: includeRinse)
+        _remindersOn = State(initialValue: remindersOn)
+        _reminderMorning = State(initialValue: reminderMorning)
+        _reminderEvening = State(initialValue: reminderEvening)
+        self.brushWeek = brushWeek
         _showProMotionTelemetry = State(initialValue: showProMotionTelemetry)
         self.onSaveProfile = onSaveProfile
         self.onChangeQuality = onChangeQuality
@@ -69,6 +87,8 @@ public struct ProfileAndSettingsSheet: View {
         self.onChangeLanguage = onChangeLanguage
         self.onChangeReducedMotion = onChangeReducedMotion
         self.onChangeIncludeRinse = onChangeIncludeRinse
+        self.onSetReminders = onSetReminders
+        self.onSetReminderTimes = onSetReminderTimes
         self.onToggleProMotionTelemetry = onToggleProMotionTelemetry
         self.onReplayCosmicIntro = onReplayCosmicIntro
     }
@@ -181,6 +201,59 @@ public struct ProfileAndSettingsSheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
                             .accessibilityHidden(true)
+
+                        // This week: a column a day, a mark for each full brush (morning and evening)
+                        let brushes = BrushDays.count(brushWeek)
+                        let brushesText = L10n.t(brushes == 1 ? "1 brush this week" : "\(brushes) brushes this week")
+                        Text(L10n.t("This week"))
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                            .foregroundStyle(MLTheme.textSecondary)
+                            .padding(.top, 6)
+                        BrushWeekStrip(days: brushWeek, language: coachLanguage)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(brushesText)
+                        Text(brushesText)
+                            .font(.system(.caption, design: .rounded, weight: .medium))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .accessibilityHidden(true)
+
+                        // Reminders: a grown-up turns them on; the system asks once for permission
+                        Toggle(L10n.t("⏰ Brush Reminders"), isOn: Binding(
+                            get: { remindersOn },
+                            set: { on in
+                                if on {
+                                    showReminderGate = true
+                                } else {
+                                    remindersOn = false
+                                    onSetReminders(false) { _ in }
+                                }
+                            }
+                        ))
+                            .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            .tint(MLTheme.mintClean)
+                            .padding(.top, 6)
+                            .sheet(isPresented: $showReminderGate) {
+                                ParentGateView(note: L10n.t("Reminders are set by a grown-up.")) {
+                                    onSetReminders(true) { allowed in
+                                        remindersOn = allowed
+                                        remindersBlocked = !allowed
+                                    }
+                                }
+                                .presentationDetents([.medium])
+                            }
+
+                        if remindersOn {
+                            DatePicker(L10n.t("☀️ Morning"), selection: timeBinding(morning: true), displayedComponents: .hourAndMinute)
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                            DatePicker(L10n.t("🌙 Evening"), selection: timeBinding(morning: false), displayedComponents: .hourAndMinute)
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        }
+
+                        Text(remindersBlocked
+                            ? L10n.t("Notifications are off for MouthLife. A grown-up can allow them in Settings.")
+                            : L10n.t("For grown-ups: a gentle nudge at these times."))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(MLTheme.textSecondary)
                     }
                     .mlGlassCard()
                     .sheet(isPresented: $showRinseGate) {
@@ -327,6 +400,56 @@ public struct ProfileAndSettingsSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+extension ProfileAndSettingsSheet {
+    /// A reminder time (minutes after midnight) as a time of day for the picker.
+    fileprivate func timeBinding(morning: Bool) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = morning ? reminderMorning : reminderEvening
+                return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                let minutes = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+                if morning { reminderMorning = minutes } else { reminderEvening = minutes }
+                onSetReminderTimes(reminderMorning, reminderEvening)
+            }
+        )
+    }
+}
+
+/// "This week": a column for each of the last seven days (today last, outlined), with a mark for
+/// each full brush, up to two.
+struct BrushWeekStrip: View {
+    let days: [BrushDays.Day]
+    let language: CoachLanguage
+
+    var body: some View {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: language.rawValue)
+        format.setLocalizedDateFormatFromTemplate(String(repeating: "E", count: 5)) // a one-letter weekday
+        return HStack(spacing: 4) {
+            ForEach(days, id: \.dateKey) { day in
+                VStack(spacing: 4) {
+                    Text(format.string(from: day.date))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(MLTheme.textSecondary)
+                    ForEach(0..<BrushDays.goalPerDay, id: \.self) { i in
+                        Circle()
+                            .fill(i < day.full ? MLTheme.mintClean : Color.clear)
+                            .overlay(Circle().strokeBorder(i < day.full ? MLTheme.mintClean : Color.white.opacity(0.3), lineWidth: 1.5))
+                            .frame(width: 13, height: 13)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(day.isToday ? MLTheme.mintClean.opacity(0.12) : Color.clear))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(day.isToday ? MLTheme.mintClean.opacity(0.45) : Color.clear, lineWidth: 1))
+            }
+        }
     }
 }
 

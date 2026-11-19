@@ -65,6 +65,13 @@ public final class AppCoordinator {
     /// The fluoride rinse step (ages 6 and up). Off until a grown-up turns it on in Settings, since
     /// the brusher may be younger than 6.
     public var includeRinse: Bool = false
+    // Brush reminders (a grown-up's choice), under the same names as the web edition.
+    private static let remindersOnDefaultsKey = "mouthlife.reminders.on"
+    private static let reminderMorningDefaultsKey = "mouthlife.reminders.morning"
+    private static let reminderEveningDefaultsKey = "mouthlife.reminders.evening"
+    public private(set) var remindersOn = false
+    public private(set) var reminderMorning = BrushDays.defaultMorning
+    public private(set) var reminderEvening = BrushDays.defaultEvening
     /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
     public private(set) var pacerBrushedFullTime: Bool = false
     public var pacerElapsedSec: Double = 0.0
@@ -157,6 +164,9 @@ public final class AppCoordinator {
         self.mouthwashDurationStyle = persistedMouthwashStyle
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
         self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? false
+        self.remindersOn = UserDefaults.standard.bool(forKey: Self.remindersOnDefaultsKey)
+        self.reminderMorning = Self.storedMinutes(Self.reminderMorningDefaultsKey) ?? BrushDays.defaultMorning
+        self.reminderEvening = Self.storedMinutes(Self.reminderEveningDefaultsKey) ?? BrushDays.defaultEvening
         self.tutorialGate = TutorialGate(
             progress: TutorialProgress(
                 offers: UserDefaults.standard.integer(forKey: Self.tutorialOffersDefaultsKey),
@@ -173,6 +183,54 @@ public final class AppCoordinator {
         applyLaunchArgumentsIfPresent()
         syncSceneMode()
         startWatchLink()
+        refreshReminders()
+    }
+
+    // MARK: - Brush log and reminders
+
+    /// The last seven days of brushes, for "This week" in Settings.
+    public var brushWeek: [BrushDays.Day] { BrushDays.week(save.dailySlotsByDate) }
+
+    private static func storedMinutes(_ key: String) -> Int? {
+        guard let n = UserDefaults.standard.object(forKey: key) as? Int, (0..<1440).contains(n) else { return nil }
+        return n
+    }
+
+    /// Turns reminders on (asking the system for permission the first time) or off; `done` gets the
+    /// final state (off if notifications are not allowed).
+    public func setReminders(_ on: Bool, done: @escaping (Bool) -> Void) {
+        NativeSoundEngine.shared.playUiTap()
+        guard on else {
+            remindersOn = false
+            UserDefaults.standard.set(false, forKey: Self.remindersOnDefaultsKey)
+            refreshReminders()
+            done(false)
+            return
+        }
+        Task { @MainActor in
+            let allowed = await BrushReminderScheduler.requestPermission()
+            self.remindersOn = allowed
+            UserDefaults.standard.set(allowed, forKey: Self.remindersOnDefaultsKey)
+            self.refreshReminders()
+            done(allowed)
+        }
+    }
+
+    public func setReminderTimes(morning: Int, evening: Int) {
+        reminderMorning = max(0, min(1439, morning))
+        reminderEvening = max(0, min(1439, evening))
+        UserDefaults.standard.set(reminderMorning, forKey: Self.reminderMorningDefaultsKey)
+        UserDefaults.standard.set(reminderEvening, forKey: Self.reminderEveningDefaultsKey)
+        refreshReminders()
+    }
+
+    /// The next week of reminders, quiet today once that brush is done (called on launch, on return
+    /// to the app, after each brush and when a setting or the language changes).
+    private func refreshReminders() {
+        let fullToday = save.dailySlotsByDate[HabitBank.localDateKey()]?.fullRewards ?? 0
+        BrushReminderScheduler.refresh(on: remindersOn, morning: reminderMorning, evening: reminderEvening, fullToday: fullToday) { slot in
+            L10n.t(slot.text)
+        }
     }
 
     // MARK: - Apple Watch
@@ -220,6 +278,7 @@ public final class AppCoordinator {
         }
         save = saveSystem.getSave()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
+        refreshReminders()
         if mode == .hub {
             if ack.ionsAwarded > 0 {
                 showHubToast("⌚ Brushed on Apple Watch! +\(ack.ionsAwarded) F⁻")
@@ -826,6 +885,7 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setCoachLanguage(language)
         NativeSoundEngine.shared.playUiTap()
         pushWatchSettings()
+        refreshReminders()
         if mode == .brushAlong && !pacerIsPaused && voiceCoachEnabled {
             speakCurrentPacerPhaseCue()
         }
@@ -955,6 +1015,7 @@ public final class AppCoordinator {
             rinseStepOff: !includeRinse
         )
         save = saveSystem.getSave()
+        refreshReminders()
         sceneController.touchSystem.clearAll()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
         // The completion fanfare and its haptic come from the pacerComplete event the save emits
@@ -1090,6 +1151,7 @@ public final class AppCoordinator {
         switch phase {
         case .active:
             NativeSoundEngine.shared.resumeFromForeground()
+            refreshReminders()
             if mode == .brushAlong {
                 if pacerSuspendedBySystem && !pacerPausedByUser {
                     pacerSuspendedBySystem = false
