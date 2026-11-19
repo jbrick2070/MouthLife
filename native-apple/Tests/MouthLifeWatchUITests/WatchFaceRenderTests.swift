@@ -48,7 +48,8 @@ final class WatchFaceRenderTests: XCTestCase {
         for (label, size) in Self.sizes {
             try render("ready-\(label)", size: size, WatchReadyFace(state: WatchFaceState(), onStart: {}, onResume: {}))
             try render("ready-rinse-resume-\(label)", size: size, WatchReadyFace(state: WatchFaceState(includeRinse: true, canResume: true), onStart: {}, onResume: {}))
-            for (t, tag) in [(4.0, "outside"), (14.0, "chewing"), (27.5, "countdown"), (44.0, "q2-inside")] {
+            // close on the quarter (the 3-2-1 sits inside the arch), then pulled back for the next one
+            for (t, tag) in [(4.0, "outside"), (8.5, "close-countdown"), (14.0, "chewing"), (27.5, "countdown"), (44.0, "q2-chewing"), (54.0, "q2-inside")] {
                 try render("brush-\(tag)-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: t)), onMore: {}))
             }
             try render("brush-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 64), dimmed: true), onMore: {}))

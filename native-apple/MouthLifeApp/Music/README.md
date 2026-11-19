@@ -188,6 +188,12 @@ Converting Suno `.mp3` downloads to `.m4a` halves app bundle size and uses Apple
 afconvert -f m4af -d aac -b 192000 ~/Downloads/suno_toronto.mp3 MouthLifeApp/Music/toronto.m4a
 ```
 
+## Apple Watch copies
+The watch plays the same 2-Min Brush songs (`brush_along` while brushing, `accra` while flossing,
+`aurora` while rinsing) from its own small copies in `MouthLifeWatch/Music` (cut to each stage,
+mono, 96 kbps). After replacing any of those three songs, run
+`MouthLifeWatch/Music/make-watch-music.sh` to remake them.
+
 ## Rights & Licence Record (fill in before App Store submission)
 
 All 10 bundled tracks were generated with Suno by the project owner.

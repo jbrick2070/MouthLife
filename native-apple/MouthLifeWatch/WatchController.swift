@@ -4,7 +4,7 @@ import Observation
 import WatchConnectivity
 import WatchKit
 
-/// Runs the brushing ritual on the watch: the clock, the taps on the wrist, the "self care" runtime
+/// Runs the brushing ritual on the watch: the clock, the taps on the wrist, the phone's songs, the "self care" runtime
 /// that keeps it going with the wrist down, a checkpoint to resume after an interruption, and the
 /// trip of each finished brush to the iPhone (which turns it into the reward).
 @MainActor
@@ -31,6 +31,8 @@ final class WatchController: NSObject {
     private var runtime: WKExtendedRuntimeSession?
     private var lastCheckpoint: TimeInterval = 0
     private var armTask: Task<Void, Never>?
+    /// The phone's brush, floss and rinse songs, following the ritual.
+    @ObservationIgnored private let music = WatchMusic()
 
     private static let ritualKey = "mouthlife.watch.ritual"
     private static let savedAtKey = "mouthlife.watch.ritualSavedAt"
@@ -63,6 +65,7 @@ final class WatchController: NSObject {
     private func set(_ r: WatchRitual?) {
         engine = r
         ritual = r
+        music.follow(r)
     }
 
     func resume() {
@@ -157,6 +160,7 @@ final class WatchController: NSObject {
         if cue != nil || shown?.stage != r.stage || shown?.paused != r.paused
             || Int(r.stageElapsed) != Int(shown?.stageElapsed ?? -1) {
             ritual = r
+            music.follow(r)
         }
         handle(cue)
         checkpoint(force: false)

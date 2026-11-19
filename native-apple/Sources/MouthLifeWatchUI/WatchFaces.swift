@@ -22,7 +22,7 @@ public enum WatchLook {
     static let danger = Color(red: 0.94, green: 0.27, blue: 0.27)
     /// Lakers gold.
     static let gold = Color(red: 0.992, green: 0.725, blue: 0.153)
-    static let brightPurple = Color(red: 0.66, green: 0.44, blue: 1.0)
+    static let brightPurple = Color(red: 0.76, green: 0.56, blue: 1.0)
     static let lavender = Color(red: 0.91, green: 0.85, blue: 1.0)
     static let outside = gold
     static let chewing = brightPurple
@@ -164,7 +164,11 @@ public struct MirrorMouth: View {
 /// "inside" a dashed line along the tongue side, "chewing" the grooves on top. Floss puts a gold
 /// thread in every gap of the arch being flossed. Quarters already brushed get a gold outline. In
 /// Always On everything is drawn as outlines, the marks included.
-public struct MouthMap: View {
+///
+/// A camera can move in close on the quarter being brushed (or the arch being flossed), so its teeth
+/// fill the face, and pull back to the whole mouth: `zoom` runs from 0 (whole) to 1 (close) and
+/// animates.
+public struct MouthMap: View, Animatable {
     public enum Mode: Equatable {
         case brushing(quadrant: BrushQuadrant, surface: BrushSurface, doneMask: Int)
         case floss(upper: Bool)
@@ -172,12 +176,50 @@ public struct MouthMap: View {
         case clean
     }
 
+    /// What the camera moves in on. (Floss and rinse keep the whole mouth: an arch is too wide to
+    /// come closer without losing its back teeth.)
+    public enum Focus: Equatable {
+        case whole
+        case quarter(BrushQuadrant)
+    }
+
     let mode: Mode
     let dimmed: Bool
+    let focus: Focus
+    var zoom: Double
 
-    public init(mode: Mode, dimmed: Bool = false) {
+    public var animatableData: Double {
+        get { zoom }
+        set { zoom = newValue }
+    }
+
+    public init(mode: Mode, dimmed: Bool = false, focus: Focus = .whole, zoom: Double = 0) {
         self.mode = mode
         self.dimmed = dimmed
+        self.focus = focus
+        self.zoom = zoom
+    }
+
+    /// The camera, from the mouth's own drawing to the view: the whole mouth at zoom 0, close on the
+    /// focus at zoom 1 (its teeth with room for the side marks and the pacer dot). Close up, the view
+    /// stays inside the mouth's frame, so its edge is never empty.
+    public static func camera(_ focus: Focus, zoom: Double, size: CGSize) -> CGAffineTransform {
+        guard zoom > 0.0005, size.width > 1, size.height > 1 else { return .identity }
+        guard case let .quarter(q) = focus else { return .identity }
+        let u = min(size.width, size.height * 1.15)
+        var box = CGRect.null
+        for t in teeth(q, in: size, unit: u) { box = box.union(outline(t).boundingRect) }
+        box = box.insetBy(dx: -u * 0.07, dy: -u * 0.07)
+        let close = min(2.4, max(1, min(size.width / box.width, size.height / box.height)))
+        let halfW = size.width / (2 * close), halfH = size.height / (2 * close)
+        let fx = min(max(box.midX, halfW), size.width - halfW)
+        let fy = min(max(box.midY, halfH), size.height - halfH)
+        let k = 1 + (close - 1) * zoom
+        let cx = size.width / 2 + (fx - size.width / 2) * zoom
+        let cy = size.height / 2 + (fy - size.height / 2) * zoom
+        return CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
+            .scaledBy(x: k, y: k)
+            .translatedBy(x: -cx, y: -cy)
     }
 
     static let teethPerQuarter = 7
@@ -313,12 +355,13 @@ public struct MouthMap: View {
     }
 
     // colours of the teeth
-    static let idleFill = Color(red: 0.27, green: 0.2, blue: 0.37)
-    static let idleLine = Color(red: 0.45, green: 0.36, blue: 0.58)
-    static let tongue = Color(red: 0.86, green: 0.42, blue: 0.62)
+    static let idleFill = Color(red: 0.36, green: 0.28, blue: 0.5)
+    static let idleLine = Color(red: 0.58, green: 0.48, blue: 0.74)
+    static let tongue = Color(red: 0.9, green: 0.45, blue: 0.66)
 
     public var body: some View {
         Canvas { ctx, size in
+            ctx.concatenate(Self.camera(focus, zoom: zoom, size: size))
             let u = min(size.width, size.height * 1.15)
             if !dimmed { drawTongue(&ctx, size: size, u: u) }
             for q in BrushQuadrant.allCases {
@@ -342,11 +385,11 @@ public struct MouthMap: View {
         p.addCurve(to: CGPoint(x: lower.cx + bw, y: baseY), control1: CGPoint(x: lower.cx + bw * 0.6, y: tipY), control2: CGPoint(x: lower.cx + bw, y: tipY - rise * 0.2))
         p.addQuadCurve(to: CGPoint(x: lower.cx - bw, y: baseY), control: CGPoint(x: lower.cx, y: baseY - rise * 0.35))
         p.closeSubpath()
-        ctx.fill(p, with: .color(Self.tongue.opacity(0.28)))
+        ctx.fill(p, with: .color(Self.tongue.opacity(0.4)))
         var groove = Path()
         groove.move(to: CGPoint(x: lower.cx, y: baseY + rise * 0.05))
         groove.addLine(to: CGPoint(x: lower.cx, y: tipY - rise * 0.35))
-        ctx.stroke(groove, with: .color(Self.tongue.opacity(0.35)), style: StrokeStyle(lineWidth: max(1, u * 0.009), lineCap: .round))
+        ctx.stroke(groove, with: .color(Self.tongue.opacity(0.5)), style: StrokeStyle(lineWidth: max(1, u * 0.009), lineCap: .round))
     }
 
     private func drawQuarter(_ q: BrushQuadrant, ctx: inout GraphicsContext, size: CGSize, u: Double) {
@@ -376,10 +419,10 @@ public struct MouthMap: View {
             }
         case let .floss(upper):
             if q.isUpper == upper {
-                fill = Color(red: 0.33, green: 0.25, blue: 0.45)
+                fill = Color(red: 0.56, green: 0.46, blue: 0.74)
                 floss = true
             } else {
-                fill = Self.idleFill.opacity(0.6)
+                fill = Self.idleFill.opacity(0.55)
             }
         case .rinse:
             fill = WatchLook.rinse.opacity(0.75)
@@ -402,6 +445,13 @@ public struct MouthMap: View {
             ctx.stroke(band, with: .color(WatchLook.outside), style: StrokeStyle(lineWidth: mark * 1.5, lineCap: .round))
         }
 
+        // the quarter being brushed glows
+        if surface != nil && !dimmed {
+            var halo = ctx
+            halo.addFilter(.blur(radius: u * 0.022))
+            for t in teeth { halo.fill(Self.outline(t), with: .color(fill.opacity(0.75))) }
+        }
+
         let shadow = CGAffineTransform(translationX: 0, y: max(1, u * 0.009))
         for t in teeth {
             let path = Self.outline(t)
@@ -414,7 +464,7 @@ public struct MouthMap: View {
                 ctx.fill(path, with: .color(fill))
                 let b = path.boundingRect
                 ctx.fill(path, with: .linearGradient(
-                    Gradient(colors: [.white.opacity(lit ? 0.38 : 0.1), .clear]),
+                    Gradient(colors: [.white.opacity(lit ? 0.5 : 0.14), .clear]),
                     startPoint: CGPoint(x: b.midX, y: b.minY),
                     endPoint: CGPoint(x: b.midX, y: b.maxY)
                 ))
@@ -436,7 +486,7 @@ public struct MouthMap: View {
 
         // floss: a gold thread in every gap (the middle one is drawn by the right-hand quarter)
         if floss {
-            let thread = StrokeStyle(lineWidth: max(1.3, u * 0.013), lineCap: .round)
+            let thread = StrokeStyle(lineWidth: max(1.6, u * 0.018), lineCap: .round)
             let over = max(1.5, u * 0.014)
             for i in 0..<(teeth.count - 1) {
                 let a = teeth[i], b = teeth[i + 1]
@@ -487,20 +537,32 @@ public struct MouthMap: View {
 
 /// The pacer dot: it steps from tooth to tooth along the quarter being brushed, once a second, there
 /// and back, on the side being brushed. It is drawn apart from the mouth, so the mouth itself is only
-/// redrawn when the quarter or the surface changes.
-public struct MouthPacer: View {
+/// redrawn when the quarter or the surface changes. It follows the mouth's camera (and stays in place,
+/// drawing nothing, while it has no step, so it moves with the camera when it comes back).
+public struct MouthPacer: View, Animatable {
     let quadrant: BrushQuadrant
     let surface: BrushSurface
-    let step: Int
+    let step: Int?
+    let focus: MouthMap.Focus
+    var zoom: Double
 
-    public init(quadrant: BrushQuadrant, surface: BrushSurface, step: Int) {
+    public var animatableData: Double {
+        get { zoom }
+        set { zoom = newValue }
+    }
+
+    public init(quadrant: BrushQuadrant, surface: BrushSurface, step: Int?, focus: MouthMap.Focus = .whole, zoom: Double = 0) {
         self.quadrant = quadrant
         self.surface = surface
         self.step = step
+        self.focus = focus
+        self.zoom = zoom
     }
 
     public var body: some View {
         Canvas { ctx, size in
+            guard let step else { return }
+            ctx.concatenate(MouthMap.camera(focus, zoom: zoom, size: size))
             let u = min(size.width, size.height * 1.15)
             let teeth = MouthMap.teeth(quadrant, in: size, unit: u)
             guard teeth.indices.contains(step) else { return }
@@ -514,8 +576,11 @@ public struct MouthPacer: View {
             case .chewingGrooves: y = t.depth / 2
             }
             let c = t.at(0, y)
-            let r = max(2.5, u * 0.024)
+            let r = max(2.5, u * 0.026)
             let dot = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+            // a soft light around it, so the eye finds it at arm's length
+            let glow = r * 1.9
+            ctx.fill(Path(ellipseIn: CGRect(x: c.x - glow, y: c.y - glow, width: glow * 2, height: glow * 2)), with: .color(.white.opacity(0.22)))
             // white on the gold outside line, gold elsewhere; a dark rim so it never melts into a tooth
             ctx.fill(dot, with: .color(surface == .outerCheek ? .white : WatchLook.gold))
             ctx.stroke(dot, with: .color(WatchLook.background), lineWidth: max(1.2, u * 0.013))
@@ -792,34 +857,42 @@ public struct WatchActiveFace: View {
                         Spacer(minLength: 0)
                         if ritual.stage == .brushing {
                             Text("\(phase.quadrant.rawValue + 1)/4")
-                                .font(WatchLook.font(w * 0.08, .bold))
-                                .foregroundStyle(WatchLook.soft)
+                                .font(WatchLook.font(w * 0.09, .bold))
+                                .foregroundStyle(WatchLook.lavender)
                         }
                     }
                     .padding(.horizontal, w * 0.04)
                     // one line for VoiceOver: where and how to brush, and the time left
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibility(ritual, phase, lang) + ", " + clock(ritual.remainingSec))
+                    let mouthSize = CGSize(width: w, height: h * 0.54)
+                    let zoomed = zoomedIn(ritual)
+                    let focus = cameraFocus(ritual, phase)
+                    let zoom: Double = zoomed ? 1 : 0
                     ZStack {
-                        // the whole mouth: which teeth, and which side of them, leaning a little
-                        // toward the quarter being brushed
-                        MouthMap(mode: mapMode(ritual, phase), dimmed: state.dimmed)
+                        // the mouth: close on the teeth being brushed, pulled back to the whole mouth
+                        // (tipped away a little, for depth) around each new quarter
+                        MouthMap(mode: mapMode(ritual, phase), dimmed: state.dimmed, focus: focus, zoom: zoom)
                             .overlay {
-                                if let step = pacerStep(ritual, pip: pip) {
-                                    MouthPacer(quadrant: phase.quadrant, surface: phase.surface, step: step)
-                                }
+                                MouthPacer(quadrant: phase.quadrant, surface: phase.surface, step: pacerStep(ritual, pip: pip), focus: focus, zoom: zoom)
                             }
+                            .clipped()
+                            .rotation3DEffect(.degrees(zoomed ? 0 : 16), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
+                            // with Reduce Motion the two views cross-fade instead of the camera moving
+                            .id(state.reduceMotion ? zoom : 0)
+                            .transition(.opacity)
                             .modifier(QuarterNod(key: nodKey(ritual, phase), axis: nodAxis(ritual, phase), enabled: !state.dimmed && !state.reduceMotion))
                         if let pip {
                             Text("\(pip)")
-                                .font(WatchLook.font(w * 0.22))
+                                .font(WatchLook.font(w * 0.24))
                                 .foregroundStyle(WatchLook.gold)
-                                .shadow(color: .black.opacity(0.8), radius: 3)
-                                .offset(y: -h * 0.02)
+                                .shadow(color: .black.opacity(0.9), radius: 3)
+                                .offset(pipOffset(focus, zoomed: zoomed, size: mouthSize))
                                 .transition(state.reduceMotion ? .identity : .scale.combined(with: .opacity))
                         }
                     }
-                    .frame(width: w * 0.8, height: h * 0.48)
+                    .frame(width: mouthSize.width, height: mouthSize.height)
+                    .animation(state.dimmed ? nil : .easeInOut(duration: state.reduceMotion ? 0.35 : 0.9), value: zoomed)
                     .accessibilityHidden(true)
                     // how far through this step: a gold bar on a dark purple track
                     GeometryReader { bar in
@@ -829,7 +902,7 @@ public struct WatchActiveFace: View {
                                 .frame(width: bar.size.width * min(1, ritual.stageElapsed / max(1, ritual.stageLength)))
                         }
                     }
-                    .frame(height: max(4, h * 0.025))
+                    .frame(height: max(5, h * 0.03))
                     .padding(.horizontal, w * 0.06)
                     .padding(.bottom, h * 0.02)
                     .accessibilityHidden(true)
@@ -859,6 +932,28 @@ public struct WatchActiveFace: View {
                 .frame(width: w, height: h)
             }
         }
+    }
+
+    /// The camera is close on the teeth being brushed and pulls back to the whole mouth for each new
+    /// quarter: from the quarter's last 3-2-1 to 2 s into the next (and the first 2 s). It stays
+    /// back while paused, for floss and for the rinse.
+    func zoomedIn(_ r: WatchRitual) -> Bool {
+        guard !r.paused, r.stage == .brushing else { return false }
+        let quarter = WatchRitual.brushSec / 4
+        let t = r.stageElapsed.truncatingRemainder(dividingBy: quarter)
+        return t >= 2 && t < quarter - 3
+    }
+
+    func cameraFocus(_ r: WatchRitual, _ p: BrushPhaseState) -> MouthMap.Focus {
+        r.stage == .brushing ? .quarter(p.quadrant) : .whole
+    }
+
+    /// Close up, the 3-2-1 sits inside the arch, off the teeth being brushed.
+    func pipOffset(_ focus: MouthMap.Focus, zoomed: Bool, size: CGSize) -> CGSize {
+        guard zoomed else { return CGSize(width: 0, height: -size.height * 0.04) }
+        let mid = CGPoint(x: size.width / 2, y: size.height / 2)
+        let c = mid.applying(MouthMap.camera(focus, zoom: 1, size: size))
+        return CGSize(width: (c.x - mid.x) * 0.6, height: (c.y - mid.y) * 0.6)
     }
 
     /// The nod's axis: it brings the new quarter (or the arch to floss) toward the child.
