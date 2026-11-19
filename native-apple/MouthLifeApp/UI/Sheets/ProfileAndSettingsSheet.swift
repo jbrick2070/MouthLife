@@ -17,6 +17,7 @@ public struct ProfileAndSettingsSheet: View {
     @State private var includeRinse: Bool
     @State private var showProMotionTelemetry: Bool
     @State private var showPrivacyPolicy = false
+    @State private var showRinseGate = false
 
     public let onSaveProfile: (String, Int, String) -> Void
     public let onChangeQuality: (QualityPreference) -> Void
@@ -154,18 +155,26 @@ public struct ProfileAndSettingsSheet: View {
                     }
                     .mlGlassCard()
 
-                    // Brushing card: a grown-up can leave out the fluoride rinse (it is on unless they do).
+                    // Brushing card: the fluoride rinse is off until a grown-up confirms the brusher is
+                    // 6 or older (it is not for younger children); turning it off needs no question.
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.t("Brushing"))
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
-                        Toggle(L10n.t("💧 Fluoride Rinse Step"), isOn: $includeRinse)
+                        Toggle(L10n.t("💧 Fluoride Rinse Step"), isOn: Binding(
+                            get: { includeRinse },
+                            set: { on in
+                                if on {
+                                    showRinseGate = true
+                                } else {
+                                    includeRinse = false
+                                    onChangeIncludeRinse(false)
+                                }
+                            }
+                        ))
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
                             .tint(MLTheme.mintClean)
-                            .onChange(of: includeRinse) { _, next in
-                                onChangeIncludeRinse(next)
-                            }
                             .accessibilityHint(L10n.t("For grown-ups: ages 6 and up. Follow the label."))
 
                         Text(L10n.t("For grown-ups: ages 6 and up. Follow the label."))
@@ -174,6 +183,13 @@ public struct ProfileAndSettingsSheet: View {
                             .accessibilityHidden(true)
                     }
                     .mlGlassCard()
+                    .sheet(isPresented: $showRinseGate) {
+                        ParentGateView(note: L10n.t("Only for brushers aged 6 and up.")) {
+                            includeRinse = true
+                            onChangeIncludeRinse(true)
+                        }
+                        .presentationDetents([.medium])
+                    }
 
                     // Hands-Free Multilingual Voice Coach Card
                     VStack(alignment: .leading, spacing: 12) {

@@ -3,7 +3,10 @@
  * rinse length), under the same names the native app uses.
  */
 
-/** Whether the fluoride rinse step follows brushing and flossing. On unless a grown-up turns it off. */
+/**
+ * Whether the fluoride rinse step follows brushing and flossing. It is for ages 6 and up, so it stays
+ * off until a grown-up turns it on (behind the grown-up question).
+ */
 export const INCLUDE_RINSE_KEY = 'mouthlife.pacer.includeRinse';
 
 /** The last choice made on this page, for when storage is blocked. */
@@ -12,9 +15,9 @@ let thisVisit: boolean | null = null;
 export function readIncludeRinse(): boolean {
   try {
     const stored = window.localStorage.getItem(INCLUDE_RINSE_KEY);
-    return stored === null ? (thisVisit ?? true) : stored !== '0';
+    return stored === null ? (thisVisit ?? false) : stored === '1';
   } catch {
-    return thisVisit ?? true;
+    return thisVisit ?? false;
   }
 }
 

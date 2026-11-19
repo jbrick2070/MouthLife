@@ -26,7 +26,7 @@ import {
 import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import { HabitBank, brushAlongMultiplier } from '../engine/persistence/HabitBank';
+import { HabitBank, brushAlongMultiplier, brushAlongRinseCredit } from '../engine/persistence/HabitBank';
 import { readIncludeRinse } from '../engine/persistence/pacerPrefs';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
@@ -103,8 +103,8 @@ export class BrushAlongOverlay implements OverlayView {
   private completedFloss = false;
   /** Whether the brushing stage ran its full 2 minutes (not tapped ahead to floss early). */
   private fullBrush = false;
-  /** A grown-up can leave out the fluoride rinse (ages 6 and up); it is on unless they do. */
-  private includeRinse = true;
+  /** The fluoride rinse step (ages 6 and up): off until a grown-up turns it on in Settings. */
+  private includeRinse = false;
   private flossToolStyle: FlossToolStyle = 'flossPick';
   private mouthwashStyle: MouthwashDurationStyle = 'totalCare60s';
 
@@ -396,13 +396,19 @@ export class BrushAlongOverlay implements OverlayView {
     this.callbacks.onActiveQuadrantChanged(-1);
 
     const save = this.saveSys.getSave();
-    const outcome = HabitBank.completeBrushAlong(save, {
+    const rewardOptions = {
       withFlossBonus,
       withMouthwashBonus,
       fullBrush: this.fullBrush,
-    });
+      rinseStepOff: !this.includeRinse,
+    };
+    const outcome = HabitBank.completeBrushAlong(save, rewardOptions);
     this.saveSys.save(save);
-    this.rewardResult = { ...outcome, withMouthwashBonus, multiplier: brushAlongMultiplier(withFlossBonus, withMouthwashBonus) };
+    this.rewardResult = {
+      ...outcome,
+      withMouthwashBonus,
+      multiplier: brushAlongMultiplier(withFlossBonus, brushAlongRinseCredit(rewardOptions)),
+    };
     this.bus.emit('pacer:complete', {
       withFlossBonus,
       withMouthwashBonus,
@@ -668,7 +674,7 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private bannerHtml(stage: PacerStage): string {
-    const buttons = BrushCoachCopy.actionButtonLabels(this.lang);
+    const buttons = BrushCoachCopy.actionButtonLabels(this.lang, !this.includeRinse);
     // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
     const amount = (label: string): string => (this.fullBrush ? label : BrushCoachCopy.withoutIonAmount(label));
     if (stage === 'mouthwashBonus') {
@@ -882,7 +888,7 @@ export class BrushAlongOverlay implements OverlayView {
         </p>
         <div class="row-wrap" style="justify-content:center;margin-bottom:12px;">
           ${goodTry && (r?.ionsAwarded ?? 0) === 0 ? '' : `<span class="pill-badge">✦ +${r?.ionsAwarded ?? 0} Fluoride Ions</span>`}
-          ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${r.multiplier >= 2 ? 'Floss + Rinse' : 'Bonus Step'}</span>` : ''}
+          ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${r.multiplier >= 2 ? (rinse ? 'Floss + Rinse' : 'Floss Bonus') : 'Bonus Step'}</span>` : ''}
           ${r?.stampAwarded ? '<span class="pill-badge">🦷 +1 Permanent Habit Stamp</span>' : ''}
           ${r?.slotType === 'full' ? '<span class="pill-badge">📡 +1 Supply Beacon</span><span class="pill-badge">⚡ +1 Overdrive Run</span>' : ''}
           ${r?.slotType === 'capped' && !goodTry ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}

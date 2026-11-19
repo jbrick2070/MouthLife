@@ -229,6 +229,8 @@ private struct GateTarget: Identifiable {
 /// A times-table question with four answers, which a young child cannot answer yet. The web does the
 /// same in src/ui/parentGate.ts.
 struct ParentGateView: View {
+    /// An optional line under the title saying what the grown-up is agreeing to.
+    var note: String? = nil
     let onPass: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var a = Int.random(in: 3...9)
@@ -240,6 +242,12 @@ struct ParentGateView: View {
             Text(L10n.t("For grown-ups"))
                 .font(.system(.title3, design: .rounded, weight: .heavy))
                 .foregroundStyle(MLTheme.textPrimary)
+            if let note {
+                Text(note)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(MLTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
             Text(verbatim: "\(a) × \(b) = ?")
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .foregroundStyle(MLTheme.textPrimary)

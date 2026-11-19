@@ -426,16 +426,18 @@ public enum BrushCoachCopy {
         }
     }
 
-    public static func actionButtonLabels(for lang: CoachLanguage) -> (flossJump: String, doneFloss: String, skipFloss: String) {
+    /// With the rinse step off, finishing the floss pays what floss and rinse would (+100).
+    public static func actionButtonLabels(for lang: CoachLanguage, rinseStepOff: Bool = false) -> (flossJump: String, doneFloss: String, skipFloss: String) {
+        let done = rinseStepOff ? 100 : 75
         switch lang {
-        case .english: return ("Floss Pick", "Done (+75 F⁻)", "Skip (+50 F⁻)")
-        case .spanish: return ("Usar Hilo", "Listo (+75 F⁻)", "Saltar (+50 F⁻)")
-        case .french: return ("Porte-Fil", "Fini (+75 F⁻)", "Passer (+50 F⁻)")
-        case .japanese: return ("フロスピック", "完了 (+75 F⁻)", "スキップ (+50 F⁻)")
-        case .chinese: return ("牙线棒", "完成 (+75 F⁻)", "跳过 (+50 F⁻)")
-        case .korean: return ("치실 픽", "완료 (+75 F⁻)", "건너뛰기 (+50 F⁻)")
-        case .portuguese: return ("Fio Dental", "Pronto (+75 F⁻)", "Pular (+50 F⁻)")
-        case .german: return ("Stick-Runde", "Fertig (+75 F⁻)", "Weiter (+50 F⁻)")
+        case .english: return ("Floss Pick", "Done (+\(done) F⁻)", "Skip (+50 F⁻)")
+        case .spanish: return ("Usar Hilo", "Listo (+\(done) F⁻)", "Saltar (+50 F⁻)")
+        case .french: return ("Porte-Fil", "Fini (+\(done) F⁻)", "Passer (+50 F⁻)")
+        case .japanese: return ("フロスピック", "完了 (+\(done) F⁻)", "スキップ (+50 F⁻)")
+        case .chinese: return ("牙线棒", "完成 (+\(done) F⁻)", "跳过 (+50 F⁻)")
+        case .korean: return ("치실 픽", "완료 (+\(done) F⁻)", "건너뛰기 (+50 F⁻)")
+        case .portuguese: return ("Fio Dental", "Pronto (+\(done) F⁻)", "Pular (+50 F⁻)")
+        case .german: return ("Stick-Runde", "Fertig (+\(done) F⁻)", "Weiter (+50 F⁻)")
         }
     }
 

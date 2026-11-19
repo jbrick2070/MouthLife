@@ -222,6 +222,11 @@ describe('Brush-Along rewards with floss and rinse', () => {
     expect(BrushCoachCopy.mouthwashButtonLabels(false, 'ja').skipRinse).toBe('スキップ (+50 F⁻)');
   });
 
+  it('promises +100 for finishing the floss while the rinse step is off', () => {
+    expect(BrushCoachCopy.actionButtonLabels('en', true).doneFloss).toBe('Done (+100 F⁻)');
+    expect(BrushCoachCopy.actionButtonLabels('en', true).skipFloss).toBe('Skip (+50 F⁻)');
+  });
+
   it('drops the promised amounts after an early tap-through (it pays only a good-try tip)', () => {
     expect(BrushCoachCopy.withoutIonAmount('Done (+75 F⁻)')).toBe('Done');
     expect(BrushCoachCopy.withoutIonAmount('スキップ (+50 F⁻)')).toBe('スキップ');

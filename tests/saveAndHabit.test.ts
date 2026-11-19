@@ -119,6 +119,16 @@ describe('SaveSystem & HabitBank', () => {
     expect(save.totalBrushStamps).toBe(11);
   });
 
+  it('pays flossing as floss + rinse while the rinse step waits for a grown-up (under-6 brushers earn the same)', () => {
+    const sys = new SaveSystem(new EventBus());
+    const save = sys.load(1_700_000_000_000);
+    const day = new Date(2026, 5, 3, 8, 0, 0);
+    const flossed = HabitBank.completeBrushAlong(save, { withFlossBonus: true, rinseStepOff: true, date: day });
+    expect(flossed).toMatchObject({ slotType: 'full', ionsAwarded: 100, stampAwarded: true });
+    const skipped = HabitBank.completeBrushAlong(save, { withFlossBonus: false, rinseStepOff: true, date: day });
+    expect(skipped).toMatchObject({ slotType: 'full', ionsAwarded: 50 });
+  });
+
   it('decrements beacons per pickup, decrements Overdrive only on completed Arcade run, and roundtrips UTF-8 ML2 Sync Codes', () => {
     const bus = new EventBus();
     const sys = new SaveSystem(bus);

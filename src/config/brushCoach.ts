@@ -511,9 +511,14 @@ export const BrushCoachCopy = {
     return HUB_START_LABEL[lang];
   },
 
-  actionButtonLabels(lang: CoachLanguage): { flossJump: string; doneFloss: string; skipFloss: string } {
+  /** With the rinse step off, finishing the floss pays what floss and rinse would (+100). */
+  actionButtonLabels(
+    lang: CoachLanguage,
+    rinseStepOff = false
+  ): { flossJump: string; doneFloss: string; skipFloss: string } {
     const w = BUTTON_WORDS[lang];
-    return { flossJump: w.flossJump, doneFloss: `${w.done} (+75 F⁻)`, skipFloss: `${w.skip} (+50 F⁻)` };
+    const done = rinseStepOff ? 100 : 75;
+    return { flossJump: w.flossJump, doneFloss: `${w.done} (+${done} F⁻)`, skipFloss: `${w.skip} (+50 F⁻)` };
   },
 
   /** "Done (+75 F⁻)" → "Done": after an early tap-through the promised amounts no longer apply. */

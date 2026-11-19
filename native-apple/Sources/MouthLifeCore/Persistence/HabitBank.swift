@@ -57,11 +57,15 @@ public enum HabitBank {
     /// Only the full 2-minute brush (`fullBrush`, the default) earns that. Tapping ahead to floss
     /// before the brushing time is up is a "good try": a small courtesy tip of Ions, no stamp, beacon
     /// or Overdrive run, and it leaves today's full rewards free for a full brush later.
+    ///
+    /// When the rinse step is off (`rinseStepOff`: it waits for a grown-up to say the brusher is 6 or
+    /// older), flossing pays what flossing and rinsing would, so younger children are not paid less.
     public static func evaluatePacerReward(
         currentSlot: DailySlotLog,
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
         fullBrush: Bool = true,
+        rinseStepOff: Bool = false,
         currentBeacons: Int = 0,
         currentOverdriveRuns: Int = 0,
         dateKey: String = localDateKey()
@@ -77,9 +81,10 @@ public enum HabitBank {
             nextSlot.fullRewards += 1
             slotType = .full
             stampAwarded = true
+            let rinseCredit = withMouthwashBonus || (rinseStepOff && withFlossBonus)
             ionsAwarded = GameConfig.brushAlongFullIons
                 + (withFlossBonus ? GameConfig.brushAlongFlossIons : 0)
-                + (withMouthwashBonus ? GameConfig.brushAlongMouthwashIons : 0)
+                + (rinseCredit ? GameConfig.brushAlongMouthwashIons : 0)
 
             let nextBeacons = min(GameConfig.maxSupplyBeacons, max(0, currentBeacons) + 1)
             beaconsAdded = max(0, nextBeacons - max(0, currentBeacons))
@@ -111,6 +116,7 @@ public enum HabitBank {
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
         fullBrush: Bool = true,
+        rinseStepOff: Bool = false,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -121,6 +127,7 @@ public enum HabitBank {
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
             fullBrush: fullBrush,
+            rinseStepOff: rinseStepOff,
             currentBeacons: save.pendingSupplyBeacons,
             currentOverdriveRuns: save.remineralizedOverdriveRuns,
             dateKey: dateKey

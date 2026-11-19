@@ -327,7 +327,7 @@ public struct BrushAlongView: View {
     public let isPaused: Bool
     public let pacerStage: PacerStage
     public let didCompleteFloss: Bool
-    /// Whether the fluoride rinse follows flossing (a grown-up can leave it out in Settings).
+    /// Whether the fluoride rinse follows flossing (off until a grown-up turns it on in Settings).
     public let includeRinse: Bool
     /// Whether brushing ran its full 2 minutes; the Ion amounts on Done / Skip are only shown then.
     public let fullBrush: Bool
@@ -414,7 +414,7 @@ public struct BrushAlongView: View {
         )
         // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
         let amount: (String) -> String = { [fullBrush] label in fullBrush ? label : BrushCoachCopy.withoutIonAmount(label) }
-        let floss = BrushCoachCopy.actionButtonLabels(for: coachLanguage)
+        let floss = BrushCoachCopy.actionButtonLabels(for: coachLanguage, rinseStepOff: !includeRinse)
         let buttons = (flossJump: floss.flossJump, doneFloss: amount(floss.doneFloss), skipFloss: amount(floss.skipFloss))
         let rinse = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
         let mwButtons = (rinseJump: rinse.rinseJump, doneRinse: amount(rinse.doneRinse), skipRinse: amount(rinse.skipRinse))

@@ -795,6 +795,7 @@ public final class SaveSystem {
         withFlossBonus: Bool,
         withMouthwashBonus: Bool = false,
         fullBrush: Bool = true,
+        rinseStepOff: Bool = false,
         date: Date = Date(),
         calendar: Calendar = .current
     ) -> PacerRewardOutcome {
@@ -804,6 +805,7 @@ public final class SaveSystem {
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
             fullBrush: fullBrush,
+            rinseStepOff: rinseStepOff,
             date: date,
             calendar: calendar
         )

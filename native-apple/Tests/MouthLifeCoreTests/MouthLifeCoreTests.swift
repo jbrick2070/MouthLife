@@ -714,6 +714,19 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(save.fluorideIons, before + 100)
     }
 
+    func testFlossPaysFlossPlusRinseWhileTheRinseStepWaitsForAGrownUp() {
+        let sys = SaveSystem(bus: EventBus(), storage: InMemorySaveStorage())
+        _ = sys.load(nowEpochMs: 1_700_000_000_000)
+        let day = Date(timeIntervalSince1970: 1_700_100_000)
+        let flossed = sys.recordBrushAlongCompletion(withFlossBonus: true, rinseStepOff: true, date: day)
+        XCTAssertEqual(flossed.slotType, .full)
+        XCTAssertEqual(flossed.ionsAwarded, 100)
+        XCTAssertTrue(flossed.stampAwarded)
+        let skipped = sys.recordBrushAlongCompletion(withFlossBonus: false, rinseStepOff: true, date: day)
+        XCTAssertEqual(skipped.ionsAwarded, 50)
+        XCTAssertEqual(BrushCoachCopy.actionButtonLabels(for: .english, rinseStepOff: true).doneFloss, "Done (+100 F⁻)")
+    }
+
     func testEarlyTapThroughLabelsDropThePromisedAmounts() {
         XCTAssertEqual(BrushCoachCopy.withoutIonAmount("Done (+75 F⁻)"), "Done")
         XCTAssertEqual(BrushCoachCopy.withoutIonAmount("スキップ (+50 F⁻)"), "スキップ")

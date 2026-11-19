@@ -62,8 +62,9 @@ public final class AppCoordinator {
     private static let flossToolDefaultsKey = "mouthlife.pacer.flossToolStyle"
     private static let mouthwashDurationDefaultsKey = "mouthlife.pacer.mouthwashDurationStyle"
     private static let includeRinseDefaultsKey = "mouthlife.pacer.includeRinse"
-    /// A grown-up can leave out the fluoride rinse (ages 6 and up); it is on unless they do.
-    public var includeRinse: Bool = true
+    /// The fluoride rinse step (ages 6 and up). Off until a grown-up turns it on in Settings, since
+    /// the brusher may be younger than 6.
+    public var includeRinse: Bool = false
     /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
     public private(set) var pacerBrushedFullTime: Bool = false
     public var pacerElapsedSec: Double = 0.0
@@ -155,7 +156,7 @@ public final class AppCoordinator {
             .flatMap(MouthwashDurationStyle.init(rawValue:)) ?? .totalCare60s
         self.mouthwashDurationStyle = persistedMouthwashStyle
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
-        self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? true
+        self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? false
         self.tutorialGate = TutorialGate(
             progress: TutorialProgress(
                 offers: UserDefaults.standard.integer(forKey: Self.tutorialOffersDefaultsKey),
@@ -427,9 +428,9 @@ public final class AppCoordinator {
                 if let language = CoachLanguage(rawValue: String(arg.dropFirst("--lang=".count))) {
                     setCoachLanguage(language)
                 }
-            } else if arg == "--rinse=off" {
-                // For screenshots and testing: brush without the rinse step (not saved).
-                includeRinse = false
+            } else if arg == "--rinse=off" || arg == "--rinse=on" {
+                // For screenshots and testing: brush with or without the rinse step (not saved).
+                includeRinse = arg == "--rinse=on"
             } else if arg == "--pacer=floss" && mode == .brushAlong {
                 // For screenshots and testing: tap ahead to the floss step straight away (after --mode=brushAlong).
                 enterFlossBonusNow()
@@ -891,7 +892,8 @@ public final class AppCoordinator {
         let outcome = saveSystem.recordBrushAlongCompletion(
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
-            fullBrush: fullBrush
+            fullBrush: fullBrush,
+            rinseStepOff: !includeRinse
         )
         save = saveSystem.getSave()
         sceneController.touchSystem.clearAll()

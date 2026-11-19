@@ -39,6 +39,7 @@ import {
   pickRecommendedDiveWorld,
 } from './hudHelpers';
 import { TutorialOverlay } from './TutorialOverlay';
+import { askGrownUp } from './parentGate';
 import { FINALE_WORLD_IDS, goldenMolarIconSvg } from './CityFinaleOverlay';
 import { molarFinishForGrade, type MolarFinish } from '../config/cityFinale';
 
@@ -1701,9 +1702,17 @@ export class CompanionHubOverlay implements OverlayView {
 
     this.container.querySelector('#btn-toggle-rinse')?.addEventListener('click', () => {
       syncPendingName();
-      writeIncludeRinse(!readIncludeRinse());
       this.actions.onPlayUiTap();
-      this.rerenderModalKeepingScroll('#btn-toggle-rinse');
+      if (readIncludeRinse()) {
+        writeIncludeRinse(false);
+        this.rerenderModalKeepingScroll('#btn-toggle-rinse');
+        return;
+      }
+      // The rinse is for ages 6 and up: only a grown-up can turn it on.
+      askGrownUp(() => {
+        writeIncludeRinse(true);
+        if (this.activeModal === 'profile') this.rerenderModalKeepingScroll('#btn-toggle-rinse');
+      }, 'Only for brushers aged 6 and up.');
     });
 
     this.container.querySelector<HTMLSelectElement>('#sel-app-language')?.addEventListener('change', (e) => {

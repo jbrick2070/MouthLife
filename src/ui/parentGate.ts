@@ -1,8 +1,9 @@
 /**
  * Links that leave the game wait for a grown-up: a times-table question with four answers, which a
  * young child cannot answer yet. One handler on the page catches every outside link (charity pages,
- * donations), so no link can open straight from a child's tap. The native app does the same in
- * CharitySheet (ParentGateView).
+ * donations), so no link can open straight from a child's tap. The same question guards turning on
+ * the fluoride rinse step (ages 6 and up). The native app does the same in CharitySheet
+ * (ParentGateView).
  */
 
 let open = false;
@@ -17,6 +18,14 @@ function isOutside(a: HTMLAnchorElement): boolean {
 }
 
 function showGate(href: string): void {
+  askGrownUp(() => window.open(href, '_blank', 'noopener,noreferrer'));
+}
+
+/**
+ * Ask the grown-up question, then run `onPass` only after the right answer (a wrong answer or
+ * "Not now" just closes it). `note` is an optional line saying what the grown-up agrees to.
+ */
+export function askGrownUp(onPass: () => void, note?: string): void {
   if (open) return;
   open = true;
   const a = 3 + Math.floor(Math.random() * 7);
@@ -40,12 +49,18 @@ function showGate(href: string): void {
   shade.innerHTML = `
     <div style="background:#06182a;border:1px solid rgba(94,234,212,0.4);border-radius:18px;padding:18px;max-width:320px;width:100%;text-align:center;color:#e2e8f0;font-family:inherit;">
       <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px;">For grown-ups</div>
+      <div data-gate-note style="font-size:0.85rem;color:#94a3b8;margin-bottom:2px;" hidden></div>
       <div style="font-size:1.6rem;font-weight:800;margin:6px 0 12px;" aria-live="polite"><span data-no-translate>${a} × ${b} = ?</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
         ${shuffled.map((n) => `<button type="button" class="btn" data-answer="${n}" style="min-height:48px;font-size:1.2rem;font-weight:800;"><span data-no-translate>${n}</span></button>`).join('')}
       </div>
       <button type="button" class="btn btn-sm" data-close>Not now</button>
     </div>`;
+  const noteEl = shade.querySelector<HTMLElement>('[data-gate-note]');
+  if (note && noteEl) {
+    noteEl.textContent = note;
+    noteEl.hidden = false;
+  }
   document.body.appendChild(shade);
 
   const close = (): void => {
@@ -71,7 +86,7 @@ function showGate(href: string): void {
     if (!pick) return;
     const right = Number(pick.dataset.answer) === answer;
     close();
-    if (right) window.open(href, '_blank', 'noopener,noreferrer');
+    if (right) onPass();
   });
   shade.querySelector<HTMLButtonElement>('[data-answer]')?.focus();
 }

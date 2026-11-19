@@ -32,6 +32,18 @@ export function brushAlongMultiplier(withFloss: boolean, withMouthwash: boolean)
   return brushAlongIons(withFloss, withMouthwash) / BRUSH_ALONG_FULL_IONS;
 }
 
+/**
+ * Whether the rinse counts toward the reward: it was done, or the rinse step is off (until a grown-up
+ * says the brusher is 6 or older) and the floss was done, so younger children are not paid less.
+ */
+export function brushAlongRinseCredit(options: {
+  withFlossBonus: boolean;
+  withMouthwashBonus?: boolean;
+  rinseStepOff?: boolean;
+}): boolean {
+  return (options.withMouthwashBonus ?? false) || ((options.rinseStepOff ?? false) && options.withFlossBonus);
+}
+
 export class HabitBank {
   /**
    * Records completion of a 2-Minute Sink Brush-Along session.
@@ -42,10 +54,19 @@ export class HabitBank {
    * Only the full 2-minute brush (`fullBrush`, the default) earns that. Tapping ahead to floss
    * before the brushing time is up is a "good try": a small courtesy tip of Ions, no stamp, beacon
    * or Overdrive run, and it leaves today's full rewards free for a full brush later.
+   *
+   * When the rinse step is off (`rinseStepOff`: it waits for a grown-up to say the brusher is 6 or
+   * older), flossing pays what flossing and rinsing would, so younger children are not paid less.
    */
   static completeBrushAlong(
     save: MouthLifeSaveV2,
-    options: { withFlossBonus: boolean; withMouthwashBonus?: boolean; fullBrush?: boolean; date?: Date }
+    options: {
+      withFlossBonus: boolean;
+      withMouthwashBonus?: boolean;
+      fullBrush?: boolean;
+      rinseStepOff?: boolean;
+      date?: Date;
+    }
   ): {
     ionsAwarded: number;
     stampAwarded: boolean;
@@ -66,7 +87,7 @@ export class HabitBank {
       slotType = 'full';
       stampAwarded = true;
       save.totalBrushStamps += 1;
-      ionsAwarded = brushAlongIons(options.withFlossBonus, options.withMouthwashBonus ?? false);
+      ionsAwarded = brushAlongIons(options.withFlossBonus, brushAlongRinseCredit(options));
       save.pendingSupplyBeacons = Math.min(
         MAX_SUPPLY_BEACONS,
         Math.max(0, save.pendingSupplyBeacons) + 1
