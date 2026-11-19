@@ -44,11 +44,14 @@ describe('mobile gameplay screen-room helpers', () => {
     expect(isCompactViewport(1280, 800)).toBe(false);
   });
 
-  it('hides the redundant virtual thumb pad when direct touch-steer is active and reveals it when Steer is OFF', () => {
-    expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: true, compactViewport: true })).toBe(false);
-    expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: false, compactViewport: true })).toBe(true);
-    expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: true, compactViewport: false })).toBe(false);
-    expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: false, compactViewport: false })).toBe(true);
+  it('always shows the thumbstick on a touch screen, and with a mouse only when Steer is OFF', () => {
+    for (const compactViewport of [true, false]) {
+      for (const pointerSteerEnabled of [true, false]) {
+        expect(shouldShowVirtualThumbPad({ pointerSteerEnabled, compactViewport, coarsePointer: true })).toBe(true);
+      }
+      expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: true, compactViewport, coarsePointer: false })).toBe(false);
+      expect(shouldShowVirtualThumbPad({ pointerSteerEnabled: false, compactViewport, coarsePointer: false })).toBe(true);
+    }
   });
 
   it('drops key names from the current plain-language toasts on phones', () => {

@@ -319,6 +319,11 @@ function bootstrapMouthLife(): void {
   input.setHooks({
     onUserGesture: () => sound.unlockOnGesture(),
     onOrbitDrag: (dYaw, dPitch) => {
+      if (currentMode === 'COSMIC_INTRO') {
+        // the native app turns 0.005 rad per point; the drag arrives at 0.007 per pixel
+        sceneMgr.nudgeCosmicOrbit(dYaw * (0.005 / 0.007));
+        return;
+      }
       sceneMgr.nudgeCompanionOrbit(dYaw, dPitch);
       activeHub?.setViewOffCenter(sceneMgr.isCompanionOrbitOffCenter());
     },

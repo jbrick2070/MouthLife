@@ -105,6 +105,7 @@ export class SceneManager {
 
   // Companion orbit angles (draggable by touch/mouse!)
   private orbitYaw = 0;
+  private cosmicYaw = 0;
   private orbitPitch = 0.42;
   private orbitResetActive = false;
   // Pixels the Companion image is lifted so the arch sits in the gap between hub chrome.
@@ -384,6 +385,7 @@ export class SceneManager {
   }
 
   setMode(mode: AppMode): void {
+    if (mode === 'COSMIC_INTRO' && this.currentMode !== 'COSMIC_INTRO') this.cosmicYaw = 0;
     this.currentMode = mode;
     this.hubInsetTimer = 0;
     this.canvas.classList.toggle('arcade-backdrop', mode === 'ARCADE' || mode === 'PULP_RESCUE');
@@ -419,6 +421,14 @@ export class SceneManager {
 
   resetCompanionOrbit(): void {
     this.orbitResetActive = true;
+  }
+
+  /**
+   * The Prologue's own turn round the crystal (kept apart from the home screen's view), held where
+   * it is let go. Same range and rate as the native app's `cosmicOrbitYaw`.
+   */
+  nudgeCosmicOrbit(deltaYaw: number): void {
+    this.cosmicYaw = Math.max(-0.75, Math.min(0.75, this.cosmicYaw + deltaYaw));
   }
 
   nudgeCompanionOrbit(deltaYaw: number, deltaPitch: number): void {
@@ -867,6 +877,17 @@ export class SceneManager {
           EARTH_BACKDROP_POS.y - 1,
           EARTH_BACKDROP_POS.z
         );
+      }
+      // Dragging turns the camera round the crystal (or the Earth), as in the native app; the
+      // hardness line-up only turns a little so all five specimens stay in view.
+      const yaw = this.cosmicYaw * (this.cosmicBeat === 1 ? 0.45 : 1);
+      if (yaw !== 0) {
+        const ox = desiredPos.x - desiredLook.x;
+        const oz = desiredPos.z - desiredLook.z;
+        const c = Math.cos(yaw);
+        const sn = Math.sin(yaw);
+        desiredPos.x = desiredLook.x + ox * c + oz * sn;
+        desiredPos.z = desiredLook.z - ox * sn + oz * c;
       }
     } else if (this.currentMode === 'HUB') {
       if (this.hubFocus === 'globe') {

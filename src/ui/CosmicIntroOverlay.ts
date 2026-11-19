@@ -224,7 +224,7 @@ export class CosmicIntroOverlay implements OverlayView {
       <div class="hub-top-bar cosmic-top-bar glass-card ui-interactive row-between">
         <div class="row-wrap" style="min-width:0;flex-wrap:nowrap;">
           <span style="font-weight:800;font-size:0.84rem;letter-spacing:0.03em;color:#5eead4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✦ COSMIC ENAMEL</span>
-          <span class="pill-badge cosmic-inspect-badge">Drag 3D Crystal to Inspect</span>
+          ${this.beatIndex <= 2 ? '<span class="pill-badge cosmic-inspect-badge">Drag 3D Crystal to Inspect</span>' : ''}
         </div>
         <div class="row-wrap" style="flex-wrap:nowrap;flex-shrink:0;">
           <button

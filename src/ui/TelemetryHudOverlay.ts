@@ -181,11 +181,17 @@ export class TelemetryHudOverlay implements OverlayView {
     return isCompactViewport(window.innerWidth, window.innerHeight);
   }
 
+  private releaseThumbPad: (() => void) | null = null;
+  /** What the round Scan / Surge buttons last showed (the page translator rewrites their text). */
+  private scanHtmlShown = '';
+  private surgeLabelShown = '';
+
   private syncThumbPadVisibility(): void {
     if (!this.thumbDeckEl) return;
     const showPad = shouldShowVirtualThumbPad({
       pointerSteerEnabled: this.input.isPointerSteerEnabled(),
       compactViewport: this.isCompactScreen(),
+      coarsePointer: this.input.isCoarsePointer(),
     });
     this.thumbDeckEl.classList.toggle('pad-hidden', !showPad);
   }
@@ -216,6 +222,7 @@ export class TelemetryHudOverlay implements OverlayView {
     this.pauseBtnEl?.setAttribute('aria-expanded', p ? 'true' : 'false');
     if (this.pauseSheetEl) this.pauseSheetEl.style.display = p ? '' : 'none';
     if (p) {
+      this.releaseThumbPad?.();
       this.input.setVirtualMove(0, 0, false);
       this.input.setVirtualScrubHeld(false);
       if (this.audio && this.pauseSheetEl) {
@@ -365,8 +372,8 @@ export class TelemetryHudOverlay implements OverlayView {
 
           <div class="actuator-cluster ui-interactive">
             <div class="row-wrap actuator-secondary-row">
-              <button type="button" id="btn-mob-scan" class="btn btn-sm">🔍 Dye Scan</button>
-              <button type="button" id="btn-mob-surge" class="btn btn-sm">🌊 Surge 0%</button>
+              <button type="button" id="btn-mob-scan" class="btn btn-sm" aria-label="Dye Scan"><span class="act-icon">🔍</span> <span class="act-label mob-hide">Dye Scan</span><span class="act-label mob-only">SCAN</span></button>
+              <button type="button" id="btn-mob-surge" class="btn btn-sm" aria-label="Surge">🌊 Surge 0%</button>
             </div>
             <button
               type="button"
@@ -375,7 +382,9 @@ export class TelemetryHudOverlay implements OverlayView {
               aria-label="Floss and Floss Zip"
               title="Tap or drag to aim Floss"
             >
-              <span>🧵 FLOSS</span>
+              <span class="act-icon mob-only">🧵</span>
+              <span class="act-label mob-only">FLOSS</span>
+              <span class="mob-hide">🧵 FLOSS</span>
               <span class="floss-sub" style="font-size:0.62rem;opacity:0.8;">TAP / AIM</span>
             </button>
           </div>
@@ -713,43 +722,54 @@ export class TelemetryHudOverlay implements OverlayView {
     });
     mobScan?.addEventListener('click', () => this.input.triggerVirtualDisclose());
 
-    // Left Virtual Scrub & Sweep Thumb Pad
+    // Left thumbstick, the same as the native app's: the direction is measured from where the thumb
+    // landed (so an off-centre touch does not lurch), the knob travels about a third of the ring,
+    // and holding it scrubs, even resting still.
     const pad = this.container.querySelector<HTMLElement>('#pad-move');
     const knob = this.container.querySelector<HTMLElement>('#pad-knob');
     if (pad && knob) {
       let activePid: number | null = null;
-      const maxR = 38;
+      let originX = 0;
+      let originY = 0;
+      let maxR = 30;
 
       const updatePad = (clientX: number, clientY: number) => {
-        const rect = pad.getBoundingClientRect();
-        const cx = rect.left + rect.width * 0.5;
-        const cy = rect.top + rect.height * 0.5;
-        let dx = clientX - cx;
-        let dy = clientY - cy;
+        let dx = clientX - originX;
+        let dy = clientY - originY;
         const dist = Math.hypot(dx, dy);
         if (dist > maxR) {
           dx = (dx / dist) * maxR;
           dy = (dy / dist) * maxR;
         }
         knob.style.transform = `translate(${dx}px, ${dy}px)`;
-        this.input.setVirtualMove(dx / maxR, dy / maxR, true);
+        this.input.setVirtualStick(dx / maxR, dy / maxR, true);
       };
+      const release = () => {
+        if (activePid === null) return;
+        activePid = null;
+        knob.style.transform = 'translate(0px, 0px)';
+        this.input.setVirtualStick(0, 0, false);
+      };
+      this.releaseThumbPad = release;
 
       pad.addEventListener('pointerdown', (e) => {
         if (activePid !== null || e.button !== 0) return;
         activePid = e.pointerId;
-        pad.setPointerCapture(e.pointerId);
+        originX = e.clientX;
+        originY = e.clientY;
+        maxR = Math.max(20, pad.getBoundingClientRect().width * 0.366);
+        try {
+          pad.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
         updatePad(e.clientX, e.clientY);
-        this.input.setVirtualScrubHeld(true);
       });
       pad.addEventListener('pointermove', (e) => {
         if (e.pointerId === activePid) updatePad(e.clientX, e.clientY);
       });
       const releasePad = (e: PointerEvent) => {
-        if (e.pointerId !== activePid) return;
-        activePid = null;
-        knob.style.transform = 'translate(0px, 0px)';
-        this.input.setVirtualMove(0, 0, false);
+        if (e.pointerId === activePid) release();
       };
       pad.addEventListener('pointerup', releasePad);
       pad.addEventListener('pointercancel', releasePad);
@@ -1032,9 +1052,12 @@ export class TelemetryHudOverlay implements OverlayView {
       this.onboardingElapsed += frameDt;
       if (this.onboardingElapsed >= 5.3) {
         if (this.session.grid.getWorldCleanRatio() < 0.05) {
+          // Touch screens get their own words (the shortened keyboard line is English only).
           this.maybeHint(
             'first_dive',
-            '🕹️ Drag on the tooth (or WASD + Space) to scrub • E / 🧵 Floss cleans the narrow gaps!'
+            this.isCompactScreen() || this.input.isCoarsePointer()
+              ? '🕹️ Use the stick or drag on the tooth to scrub • 🧵 Floss cleans the narrow gaps!'
+              : '🕹️ Drag on the tooth (or WASD + Space) to scrub • E / 🧵 Floss cleans the narrow gaps!'
           );
         } else {
           this.seenHints.add('first_dive');
@@ -1206,7 +1229,13 @@ export class TelemetryHudOverlay implements OverlayView {
     const scanSec = Math.ceil(Math.max(0, this.session.discloseActiveRemaining));
     const scanOn = scanSec > 0;
     if (this.scanBtnEl) {
-      this.scanBtnEl.textContent = scanOn ? `🔍 ${scanSec}s` : '🔍 Dye Scan';
+      const scanHtml = scanOn
+        ? `<span class="act-icon">🔍</span> <span class="act-label">${scanSec}s</span>`
+        : '<span class="act-icon">🔍</span> <span class="act-label mob-hide">Dye Scan</span><span class="act-label mob-only">SCAN</span>';
+      if (this.scanHtmlShown !== scanHtml) {
+        this.scanHtmlShown = scanHtml;
+        this.scanBtnEl.innerHTML = scanHtml;
+      }
       this.scanBtnEl.classList.toggle('scan-active', scanOn);
       this.scanBtnEl.setAttribute('aria-pressed', scanOn ? 'true' : 'false');
     }
@@ -1224,18 +1253,27 @@ export class TelemetryHudOverlay implements OverlayView {
       );
     }
     if (surgeReady && !this.lastSurgeReady && !this.usedSurge) {
-      this.maybeHint('surge', '🌊 Surge is full! Press Q or tap Surge to blast a fluoride wave.');
+      this.maybeHint(
+        'surge',
+        this.isCompactScreen() || this.input.isCoarsePointer()
+          ? '🌊 Surge is full! Tap Surge to blast a fluoride wave.'
+          : '🌊 Surge is full! Press Q or tap Surge to blast a fluoride wave.'
+      );
     }
     this.lastSurgeReady = surgeReady;
     if (this.surgeBtnEl) {
       const compact = this.isCompactScreen();
-      this.surgeBtnEl.textContent = surgeReady
-        ? compact
-          ? '🌊 SURGE!'
-          : '🌊 SURGE READY!'
-        : compact
-          ? `🌊 ${surgePct}%`
-          : `🌊 Surge ${surgePct}%`;
+      if (compact) {
+        // A round button on phones, like the native app's: the icon over a short label.
+        const label = surgeReady ? 'SURGE!' : `${surgePct}%`;
+        if (this.surgeLabelShown !== label) {
+          this.surgeLabelShown = label;
+          this.surgeBtnEl.innerHTML = `<span class="act-icon">🌊</span> <span class="act-label">${label}</span>`;
+        }
+      } else {
+        this.surgeLabelShown = '';
+        this.surgeBtnEl.textContent = surgeReady ? '🌊 SURGE READY!' : `🌊 Surge ${surgePct}%`;
+      }
       this.surgeBtnEl.style.setProperty('--surge-pct', `${surgePct}%`);
       this.surgeBtnEl.className = surgeReady ? 'btn btn-primary btn-sm surge-meter-btn surge-ready' : 'btn btn-sm surge-meter-btn';
     }
@@ -1448,6 +1486,8 @@ export class TelemetryHudOverlay implements OverlayView {
   }
 
   dispose(): void {
+    // A thumb still on the stick must not carry movement into the next screen or dive.
+    this.releaseThumbPad?.();
     window.removeEventListener('keydown', this.keyHandler);
     window.removeEventListener('resize', this.resizeHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);

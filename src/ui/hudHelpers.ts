@@ -346,16 +346,16 @@ export function isCompactViewport(viewW: number, viewH: number): boolean {
 }
 
 /**
- * Mobile gameplay best practice: when direct touch/pointer drag-to-steer on the 3D tooth is active,
- * hide the redundant 106px virtual thumb joystick so the bottom-left playfield stays 100% open.
- * Players who prefer a virtual stick can toggle Steer OFF in Pause to reveal the pad.
+ * On a touch screen the fixed thumbstick is always there, bottom-left, as in the native app: steering
+ * with a finger on the tooth would otherwise compete with the ability buttons. Touching the tooth
+ * still steers too. With a mouse the stick appears only when the player turns Steer OFF.
  */
 export function shouldShowVirtualThumbPad(params: {
   pointerSteerEnabled: boolean;
   compactViewport: boolean;
+  coarsePointer: boolean;
 }): boolean {
-  if (!params.compactViewport) return !params.pointerSteerEnabled;
-  return !params.pointerSteerEnabled;
+  return params.coarsePointer || !params.pointerSteerEnabled;
 }
 
 /**

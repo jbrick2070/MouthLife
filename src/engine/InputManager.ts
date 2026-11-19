@@ -294,6 +294,12 @@ export class InputManager {
           this.orbitPointerId = e.pointerId;
           this.lastOrbitX = e.clientX;
           this.lastOrbitY = e.clientY;
+          // keep the drag even when the finger slides over the story card
+          try {
+            this.canvas.setPointerCapture(e.pointerId);
+          } catch {
+            /* ignore */
+          }
         }
       }
     });
@@ -370,6 +376,22 @@ export class InputManager {
     this.virtualMoveX = dx;
     this.virtualMoveZ = dz;
     this.virtualScrubHeld = autoScrub && Math.hypot(dx, dz) > 0.06;
+  }
+
+  /**
+   * The on-screen thumbstick, as in the native app (`setVirtualStick`): a direction from where the
+   * thumb landed, and scrubbing for as long as it is held, even resting still in the middle.
+   */
+  setVirtualStick(moveX: number, moveZ: number, held: boolean): void {
+    if (held) this.onUserGesture?.();
+    this.virtualMoveX = moveX;
+    this.virtualMoveZ = moveZ;
+    this.virtualScrubHeld = held;
+  }
+
+  /** A touch screen (the thumbstick is shown there). */
+  isCoarsePointer(): boolean {
+    return Boolean(typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches);
   }
 
   setVirtualScrubHeld(held: boolean): void {
