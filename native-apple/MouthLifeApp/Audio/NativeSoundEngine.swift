@@ -2046,6 +2046,8 @@ public final class NativeSoundEngine {
         return isVoiceDuckingStorage
     }
 
+    private var finaleDucked = false
+
     /// Lock-free / O(1) 120Hz query returning real-time 3-band `(bass, mid, high, beatPulse)` energy
     /// across both hardware-decoded Suno songs and procedural synth + live interactive SFX.
     public func sampleAudioReactiveBands() -> AudioReactiveBands {
@@ -2078,9 +2080,16 @@ public final class NativeSoundEngine {
         60.0 / (activeTheme.bpm * currentTempoScale()) / 4.0
     }
 
+    /// Sink the music while a city finale (or the ending) plays its own.
+    public func setFinaleDucked(_ ducked: Bool) {
+        guard ducked != finaleDucked else { return }
+        finaleDucked = ducked
+        pushMixStateToKernel()
+    }
+
     private func pushMixStateToKernel() {
         let ducking = isVoiceDucking
-        let duckScale: Float = ducking ? 0.36 : 1.0
+        let duckScale: Float = (ducking ? 0.36 : 1.0) * (finaleDucked ? 0.12 : 1.0)
         let hubRadioAtten: Float = (currentMode == .hub && earthRadioActive && !pulpZeroActive) ? 0.86 : 1.0
         let baseMusic = musicVolume <= 0.001 ? Float(0) : (musicVolume * 0.55 * activeTheme.mixGain * hubRadioAtten)
         let effectiveMusic = (isPaused ? (baseMusic * 0.42) : baseMusic) * duckScale
@@ -2104,7 +2113,7 @@ public final class NativeSoundEngine {
             delaySec: dotted8th
         )
 
-        let sunoDuckScale: Float = ducking ? 0.38 : 1.0
+        let sunoDuckScale: Float = (ducking ? 0.38 : 1.0) * (finaleDucked ? 0.12 : 1.0)
         let baseSuno = musicVolume <= 0.001 ? Float(0) : min(1.0, musicVolume * 0.72 * hubRadioAtten)
         let effectiveSuno: Float
         if isPaused {
@@ -3214,6 +3223,63 @@ public final class NativeSoundEngine {
         emitSfxVoice(.bell, midi: base + (r >= 2 ? 12 : 7), offsetSec: 0.09, vel: 0.65, pan: 0.15)
         if r >= 3 {
             emitSfxVoice(.glassHarp, midi: base + 16, offsetSec: 0.18, vel: 0.60, pan: -0.15)
+        }
+    }
+
+    /// Plays notes from a city finale's score (CityFinale) right now. The web edition plays the same
+    /// score, so both sound alike.
+    public func playFinaleNotes(_ notes: [FinaleNote]) {
+        guard !notes.isEmpty, canPlaySfx(), let kernel else { return }
+        for n in notes {
+            let vel = Float(n.vel)
+            let pan = Float(n.pan)
+            let dur = Float(n.dur)
+            switch n.voice {
+            case .kick:
+                emitSfxVoice(.kick, midi: 36, durationSec: 0.4, vel: vel, pan: 0, reverb: 0)
+            case .whistle:
+                emitNoiseSweep(f0: 900, f1: 2200, durSec: dur, peak: 0.05 * vel, q: 2.2)
+                emitBlip(f0: 700, f1: 1900, durSec: dur, peak: 0.035 * vel, pan: pan)
+            case .boom:
+                emitBlip(f0: 150, f1: 38, durSec: min(0.9, dur), peak: 0.42 * vel, pan: pan)
+                emitNoiseSweep(f0: 1400, f1: 160, durSec: dur, peak: 0.12 * vel, q: 0.6)
+            case .sparkle:
+                for (k, iv) in [24, 28, 31, 36, 40].enumerated() {
+                    emitSfxVoice(.bell, midi: n.midi + iv, offsetSec: Double(k) * 0.05, durationSec: 0.5,
+                                 vel: 0.32 * vel, pan: Float(k - 2) * 0.25 + pan * 0.5, reverb: 0.6)
+                }
+            case .whoosh:
+                emitNoiseSweep(f0: 300, f1: 2200, durSec: dur, peak: 0.09 * vel, q: 0.7)
+            default:
+                let kind: SynthVoiceKind
+                switch n.voice {
+                case .rhodes: kind = .rhodes
+                case .marimba: kind = .marimba
+                case .kalimba: kind = .kalimba
+                case .celesta: kind = .celesta
+                case .pad: kind = .pad
+                case .reed: kind = .reed
+                case .pluck: kind = .pluck
+                case .bass: kind = .bass
+                default: kind = .bell
+                }
+                let hz = MusicCatalog.midiToFreq(n.midi)
+                kernel.enqueue(
+                    SynthCommand(
+                        voice: kind.rawValue,
+                        freq0: hz,
+                        freq1: hz,
+                        durationSec: dur,
+                        velocity: vel,
+                        pan: pan,
+                        reverbSend: n.voice == .bass ? 0 : 0.3,
+                        delaySend: 0,
+                        filterQ: 1.0,
+                        isMusicBus: 0,
+                        delaySamples: 0
+                    )
+                )
+            }
         }
     }
 

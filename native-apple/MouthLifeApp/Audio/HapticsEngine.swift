@@ -735,6 +735,27 @@ public final class HapticsEngine: @unchecked Sendable {
         #endif
     }
 
+    /// One tap during a city finale: a firework's boom, the piece clicking into the molar.
+    public func playFinaleTap(intensity: Float, sharpness: Float) {
+        guard canPlayHaptics() else { return }
+        #if canImport(CoreHaptics)
+        hapticQueue.async { [weak self] in
+            guard let self else { return }
+            let events: [CHHapticEvent] = [
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: max(0.1, min(1, intensity))),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: max(0, min(1, sharpness)))
+                    ],
+                    relativeTime: 0.0
+                )
+            ]
+            self.playEventsOnQueue(events: events)
+        }
+        #endif
+    }
+
     // MARK: - Direct EventBus Integration
 
     /// Convenience dispatcher matching `MouthLifeCore.GameEvent` so `AppCoordinator` can bind haptics directly.

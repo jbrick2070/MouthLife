@@ -206,3 +206,20 @@ l 0.5 1.96 1.6 1.96 0.04 #fef08a
 L 0 2.32 0 2.8 0.05 #94a3b8
 c 0 2.86 0.13 #f87171
 c 0 1.96 0.16 #67e8f9
+@emblem
+; a crescent Moon and stars
+N 0.1 0 0.9 0.5 180 #e2e8f0
+S 0.42 0.22 0.3 #fde047
+S 0.5 -0.36 0.16 #93c5fd
+C 0.18 0.62 0.05 #f8fafc
+@finale
+; no fireworks in space: shooting stars, and bursts of starlight round the station
+voice bell 62
+show meteors
+host right
+burst 0.4 22 10.6 ring #67e8f9 #a78bfa
+burst 1.2 46 11.4 peony #fde047 #f8fafc
+burst 2 12 11.8 ring #34d399 #5eead4
+burst 2.8 56 10.8 peony #a78bfa #f0abfc
+burst 3.6 34 12.2 ring #f8fafc #67e8f9
+burst 4.4 64 11.6 willow #93c5fd #f8fafc

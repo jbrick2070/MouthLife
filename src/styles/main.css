@@ -2469,3 +2469,184 @@ textarea:focus-visible {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------ city finale and ending */
+.finale-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  outline: none;
+  pointer-events: auto;
+}
+.finale-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.finale-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 16px;
+}
+.finale-top {
+  top: max(6vh, env(safe-area-inset-top, 0px) + 12px);
+}
+.finale-bottom {
+  bottom: max(7vh, env(safe-area-inset-bottom, 0px) + 16px);
+}
+.finale-line {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.65);
+}
+.finale-line.show {
+  opacity: 1;
+  transform: none;
+}
+.finale-city,
+.finale-ending-title {
+  font-size: clamp(1.7rem, 6vmin, 3.4rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.finale-ending-title {
+  color: #fde68a;
+  position: absolute;
+  top: 0;
+}
+.finale-sub {
+  font-size: clamp(0.95rem, 2.6vmin, 1.25rem);
+  font-weight: 700;
+  color: #fde68a;
+}
+.finale-badge {
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(2, 6, 23, 0.55);
+  color: #f8fafc;
+}
+.finale-badge-gold {
+  color: #422006;
+  background: linear-gradient(180deg, #fef3c7, #f59e0b);
+  border-color: #fbbf24;
+}
+.finale-badge-silver {
+  color: #0f172a;
+  background: linear-gradient(180deg, #f8fafc, #94a3b8);
+}
+.finale-badge-pearl {
+  color: #292524;
+  background: linear-gradient(180deg, #fff7ed, #d6d3d1);
+}
+.finale-bubble {
+  position: absolute;
+  transform: translate(-20%, calc(-100% + 8px)) scale(0.9);
+  padding: 8px 14px;
+  border-radius: 16px 16px 16px 4px;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 800;
+  font-size: clamp(0.9rem, 2.6vmin, 1.2rem);
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.finale-bubble.show {
+  transform: translate(-20%, -100%);
+}
+.finale-bubble.finale-bubble-right {
+  border-radius: 16px 16px 4px 16px;
+  transform: translate(-80%, calc(-100% + 8px)) scale(0.9);
+}
+.finale-bubble.finale-bubble-right.show {
+  transform: translate(-80%, -100%);
+}
+.finale-credit {
+  top: 30vh;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.finale-credit.show {
+  opacity: 1;
+}
+.finale-credit-city {
+  font-size: clamp(1.4rem, 5vmin, 2.6rem);
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+.finale-credit-host {
+  font-size: clamp(0.85rem, 2.4vmin, 1.1rem);
+  color: #e2e8f0;
+  font-weight: 600;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.finale-thanks {
+  font-size: clamp(1.2rem, 4.2vmin, 2.2rem);
+  font-weight: 900;
+  color: #fff;
+}
+.finale-perfect {
+  font-size: clamp(1.1rem, 3.6vmin, 1.9rem);
+  font-weight: 900;
+  color: #fde047;
+}
+.finale-hint {
+  font-size: clamp(0.85rem, 2.4vmin, 1.1rem);
+  font-weight: 600;
+  color: #fde68a;
+}
+.finale-skip {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 0px) + 8px);
+  right: max(14px, env(safe-area-inset-right, 0px) + 8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  background: rgba(2, 6, 23, 0.45);
+  border-color: rgba(226, 232, 240, 0.3);
+  color: #e2e8f0;
+}
+.finale-skip.show {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+.molar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.molar-pill .molar-ico {
+  display: block;
+}
+.molar-pill.complete {
+  border-color: #fbbf24;
+  color: #fde68a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .finale-line,
+  .finale-credit {
+    transition: opacity 0.3s ease;
+    transform: none;
+  }
+}

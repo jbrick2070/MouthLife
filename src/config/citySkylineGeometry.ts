@@ -31,6 +31,18 @@
  * Motion is decoration only. With Reduce Motion on, everything rests in its drawn place and blinking
  * lights stay on.
  *
+ * `@emblem` draws the city's sign (Toronto's maple leaf, Ghana's black star) round 0,0, about one unit
+ * each way. It is stamped on the city's piece of the Golden Molar and burst into the sky in sparks.
+ *
+ * `@finale` sets up the show the city puts on when it is cleaned (see config/cityFinale.ts), one
+ * setting a line:
+ *
+ *   voice rhodes 60                      the city's instrument and the note its tunes start from (MIDI)
+ *   show fireworks                       what fills the sky: fireworks, beads, neon, balloons or meteors
+ *   host left                            which side the city's host pops up on to wave
+ *   burst t x y peony #hex #hex          a firework t seconds into the show, bursting over (x, y):
+ *                                        peony, ring or willow, fading from the first colour to the second
+ *
  * This file is the web half of a pair: native-apple/Sources/MouthLifeCore/Config/CitySkylines.swift
  * must build the same triangles (tests/citySkylines.test.ts and the Swift tests check it).
  */
@@ -65,6 +77,37 @@ export interface CityArt {
   prop: SkylinePiece[];
   /** How the panorama's moving groups move; a piece points at one through `group`. */
   motions: SkylineMotion[];
+  /** The city's sign, drawn round 0,0 about one unit each way. */
+  emblem: SkylinePiece[];
+  /** The show the city puts on when it is cleaned; null for a drawing without one. */
+  finale: CityFinalePlan | null;
+}
+
+/** Instruments both editions' synths can play. */
+export const FINALE_VOICES = ['rhodes', 'marimba', 'kalimba', 'celesta', 'bell', 'pad', 'reed', 'pluck'] as const;
+export type FinaleInstrument = (typeof FINALE_VOICES)[number];
+export const FINALE_SHOWS = ['fireworks', 'beads', 'neon', 'balloons', 'meteors'] as const;
+export type FinaleShow = (typeof FINALE_SHOWS)[number];
+export const FINALE_BURST_KINDS = ['peony', 'ring', 'willow'] as const;
+export type FinaleBurstKind = (typeof FINALE_BURST_KINDS)[number];
+
+export interface FinaleBurst {
+  /** Seconds into the show when the rocket goes up (it bursts a moment later). */
+  t: number;
+  x: number;
+  y: number;
+  kind: FinaleBurstKind;
+  color: number;
+  color2: number;
+}
+
+export interface CityFinalePlan {
+  voice: FinaleInstrument;
+  /** MIDI note the city's tunes are built on. */
+  tonic: number;
+  show: FinaleShow;
+  hostSide: 'left' | 'right';
+  bursts: FinaleBurst[];
 }
 
 /** The panorama is drawn 64 units wide and centred on stages of any width. */
@@ -228,23 +271,89 @@ function middleX(tris: number[]): number {
   return (lo + hi) * 0.5;
 }
 
+/** The longest a finale's show runs, in seconds; a burst must go up inside it. */
+export const FINALE_SHOW_SECONDS = 5.5;
+
+const HEX = /^#[0-9a-f]{6}$/;
+
+function readFinaleLine(plan: Partial<CityFinalePlan> & { bursts: FinaleBurst[] }, tokens: string[], lineNo: number): void {
+  const num = (s: string): number => {
+    const v = Number(s);
+    if (!Number.isFinite(v)) fail(lineNo, 'a number is not a number');
+    return v;
+  };
+  const once = (key: keyof CityFinalePlan): void => {
+    if (plan[key] !== undefined) fail(lineNo, `"${key}" is set twice`);
+  };
+  switch (tokens[0]) {
+    case 'voice':
+      once('voice');
+      if (tokens.length !== 3 || !(FINALE_VOICES as readonly string[]).includes(tokens[1])) fail(lineNo, 'voice needs an instrument and a note');
+      plan.voice = tokens[1] as FinaleInstrument;
+      plan.tonic = num(tokens[2]);
+      if (plan.tonic < 36 || plan.tonic > 84) fail(lineNo, 'the note is out of range');
+      return;
+    case 'show':
+      once('show');
+      if (tokens.length !== 2 || !(FINALE_SHOWS as readonly string[]).includes(tokens[1])) fail(lineNo, 'unknown show');
+      plan.show = tokens[1] as FinaleShow;
+      return;
+    case 'host':
+      once('hostSide');
+      if (tokens.length !== 2 || (tokens[1] !== 'left' && tokens[1] !== 'right')) fail(lineNo, 'host is left or right');
+      plan.hostSide = tokens[1];
+      return;
+    case 'burst': {
+      if (tokens.length !== 7) fail(lineNo, 'wrong number of values for burst');
+      const kind = tokens[4];
+      if (!(FINALE_BURST_KINDS as readonly string[]).includes(kind)) fail(lineNo, `unknown burst "${kind}"`);
+      if (!HEX.test(tokens[5]) || !HEX.test(tokens[6])) fail(lineNo, 'bad colour');
+      const t = num(tokens[1]);
+      if (t < 0 || t > FINALE_SHOW_SECONDS) fail(lineNo, 'a burst must go up during the show');
+      plan.bursts.push({
+        t,
+        x: num(tokens[2]),
+        y: num(tokens[3]),
+        kind: kind as FinaleBurstKind,
+        color: parseInt(tokens[5].slice(1), 16),
+        color2: parseInt(tokens[6].slice(1), 16),
+      });
+      return;
+    }
+    default:
+      fail(lineNo, `unknown finale setting "${tokens[0]}"`);
+  }
+}
+
 /** Reads one city's drawing. Throws on a line it does not understand, so a typo fails the tests. */
 export function parseCityArt(text: string): CityArt {
-  const art: CityArt = { skyline: [], prop: [], motions: [] };
+  const art: CityArt = { skyline: [], prop: [], motions: [], emblem: [], finale: null };
   let target = art.skyline;
+  type Section = 'skyline' | 'prop' | 'emblem' | 'finale';
+  let section = 'skyline' as Section;
+  let finale: (Partial<CityFinalePlan> & { bursts: FinaleBurst[] }) | null = null;
   let order = 0;
   let group = 0;
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line === '' || line.startsWith(';')) continue;
-    if (line === '@skyline' || line === '@prop') {
+    if (line === '@skyline' || line === '@prop' || line === '@emblem' || line === '@finale') {
       if (group !== 0) fail(i + 1, 'a motion is still open (missing ~end)');
-      target = line === '@prop' ? art.prop : art.skyline;
+      section = line.slice(1) as Section;
+      target = section === 'prop' ? art.prop : section === 'emblem' ? art.emblem : art.skyline;
+      if (section === 'finale') {
+        if (finale) fail(i + 1, 'only one @finale');
+        finale = { bursts: [] };
+      }
       order = 0;
       continue;
     }
     const tokens = line.split(/\s+/);
+    if (section === 'finale') {
+      readFinaleLine(finale!, tokens, i + 1);
+      continue;
+    }
     if (tokens[0].startsWith('~')) {
       if (tokens[0] === '~end') {
         if (group === 0 || tokens.length !== 1) fail(i + 1, '~end without a motion to end');
@@ -283,6 +392,13 @@ export function parseCityArt(text: string): CityArt {
     order++;
   }
   if (group !== 0) fail(lines.length, 'a motion is still open (missing ~end)');
+  if (finale) {
+    const f: Partial<CityFinalePlan> & { bursts: FinaleBurst[] } = finale;
+    if (f.voice === undefined || f.tonic === undefined || f.show === undefined || f.hostSide === undefined) {
+      fail(lines.length, '@finale needs voice, show and host');
+    }
+    art.finale = { voice: f.voice, tonic: f.tonic, show: f.show, hostSide: f.hostSide, bursts: f.bursts };
+  }
   return art;
 }
 

@@ -38,6 +38,8 @@ import {
   pickRecommendedDiveWorld,
 } from './hudHelpers';
 import { TutorialOverlay } from './TutorialOverlay';
+import { FINALE_WORLD_IDS, goldenMolarIconSvg } from './CityFinaleOverlay';
+import { molarFinishForGrade, type MolarFinish } from '../config/cityFinale';
 
 type ActiveModal = 'none' | 'profile' | 'lab' | 'history' | 'sync' | 'charity' | 'chart';
 
@@ -135,6 +137,8 @@ export class CompanionHubOverlay implements OverlayView {
       tutorialGate?: TutorialGate;
       isGamepadConnected?: () => boolean;
       onPlayTutorialDemo?: (pageId: TutorialPageId) => void;
+      /** Plays the ending again (offered once all five pieces of the Golden Molar are in). */
+      onWatchEnding?: () => void;
     }
   ) {}
 
@@ -289,6 +293,34 @@ export class CompanionHubOverlay implements OverlayView {
   setStatusBanner(text: string): void {
     this.statusBanner = text;
     if (this.activeModal === 'none') this.render();
+  }
+
+  /** Each campaign city's piece of the Golden Molar. */
+  private molarFinishes(): MolarFinish[] {
+    const worlds = this.saveSys.getSave().worlds;
+    return FINALE_WORLD_IDS.map((id) => molarFinishForGrade(worlds[id]?.bestGrade, Boolean(worlds[id]?.completed)));
+  }
+
+  /** The Golden Molar on the top bar: a piece for every city cleaned. Complete, it replays the ending. */
+  private buildMolarPillHtml(): string {
+    const finishes = this.molarFinishes();
+    const count = finishes.filter((f) => f !== 'empty').length;
+    const complete = count === finishes.length;
+    const label = complete ? 'Watch the ending' : `Golden Molar: ${count} of 5`;
+    return `<button type="button" id="btn-golden-molar" class="pill-badge molar-pill${complete ? ' complete' : ''}" aria-label="${label}" title="${label}">
+      ${goldenMolarIconSvg(finishes)}<strong>${count}</strong><span class="currency-lbl">/5</span>
+    </button>`;
+  }
+
+  /** Narrow phones have no room in the header, so there the Golden Molar floats opposite the ? button. */
+  private buildMolarFabHtml(): string {
+    const finishes = this.molarFinishes();
+    const count = finishes.filter((f) => f !== 'empty').length;
+    const complete = count === finishes.length;
+    const label = complete ? 'Watch the ending' : `Golden Molar: ${count} of 5`;
+    return `<button type="button" id="btn-golden-molar-fab" class="btn btn-icon molar-fab ui-interactive${complete ? ' complete' : ''}" aria-label="${label}" title="${label}">
+      ${goldenMolarIconSvg(finishes, 24)}
+    </button>`;
   }
 
   /** Collapses the mobile secondary drawer in O(1) without rebuilding DOM during active 3D touch/orbit. */
@@ -455,6 +487,7 @@ export class CompanionHubOverlay implements OverlayView {
             ${this.tab === 'companion' ? claimPillHtml : ''}
             <span class="pill-badge" title="Fluoride Ions (game money)">✦ <strong id="val-ions">${save.fluorideIons}</strong><span class="currency-lbl"> Ions</span></span>
             <span class="pill-badge" title="Habit Stamps (you never lose them!)">🦷 <strong id="val-stamps">${save.totalBrushStamps}</strong><span class="currency-lbl"> Stamps</span></span>
+            ${this.buildMolarPillHtml()}
             <button
               type="button"
               id="btn-toggle-mute"
@@ -519,13 +552,16 @@ export class CompanionHubOverlay implements OverlayView {
         }
       </div>
 
-      <button
-        type="button"
-        id="btn-open-tutorial-compact"
-        class="btn btn-icon hub-help-btn hub-help-fab ui-interactive"
-        aria-label="${TUTORIAL_COPY.buttonLabel}"
-        title="${TUTORIAL_COPY.buttonLabel}"
-      >?</button>
+      <div class="hub-fab-row">
+        ${this.buildMolarFabHtml()}
+        <button
+          type="button"
+          id="btn-open-tutorial-compact"
+          class="btn btn-icon hub-help-btn hub-help-fab ui-interactive"
+          aria-label="${TUTORIAL_COPY.buttonLabel}"
+          title="${TUTORIAL_COPY.buttonLabel}"
+        >?</button>
+      </div>
 
       <div class="hub-bottom-deck glass-card ui-interactive${this.mobileDrawerOpen ? ' drawer-open' : ''}">
         ${bottomDeckHtml}
@@ -1437,6 +1473,17 @@ export class CompanionHubOverlay implements OverlayView {
       this.actions.onToggleMute();
       this.syncMuteUi();
     });
+
+    this.container.querySelectorAll('#btn-golden-molar, #btn-golden-molar-fab').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        this.actions.onPlayUiTap();
+        if (this.molarFinishes().every((f) => f !== 'empty') && this.actions.onWatchEnding) {
+          this.actions.onWatchEnding();
+        } else {
+          this.setStatusBanner('Clean every city to finish the Golden Molar.');
+        }
+      })
+    );
 
     this.container.querySelector('#btn-claim-reservoir')?.addEventListener('click', () => {
       const claimed = CompanionArchSim.claimIdleReservoir(save.companion);

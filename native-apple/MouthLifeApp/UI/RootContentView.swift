@@ -49,7 +49,9 @@ public struct RootContentView: View {
                     },
                     showTutorialOffer: coordinator.showTutorialOffer,
                     onOpenTutorial: { coordinator.openTutorial() },
-                    onDismissTutorialOffer: { coordinator.dismissTutorialOffer() }
+                    onDismissTutorialOffer: { coordinator.dismissTutorialOffer() },
+                    molarFinishes: coordinator.molarFinishes,
+                    onTapGoldenMolar: { coordinator.tapGoldenMolar() }
                 )
                 .transition(.opacity)
 
@@ -84,7 +86,7 @@ public struct RootContentView: View {
                 .transition(.opacity)
 
             case .arcade, .pulpRescue:
-                if let snap = coordinator.latestSnapshot {
+                if let snap = coordinator.latestSnapshot, coordinator.finale == nil {
                     ArcadeHudView(
                         cartridge: coordinator.activeCartridge,
                         snapshot: snap,
@@ -127,6 +129,14 @@ public struct RootContentView: View {
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+            }
+
+            // A cleaned city's finale (and the ending) plays over everything, then hands over to the score.
+            if let request = coordinator.finale {
+                CityFinaleView(request: request, onDone: { coordinator.finishFinale() })
+                    .id(request.id)
+                    .transition(.opacity)
+                    .zIndex(20)
             }
 
             // The How to Play guide floats over the Home screen.

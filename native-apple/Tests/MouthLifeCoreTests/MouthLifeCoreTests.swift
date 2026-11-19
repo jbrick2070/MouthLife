@@ -1038,6 +1038,58 @@ final class MouthLifeCoreTests: XCTestCase {
         }
     }
 
+    func testCityFinaleMatchesTheWebNumberForNumber() {
+        // CitySkylineArt carries the web edition's checksum over every position, brightness and note
+        // of each city's finale. Matching it means both editions put on the same show.
+        XCTAssertEqual(CityFinale.hash(1, 2), CitySkylineArt.expectedHash[0])
+        XCTAssertEqual(CityFinale.hash(77, 301), CitySkylineArt.expectedHash[1])
+        XCTAssertEqual(CityFinale.hash(0, 0), CitySkylineArt.expectedHash[2])
+        for (slot, host) in CityFinale.hostIds.enumerated() {
+            guard let art = CitySkyline.art(forHost: host),
+                  let plan = art.finale,
+                  let want = CitySkylineArt.expectedFinale(forHost: host),
+                  let wantEmblem = CitySkylineArt.expectedEmblem(forHost: host)
+            else {
+                XCTFail("\(host): no finale")
+                continue
+            }
+            XCTAssertEqual(art.emblem.count, wantEmblem.pieces, "\(host) emblem pieces")
+            XCTAssertEqual(CitySkyline.checksum(art.emblem), wantEmblem.checksum, accuracy: 0.01, "\(host) emblem checksum")
+            XCTAssertEqual(plan.voice.rawValue, want.voice, "\(host) voice")
+            XCTAssertEqual(plan.tonic, want.tonic, "\(host) tonic")
+            XCTAssertEqual(plan.show.rawValue, want.show, "\(host) show")
+            XCTAssertEqual(plan.hostOnLeft ? "left" : "right", want.hostSide, "\(host) host side")
+            XCTAssertEqual(plan.bursts.count, want.bursts, "\(host) bursts")
+            XCTAssertEqual(CityFinale.notes(plan, finish: .gold, reducedMotion: false).count, want.notes, "\(host) notes")
+            XCTAssertEqual(CityFinale.checksum(plan, emblem: art.emblem, slotIndex: slot, reducedMotion: false), want.checksum, accuracy: 0.01, "\(host) checksum")
+            XCTAssertEqual(CityFinale.checksum(plan, emblem: art.emblem, slotIndex: slot, reducedMotion: true), want.reducedChecksum, accuracy: 0.01, "\(host) reduced checksum")
+        }
+        let plans = CityFinale.campaignPlans()
+        XCTAssertEqual(plans.count, 5)
+        XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: true, reducedMotion: false), CitySkylineArt.expectedEnding["gold"] ?? -1, accuracy: 0.01)
+        XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: true, reducedMotion: true), CitySkylineArt.expectedEnding["gold-reduced"] ?? -1, accuracy: 0.01)
+        XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: false, reducedMotion: false), CitySkylineArt.expectedEnding["mixed"] ?? -1, accuracy: 0.01)
+        XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: false, reducedMotion: true), CitySkylineArt.expectedEnding["mixed-reduced"] ?? -1, accuracy: 0.01)
+
+        // The campaign's cities line up with the worlds, and each grade has its finish.
+        for (i, host) in CityFinale.hostIds.enumerated() {
+            XCTAssertEqual(WorldRegistry.cartridgeOrDefault(forId: CityFinale.worldIds[i]).hostId, host)
+        }
+        XCTAssertEqual(CityFinale.finish(for: .fluorapatiteGold, completed: true), .gold)
+        XCTAssertEqual(CityFinale.finish(for: .s, completed: true), .silver)
+        XCTAssertEqual(CityFinale.finish(for: .b, completed: true), .pearl)
+        XCTAssertEqual(CityFinale.finish(for: .fluorapatiteGold, completed: false), .empty)
+
+        // The piece lands exactly in its own cusp, then the molar shows it.
+        for i in 0..<CityFinale.campaignPieces {
+            let p = CityFinale.piece(CityFinale.slot - 1e-6, slotIndex: i, reducedMotion: false)
+            let s = CityFinale.slotPosition(i)
+            XCTAssertEqual(p.x, s.x, accuracy: 0.001)
+            XCTAssertEqual(p.y, s.y, accuracy: 0.001)
+            XCTAssertFalse(CityFinale.piece(CityFinale.slot, slotIndex: i, reducedMotion: false).visible)
+        }
+    }
+
     func testCitySkylineShapesPlacementAndLights() {
         let art = CitySkyline.parse("""
         ; a note

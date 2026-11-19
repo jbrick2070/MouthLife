@@ -49,6 +49,49 @@ public enum CitySkylineArt {
         }
     }
 
+    public static func expectedEmblem(forHost hostId: String) -> Expected? {
+        switch hostId {
+        case "accra": return Expected(pieces: 5, lightPieces: 0, triangles: 80, checksum: 1.644, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "new_orleans": return Expected(pieces: 11, lightPieces: 0, triangles: 146, checksum: 188.437, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "orbit_aurora": return Expected(pieces: 4, lightPieces: 0, triangles: 68, checksum: 56.065, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "tokyo": return Expected(pieces: 11, lightPieces: 0, triangles: 204, checksum: 2.702, shadedPieces: 0, movingPieces: 0, motions: 0)
+        case "toronto": return Expected(pieces: 13, lightPieces: 0, triangles: 20, checksum: 11.868, shadedPieces: 0, movingPieces: 0, motions: 0)
+        default: return nil
+        }
+    }
+
+    /// What the web edition makes of a city's finale (see src/config/cityFinale.ts).
+    public struct FinaleExpected: Equatable, Sendable {
+        public let voice: String
+        public let tonic: Int
+        public let show: String
+        public let hostSide: String
+        public let bursts: Int
+        public let notes: Int
+        public let checksum: Double
+        public let reducedChecksum: Double
+    }
+
+    public static func expectedFinale(forHost hostId: String) -> FinaleExpected? {
+        switch hostId {
+        case "accra": return FinaleExpected(voice: "pluck", tonic: 55, show: "balloons", hostSide: "left", bursts: 6, notes: 143, checksum: 5002.047, reducedChecksum: 4232.633)
+        case "new_orleans": return FinaleExpected(voice: "reed", tonic: 58, show: "beads", hostSide: "left", bursts: 6, notes: 143, checksum: 5152.127, reducedChecksum: 4382.122)
+        case "orbit_aurora": return FinaleExpected(voice: "bell", tonic: 62, show: "meteors", hostSide: "right", bursts: 6, notes: 137, checksum: 4851.207, reducedChecksum: 4081.227)
+        case "tokyo": return FinaleExpected(voice: "celesta", tonic: 64, show: "neon", hostSide: "left", bursts: 7, notes: 146, checksum: 5189.581, reducedChecksum: 4430.342)
+        case "toronto": return FinaleExpected(voice: "rhodes", tonic: 60, show: "fireworks", hostSide: "left", bursts: 9, notes: 152, checksum: 5828.068, reducedChecksum: 5056.909)
+        default: return nil
+        }
+    }
+
+    /// The ending's checksum for every combination of (all gold, Reduce Motion), and two hash values.
+    public static let expectedEnding: [String: Double] = [
+        "gold": 4244.073,
+        "gold-reduced": 4225.616,
+        "mixed": 4241.973,
+        "mixed-reduced": 4223.516,
+    ]
+    public static let expectedHash: [Double] = [0.10232719359919429, 0.7369172223843634, 0.5687719557899982]
+
     static let accra = #"""
 ; Accra's coast on the west, Colorado's Rockies on the east: sunset over Labadi Beach, swaying
 ; palms and a fishing canoe, Jamestown Lighthouse sweeping its beam, the Nkrumah Mausoleum, Ghana's
@@ -224,6 +267,24 @@ A -0.6 2.45 0.6 0.15 20 140 #15803d
 C 0 2.55 0.22 #8b5e34
 L 0.95 2.1 0.95 1.75 0.04 #8b5e34
 c 0.95 1.55 0.22 #fde68a
+@emblem
+; Ghana's black star in a ring of red, gold and green
+A 0 0 0.98 0.14 90 210 #dc2626
+A 0 0 0.98 0.14 210 330 #fbbf24
+A 0 0 0.98 0.14 330 450 #16a34a
+S 0 0.02 0.86 #fbbf24
+S 0 0.02 0.7 #0f172a
+@finale
+; hot-air balloons rise over the mountains while fireworks burst over the coast
+voice pluck 55
+show balloons
+host left
+burst 0.2 32 13.4 ring #fbbf24 #f8fafc
+burst 0.9 17 12 peony #dc2626 #fbbf24
+burst 1.7 26 12.8 peony #16a34a #fde047
+burst 2.5 53 13.6 willow #fde68a #f97316
+burst 3.3 40 12.4 ring #dc2626 #16a34a
+burst 4.1 64 12.6 peony #a78bfa #fde047
 """#
 
     static let newOrleans = #"""
@@ -437,6 +498,30 @@ L 0 0 0 2.2 0.12 #475569
 P -0.3 2.2 0.3 2.2 0.38 2.9 -0.38 2.9 #475569
 p -0.2 2.28 0.2 2.28 0.27 2.82 -0.27 2.82 #fbbf24
 P -0.42 2.9 0.42 2.9 0 3.25 #475569
+@emblem
+; the fleur-de-lis
+P 0 1 0.2 0.66 0.24 0.28 0.1 -0.1 -0.1 -0.1 -0.24 0.28 -0.2 0.66 #eab308
+A -0.44 0.22 0.44 0.14 0 165 #eab308
+C -0.8 0.3 0.09 #eab308
+C -0.78 0.16 0.07 #eab308
+A 0.44 0.22 0.44 0.14 15 180 #eab308
+C 0.8 0.3 0.09 #eab308
+C 0.78 0.16 0.07 #eab308
+R -0.46 -0.24 0.92 0.16 #ca8a04
+P -0.1 -0.24 0.1 -0.24 0 -0.62 #eab308
+P -0.46 -0.24 -0.16 -0.24 -0.42 -0.56 #eab308
+P 0.16 -0.24 0.46 -0.24 0.42 -0.56 #eab308
+@finale
+; a second line: Mardi Gras beads thrown high, purple, green and gold fireworks over the river
+voice reed 58
+show beads
+host left
+burst 0.3 54 12 peony #c084fc #fde047
+burst 1 31 13 ring #4ade80 #c084fc
+burst 1.8 62 12.6 willow #fde047 #f59e0b
+burst 2.6 18 12.2 peony #4ade80 #fde047
+burst 3.3 45 13.4 ring #fde047 #c084fc
+burst 4.1 31 12.4 peony #c084fc #4ade80
 """#
 
     static let orbitAurora = #"""
@@ -648,6 +733,23 @@ l 0.5 1.96 1.6 1.96 0.04 #fef08a
 L 0 2.32 0 2.8 0.05 #94a3b8
 c 0 2.86 0.13 #f87171
 c 0 1.96 0.16 #67e8f9
+@emblem
+; a crescent Moon and stars
+N 0.1 0 0.9 0.5 180 #e2e8f0
+S 0.42 0.22 0.3 #fde047
+S 0.5 -0.36 0.16 #93c5fd
+C 0.18 0.62 0.05 #f8fafc
+@finale
+; no fireworks in space: shooting stars, and bursts of starlight round the station
+voice bell 62
+show meteors
+host right
+burst 0.4 22 10.6 ring #67e8f9 #a78bfa
+burst 1.2 46 11.4 peony #fde047 #f8fafc
+burst 2 12 11.8 ring #34d399 #5eead4
+burst 2.8 56 10.8 peony #a78bfa #f0abfc
+burst 3.6 34 12.2 ring #f8fafc #67e8f9
+burst 4.4 64 11.6 willow #93c5fd #f8fafc
 """#
 
     static let tokyo = #"""
@@ -886,6 +988,31 @@ R -1.35 2.2 2.7 0.24 #f97316
 P -1.5 2.44 1.5 2.44 1.65 2.72 -1.65 2.72 #1e293b
 L 0 1.5 0 1.7 0.05 #94a3b8
 c 0 1.2 0.3 #fde047
+@emblem
+; the neon acid clock, safe side and acid side
+C 0 0 0.98 #f472b6
+C 0 0 0.84 #1e1b4b
+A 0 0 0.74 0.12 -90 90 #34d399
+A 0 0 0.74 0.12 90 270 #f59e0b
+C 0 0.56 0.06 #f8fafc
+C 0.56 0 0.06 #f8fafc
+C 0 -0.56 0.06 #f8fafc
+C -0.56 0 0.06 #f8fafc
+L 0 0 0 0.6 0.1 #f8fafc
+L 0 0 0.38 -0.22 0.1 #f8fafc
+C 0 0 0.1 #fde047
+@finale
+; the whole town pulses with the beat while fireworks go up over the river, Tokyo and Chicago
+voice celesta 64
+show neon
+host left
+burst 0.2 22 12.6 peony #f472b6 #67e8f9
+burst 0.9 42 13.4 ring #67e8f9 #f0abfc
+burst 1.6 8 11.8 willow #f9a8d4 #fbcfe8
+burst 2.3 56 12.8 peony #fbbf24 #fde68a
+burst 3 32 13 ring #a78bfa #f472b6
+burst 3.8 64 12.2 peony #fde68a #f97316
+burst 4.5 14 12.6 ring #67e8f9 #f472b6
 """#
 
     static let toronto = #"""
@@ -1033,5 +1160,34 @@ L -0.9 0 -0.9 1 0.14 #5b3a29
 C -0.9 1.5 0.72 #ea580c
 C -1.3 1.2 0.48 #f59e0b
 C -0.5 1.15 0.45 #dc2626
+@emblem
+; the maple leaf
+P -0.34 -0.38 0.34 -0.38 0.42 0.18 0 0.55 -0.42 0.18 #dc2626
+P -0.24 0.3 0.24 0.3 0.3 0.62 0 1 -0.3 0.62 #dc2626
+P 0.18 0.48 0.46 0.78 0.3 0.4 #dc2626
+P -0.18 0.48 -0.3 0.4 -0.46 0.78 #dc2626
+P -0.3 0 -0.42 0.36 -0.95 0.5 -0.78 0.14 #dc2626
+P 0.3 0 0.78 0.14 0.95 0.5 0.42 0.36 #dc2626
+P -0.58 0.4 -0.66 0.72 -0.48 0.38 #dc2626
+P 0.58 0.4 0.48 0.38 0.66 0.72 #dc2626
+P -0.7 0.18 -0.9 -0.02 -0.58 0.08 #dc2626
+P 0.7 0.18 0.58 0.08 0.9 -0.02 #dc2626
+P -0.36 -0.1 -0.12 -0.38 -0.7 -0.5 #dc2626
+P 0.36 -0.1 0.7 -0.5 0.12 -0.38 #dc2626
+L 0 -0.36 0.02 -1 0.1 #b91c1c
+@finale
+; Canada Day over the lake: red and white fireworks round the CN Tower
+voice rhodes 60
+show fireworks
+host left
+burst 0 30 12.2 peony #f87171 #fef2f2
+burst 0.5 50 11.4 ring #f8fafc #f87171
+burst 1.1 18 11.8 peony #fde68a #fb923c
+burst 1.7 58 12.4 willow #fde68a #f59e0b
+burst 2.3 40 13 peony #f87171 #ffffff
+burst 2.9 8 11.2 ring #93c5fd #f8fafc
+burst 3.4 30 13.6 willow #fef2f2 #f87171
+burst 4 46 12 peony #fde047 #f87171
+burst 4.5 22 12.8 ring #f87171 #fef2f2
 """#
 }

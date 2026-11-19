@@ -86,6 +86,24 @@ public struct CityArt: Equatable, Sendable {
     public let prop: [SkylinePiece]
     /// How the panorama's moving groups move; a piece points at one through `group`.
     public let motions: [SkylineMotion]
+    /// The city's sign, drawn round 0,0 about one unit each way (see CityFinale).
+    public let emblem: [SkylinePiece]
+    /// The show the city puts on when it is cleaned; nil for a drawing without one.
+    public let finale: CityFinalePlan?
+
+    public init(
+        skyline: [SkylinePiece],
+        prop: [SkylinePiece],
+        motions: [SkylineMotion],
+        emblem: [SkylinePiece] = [],
+        finale: CityFinalePlan? = nil
+    ) {
+        self.skyline = skyline
+        self.prop = prop
+        self.motions = motions
+        self.emblem = emblem
+        self.finale = finale
+    }
 }
 
 public enum CitySkyline {
@@ -251,22 +269,38 @@ public enum CitySkyline {
     /// Reads one city's drawing. Lines it does not understand are skipped (the web tests reject them
     /// before they ever reach the app).
     public static func parse(_ text: String) -> CityArt {
+        enum Section { case skyline, prop, emblem, finale }
         var skyline: [SkylinePiece] = []
         var prop: [SkylinePiece] = []
+        var emblem: [SkylinePiece] = []
         var motions: [SkylineMotion] = []
-        var intoProp = false
+        var finale = CityFinale.PlanBuilder()
+        var hasFinale = false
+        var section = Section.skyline
         var order = 0
         var group = 0
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix(";") { continue }
-            if line == "@skyline" || line == "@prop" {
-                intoProp = line == "@prop"
+            if line == "@skyline" || line == "@prop" || line == "@emblem" || line == "@finale" {
+                switch line {
+                case "@prop": section = .prop
+                case "@emblem": section = .emblem
+                case "@finale":
+                    section = .finale
+                    hasFinale = true
+                default: section = .skyline
+                }
                 order = 0
                 group = 0
                 continue
             }
             let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            if section == .finale {
+                finale.read(tokens)
+                continue
+            }
+            let intoProp = section != .skyline
             if tokens[0].hasPrefix("~") {
                 if tokens[0] == "~end" {
                     group = 0
@@ -304,11 +338,15 @@ public enum CitySkyline {
                     topColorHex: colours == 2 ? hexes[1] : nil,
                     group: intoProp ? 0 : group
                 )
-                if intoProp { prop.append(piece) } else { skyline.append(piece) }
+                switch section {
+                case .prop: prop.append(piece)
+                case .emblem: emblem.append(piece)
+                default: skyline.append(piece)
+                }
             }
             order += 1
         }
-        return CityArt(skyline: skyline, prop: prop, motions: motions)
+        return CityArt(skyline: skyline, prop: prop, motions: motions, emblem: emblem, finale: hasFinale ? finale.plan : nil)
     }
 
     // MARK: - Motion

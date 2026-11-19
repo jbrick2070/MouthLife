@@ -36,6 +36,9 @@ public struct CompanionHubView: View {
     public let showTutorialOffer: Bool
     public let onOpenTutorial: () -> Void
     public let onDismissTutorialOffer: () -> Void
+    /// Each campaign city's piece of the Golden Molar.
+    public let molarFinishes: [MolarFinish]
+    public let onTapGoldenMolar: () -> Void
 
     @State private var showHint = true
 
@@ -60,8 +63,12 @@ public struct CompanionHubView: View {
         onOpenSheet: @escaping (HubSheetKind) -> Void,
         showTutorialOffer: Bool = false,
         onOpenTutorial: @escaping () -> Void = {},
-        onDismissTutorialOffer: @escaping () -> Void = {}
+        onDismissTutorialOffer: @escaping () -> Void = {},
+        molarFinishes: [MolarFinish] = [],
+        onTapGoldenMolar: @escaping () -> Void = {}
     ) {
+        self.molarFinishes = molarFinishes
+        self.onTapGoldenMolar = onTapGoldenMolar
         self.save = save
         self.selectedWorldId = selectedWorldId
         self.hubRadioStation = hubRadioStation
@@ -117,8 +124,31 @@ public struct CompanionHubView: View {
                     }
                 }
 
+                // Phones: the same row, dropping a chip at a time until it fits, so the row never
+                // grows wider than the screen (which would push the whole Home screen off its edges).
+                compactTopRow(isBasking: isBasking, keep: 3, iconOnlyMenu: false)
+                compactTopRow(isBasking: isBasking, keep: 2, iconOnlyMenu: false)
+                compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: false)
+                compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity)
+
+            hubBelowTopRow(comp: comp, isBasking: isBasking, needsPulpRescue: needsPulpRescue)
+        }
+        .task {
+            // The how-to line is a first-glance hint, not a fixture: let it go so the sky is clear.
+            try? await Task.sleep(nanoseconds: 7_000_000_000)
+            withAnimation(.easeOut(duration: 0.6)) { showHint = false }
+        }
+    }
+
+    @ViewBuilder
+    private func compactTopRow(isBasking: Bool, keep: Int, iconOnlyMenu: Bool) -> some View {
+        let comp = save.companion
                 HStack(spacing: 6) {
-                    statChips(isBasking: isBasking)
+                    statChips(isBasking: isBasking, keep: keep)
                     Spacer(minLength: 4)
                     if comp.unclaimedIdleIons > 0 {
                         Button {
@@ -145,7 +175,13 @@ public struct CompanionHubView: View {
                             }
                         }
                     } label: {
-                        Label(L10n.t("Menu"), systemImage: "line.3.horizontal")
+                        Group {
+                            if iconOnlyMenu {
+                                Image(systemName: "line.3.horizontal")
+                            } else {
+                                Label(L10n.t("Menu"), systemImage: "line.3.horizontal")
+                            }
+                        }
                             .font(.system(.footnote, design: .rounded, weight: .semibold))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
@@ -159,10 +195,12 @@ public struct CompanionHubView: View {
                     .buttonStyle(.plain)
                     .menuIndicator(.hidden)
                     .fixedSize()
+                    .accessibilityLabel(Text(L10n.t("Menu")))
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 6)
+    }
+
+    @ViewBuilder
+    private func hubBelowTopRow(comp: CompanionState, isBasking: Bool, needsPulpRescue: Bool) -> some View {
 
             // Tapped Crown / Toast Floating Callout (Non-blocking!)
             if let statusToast {
@@ -405,12 +443,6 @@ public struct CompanionHubView: View {
             .mlGlassCard(cornerRadius: 22, borderColor: MLTheme.cyanAccent.opacity(0.38), padding: 11)
             .padding(.horizontal, 12)
             .padding(.bottom, 6)
-        }
-        .task {
-            // The how-to line is a first-glance hint, not a fixture: let it go so the sky is clear.
-            try? await Task.sleep(nanoseconds: 7_000_000_000)
-            withAnimation(.easeOut(duration: 0.6)) { showHint = false }
-        }
     }
 
     private func isWorldUnlocked(_ host: HostCityDef) -> Bool {
@@ -419,8 +451,10 @@ public struct CompanionHubView: View {
         return save.totalBrushStamps >= host.unlockStampsRequired
     }
 
+    /// The top strip's readouts. `keep` drops the least important ones on narrow phones (3 = all);
+    /// the Golden Molar always stays.
     @ViewBuilder
-    private func statChips(isBasking: Bool) -> some View {
+    private func statChips(isBasking: Bool, keep: Int = 3) -> some View {
         MLStatChip(
             icon: "bolt.shield.fill",
             label: "Fluoride",
@@ -428,20 +462,47 @@ public struct CompanionHubView: View {
             tint: MLTheme.cyanAccent,
             compact: true
         )
-        MLStatChip(
-            icon: "checkmark.seal.fill",
-            label: "Stamps",
-            value: "\(save.totalBrushStamps)",
-            tint: MLTheme.mintClean,
-            compact: true
-        )
-        MLStatChip(
-            icon: isBasking ? "sparkles" : "drop.fill",
-            label: isBasking ? "Smooth Bask" : "Saliva Stasis",
-            value: "\(Int(save.companion.smoothnessIndex.rounded()))%",
-            tint: isBasking ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent,
-            compact: true
-        )
+        if keep >= 2 {
+            MLStatChip(
+                icon: "checkmark.seal.fill",
+                label: "Stamps",
+                value: "\(save.totalBrushStamps)",
+                tint: MLTheme.mintClean,
+                compact: true
+            )
+        }
+        if keep >= 3 {
+            MLStatChip(
+                icon: isBasking ? "sparkles" : "drop.fill",
+                label: isBasking ? "Smooth Bask" : "Saliva Stasis",
+                value: "\(Int(save.companion.smoothnessIndex.rounded()))%",
+                tint: isBasking ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent,
+                compact: true
+            )
+        }
+        goldenMolarChip
+    }
+
+    /// The Golden Molar: a piece for every city cleaned. Complete, it replays the ending.
+    private var goldenMolarChip: some View {
+        let count = molarFinishes.filter { $0 != .empty }.count
+        let complete = count == CityFinale.campaignPieces
+        return Button(action: onTapGoldenMolar) {
+            HStack(spacing: 4) {
+                GoldenMolarBadge(finishes: molarFinishes)
+                Text(verbatim: "\(count)/5")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(complete ? MLTheme.fluorapatiteGold : MLTheme.textPrimary)
+                    .fixedSize()
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule(style: .continuous).fill(MLTheme.cardBg))
+            .overlay(Capsule(style: .continuous).strokeBorder(complete ? MLTheme.fluorapatiteGold : Color.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(L10n.t(complete ? "Watch the ending" : "Golden Molar: \(count) of 5")))
     }
 
     private func open(_ shortcut: HubShortcut) {

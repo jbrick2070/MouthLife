@@ -559,3 +559,63 @@
     opacity: 1;
   }
 }
+
+/* ---- The Golden Molar's place on narrow phones ----
+   The row is invisible to layout (display: contents) unless a narrow phone needs it, so the ?
+   button keeps its usual place everywhere else. */
+.hub-fab-row {
+  display: contents;
+}
+.molar-fab {
+  display: none;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 6px 2px;
+  border-radius: 50%;
+  background: rgba(6, 28, 42, 0.88);
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  align-items: center;
+  justify-content: center;
+}
+.molar-fab.complete {
+  border-color: #fbbf24;
+}
+@media (max-width: 520px) and (orientation: portrait) {
+  .hub-fab-row {
+    display: flex;
+    align-self: stretch;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+  .hub-fab-row > * {
+    pointer-events: auto;
+  }
+  .molar-fab {
+    display: inline-flex;
+  }
+  .companion-hub #btn-golden-molar {
+    display: none;
+  }
+}
+/* A phone on its side: the header column is narrow too, so the Golden Molar sits beside the ?
+   at the bottom of the open side, over the scene. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .companion-hub .hub-fab-row {
+    display: flex;
+    gap: 8px;
+    grid-column: 1;
+    grid-row: 2;
+    align-self: end;
+    justify-self: start;
+    align-items: flex-end;
+  }
+  .molar-fab {
+    display: inline-flex;
+    margin: 0 0 2px 2px;
+  }
+  .companion-hub #btn-golden-molar {
+    display: none;
+  }
+}

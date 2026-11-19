@@ -172,3 +172,21 @@ A -0.6 2.45 0.6 0.15 20 140 #15803d
 C 0 2.55 0.22 #8b5e34
 L 0.95 2.1 0.95 1.75 0.04 #8b5e34
 c 0.95 1.55 0.22 #fde68a
+@emblem
+; Ghana's black star in a ring of red, gold and green
+A 0 0 0.98 0.14 90 210 #dc2626
+A 0 0 0.98 0.14 210 330 #fbbf24
+A 0 0 0.98 0.14 330 450 #16a34a
+S 0 0.02 0.86 #fbbf24
+S 0 0.02 0.7 #0f172a
+@finale
+; hot-air balloons rise over the mountains while fireworks burst over the coast
+voice pluck 55
+show balloons
+host left
+burst 0.2 32 13.4 ring #fbbf24 #f8fafc
+burst 0.9 17 12 peony #dc2626 #fbbf24
+burst 1.7 26 12.8 peony #16a34a #fde047
+burst 2.5 53 13.6 willow #fde68a #f97316
+burst 3.3 40 12.4 ring #dc2626 #16a34a
+burst 4.1 64 12.6 peony #a78bfa #fde047

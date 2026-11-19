@@ -31,6 +31,11 @@ Welcome! This repository contains **MouthLife**, with active development focused
    - Draw real places accurately (a second-pass review caught 1970s towers in "1940 Chicago", a sideways Ghana flag and the wrong bridge for New Orleans). Check a landmark's shape and date before adding it.
 6. **One Sign for the Main Menu:**
    - Any button that returns to the Hub is the bright white pill with a house (`.btn-home` + `HOME_ICON_SVG` on web, `MLHomeButtonStyle` + `house.fill` on native). Do not style anything else that way.
+7. **Every City Ends With the Same Finale, and Both Editions Play It Identically:**
+   - Sealing a city's last zone plays its finale before the score (hush → rise → wave of light → blaze → show → the city's sign in sparks → the prize → the Golden Molar → liftoff, about 25 s, Skip after 1.5 s); sealing the fifth city for the first time also plays the ending (molar assembles, credits roll through the five cities, gold in every city earns the winking-molar surprise). Keep the beats the same in every city: players should learn the rhythm.
+   - All timing, positions, brightness and notes are pure functions in `src/config/cityFinale.ts` with a Swift twin in `CityFinale.swift`; the generator embeds a checksum of the whole show and the Swift tests compare it. Change both files together, run the generator, then both test suites. A city's sign (`@emblem`) and show settings (`@finale`: voice, show, host side, bursts) live in its drawing file.
+   - The Golden Molar has five cusps, one per campaign city, finished pearl / silver / gold by the city's best grade (from the save; nothing new is stored, so Sync Codes are unchanged). It sits in the Home header on wide screens and floats beside the ? on phones; never let it widen the header past the screen.
+   - Reduce Motion keeps every beat but fades instead of flying, sweeping or bursting.
 
 ## 3. Verification Checklist Before Committing
 

@@ -26,6 +26,8 @@ import {
   MissionReportOverlay,
 } from './ui/MissionReportOverlay';
 import { TelemetryHudOverlay } from './ui/TelemetryHudOverlay';
+import { CityFinaleOverlay } from './ui/CityFinaleOverlay';
+import { molarFinishForGrade, type MolarFinish } from './config/cityFinale';
 import { shouldHandleGlobalMuteKey } from './ui/hudHelpers';
 import { getCartridgeById } from './worlds/worldRegistry';
 
@@ -50,6 +52,8 @@ declare global {
       getHud: () => TelemetryHudOverlay | null;
       switchMode: (next: AppMode) => void;
       launchStage: (worldId: string, mode?: 'ARCADE' | 'PULP_RESCUE') => void;
+      /** Plays a city's finale (or the ending) straight away, for checking it. */
+      playFinale: (kind: 'city' | 'ending' | 'city+ending', worldIndex?: number, finishes?: MolarFinish[]) => void;
     };
   }
 }
@@ -138,6 +142,61 @@ function bootstrapMouthLife(): void {
   let activePacerQuadrant = -1;
   let lastPlayedWorldId = 'world_1';
   let lastReport: MissionReportData | null = null;
+  /** A city finale is playing: the game is frozen behind it. */
+  let finaleActive = false;
+  /** The finale covers the whole screen, so the 3D scene need not draw. */
+  let sceneHidden = false;
+  let finaleOverlay: CityFinaleOverlay | null = null;
+
+  /** Each campaign city's piece of the Golden Molar, from the save. */
+  function molarFinishes(): MolarFinish[] {
+    const worlds = saveSys.getSave().worlds;
+    return CAMPAIGN_WORLD_IDS.map((id) => molarFinishForGrade(worlds[id]?.bestGrade, Boolean(worlds[id]?.completed)));
+  }
+
+  /**
+   * Plays a finale over whatever is on screen, then calls `then`. For a city, the game's HUD is
+   * taken down first and the score follows; the ending alone (from the main menu) leaves the menu
+   * underneath and simply uncovers it.
+   */
+  function playFinale(
+    kind: 'city' | 'ending' | 'city+ending',
+    worldIndex: number,
+    finishes: MolarFinish[],
+    then: () => void
+  ): void {
+    finaleOverlay?.dispose();
+    if (kind !== 'ending') {
+      activeOverlay?.dispose();
+      activeOverlay = null;
+      activeTelemetryHud = null;
+      touch.endTouch();
+      uiRoot!.innerHTML = '';
+    }
+    finaleActive = true;
+    sound.stopScrub();
+    sound.setFinaleDucked(true);
+    const overlay = new CityFinaleOverlay({
+      kind,
+      worldIndex,
+      finishes,
+      reducedMotion: sceneMgr.isReducedMotion(),
+      onNotes: (notes) => sound.playFinaleNotes(notes),
+      onCovered: (covered) => {
+        sceneHidden = covered;
+      },
+      onDone: () => {
+        overlay.dispose();
+        if (finaleOverlay === overlay) finaleOverlay = null;
+        finaleActive = false;
+        sceneHidden = false;
+        sound.setFinaleDucked(false);
+        then();
+      },
+    });
+    finaleOverlay = overlay;
+    overlay.mount(kind === 'ending' ? document.body : uiRoot!);
+  }
 
   // Direct touch-the-teeth Smooth Bask toy (HUB companion & REPORT) + 3D globe city picking
   let lastEmptyTapMs = 0;
@@ -516,6 +575,7 @@ function bootstrapMouthLife(): void {
 
     const cart = getCartridgeById(worldId);
     const prevBest = saveSys.getSave().worlds[worldId]?.bestScore ?? 0;
+    const clearedBefore = CAMPAIGN_WORLD_IDS.filter((id) => saveSys.getSave().worlds[id]?.completed).length;
     const { unlockedHistoryNoteId } = saveSys.recordMissionCompletion({
       mode,
       worldId,
@@ -548,6 +608,14 @@ function bootstrapMouthLife(): void {
       unlockedUpgradeNames: missionUpgradeIds.map((id) => getUpgradeById(id)?.name ?? id),
     };
     missionUpgradeIds.length = 0;
+
+    // A cleaned city puts on its finale before the score; the fifth one also plays the ending.
+    const worldIndex = CAMPAIGN_WORLD_IDS.indexOf(worldId);
+    if (mode === 'ARCADE' && won && worldIndex >= 0) {
+      const justMastered = clearedBefore < CAMPAIGN_WORLD_IDS.length && clearedCount >= CAMPAIGN_WORLD_IDS.length;
+      playFinale(justMastered ? 'city+ending' : 'city', worldIndex, molarFinishes(), () => switchMode('REPORT'));
+      return;
+    }
     switchMode('REPORT');
   });
 
@@ -572,6 +640,13 @@ function bootstrapMouthLife(): void {
   function switchMode(next: AppMode): void {
     const prev = currentMode;
     currentMode = next;
+    if (finaleOverlay) {
+      finaleOverlay.dispose();
+      finaleOverlay = null;
+      finaleActive = false;
+      sceneHidden = false;
+      sound.setFinaleDucked(false);
+    }
 
     activeOverlay?.dispose();
     activeOverlay = null;
@@ -654,6 +729,7 @@ function bootstrapMouthLife(): void {
         tutorialGate,
         isGamepadConnected: () => input.isGamepadConnected(),
         onPlayTutorialDemo: (pageId) => playTutorialDemoSound(pageId),
+        onWatchEnding: () => playFinale('ending', 0, molarFinishes(), () => {}),
       });
       activeOverlay = activeHub;
     } else if (next === 'ARCADE' || next === 'PULP_RESCUE') {
@@ -734,6 +810,7 @@ function bootstrapMouthLife(): void {
     (fixedDt) => {
       if (
         (currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') &&
+        !finaleActive &&
         !activeTelemetryHud?.isPaused()
       ) {
         const cmd = input.sampleSessionCommand(
@@ -774,6 +851,7 @@ function bootstrapMouthLife(): void {
         !sceneMgr.isTransitioning() &&
         input.isScrubInputActive();
 
+      if (sceneHidden) return;
       session.beginRenderInterpolation(simAlpha);
       sceneMgr.renderFrame({
         frameDt,
@@ -843,6 +921,12 @@ function bootstrapMouthLife(): void {
     switchMode,
     launchStage: (worldId, mode = worldId === 'pulp_rescue' ? 'PULP_RESCUE' : 'ARCADE') =>
       launchPlayableStage(worldId, mode),
+    playFinale: (kind, worldIndex = 0, finishes) => {
+      const back = currentMode;
+      playFinale(kind, worldIndex, finishes ?? molarFinishes(), () => {
+        if (kind !== 'ending') switchMode(back === 'ARCADE' || back === 'PULP_RESCUE' ? 'HUB' : back);
+      });
+    },
   };
 }
 

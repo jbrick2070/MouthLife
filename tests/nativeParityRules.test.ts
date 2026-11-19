@@ -147,3 +147,29 @@ describe('one sign for the main menu', () => {
     expect(read('native-apple/MouthLifeApp/UI/DesignSystem.swift')).toContain('public struct MLHomeButtonStyle: ButtonStyle');
   });
 });
+
+describe('city finales in both editions', () => {
+  const web = readFileSync('src/ui/CityFinaleOverlay.ts', 'utf8');
+  const native = readFileSync('native-apple/MouthLifeApp/UI/CityFinaleView.swift', 'utf8');
+  const webMain = readFileSync('src/main.ts', 'utf8');
+  const coordinator = readFileSync('native-apple/MouthLifeApp/AppCoordinator.swift', 'utf8');
+
+  it('show the same words', () => {
+    for (const words of ['Thank you!', 'Golden Molar: ', ' of 5', 'Gold piece', 'Silver piece', 'Pearl piece', 'The Golden Molar', 'Thanks for playing!', 'Perfect smile!', 'Get gold in every city for a surprise.', 'Skip ›']) {
+      expect(web, `web says "${words}"`).toContain(words);
+      expect(native, `native says "${words}"`).toContain(words);
+    }
+  });
+
+  it('play the shared score and both parts of the show', () => {
+    expect(web).toContain('finaleNotes(');
+    expect(web).toContain('endingNotes(');
+    expect(native).toContain('CityFinale.notes(');
+    expect(native).toContain('CityFinale.endingNotes(');
+  });
+
+  it('come before the score, and the fifth city adds the ending', () => {
+    expect(webMain).toMatch(/justMastered \? 'city\+ending' : 'city'/);
+    expect(coordinator).toMatch(/justMastered \? \.cityThenEnding : \.city/);
+  });
+});

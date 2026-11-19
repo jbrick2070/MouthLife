@@ -53,6 +53,10 @@ public final class AppCoordinator {
     public var lastBreakdown: ScoreBreakdown?
     public var lastUnlockedNoteId: String?
     public var lastUnlockedUpgradeIds: [String] = []
+    /// A city finale (or the ending) playing over the frozen game; nil otherwise.
+    public var finale: CityFinaleRequest?
+    /// What to show once the finale ends: the score for a cleaned city, or nothing (back to Home).
+    private var reportAfterFinale = false
 
     // Active 2-Minute Sink Brush-Along Pacer State
     private static let flossToolDefaultsKey = "mouthlife.pacer.flossToolStyle"
@@ -397,6 +401,21 @@ public final class AppCoordinator {
                 if let b = Int(arg.dropFirst("--beat=".count)) {
                     cosmicBeatIndex = max(0, min(3, b))
                 }
+            } else if arg.hasPrefix("--finale=") || arg == "--ending" {
+                // For screenshots and testing: play a city's finale (--finale=0 ... 4) or the ending
+                // straight away, optionally with --finishes=gold,silver,pearl,empty,gold
+                saveSystem.markCosmicIntroSeen()
+                save = saveSystem.getSave()
+                mode = .hub
+                let finishes = args.first { $0.hasPrefix("--finishes=") }.map { list in
+                    list.dropFirst("--finishes=".count).split(separator: ",").map { MolarFinish(rawValue: String($0)) ?? .empty }
+                }
+                if arg == "--ending" {
+                    playFinale(.ending, worldIndex: 0, thenReport: false, finishes: finishes)
+                } else {
+                    let index = max(0, min(4, Int(arg.dropFirst("--finale=".count)) ?? 0))
+                    playFinale(.city, worldIndex: index, thenReport: false, finishes: finishes)
+                }
             } else if arg.hasPrefix("--lang=") {
                 // For screenshots and testing: start in a given language, e.g. --lang=ja
                 if let language = CoachLanguage(rawValue: String(arg.dropFirst("--lang=".count))) {
@@ -439,6 +458,7 @@ public final class AppCoordinator {
             showArcadeToast("🛡️ Slime dome! Crack it with Floss or Surge first.")
 
         case let .missionComplete(playMode, worldId, won, breakdown, _):
+            let clearedBefore = CityFinale.worldIds.filter { saveSystem.getSave().worlds[$0]?.completed == true }.count
             let outcome = saveSystem.recordMissionCompletion(
                 mode: playMode,
                 worldId: worldId,
@@ -451,10 +471,61 @@ public final class AppCoordinator {
             self.lastBreakdown = breakdown
             self.lastUnlockedNoteId = outcome.unlockedHistoryNoteId
             self.lastUnlockedUpgradeIds = outcome.newlyUnlockedUpgradeIds
-            transition(to: .report)
+            // A cleaned city puts on its finale before the score; the fifth one also plays the ending.
+            if playMode == .arcade, won, let index = CityFinale.worldIds.firstIndex(of: worldId) {
+                let clearedAfter = CityFinale.worldIds.filter { save.worlds[$0]?.completed == true }.count
+                let justMastered = clearedBefore < CityFinale.campaignPieces && clearedAfter >= CityFinale.campaignPieces
+                playFinale(justMastered ? .cityThenEnding : .city, worldIndex: index, thenReport: true)
+            } else {
+                transition(to: .report)
+            }
 
         default:
             break
+        }
+    }
+
+    // MARK: - City Finales
+
+    /// Each campaign city's piece of the Golden Molar, from the save.
+    public var molarFinishes: [MolarFinish] {
+        CityFinale.worldIds.map { id in
+            let rec = save.worlds[id]
+            return CityFinale.finish(for: rec?.bestGrade, completed: rec?.completed == true)
+        }
+    }
+
+    private func playFinale(_ kind: CityFinaleRequest.Kind, worldIndex: Int, thenReport: Bool, finishes: [MolarFinish]? = nil) {
+        NativeSoundEngine.shared.stopScrub()
+        NativeSoundEngine.shared.setFinaleDucked(true)
+        reportAfterFinale = thenReport
+        withAnimation(.easeOut(duration: 0.2)) {
+            finale = CityFinaleRequest(kind: kind, worldIndex: worldIndex, finishes: finishes ?? molarFinishes, reducedMotion: reducedMotion)
+        }
+    }
+
+    /// The main menu's Golden Molar: once complete, it plays the ending again.
+    public func watchEnding() {
+        playFinale(.ending, worldIndex: 0, thenReport: false)
+    }
+
+    /// The finale ended or was skipped: on to the score (or back to Home).
+    public func finishFinale() {
+        NativeSoundEngine.shared.setFinaleDucked(false)
+        let report = reportAfterFinale
+        reportAfterFinale = false
+        withAnimation(.easeInOut(duration: 0.35)) {
+            finale = nil
+            if report { transition(to: .report) }
+        }
+    }
+
+    public func tapGoldenMolar() {
+        NativeSoundEngine.shared.playUiTap()
+        if molarFinishes.allSatisfy({ $0 != .empty }) {
+            watchEnding()
+        } else {
+            showHubToast("Clean every city to finish the Golden Molar.")
         }
     }
 

@@ -6,12 +6,15 @@
  *
  * The web game reads src/config/skylines/<city>.txt directly. The native app gets the same text as
  * Swift string constants, plus what the web parser makes of each drawing (piece and triangle counts
- * and a checksum), so the Swift tests can prove both editions build the same shapes.
+ * and a checksum), so the Swift tests can prove both editions build the same shapes. The same goes
+ * for each city's finale (src/config/cityFinale.ts): its settings, note count and a checksum over
+ * every position, brightness and note of the show.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseCityArt, type SkylinePiece } from '../src/config/citySkylineGeometry';
+import { parseCityArt, type CityFinalePlan, type SkylinePiece } from '../src/config/citySkylineGeometry';
 import { CITY_SKYLINE_TEXT } from '../src/config/citySkylines';
+import { FINALE_HOST_IDS, endingChecksum, finaleChecksum, finaleHash, finaleNotes } from '../src/config/cityFinale';
 
 export const SKYLINE_SWIFT_PATH = join(
   process.cwd(),
@@ -43,6 +46,21 @@ function summary(pieces: readonly SkylinePiece[], motions: number): string {
 }
 
 const constName = (hostId: string): string => hostId.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
+
+function finaleSummary(hostId: string): string {
+  const art = parseCityArt(CITY_SKYLINE_TEXT[hostId]);
+  const plan = art.finale as CityFinalePlan;
+  const slot = (FINALE_HOST_IDS as readonly string[]).indexOf(hostId);
+  return (
+    `FinaleExpected(voice: "${plan.voice}", tonic: ${plan.tonic}, show: "${plan.show}", hostSide: "${plan.hostSide}", ` +
+    `bursts: ${plan.bursts.length}, notes: ${finaleNotes(plan, 'gold', false).length}, ` +
+    `checksum: ${finaleChecksum(plan, art.emblem, slot, false)}, reducedChecksum: ${finaleChecksum(plan, art.emblem, slot, true)})`
+  );
+}
+
+function endingPlans(): CityFinalePlan[] {
+  return FINALE_HOST_IDS.map((h) => parseCityArt(CITY_SKYLINE_TEXT[h]).finale as CityFinalePlan);
+}
 
 export function renderSkylineSwift(): string {
   const hosts = Object.keys(CITY_SKYLINE_TEXT).sort();
@@ -84,6 +102,41 @@ ${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYL
         default: return nil
         }
     }
+
+    public static func expectedEmblem(forHost hostId: String) -> Expected? {
+        switch hostId {
+${hosts.map((h) => `        case "${h}": return ${summary(parseCityArt(CITY_SKYLINE_TEXT[h]).emblem, 0)}`).join('\n')}
+        default: return nil
+        }
+    }
+
+    /// What the web edition makes of a city's finale (see src/config/cityFinale.ts).
+    public struct FinaleExpected: Equatable, Sendable {
+        public let voice: String
+        public let tonic: Int
+        public let show: String
+        public let hostSide: String
+        public let bursts: Int
+        public let notes: Int
+        public let checksum: Double
+        public let reducedChecksum: Double
+    }
+
+    public static func expectedFinale(forHost hostId: String) -> FinaleExpected? {
+        switch hostId {
+${hosts.map((h) => `        case "${h}": return ${finaleSummary(h)}`).join('\n')}
+        default: return nil
+        }
+    }
+
+    /// The ending's checksum for every combination of (all gold, Reduce Motion), and two hash values.
+    public static let expectedEnding: [String: Double] = [
+        "gold": ${endingChecksum(endingPlans(), true, false)},
+        "gold-reduced": ${endingChecksum(endingPlans(), true, true)},
+        "mixed": ${endingChecksum(endingPlans(), false, false)},
+        "mixed-reduced": ${endingChecksum(endingPlans(), false, true)},
+    ]
+    public static let expectedHash: [Double] = [${finaleHash(1, 2)}, ${finaleHash(77, 301)}, ${finaleHash(0, 0)}]
 `;
   for (const host of hosts) {
     const text = CITY_SKYLINE_TEXT[host].replace(/\r\n/g, '\n').replace(/\s+$/, '');

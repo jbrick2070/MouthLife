@@ -25,9 +25,12 @@ import {
   buildReverbImpulse,
   celesta,
   marimba,
+  playVoice,
   rhodes,
+  softKick,
   type VoiceOut,
 } from './SynthVoices';
+import type { FinaleNote } from '../../config/cityFinale';
 
 const MASTER_GAIN = 0.85;
 const MUSIC_SCALE = 0.55;
@@ -47,6 +50,8 @@ const SFX_REVERB_SCALE = 0.6;
 const SFX_SCALE = 0.95;
 /** About -8.4 dB, the same music duck the native app uses under spoken cues. */
 const VOICE_DUCK_GAIN = 0.38;
+/** A city's finale brings its own music: the game's music sinks right down underneath it. */
+const FINALE_DUCK_GAIN = 0.12;
 const FLOOR = 0.0001;
 
 /** About +/-1 dB, so a cue heard many times never lands identically. Pitch stays in key. */
@@ -100,6 +105,7 @@ export class SoundEngine {
   private paused = false;
   /** True while the voice coach is speaking: music sits about 8 dB lower so the words stay clear. */
   private voiceDucked = false;
+  private finaleDucked = false;
   private hidden = false;
   private urgency = false;
   private acidTension = false;
@@ -470,6 +476,13 @@ export class SoundEngine {
     this.applyPlaybackState();
   }
 
+  /** Sink the music while a city finale (or the ending) plays its own. */
+  setFinaleDucked(ducked: boolean): void {
+    if (ducked === this.finaleDucked) return;
+    this.finaleDucked = ducked;
+    this.applyPlaybackState();
+  }
+
   /** Bus gains/filter + scheduler on/off for pause + hidden-tab ducking (no backlog on resume). */
   private applyPlaybackState(): void {
     if (!this.ctx || !this.musicBus || !this.musicFilter || !this.seq) return;
@@ -490,7 +503,7 @@ export class SoundEngine {
       this.stopScrub();
       return;
     }
-    const voiceDuck = this.voiceDucked ? VOICE_DUCK_GAIN : 1;
+    const voiceDuck = (this.voiceDucked ? VOICE_DUCK_GAIN : 1) * (this.finaleDucked ? FINALE_DUCK_GAIN : 1);
     const dryTarget = silent ? 0 : Math.max(FLOOR, (this.paused ? base * 0.45 : base) * voiceDuck);
     const wetDuck = this.paused ? 0.3 : this.acidTension && this.seq.theme.id === 'world_3' ? 0.65 : 1;
     const wetTarget = silent ? 0 : wetBase * wetDuck * voiceDuck;
@@ -1013,6 +1026,41 @@ export class SoundEngine {
   }
 
   /** Joyful chord fanfare on a win; warm reassuring stabilization cadence otherwise. */
+  /**
+   * Plays notes from a city finale's score (config/cityFinale.ts) right now. The same score drives
+   * the native app's synth, so both editions sound alike.
+   */
+  playFinaleNotes(notes: readonly FinaleNote[]): void {
+    if (notes.length === 0) return;
+    this.run((o, t) => {
+      for (const n of notes) {
+        switch (n.voice) {
+          case 'kick':
+            softKick(o, t, n.vel);
+            break;
+          case 'whistle':
+            this.noiseSweep(o, t, 900, 2200, n.dur, 0.05 * n.vel, 2.2);
+            this.blip(o, t, 700, 1900, n.dur, 0.035 * n.vel, 'sine', 3000);
+            break;
+          case 'boom':
+            this.blip(o, t, 150, 38, Math.min(0.9, n.dur), 0.42 * n.vel, 'sine', 400);
+            this.noiseSweep(o, t, 1400, 160, n.dur, 0.12 * n.vel, 0.6);
+            break;
+          case 'sparkle':
+            [24, 28, 31, 36, 40].forEach((iv, k) =>
+              this.bell(o, t + k * 0.05, n.midi + iv, 0.32 * n.vel, (k - 2) * 0.25 + n.pan * 0.5, 0.6)
+            );
+            break;
+          case 'whoosh':
+            this.noiseSweep(o, t, 300, 2200, n.dur, 0.09 * n.vel, 0.7);
+            break;
+          default:
+            playVoice(o, n.voice, t, n.midi, n.dur, n.vel, n.pan, n.voice === 'bass' ? 0 : 0.5 * SFX_REVERB_SCALE);
+        }
+      }
+    });
+  }
+
   playMissionEnd(won: boolean): void {
     this.run((o, t) => {
       const { theme } = this.getHarmony();
