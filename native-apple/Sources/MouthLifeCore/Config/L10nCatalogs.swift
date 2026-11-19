@@ -1097,7 +1097,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome aus dem All in echte Städte und die Zahngeschichte. Freu dich jeden Tag über glatte, saubere Zähne durch Putzen, Zahnseide und Fluorid!",
 "← Exit to Hub":"← Zur Basis",
 "← Hub":"← Basis",
-"Exit to Smooth Bask Hub":"Zurück zur Glattglanz-Basis"
+"Exit to Smooth Bask Hub":"Zurück zur Glattglanz-Basis",
+"Full screen":"Vollbild",
+"Whole mouth":"Ganzer Mund"
 }
 """###
 
@@ -2180,7 +2182,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Acércate desde el espacio a ciudades reales y a la historia de los dientes. ¡Disfruta de dientes lisos y limpios cada día cepillándote, usando hilo dental y flúor!",
 "← Exit to Hub":"← Salir a la Base",
 "← Hub":"← Base",
-"Exit to Smooth Bask Hub":"Salir a la Base de Brillo suave"
+"Exit to Smooth Bask Hub":"Salir a la Base de Brillo suave",
+"Full screen":"Pantalla completa",
+"Whole mouth":"Toda la boca"
 }
 """###
 
@@ -3263,7 +3267,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Zoome depuis l'espace sur de vraies villes et l'histoire des dents. Profite de dents lisses et propres chaque jour grâce au brossage, au fil dentaire et au fluor !",
 "← Exit to Hub":"← Retour à l'Accueil",
 "← Hub":"← Accueil",
-"Exit to Smooth Bask Hub":"Quitter vers l'Accueil Pause lisse"
+"Exit to Smooth Bask Hub":"Quitter vers l'Accueil Pause lisse",
+"Full screen":"Plein écran",
+"Whole mouth":"Toute la bouche"
 }
 """###
 
@@ -4346,7 +4352,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"うちゅうから本物のまちや歯のれきしにズームイン！歯みがき、フロス、フッそを使って、毎日つるつるできれいな歯を楽しみましょう！",
 "← Exit to Hub":"← ひろばへもどる",
 "← Hub":"← ひろば",
-"Exit to Smooth Bask Hub":"つるつるタイムひろばへ出る"
+"Exit to Smooth Bask Hub":"つるつるタイムひろばへ出る",
+"Full screen":"全画面",
+"Whole mouth":"口全体"
 }
 """###
 
@@ -5429,7 +5437,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"우주에서 실제 도시와 치아 역사 속으로 쑥 들어가 봐요. 양치질과 치실, 불소로 매일 매끈하고 깨끗한 치아를 느껴 봐요!",
 "← Exit to Hub":"← 기지로 나가기",
 "← Hub":"← 기지",
-"Exit to Smooth Bask Hub":"매끈 휴식 기지로 나가기"
+"Exit to Smooth Bask Hub":"매끈 휴식 기지로 나가기",
+"Full screen":"전체 화면",
+"Whole mouth":"입 전체"
 }
 """###
 
@@ -6512,7 +6522,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"Dê zoom do espaço até cidades reais e conheça a história dos dentes. Curta dentes lisos e limpos todo dia escovando, passando fio dental e usando flúor!",
 "← Exit to Hub":"← Sair para a Base",
 "← Hub":"← Base",
-"Exit to Smooth Bask Hub":"Sair para a Base Descanso Liso"
+"Exit to Smooth Bask Hub":"Sair para a Base Descanso Liso",
+"Full screen":"Tela cheia",
+"Whole mouth":"Boca inteira"
 }
 """###
 
@@ -7595,7 +7607,9 @@ enum L10nCatalogs {
 "Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!":"从太空飞进真实的城市，探索牙齿历史。每天刷牙、用牙线和使用氟化物，享受光滑干净的牙齿吧！",
 "← Exit to Hub":"← 返回基地",
 "← Hub":"← 基地",
-"Exit to Smooth Bask Hub":"返回光滑沐浴基地"
+"Exit to Smooth Bask Hub":"返回光滑沐浴基地",
+"Full screen":"全屏",
+"Whole mouth":"整个口腔"
 }
 """###
 }

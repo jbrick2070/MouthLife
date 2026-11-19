@@ -52,6 +52,8 @@
 		F186065720BDAA29853D480C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8738225AC4938AA2222183FA /* Assets.xcassets */; };
 		F31AC7583D7185570DBCBAB2 /* NativeSoundEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5A2245810530D69820F600 /* NativeSoundEngine.swift */; };
 		F6149BBFDAF55354A865C00B /* BrushAlongView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9396B3C7425C92956AD99A31 /* BrushAlongView.swift */; };
+		7C0A14000000000000000011 /* BrushOverviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A14000000000000000001 /* BrushOverviewPanel.swift */; };
+		7C0A14000000000000000021 /* MouthLifeWatchUI in Frameworks */ = {isa = PBXBuildFile; productRef = 7C0A14000000000000000031 /* MouthLifeWatchUI */; };
 		FA422C8939196D341AB49DF7 /* ProfileAndSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB3D2C8E1B5ABFA1741026 /* ProfileAndSettingsSheet.swift */; };
 /* End PBXBuildFile section */
 
@@ -114,6 +116,7 @@
 		850EA58EF72EEF9D81393447 /* MouthLife3DViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLife3DViewport.swift; path = MouthLifeApp/Render/MouthLife3DViewport.swift; sourceTree = "<group>"; };
 		8738225AC4938AA2222183FA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = MouthLifeApp/Assets.xcassets; sourceTree = "<group>"; };
 		8FCB3D2C8E1B5ABFA1741026 /* ProfileAndSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfileAndSettingsSheet.swift; path = MouthLifeApp/UI/Sheets/ProfileAndSettingsSheet.swift; sourceTree = "<group>"; };
+		7C0A14000000000000000001 /* BrushOverviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrushOverviewPanel.swift; path = MouthLifeApp/UI/BrushOverviewPanel.swift; sourceTree = "<group>"; };
 		9396B3C7425C92956AD99A31 /* BrushAlongView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrushAlongView.swift; path = MouthLifeApp/UI/BrushAlongView.swift; sourceTree = "<group>"; };
 		9B233D855B398BD62F8D4023 /* HapticsEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HapticsEngine.swift; path = MouthLifeApp/Audio/HapticsEngine.swift; sourceTree = "<group>"; };
 		5E9C1D4287A34F60B1E28802 /* MotionTiltMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MotionTiltMonitor.swift; path = MouthLifeApp/Audio/MotionTiltMonitor.swift; sourceTree = "<group>"; };
@@ -134,6 +137,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D786A60CEB5C0B8B6607A0D8 /* MouthLifeCore in Frameworks */,
+				7C0A14000000000000000021 /* MouthLifeWatchUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -178,6 +182,7 @@
 				B87DE4132E4982A9110761AA /* CompanionHubView.swift */,
 				7A11C0DE5EED4B1DA5E2F001 /* TutorialView.swift */,
 				9396B3C7425C92956AD99A31 /* BrushAlongView.swift */,
+				7C0A14000000000000000001 /* BrushOverviewPanel.swift */,
 				4547A05E5D031164D834E42E /* ArcadeHudView.swift */,
 				6D893AF0797D7CF7E367F84B /* MissionReportView.swift */,
 				5F1A11E0C1D2E3F405A6B7C2 /* CityFinaleView.swift */,
@@ -245,6 +250,7 @@
 			name = MouthLife;
 			packageProductDependencies = (
 				92A2413D2632ABB70C9A52EF /* MouthLifeCore */,
+				7C0A14000000000000000031 /* MouthLifeWatchUI */,
 			);
 			productName = MouthLife;
 			productReference = D3D407A6E8675D5FDEA5235D /* MouthLife.app */;
@@ -359,6 +365,7 @@
 				04C1B02BBE00EAA1A6EF11ED /* CompanionHubView.swift in Sources */,
 				7A11C0DE5EED4B1DA5E2F002 /* TutorialView.swift in Sources */,
 				F6149BBFDAF55354A865C00B /* BrushAlongView.swift in Sources */,
+				7C0A14000000000000000011 /* BrushOverviewPanel.swift in Sources */,
 				7BF6C1251C43077C582AE14A /* ArcadeHudView.swift in Sources */,
 				9B4C63EB690FDDAB5A71A19C /* MissionReportView.swift in Sources */,
 				5F1A11E0C1D2E3F405A6B7C1 /* CityFinaleView.swift in Sources */,
@@ -601,6 +608,11 @@
 			productName = MouthLifeCore;
 		};
 		7C0A12000000000000000032 /* MouthLifeWatchUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96320F82233D0E1B9674FCF0 /* XCLocalSwiftPackageReference "." */;
+			productName = MouthLifeWatchUI;
+		};
+		7C0A14000000000000000031 /* MouthLifeWatchUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 96320F82233D0E1B9674FCF0 /* XCLocalSwiftPackageReference "." */;
 			productName = MouthLifeWatchUI;

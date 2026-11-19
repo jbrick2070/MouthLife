@@ -5,15 +5,65 @@ public struct RootContentView: View {
     @Bindable public var coordinator: AppCoordinator
     /// The system's Reduce Motion setting; the game follows it (the in-app switch can still turn it on).
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    /// On a wide screen the 2-minute brush shows the whole mouth beside the 3D close-up (the "duo");
+    /// one tap folds it away for a full-screen close-up, and the choice is remembered.
+    @AppStorage("mouthlife.brushOverview") private var showBrushOverview = true
 
     public init(coordinator: AppCoordinator) {
         self.coordinator = coordinator
     }
 
     public var body: some View {
+        GeometryReader { geo in
+            let wide = coordinator.mode == .brushAlong && geo.size.width >= 900 && geo.size.width > geo.size.height * 1.15
+            let panel: CGFloat = wide && showBrushOverview ? min(460, geo.size.width * 0.36) : 0
+            ZStack(alignment: .trailing) {
+                modes(trailingInset: panel)
+                if wide {
+                    if showBrushOverview {
+                        BrushOverviewPanel(
+                            elapsedSec: coordinator.pacerElapsedSec,
+                            pacerStage: coordinator.pacerStage,
+                            mouthwashDurationSec: coordinator.mouthwashDurationStyle.durationSec,
+                            isPaused: coordinator.pacerIsPaused,
+                            language: coordinator.coachLanguage,
+                            onHide: { showBrushOverview = false }
+                        )
+                        .frame(width: panel - 24)
+                        .padding(.vertical, 16)
+                        .padding(.trailing, 16)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    } else {
+                        // a tab on the edge brings the overview back
+                        Button { showBrushOverview = true } label: {
+                            Image(systemName: "arrow.left.to.line")
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(MLTheme.textSecondary)
+                                .frame(width: 44, height: 64)
+                                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.45)))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 10)
+                        .accessibilityLabel(L10n.t("Whole mouth"))
+                        .transition(.opacity)
+                    }
+                }
+            }
+            .animation(systemReduceMotion ? nil : .easeInOut(duration: 0.3), value: panel)
+            .background(MLTheme.deepOcean.ignoresSafeArea())
+        }
+        .ignoresSafeArea(.keyboard)
+    }
+
+    /// The 3D scene with the overlay for the current mode. `trailingInset` leaves room on the right
+    /// for the brush overview on a wide screen (the scene and its controls move over; nothing else
+    /// changes, so the 3D view is never rebuilt).
+    @ViewBuilder
+    private func modes(trailingInset: CGFloat) -> some View {
         ZStack {
             // Full-screen 120Hz Native Metal SceneKit 3D Viewport
             MouthLife3DViewport(controller: coordinator.sceneController, paused: coordinator.finale != nil)
+                .padding(.trailing, trailingInset)
                 .ignoresSafeArea()
 
             // Streamlined Liquid-Glass Mode Overlays
@@ -86,6 +136,7 @@ public struct RootContentView: View {
                     },
                     onCancelToHub: { coordinator.returnToHub() }
                 )
+                .padding(.trailing, trailingInset)
                 .transition(.opacity)
 
             case .arcade, .pulpRescue:
