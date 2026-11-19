@@ -92,6 +92,28 @@ public struct WatchRitual: Codable, Equatable, Sendable {
 
     public var remainingSec: Double { max(0, stageLength - stageElapsed) }
 
+    /// The big 3-2-1 on the watch face: shown only before the moves the wrist taps 3-2-1 for (each
+    /// new quarter, including the roll into floss, the floss halfway and end, and the rinse end),
+    /// and never while paused. Surface changes get their own tap and no countdown.
+    public var countdownDigit: Int? {
+        guard !paused else { return nil }
+        let next: Double
+        switch stage {
+        case .brushing:
+            let quarter = Self.brushSec / 4
+            next = min(Self.brushSec, (floor(stageElapsed / quarter) + 1) * quarter)
+        case .floss:
+            next = stageElapsed < Self.flossSec / 2 ? Self.flossSec / 2 : Self.flossSec
+        case .rinse:
+            next = rinseSec
+        case .done:
+            return nil
+        }
+        let left = next - stageElapsed
+        guard left <= 3, left > 0.05 else { return nil }
+        return max(1, min(3, Int(left.rounded(.up))))
+    }
+
     /// Position on the shared timeline (what BrushPhaseState.evaluate expects).
     public var timelineSec: Double {
         switch stage {

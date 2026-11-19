@@ -51,13 +51,14 @@ struct WatchRootView: View {
                         onClose: { controller.closeControls() }
                     )
                 } else {
-                    WatchActiveFace(state: state, onMore: { controller.openControls() })
+                    WatchActiveFace(state: state, onMore: { controller.openControls() }, onResume: { controller.togglePause() })
                 }
             } else {
                 WatchReadyFace(state: state, onStart: { controller.start() }, onResume: { controller.resume() })
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: controller.ritual?.phase.countdownPip)
+        // the 3-2-1 pops in and out (still in Always On and with Reduce Motion)
+        .animation(reduceMotion || dimmed ? nil : .easeInOut(duration: 0.2), value: controller.ritual?.countdownDigit)
         // deep purple-black behind every face (purple and gold, like the owner's team)
         .background(WatchLook.background.ignoresSafeArea())
     }

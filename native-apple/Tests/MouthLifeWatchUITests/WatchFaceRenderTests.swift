@@ -48,8 +48,9 @@ final class WatchFaceRenderTests: XCTestCase {
         for (label, size) in Self.sizes {
             try render("ready-\(label)", size: size, WatchReadyFace(state: WatchFaceState(), onStart: {}, onResume: {}))
             try render("ready-rinse-resume-\(label)", size: size, WatchReadyFace(state: WatchFaceState(includeRinse: true, canResume: true), onStart: {}, onResume: {}))
-            // close on the quarter (the 3-2-1 sits inside the arch), then pulled back for the next one
-            for (t, tag) in [(4.0, "outside"), (8.5, "close-countdown"), (14.0, "chewing"), (27.5, "countdown"), (44.0, "q2-chewing"), (54.0, "q2-inside")] {
+            // close on the quarter with the brush on each surface (no 3-2-1 before a surface change),
+            // then pulled back for the next quarter with the 3-2-1 and a "here next" outline
+            for (t, tag) in [(4.0, "outside"), (8.5, "outside-molar"), (16.0, "chewing"), (27.5, "countdown"), (44.0, "q2-chewing"), (54.0, "q2-inside")] {
                 try render("brush-\(tag)-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: t)), onMore: {}))
             }
             try render("brush-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 64), dimmed: true), onMore: {}))
@@ -59,7 +60,12 @@ final class WatchFaceRenderTests: XCTestCase {
             try render("controls-brushing-\(label)", size: size, WatchControlsFace(state: WatchFaceState(ritual: ritual(at: 40)), armed: nil, onPause: {}, onNext: {}, onSkip: {}, onEnd: {}, onClose: {}, scrollable: false))
             try render("floss-top-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 128)), onMore: {}))
             try render("floss-bottom-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 150)), onMore: {}))
-            try render("rinse-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true)), onMore: {}))
+            try render("rinse-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 175, includeRinse: true)), onMore: {}))
+            try render("rinse-between-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true)), onMore: {}))
+            try render("rinse-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true), dimmed: true), onMore: {}))
+            var paused = ritual(at: 40)
+            _ = paused.setPaused(true)
+            try render("brush-paused-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: paused), onMore: {}))
             try render("controls-\(label)", size: size, WatchControlsFace(state: WatchFaceState(ritual: ritual(at: 128)), armed: "next", onPause: {}, onNext: {}, onSkip: {}, onEnd: {}, onClose: {}, scrollable: false))
             var done = ritual(at: 0)
             _ = done.end(now: Date(timeIntervalSince1970: 0))
@@ -67,14 +73,39 @@ final class WatchFaceRenderTests: XCTestCase {
             let full = ritual(at: 170)
             try render("done-full-\(label)", size: size, WatchDoneFace(state: WatchFaceState(ritual: full, ack: WatchBrushAck(sessionId: "x", ionsAwarded: 100, stampAwarded: true, fullReward: true)), onClose: {}))
         }
-        // the longest words, at the smallest size
-        for lang in [CoachLanguage.german, .japanese, .french] {
+        // every language at the smallest size (the longest words: German, French, Japanese)
+        for lang in CoachLanguage.allCases {
             let size = Self.sizes[0].1
+            try render("rinse-between-\(lang.rawValue)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 190, includeRinse: true), language: lang), onMore: {}))
+            var paused = ritual(at: 40)
+            _ = paused.setPaused(true)
+            try render("paused-\(lang.rawValue)", size: size, WatchActiveFace(state: WatchFaceState(ritual: paused, language: lang), onMore: {}))
             try render("brush-\(lang.rawValue)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 24), language: lang), onMore: {}))
             try render("floss-\(lang.rawValue)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 128), language: lang), onMore: {}))
             var early = ritual(at: 0)
             _ = early.end(now: Date(timeIntervalSince1970: 0))
             try render("done-\(lang.rawValue)", size: size, WatchDoneFace(state: WatchFaceState(ritual: early, language: lang, syncPending: true), onClose: {}))
         }
+    }
+
+    /// The brush reaches every tooth, the back molar included, in every 10 s surface of the brush.
+    func testTheBrushSweepsEveryToothInEverySurface() {
+        for surface in 0..<12 {
+            var seen = Set<Int>()
+            for tenth in 0..<100 {
+                let r = ritual(at: Double(surface) * 10 + Double(tenth) / 10 + 0.05)
+                seen.insert(MouthPacer.tooth(atSurfaceSecond: r.phase.phaseElapsedSec))
+            }
+            XCTAssertEqual(seen, Set(0...6), "surface \(surface)")
+        }
+    }
+
+    /// Floss goes gap by gap from the back right to the back left, as on the phone.
+    func testFlossGapsRunFromBackRightToBackLeft() {
+        XCTAssertEqual(MouthMap.contactIndex(gap: 5, right: true), 0)
+        XCTAssertEqual(MouthMap.contactIndex(gap: 0, right: true), 5)
+        XCTAssertEqual(MouthMap.contactIndex(gap: -1, right: true), 6)
+        XCTAssertEqual(MouthMap.contactIndex(gap: 0, right: false), 7)
+        XCTAssertEqual(MouthMap.contactIndex(gap: 5, right: false), 12)
     }
 }

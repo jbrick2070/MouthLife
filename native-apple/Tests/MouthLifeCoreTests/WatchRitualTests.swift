@@ -38,6 +38,29 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertTrue(inputs.fullBrush && inputs.withFloss && inputs.rinseStepOff && !inputs.withRinse)
     }
 
+    func testTheBigCountdownShowsOnlyWhenTheWristTapsIt() {
+        var r = WatchRitual(startedAt: t0, includeRinse: true, rinseSec: 30)
+        var seconds: Set<Int> = []
+        while r.stage != .done {
+            let stage = r.stage
+            let cue = r.advance(by: 0.1, now: t0)
+            if case let .countdown(n) = cue { XCTAssertEqual(r.countdownDigit, n, "\(stage) \(r.stageElapsed)") }
+            if r.countdownDigit != nil, r.stage == stage { seconds.insert(Int(r.timelineSec)) }
+        }
+        // before each new quarter (and the roll into floss), the floss halfway and end, the rinse end
+        let expected: Set<Int> = [27, 28, 29, 57, 58, 59, 87, 88, 89, 117, 118, 119,
+                                  139, 140, 141, 142, 162, 163, 164, 192, 193, 194]
+        XCTAssertEqual(seconds, expected)
+        // none before a surface change, and none while paused
+        var s = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&s, seconds: 8.5)
+        XCTAssertNil(s.countdownDigit)
+        _ = run(&s, seconds: 19.5)
+        XCTAssertEqual(s.countdownDigit, 2)
+        _ = s.setPaused(true)
+        XCTAssertNil(s.countdownDigit)
+    }
+
     func testRinseRunsOnlyWhenTheGrownUpTurnedItOn() {
         var r = WatchRitual(startedAt: t0, includeRinse: true, rinseSec: 30)
         _ = run(&r, seconds: 165)

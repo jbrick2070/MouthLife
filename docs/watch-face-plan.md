@@ -1,4 +1,45 @@
-# Apple Watch brushing face: improvement plan (draft for final review)
+# Apple Watch brushing face: improvement plan
+
+## Final decisions (after the Astra review, 2026-11-19)
+
+The draft below was reviewed by Astra. These are the decisions being built.
+
+1. **Brush (item 1): built, corrected.**
+   - The skipped molars happen only in Q1 and Q3; Q2 and Q4 do reach tooth 6.
+   - The sweep comes from `phaseElapsedSec` in all twelve surfaces.
+   - The brush glides only between neighbouring teeth. It jumps on a surface change, after a missed
+     tick and with Reduce Motion.
+2. **Countdown (item 2): built.** The digit follows `WatchRitual.crossing` exactly (new
+   `WatchRitual.countdownDigit`): the last 3 s of each quarter (including 117-119 s before floss),
+   both floss boundaries and the rinse end. It hides while paused, and the brush stays visible beside
+   it.
+3. **Camera (item 3): built, changed.**
+   - The 2 s hold stays, because the face only updates on whole seconds.
+   - The zoom-in takes 0.7 s.
+   - The next-quarter hint is worked out from the current quarter (Q1-Q3), because
+     `upcomingQuadrantIndex` lasts only 0.85 s. It is drawn fainter than the brush.
+   - Tilt is 8°, to be judged on the wrist together with the 10° nod.
+4. **Floss pick (item 4): built.**
+   - `flossContactIndex` maps 0 to rear-right, 6 to centre and 12 to rear-left. The lower arch
+     restarts at rear-right at 22.5 s, as on the phone.
+   - In Always On, the arch not being flossed is dimmed.
+5. **Rinse (item 5): built, still water first.** The teeth stay idle-coloured. One clear waterline in
+   a new water colour is drawn, with gap marks on the middle step and an outline only in Always On.
+6. **Compass and segmented bar (item 6): dropped.** The clock, "1/4" and the continuous bar stay.
+7. **Teeth (item 7): built.** The molar depth goes to 0.82, checked by eye for space between the
+   stroked teeth. The lit sheen and the inside dash weight are tuned after that.
+8. **Paused control (item 8): built, changed.**
+   - "…" gets a 44 pt touch target (it was 32 pt at 40 mm) and a quieter look.
+   - While paused, the word pill becomes a Resume button (`togglePause`). "…" still opens the
+     controls, so End stays reachable.
+9. **Always On covers the whole running face (new): built.**
+   - The bar, pill and button are drawn as outlines.
+   - There is no 3-2-1 animation while dimmed.
+10. **VoiceOver (new): built.** There is still one summary line for location, action and time. The
+    Resume button reads its real action.
+
+Not done this pass: coalescing the mid-second floss-halfway update, and caching tooth geometry
+between frames. Both are small, and can be revisited if the wrist shows any stutter.
 
 State on `master` at `1cf5616`, worn on the owner's Series 9 (watchOS 27.2.1) on 2026-11-19. The owner's
 verdict: "much better representation", "actually pretty good", but "I don't see a brush".
