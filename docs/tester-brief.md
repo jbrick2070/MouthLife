@@ -18,6 +18,18 @@ a browser, and it can be installed to the Home Screen like an app.
 4. Bonus if you have one: a foldable Android phone (open flat and half open), an Android tablet or
    iPad, or a touchscreen laptop.
 
+## If you have 1 hour
+
+Do these, in order, and skip the rest:
+
+1. **Android phone, Chrome, fresh browser (15 min):** the Prologue, then Home, then one whole
+   2-Minute Brush (with floss; about 3 minutes). Note anything confusing or broken.
+2. **Android phone (15 min):** one city stage (Dive): thumbstick, Floss, Scan, pause, and finishing
+   the city if you can.
+3. **iPhone, Safari (15 min):** the same 2-Minute Brush and a few minutes of a city stage.
+4. **Computer (10 min):** a city stage with mouse and keyboard, including right-click to floss.
+5. **Write-up (5 min):** your top bugs (with a screenshot or recording each) and first impressions.
+
 ## What to test (about 2 to 3 hours in all)
 
 Start with a fresh browser (a private window, or clear the site's data) so you see the first-run
