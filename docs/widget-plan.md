@@ -2,19 +2,22 @@
 
 Status on `master` at `071b3f6`: **MouthLife has no widgets yet.** No WidgetKit extension, no App
 Group, no entitlements file. This is the draft for what to build; it is meant to be reviewed
-before any code is written. Updated 2026-11-19 with the agy and Codex design reviews and the
-iPhone Duo (sections at the end).
+before any code is written. Updated 2026-11-19 with the agy and Codex design reviews, the iPhone
+Duo, and the owner's widget strategy for HomeView, iPhone and Android (sections at the end; the
+"Owner's strategy" section is the most recent and wins where sections differ).
 
 **Where the widgets go:** every iPhone and iPad (Home Screen, Lock Screen, StandBy on iPhone),
-Apple HomeView if it accepts them, and both Home Screens of the iPhone Duo. One set of widgets for
-all of them; the Duo needs no widget of its own.
+Apple HomeView (small widgets only, confirmed by Apple), and both Home Screens of the iPhone Duo.
+One set of widgets for all of them; the Duo needs no widget of its own. Android is a separate,
+later decision (see the strategy section).
 
 ## Why widgets
 - The owner asked for iPhone widgets, and for them to be "good".
-- Apple HomeView (on sale 2026-11-13, $299, 7-inch square screen) cannot run MouthLife itself. The
-  one third-party route reported so far is small iPhone widgets on its Modular face (a claim from a
-  personal blog, unconfirmed by Apple). Widgets are therefore also the closest way to be on
-  HomeView. Design them so they still work with the background removed (StandBy style).
+- Apple HomeView (on sale 2026-11-13, $299, 7-inch square screen) cannot run MouthLife itself. Its
+  only third-party surface is iPhone widgets of the **small** family. Apple's widget guidelines
+  (updated 2026-10-13) list HomeView only for the small family: on each household member's own Home
+  Screen and on the household's one shared Modular face, where the widget is shown larger, with
+  its background removed, and tinted red in low light. So the small widget must work on its own.
 
 ## What data a widget can show (already in the app)
 - `BrushDays` (`native-apple/Sources/MouthLifeCore/Config/BrushDays.swift`): per day, full 2-minute
@@ -117,10 +120,12 @@ Where they disagree, the owner decides:
    keeps a small "Today" for the child and a medium "This week" for the grown-up. Suggested: both
    families (small Today, medium This week); a family adds one view, not a new feature.
 
-Unverified, check on hardware before promising it: whether HomeView takes third-party small widgets
-on its personal Home Screen and its household-wide Modular face (Codex says Apple confirms both;
-Xcode 27.2 has no HomeView widget API, so they would be ordinary small widgets). With question 1's
-suggestion, a household screen would only ever show the neutral tooth or nothing.
+HomeView facts: confirmed by Apple's guidelines since the reviews (small family only; personal Home
+Screens and one shared Modular face; background removed, larger, red-tinted in low light). Xcode 27.2
+still has no HomeView API, simulator or widget location, so a widget cannot tell it is on HomeView.
+Still unverified: what a tap on our widget does on HomeView (Apple documents nothing; never depend on
+it), and whether iPhone Live Activities appear there (Apple's Live Activities guidelines do not list
+HomeView).
 
 ## iPhone Duo
 
@@ -152,3 +157,107 @@ Checked on the iPhone Duo simulator (screenshots in [`duo-captures/`](duo-captur
 - **Languages:** widget words come from `WatchCopy` (one or two words). Check German and French in
   the small family and in the circular Lock Screen family, cover and inner, with large text.
 - **Non-punitive everywhere:** an empty day is an empty outline; no streak, no red, no "missed".
+
+## Owner's strategy (HomeView, iPhone, Android), merged 2026-11-19
+
+The owner's widget strategy notes (private, summarised here in our own words) were checked against
+the code, the Xcode 27.2 SDK and Apple's guidelines. Every WidgetKit call they name exists in the SDK
+(`containerBackground(for:)`, `containerBackgroundRemovable`, `showsWidgetContainerBackground`,
+`widgetRenderingMode`, `widgetAccentable`, `widgetAccentedRenderingMode`, `privacySensitive`,
+`disfavoredLocations`, `ControlWidget` / `StaticControlConfiguration`, `LiveActivityIntent`). The
+files they name exist (`BrushDays.swift`, `BrushWeekStrip`, `PhoneWatchBridge.swift`,
+`BrushReminderScheduler.swift`, `DesignSystem.swift`, `WatchFaces.swift`, `src/config/brushDays.ts`).
+
+### Adopted
+
+- **The small "Today" widget is the flagship.** It alone covers the iPhone Home Screen, StandBy and
+  HomeView (both its personal and its shared screens), so it must say everything by itself; the
+  medium week strip is a bonus for the iPhone and iPad Home Screen only.
+- **Four states, told apart by shape, readable across a room by a child who cannot read yet:**
+  nothing yet = two calm outlines ("Ready"); a short brush = a warm dashed half-glow with a small
+  sparkle ("Good try"); one full brush = one solid gold mark; two = both gold with a sparkle arc
+  ("All shine!", new string). The word is hidden when the background is removed. Same purple and
+  gold as the watch.
+- **Rendering rules:**
+  - the purple background goes in `.containerBackground(for: .widget)` and stays removable (never
+    `.containerBackgroundRemovable(false)`, which would keep the widget out of StandBy and HomeView);
+  - when `showsWidgetContainerBackground` is false (StandBy, HomeView's Modular face), the marks grow,
+    their strokes get thicker (about 3 → 5 pt) and the word goes;
+  - in the accented rendering mode (tinted and clear Home Screens) only finished marks and the
+    good-try glow are `.widgetAccentable()`, so done and not-yet stay apart in one tint; any image
+    gets `.widgetAccentedRenderingMode(...)` so it does not turn into a white block;
+  - round, calm shapes only (no crosses, triangles or exclamation marks), so the red night tint
+    still reads as a night-light, not an alarm.
+- **Privacy by omission:** no name, age, picture or text about the child on any widget; only
+  anonymous marks. This holds on every surface, because a widget cannot know where it is shown.
+  Putting the small widget on HomeView's shared face is then a grown-up's choice, not a leak.
+- **Taps open Home, never start the brush,** and no "mark as done" button (it would skip the
+  brushing). Interactive App Intents are kept for a later Live Activity's pause, if ever.
+- **Week strip** with one-letter weekdays from the system (`veryShortWeekdaySymbols`), so no
+  language truncates; today in a ring.
+- **Shared data:** the app and the widget extension in the same team, with one App Group; the watch
+  bridge (`PhoneWatchBridge`) writes the snapshot and reloads widgets when a watch brush arrives.
+
+### Changed
+
+- **Sun and moon tokens:** the notes put a morning sun on the left and an evening moon on the right.
+  The save keeps only counts per day (`DailySlotLog.fullRewards` / `.tips`), not times, so a child
+  who brushes first at night would see the morning sun fill. Plan: two identical marks that fill left
+  to right. Sun and moon would need brush times in the save, which changes the Sync Code shared with
+  the web (`ML2:`), so it is an owner question (below).
+- **Timeline:** one entry per local midnight, refreshed with `.atEnd`. The notes' extra entries at
+  reminder times only matter with a sun and a moon; without them nothing changes at 07:30 or 19:30.
+- **Lock Screen "next brush" rectangle** ("Morning", "Bedtime" beside two small marks): not planned.
+  It needs brush times, shows a child's routine on a locked screen, and repeats the reminder
+  notifications the app already has (`BrushReminderScheduler`). Owner question.
+- **Live Activity with Pause and Finish buttons:** still deferred (see the iPhone Duo section and
+  `duo-plan.md`): today the brush pauses when the phone locks, and Apple does not list HomeView for
+  Live Activities.
+
+### New, small, optional
+
+- **Control Center launcher** (`ControlWidget` with `StaticControlConfiguration`, iOS 18+, the app
+  targets iOS 17 so it is guarded): a brush symbol and one word, "Brush", that opens Home and never
+  starts the timer. Also usable from the Lock Screen corners and the Action Button. Stateless, so no
+  privacy question.
+
+### Android (separate decision, after the Apple widgets)
+
+- **A web app cannot make an Android widget** (per the sources in the notes; not re-checked here).
+  Chrome and Edge give installed web apps no Home or
+  Lock Screen widgets on Android (Edge's widget support is Windows-only), and Google's smart displays
+  (Nest Hub) take no third-party widgets at all.
+- **What it would take:** a small Android app that wraps the web edition (a Trusted Web Activity,
+  made with Bubblewrap) plus a native Jetpack Glance widget, shown on Android Home Screens, the new
+  Android 16 Lock Screen widget page and a docked Pixel Tablet. Same four states, same privacy.
+- **Costs and corrections:**
+  - A fourth code base (Kotlin) and a first Play Store app, with Google's Families policy and data
+    safety form for a children's app.
+  - The wrapper must prove it owns the website with a Digital Asset Links file at the site's
+    **root** (`/.well-known/assetlinks.json`). The web edition is a GitHub Pages project site with no
+    custom domain, whose root it does not control: it would need the owner's user site or a custom
+    domain, or the wrapper bundles the web files offline (a plain WebView instead of Chrome).
+  - The widget cannot read the web app's storage. The notes pass the day's counts through a custom
+    link (`mouthlife://...`); a link would visibly leave the page. Chrome's message channel between
+    a Trusted Web Activity and its app (`PostMessage`, AndroidX Browser) can do it without leaving;
+    to be verified. Pass only the day's counts, not a whole Sync Code.
+  - Android 15 grays out a force-stopped app's widgets until the app is opened again; opening the
+    app from the Lock Screen asks for unlock first (good for a family phone).
+- Web and native must match: this would be the web edition's first store app and first widget, so
+  it needs the owner's go-ahead as its own project.
+
+### Build order (suggested)
+
+1. App Group, the snapshot, small **Today** (Home Screen, StandBy, HomeView), medium **This week**.
+2. The Lock Screen circular widget, once the privacy question is decided, and the Control Center
+   launcher.
+3. Later, only with the owner's go-ahead: the Live Activity (with background audio), then Android.
+
+### Questions for the owner (strategy)
+
+1. **Sun and moon,** with brush times added to the save and the Sync Code (both editions), or two
+   identical marks (no save change)? Suggested: two identical marks.
+2. **Lock Screen:** neutral tooth, or anonymous progress marked `.privacySensitive()`? (Note that
+   Apple's redaction on the Lock Screen depends on the user's settings.)
+3. **The "next brush" rectangle on the Lock Screen:** skip (suggested) or build?
+4. **Android:** a separate project after the Apple widgets, or not at all?
