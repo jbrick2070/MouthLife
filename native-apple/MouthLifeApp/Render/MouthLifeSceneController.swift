@@ -285,8 +285,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         cosmicNodes.rootNode.isHidden = inStage || mode == .brushAlong
         if !inStage {
             probeRig.flossBeamNode.isHidden = true
-            directTouchWorldPos = nil
         }
+        // A thumb or button held on the way out of a stage never carries into the next screen.
+        if prevMode != mode { resetStageInput() }
 
         cosmicNodes.setCosmicIntroState(visible: mode == .cosmicIntro, beatIndex: cosmicBeatIndex)
         if mode == .cosmicIntro {
@@ -329,6 +330,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     public func mountStage(for session: WorldSession) {
         self.activeSession = session
+        resetStageInput()
         let cart = session.cartridge
 
         // Tear down old stage nodes
@@ -403,6 +405,35 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         self.stickScrubHeld = held
     }
 
+    /// The Prologue's hardness chips pick a 3D crystal.
+    public func selectCosmicMohs(_ index: Int) {
+        cosmicNodes.selectMohsSpecimen(index)
+    }
+
+    /// Lets go of everything a stage was being told: the stick, a finger on the tooth and any floss,
+    /// Surge or Scan still waiting for the next step. Called on pause, on leaving a stage, when a
+    /// finale starts and when a new stage mounts (web twin: `releaseThumbPad` + `setVirtualMove(0, 0,
+    /// false)` in `TelemetryHudOverlay.setPaused`).
+    public func resetStageInput() {
+        stickMoveX = 0
+        stickMoveZ = 0
+        stickScrubHeld = false
+        directTouchWorldPos = nil
+        pendingFlossFire = false
+        pendingFlossAimPos = nil
+        pendingRinseFire = false
+        pendingDiscloseFire = false
+        lastTapTimeSec = nil
+    }
+
+    /// The Mac's right-click: floss toward the point under the pointer, as on the web (a click with
+    /// no ground under it falls back to the automatic aim).
+    public func requestFlossToward(_ point: CGPoint, in scnView: SCNView) {
+        guard !arcadePaused, appMode == .arcade || appMode == .pulpRescue else { return }
+        pendingFlossFire = true
+        pendingFlossAimPos = arcadeGroundPoint(at: point, in: scnView)
+    }
+
     public func spawnCompanionTreatSplats() {
         touchSystem.spawnTreatSplats(anchors: companionCrownAnchors, count: 3)
     }
@@ -424,6 +455,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public func handlePointerDown(at point: CGPoint, in scnView: SCNView) {
         let now = Double(sceneNowSec)
         if appMode == .arcade || appMode == .pulpRescue {
+            guard !arcadePaused else { return }
             if isDoubleTap(
                 prevTimeSec: lastTapTimeSec,
                 prevX: Double(lastTapPt.x),
@@ -464,6 +496,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     public func handlePointerMove(at point: CGPoint, delta: CGSize, in scnView: SCNView) {
         if appMode == .arcade || appMode == .pulpRescue {
+            guard !arcadePaused else { return }
             updateArcadeGroundTarget(at: point, in: scnView)
         } else if appMode == .hub {
             if !tryRubCompanionCrown(at: point, in: scnView, phase: .move) {
@@ -489,20 +522,26 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     private func updateArcadeGroundTarget(at point: CGPoint, in scnView: SCNView) {
-        guard let cart = activeSession?.cartridge else { return }
+        guard let target = arcadeGroundPoint(at: point, in: scnView) else { return }
+        directTouchWorldPos = target
+    }
+
+    /// Where a screen point lands on the stage's tooth surface (kept inside the stage), or nil.
+    private func arcadeGroundPoint(at point: CGPoint, in scnView: SCNView) -> Vec2? {
+        guard let cart = activeSession?.cartridge else { return nil }
         let nearPt = scnView.unprojectPoint(SCNVector3(Float(point.x), Float(point.y), 0.0))
         let farPt = scnView.unprojectPoint(SCNVector3(Float(point.x), Float(point.y), 1.0))
         let rayOrigin = SIMD3<Float>(Float(nearPt.x), Float(nearPt.y), Float(nearPt.z))
         let rayEnd = SIMD3<Float>(Float(farPt.x), Float(farPt.y), Float(farPt.z))
         let dir = rayEnd - rayOrigin
-        guard abs(dir.y) > 1e-4 else { return }
+        guard abs(dir.y) > 1e-4 else { return nil }
         let planeY: Float = 0.55
         let t = (planeY - rayOrigin.y) / dir.y
-        guard t > 0 else { return }
+        guard t > 0 else { return nil }
         let hit = rayOrigin + dir * t
         let wx = max(1.0, min(cart.worldWidth - 1.0, Double(hit.x)))
         let wz = max(1.0, min(cart.worldDepth - 1.0, Double(hit.z)))
-        directTouchWorldPos = Vec2(x: wx, z: wz)
+        return Vec2(x: wx, z: wz)
     }
 
     @discardableResult
@@ -891,7 +930,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 bufferedRinse: true,
                 probePosition: Vec2(x: interpX, z: interpZ),
                 probeFoamRadius: Float(snap.effectiveBrushRadius),
-                probeFoamStrength: snap.scrubActive ? 1.0 : 0.2,
+                // No brushing glow behind the pause card (the last snapshot may still say scrubbing).
+                probeFoamStrength: snap.scrubActive && !arcadePaused ? 1.0 : 0.2,
                 acidStress: snap.stephanTimerSec > 0 ? 0.65 : 0.0,
                 audioBands: smoothedAudioBands
             )

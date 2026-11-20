@@ -804,6 +804,25 @@ public func pickRecommendedDiveWorld(
     )
 }
 
+/// A campaign city's place (1-5) for Home's "Dive 4 of 5", taken from the world the button launches;
+/// nil for anything outside the campaign. Web twin: `campaignStageNumber` in `src/ui/hudHelpers.ts`.
+public func campaignStageNumber(
+    worldId: String,
+    campaignWorldIds: [String] = ["world_1", "world_2", "world_3", "world_4", "world_5"]
+) -> Int? {
+    campaignWorldIds.firstIndex(of: worldId).map { $0 + 1 }
+}
+
+/// "Accra & Colorado Springs" -> "Accra", "Station Aurora (408 km LEO)" -> "Station Aurora": the
+/// city's short name for the Home Dive button. Web twin: `shortCityName` in `src/ui/hudHelpers.ts`.
+public func shortCityName(_ city: String) -> String {
+    var first = city.components(separatedBy: " & ").first ?? city
+    if let open = first.range(of: "("), first.hasSuffix(")") {
+        first = String(first[..<open.lowerBound])
+    }
+    return first.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 public func countAffordableLockedUpgrades(
     fluorideIons: Int,
     unlockedIds: [String],

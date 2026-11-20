@@ -111,4 +111,45 @@ final class QAFixTests: XCTestCase {
         XCTAssertEqual(SyncCodeError.invalidUtf8.errorDescription, "This code is damaged and can’t be read.")
         XCTAssertThrowsError(try SaveSystem.decodeSaveFromSyncCode("ML2:abc$$"))
     }
+
+    // Home's Dive names the city and its place in the campaign (web twin: tests/qaParity.test.ts).
+    func testDiveLabelNamesTheCityAndItsPlace() {
+        XCTAssertEqual(campaignStageNumber(worldId: "world_1"), 1)
+        XCTAssertEqual(campaignStageNumber(worldId: "world_4"), 4)
+        XCTAssertNil(campaignStageNumber(worldId: "pulp_rescue"))
+        XCTAssertEqual(shortCityName("Accra & Colorado Springs"), "Accra")
+        XCTAssertEqual(shortCityName("Station Aurora (408 km LEO)"), "Station Aurora")
+        XCTAssertEqual(shortCityName("Tokyo & Chicago"), "Tokyo")
+        XCTAssertEqual(shortCityName("New Orleans"), "New Orleans")
+        for host in HostsAndHistory.hostCities {
+            XCTAssertNotNil(campaignStageNumber(worldId: host.worldId), host.worldId)
+        }
+    }
+
+    // "Have a Sync Code?" on a brand-new device: the code's tooth comes across, although the fresh
+    // save was written later; counts still merge (web twin: tests/qaParity.test.ts).
+    func testPrologueRestoreKeepsTheCodesToothOnABrandNewSave() {
+        var fromOtherPhone = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_000_000)
+        fromOtherPhone.companion.enamelShield = 41
+        fromOtherPhone.fluorideIons = 300
+        fromOtherPhone.hasSeenCosmicIntro = true
+        var fresh = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_900_000)
+        fresh.fluorideIons = 5
+        let restored = SaveSystem.mergeSaves(current: fresh, imported: fromOtherPhone, preferImported: true)
+        XCTAssertEqual(restored.companion.enamelShield, 41)
+        XCTAssertEqual(restored.fluorideIons, 300)
+        XCTAssertTrue(restored.hasSeenCosmicIntro)
+        // An ordinary import still keeps this device's newer tooth.
+        let merged = SaveSystem.mergeSaves(current: fresh, imported: fromOtherPhone)
+        XCTAssertEqual(merged.companion.enamelShield, fresh.companion.enamelShield)
+        XCTAssertEqual(merged.fluorideIons, 300)
+    }
+
+    // The Prologue's hardness scale: the web's five specimens, softest first, enamel picked first.
+    func testMohsSpecimensMatchTheWeb() {
+        XCTAssertEqual(MohsSpecimens.all.map(\.name), ["Pure Gold", "Iron / Mild Steel", "Tooth Enamel", "Crystalline Quartz", "Diamond"])
+        XCTAssertEqual(MohsSpecimens.all.map(\.hardness), ["2.5", "4.0", "5.0", "7.0", "10.0"])
+        XCTAssertTrue(MohsSpecimens.all[MohsSpecimens.enamelIndex].isEnamel)
+        XCTAssertEqual(MohsSpecimens.all.filter(\.isEnamel).count, 1)
+    }
 }

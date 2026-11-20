@@ -635,10 +635,11 @@ export class SaveSystem {
     return encodeSaveToSyncCode(this.currentSave);
   }
 
-  importSyncCode(code: string, nowEpochMs = Date.now()): MouthLifeSaveV2 {
+  /** `preferImported`: see `mergeSaves` (the Prologue's restore on a brand-new save). */
+  importSyncCode(code: string, nowEpochMs = Date.now(), preferImported = false): MouthLifeSaveV2 {
     const imported = decodeSaveFromSyncCode(code, nowEpochMs);
     // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
-    const merged = mergeSaves(this.currentSave, imported);
+    const merged = mergeSaves(this.currentSave, imported, preferImported);
     CompanionArchSim.reconcileOfflineElapsed(merged.companion, nowEpochMs);
     merged.saveRevision = Math.max(this.currentSave.saveRevision, imported.saveRevision) + 1;
     this.currentSave = merged;
@@ -656,8 +657,17 @@ export class SaveSystem {
  * earned twice), the companion comes from whichever save is newer, and this device keeps its own
  * graphics setting. The Swift twin is SaveSystem.mergeSaves.
  */
-export function mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2): MouthLifeSaveV2 {
-  const newer = imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current;
+export function mergeSaves(
+  current: MouthLifeSaveV2,
+  imported: MouthLifeSaveV2,
+  /**
+   * This device's save is brand new (the Prologue's "Have a Sync Code?"), so the code's tooth,
+   * settings and choices win even though the fresh save was written more recently. Counts and
+   * unlocks still merge the same way. Native twin: `SaveSystem.mergeSaves(preferImported:)`.
+   */
+  preferImported = false
+): MouthLifeSaveV2 {
+  const newer = preferImported || imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current;
   const union = (a: readonly string[], b: readonly string[]): string[] => [...new Set([...a, ...b])];
   const worlds: Record<string, WorldRecord> = {};
   for (const id of new Set([...Object.keys(current.worlds), ...Object.keys(imported.worlds)])) {

@@ -1,5 +1,8 @@
 import SwiftUI
 import MouthLifeCore
+#if canImport(AppKit)
+import AppKit
+#endif
 
 public struct ArcadeHudView: View {
     public let cartridge: WorldCartridge
@@ -17,9 +20,58 @@ public struct ArcadeHudView: View {
     /// Tells the game the pause card is up or down, so the mission really stops while it shows.
     public let onPauseChanged: (Bool) -> Void
 
-    @State private var flossDragOffset: CGSize = .zero
-    @State private var stickDragOffset: CGSize = .zero
+    /// The Floss ring's drag; resets by itself if the touch is cancelled.
+    @GestureState private var flossDragOffset: CGSize = .zero
+    /// The thumbstick's drag from where the thumb landed (nil = no thumb). Resets by itself when the
+    /// touch ends or is cancelled (pause card, app to background, the HUD going away).
+    @GestureState private var stickTranslation: CGSize?
+    /// Set when the stick is let go while a thumb is still down (pause, focus lost): the rest of that
+    /// touch does nothing until it is lifted, as on the web (`releaseThumbPad`).
+    @State private var stickLatched: Bool = false
     @State private var isPausedSheet: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    private static let stickReach: CGFloat = 30
+
+    /// The knob's offset inside the ring, clamped to its reach.
+    private var stickKnobOffset: CGSize {
+        guard let t = stickTranslation, !stickLatched, !isPausedSheet else { return .zero }
+        let dist = hypot(t.width, t.height)
+        let k = dist > Self.stickReach ? Self.stickReach / dist : 1.0
+        return CGSize(width: t.width * k, height: t.height * k)
+    }
+
+    /// Tells the game what the stick is doing now (zero and not held when there is no live thumb).
+    private func pushStick() {
+        let o = stickKnobOffset
+        let live = stickTranslation != nil && !stickLatched && !isPausedSheet
+        onVirtualStickMove(Double(o.width / Self.stickReach), Double(o.height / Self.stickReach), live)
+    }
+
+    /// Lets go of the stick; a thumb still down stays ignored until it lifts.
+    private func releaseStick() {
+        if stickTranslation != nil { stickLatched = true }
+        onVirtualStickMove(0, 0, false)
+    }
+
+    /// The stage's pause card: one place, so the stick always lets go with it.
+    private func openPauseCard() {
+        releaseStick()
+        isPausedSheet = true
+    }
+
+    /// The mission must not run unattended (web: `visibilityHandler` / `blurHandler`).
+    private func pauseIfUnattended() {
+        if !isPausedSheet { openPauseCard() }
+    }
+
+    #if os(macOS)
+    private static let pauseHint = "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim."
+    private static let zipReadyText = "🧵 Right-click to Zip!"
+    #else
+    private static let pauseHint = "Touch any tooth to steer and scrub. Double-tap to Floss, or drag the Floss ring to aim."
+    private static let zipReadyText = "🧵 Tap to Zip!"
+    #endif
 
     public init(
         cartridge: WorldCartridge,
@@ -68,7 +120,7 @@ public struct ArcadeHudView: View {
                     // pauses first, so a stray thumb never ends a dive; the pause card then offers
                     // the same house beside Resume.
                     Button {
-                        isPausedSheet = true
+                        openPauseCard()
                     } label: {
                         Image(systemName: "house.fill")
                             .font(.system(size: 12, weight: .bold))
@@ -81,7 +133,7 @@ public struct ArcadeHudView: View {
                     .accessibilityLabel(L10n.t("Exit to Hub"))
 
                     Button {
-                        isPausedSheet = true
+                        openPauseCard()
                     } label: {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 22))
@@ -178,18 +230,22 @@ public struct ArcadeHudView: View {
                             .background(Capsule().fill(MLTheme.cardBg))
                     }
 
-                    if let zipHint = snapshot.nearestZipMouth, zipHint.distToEntry <= GameConfig.zipPromptRadius {
+                    // Only for a gap too narrow to drive through, and not mid-zip: "closer" until the
+                    // floss can reach, then the button (web twin: `tickZipPrompt`).
+                    if let zipHint = snapshot.nearestZipMouth, zipHint.blockedToWalking, snapshot.probeZip == nil {
+                        let ready = zipHint.inZipRange
                         Button {
                             onFireFlossSmart()
                         } label: {
-                            Label(L10n.t("Floss Zip Ready • Tap Floss!"), systemImage: "bolt.horizontal.fill")
+                            Text(L10n.t(ready ? Self.zipReadyText : "🦷 Closer to Zip"))
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
-                                .foregroundStyle(MLTheme.deepOcean)
+                                .foregroundStyle(ready ? MLTheme.deepOcean : MLTheme.textPrimary)
                                 .padding(.horizontal, 11)
                                 .padding(.vertical, 5)
-                                .background(Capsule().fill(MLTheme.fluorapatiteGold))
+                                .background(Capsule().fill(ready ? MLTheme.fluorapatiteGold : MLTheme.cardBg))
                         }
                         .buttonStyle(.plain)
+                        .disabled(!ready)
                     }
                 }
 
@@ -218,26 +274,19 @@ public struct ArcadeHudView: View {
                         Circle()
                             .fill(MLTheme.cyanAccent.opacity(0.85))
                             .frame(width: 34, height: 34)
-                            .offset(stickDragOffset)
+                            .offset(stickKnobOffset)
                     }
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { val in
-                                let maxR: CGFloat = 30
-                                let dx = val.translation.width
-                                let dy = val.translation.height
-                                let dist = hypot(dx, dy)
-                                let clamped = dist > maxR ? maxR / dist : 1.0
-                                stickDragOffset = CGSize(width: dx * clamped, height: dy * clamped)
-                                let nx = Double((dx * clamped) / maxR)
-                                let nz = Double((dy * clamped) / maxR)
-                                onVirtualStickMove(nx, nz, true)
-                            }
-                            .onEnded { _ in
-                                stickDragOffset = .zero
-                                onVirtualStickMove(0, 0, false)
+                            .updating($stickTranslation) { val, state, _ in
+                                state = val.translation
                             }
                     )
+                    .onChange(of: stickTranslation) { _, now in
+                        // A lifted (or cancelled) thumb clears the latch for the next touch.
+                        if now == nil { stickLatched = false }
+                        pushStick()
+                    }
                     .accessibilityLabel(L10n.t("Brush Thumbstick"))
 
                     Spacer()
@@ -316,19 +365,18 @@ public struct ArcadeHudView: View {
                         }
                         .gesture(
                             DragGesture(minimumDistance: 0)
-                                .onChanged { val in
+                                .updating($flossDragOffset) { val, state, _ in
                                     let maxR: CGFloat = 24
                                     let dx = val.translation.width
                                     let dy = val.translation.height
                                     let dist = hypot(dx, dy)
                                     let scale = dist > maxR ? maxR / dist : 1.0
-                                    flossDragOffset = CGSize(width: dx * scale, height: dy * scale)
+                                    state = CGSize(width: dx * scale, height: dy * scale)
                                 }
                                 .onEnded { val in
                                     let dx = Double(val.translation.width)
                                     let dz = Double(val.translation.height)
                                     let dist = hypot(dx, dz)
-                                    flossDragOffset = .zero
                                     if dist < 12.0 {
                                         onFireFlossSmart()
                                     } else {
@@ -354,7 +402,7 @@ public struct ArcadeHudView: View {
                     Text(L10n.t(cartridge.title))
                         .font(.system(.title3, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.textPrimary)
-                    Text(L10n.t("Touch any tooth to steer and scrub. Double-tap to Floss, or drag the Floss ring to aim."))
+                    Text(L10n.t(Self.pauseHint))
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -378,6 +426,17 @@ public struct ArcadeHudView: View {
                 .padding(28)
             }
         }
+        // Leaving the screen (Home button, call, lock, another app) pauses the stage; the HUD going
+        // away (finale, score) always lets go of the stick.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { pauseIfUnattended() }
+        }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            pauseIfUnattended()
+        }
+        #endif
+        .onDisappear { onVirtualStickMove(0, 0, false) }
     }
 
     private var worldMechanicBadge: (label: String, warn: Bool)? {

@@ -722,7 +722,8 @@ function bootstrapMouthLife(): void {
           ? undefined
           : (code) => {
               try {
-                saveSys.importSyncCode(code);
+                // The link only shows on a brand-new save, so the code's tooth and settings come too.
+                saveSys.importSyncCode(code, Date.now(), true);
               } catch (err) {
                 return err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.';
               }

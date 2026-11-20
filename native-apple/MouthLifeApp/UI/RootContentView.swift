@@ -73,7 +73,9 @@ public struct RootContentView: View {
                     beatIndex: $coordinator.cosmicBeatIndex,
                     hasSeenBefore: coordinator.save.hasSeenCosmicIntro,
                     onComplete: { coordinator.completeCosmicIntro() },
-                    onRestoreCode: { coordinator.activeSheet = .restoreCode }
+                    onRestoreCode: { coordinator.activeSheet = .restoreCode },
+                    mohsIndex: coordinator.cosmicMohsIndex,
+                    onSelectMohs: { coordinator.selectCosmicMohs($0) }
                 )
                 .transition(.opacity)
 

@@ -47,6 +47,8 @@ import {
   isCampaignWorldUnlocked,
   isCompactViewport,
   pickRecommendedDiveWorld,
+  campaignStageNumber,
+  shortCityName,
 } from './hudHelpers';
 import { TutorialOverlay } from './TutorialOverlay';
 import { askGrownUp } from './parentGate';
@@ -65,11 +67,6 @@ function escapeHtml(raw: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-/** "Accra & Colorado Springs" -> "Accra", "Station Aurora (408 km LEO)" -> "Station Aurora", for a phone button. */
-function shortCityName(city: string): string {
-  return city.split(' & ')[0].replace(/\s*\(.*\)\s*$/, '').trim();
 }
 
 export class CompanionHubOverlay implements OverlayView {
@@ -623,10 +620,11 @@ export class CompanionHubOverlay implements OverlayView {
     const divePick = pickRecommendedDiveWorld(save.worlds, fallbackHomeWorldId);
     const diveWorldId = isPlayableWorld(divePick.worldId) ? divePick.worldId : fallbackHomeWorldId;
     const diveWorldTitle = getCartridgeById(diveWorldId).title;
-    // Name the city Dive goes to (and where it sits in the campaign), as the native Home does.
+    // Name the city Dive goes to and its place in the campaign (also for a replay once all five are
+    // clean), from the world the button launches, exactly as the native Home does.
     const diveCity = HOST_CITIES.find((h) => h.worldId === diveWorldId)?.city ?? diveWorldTitle;
     const diveCityShort = shortCityName(diveCity);
-    const diveStage = divePick.stageNumber;
+    const diveStage = campaignStageNumber(diveWorldId);
     const affordableLabCount = countAffordableLockedUpgrades(
       save.fluorideIons,
       save.unlockedUpgrades,

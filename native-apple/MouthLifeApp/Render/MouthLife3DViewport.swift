@@ -112,12 +112,15 @@ public struct MouthLife3DViewport: NSViewRepresentable {
         nsView.preferredFramesPerSecond = 120
         nsView.isPlaying = !paused
         nsView.rendersContinuously = !paused
+        nsView.finaleShowing = paused
     }
 }
 
 public final class InteractiveMetalSCNView: SCNView {
     public weak var controller: MouthLifeSceneController?
     private var lastMousePt: CGPoint = .zero
+    /// A finale covers the stage (the mode is still the stage's): clicks must not reach the game.
+    var finaleShowing = false
 
     public override func layout() {
         super.layout()
@@ -125,6 +128,7 @@ public final class InteractiveMetalSCNView: SCNView {
     }
 
     public override func mouseDown(with event: NSEvent) {
+        if finaleShowing { return }
         let loc = convert(event.locationInWindow, from: nil)
         let pt = CGPoint(x: loc.x, y: bounds.height - loc.y)
         lastMousePt = pt
@@ -143,15 +147,17 @@ public final class InteractiveMetalSCNView: SCNView {
         controller?.handlePointerUp()
     }
 
-    /// Right-click flosses in a stage, as How to Play teaches ("E or right-click") and as on the web.
+    /// Right-click flosses toward the pointer in a stage, as How to Play teaches ("E or right-click")
+    /// and as on the web. Not while paused or while a finale plays.
     public override func rightMouseDown(with event: NSEvent) {
         guard let controller,
               controller.appMode == .arcade || controller.appMode == .pulpRescue,
-              !controller.arcadePaused else {
+              !controller.arcadePaused, !finaleShowing else {
             super.rightMouseDown(with: event)
             return
         }
-        controller.requestSmartFloss()
+        let loc = convert(event.locationInWindow, from: nil)
+        controller.requestFlossToward(CGPoint(x: loc.x, y: bounds.height - loc.y), in: self)
     }
 }
 #endif

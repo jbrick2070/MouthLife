@@ -380,10 +380,16 @@ public struct CompanionHubView: View {
                 let activeHost = HostsAndHistory.hostCities.first { $0.worldId == selectedWorldId } ?? HostsAndHistory.hostCities[0]
                 let activeUnlocked = isWorldUnlocked(activeHost)
                 let activeCart = WorldRegistry.cartridgeOrDefault(forId: activeHost.worldId)
+                // Dive names its city and the city's place in the campaign, from the world it launches
+                // (web twin: btn-launch-arcade in CompanionHubOverlay.ts).
+                let diveCity = L10n.t(shortCityName(activeHost.city))
+                let diveStage = campaignStageNumber(worldId: activeHost.worldId)
+                let diveWords = diveStage.map { L10n.t("Dive \($0) of 5") } ?? L10n.t("Dive")
 
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(L10n.t(activeCart.title)) • \(L10n.t(activeHost.city))")
+                        // The Dive button names the city; a locked card says which city it is here.
+                        Text(activeUnlocked ? L10n.t(activeCart.title) : "\(L10n.t(activeCart.title)) • \(L10n.t(activeHost.city))")
                             .font(.system(.subheadline, design: .rounded, weight: .heavy))
                             .foregroundStyle(MLTheme.textPrimary)
                             .lineLimit(1)
@@ -434,9 +440,37 @@ public struct CompanionHubView: View {
                     Button {
                         onLaunchWorld(activeHost.worldId)
                     } label: {
-                        Label(L10n.t(activeUnlocked ? "Dive Arch" : "Locked"), systemImage: activeUnlocked ? "play.fill" : "lock.fill")
-                            .lineLimit(1)
-                            .fixedSize()
+                        if activeUnlocked {
+                            // "Dive 4 of 5 · Accra"; on a narrow phone "Accra" over "4/5"; then the city alone.
+                            ViewThatFits(in: .horizontal) {
+                                Label("\(diveWords) · \(diveCity)", systemImage: "play.fill")
+                                    .lineLimit(1)
+                                    .fixedSize()
+                                Label {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(diveCity).lineLimit(1)
+                                        if let diveStage {
+                                            Text("\(diveStage)/5")
+                                                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                                                .monospacedDigit()
+                                                .opacity(0.8)
+                                        }
+                                    }
+                                } icon: {
+                                    Image(systemName: "play.fill")
+                                }
+                                .fixedSize()
+                                Label(diveCity, systemImage: "play.fill")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(diveWords) · \(diveCity)")
+                        } else {
+                            Label(L10n.t("Locked"), systemImage: "lock.fill")
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
                     }
                     .buttonStyle(MLPrimaryButtonStyle(accent: activeUnlocked ? MLTheme.cyanAccent : MLTheme.textMuted, darkText: true))
                     .disabled(!activeUnlocked)

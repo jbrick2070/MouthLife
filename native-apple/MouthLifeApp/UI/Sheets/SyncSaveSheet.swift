@@ -63,6 +63,7 @@ public struct SyncSaveSheet: View {
                             .foregroundStyle(MLTheme.mintClean)
 
                         TextField(L10n.t("Paste ML2:... sync code here"), text: $importInput, axis: .vertical)
+                            .syncCodeEntry()
                             .lineLimit(3...6)
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(MLTheme.textPrimary)
@@ -163,6 +164,7 @@ public struct SyncRestoreSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 TextField(L10n.t("Paste ML2:... sync code here"), text: $importInput, axis: .vertical)
+                    .syncCodeEntry()
                     .lineLimit(3...6)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(MLTheme.textPrimary)
@@ -219,6 +221,17 @@ public struct SyncRestoreSheet: View {
         return NSPasteboard.general.string(forType: .string)
         #else
         return nil
+        #endif
+    }
+}
+
+private extension View {
+    /// A Sync Code is typed exactly: no autocorrect or capitals changing its letters.
+    func syncCodeEntry() -> some View {
+        #if os(iOS)
+        return self.autocorrectionDisabled().textInputAutocapitalization(.never)
+        #else
+        return self.autocorrectionDisabled()
         #endif
     }
 }

@@ -36,6 +36,9 @@ public final class AppCoordinator {
             }
         }
     }
+    /// The Prologue's picked hardness specimen (chips and 3D crystals stay in step).
+    public var cosmicMohsIndex: Int = MohsSpecimens.enamelIndex
+
     public var cosmicBeatIndex: Int = 0 {
         didSet {
             sceneController.cosmicBeatIndex = cosmicBeatIndex
@@ -468,7 +471,8 @@ public final class AppCoordinator {
             }
         }
 
-        sceneController.onCosmicMohsSelected = { idx in
+        sceneController.onCosmicMohsSelected = { [weak self] idx in
+            self?.cosmicMohsIndex = idx
             NativeSoundEngine.shared.playCrownRub(crownIndex: idx * 3, smoothnessIndex: 96.0)
             HapticsEngine.shared.playEnamelRub(smoothnessIndex: 96.0, intensity: 0.75)
         }
@@ -628,6 +632,7 @@ public final class AppCoordinator {
 
     private func playFinale(_ kind: CityFinaleRequest.Kind, worldIndex: Int, thenReport: Bool, finishes: [MolarFinish]? = nil) {
         NativeSoundEngine.shared.stopScrub()
+        sceneController.resetStageInput()
         NativeSoundEngine.shared.setFinaleDucked(true)
         reportAfterFinale = thenReport
         withAnimation(.easeOut(duration: 0.2)) {
@@ -722,7 +727,10 @@ public final class AppCoordinator {
     /// snapshot will arrive to turn it off).
     public func setArcadePaused(_ paused: Bool) {
         sceneController.arcadePaused = paused
-        if paused { NativeSoundEngine.shared.stopScrub() }
+        // Music sinks and dulls behind the pause card, as on the web (`sound.setPaused`); this also
+        // silences the brush. A held stick or a queued floss never carries past the card.
+        NativeSoundEngine.shared.setPaused(paused)
+        if paused { sceneController.resetStageInput() }
     }
 
     public func returnToHub() {
@@ -1248,9 +1256,13 @@ public final class AppCoordinator {
     }
 
     public func importSyncCode(_ code: String) -> Result<Void, Error> {
+        importSyncCode(code, preferImported: false)
+    }
+
+    private func importSyncCode(_ code: String, preferImported: Bool) -> Result<Void, Error> {
         do {
             // Merge, never overwrite: an older code must not erase this device's newer progress.
-            save = try saveSystem.importSyncCode(code)
+            save = try saveSystem.importSyncCode(code, preferImported: preferImported)
             sceneController.companionSmoothness = save.companion.smoothnessIndex
             if !isWorldUnlocked(activeRadioWorldId) {
                 activeRadioWorldId = pickRecommendedDiveWorld(from: save)
@@ -1266,11 +1278,23 @@ public final class AppCoordinator {
         }
     }
 
+    /// A hardness chip on the Prologue: the 3D crystal lights up with it (web twin: `onMohsSelected`).
+    public func selectCosmicMohs(_ index: Int) {
+        let idx = min(max(0, index), MohsSpecimens.all.count - 1)
+        cosmicMohsIndex = idx
+        sceneController.selectCosmicMohs(idx)
+        NativeSoundEngine.shared.playCrownRub(crownIndex: idx * 3, smoothnessIndex: 96.0)
+        HapticsEngine.shared.playEnamelRub(smoothnessIndex: 96.0, intensity: 0.75)
+    }
+
     /// "Have a Sync Code?" on the Prologue: bring the other device's progress across (merged, never
     /// overwritten), then straight Home. Web twin: `restoreSyncCode` in main.ts.
     public func restoreFromPrologue(_ code: String) -> Result<Void, Error> {
-        let result = importSyncCode(code)
+        // The link only shows on a brand-new save, so the code's tooth and settings come across too.
+        let result = importSyncCode(code, preferImported: !save.hasSeenCosmicIntro)
         if case .success = result {
+            // Home's Dive aims at the next city of the restored campaign, not at Toronto.
+            selectedWorldId = pickRecommendedDiveWorld(from: save)
             activeSheet = nil
             completeCosmicIntro()
             showHubToast("Code imported! Your save is updated.")

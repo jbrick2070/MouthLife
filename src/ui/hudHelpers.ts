@@ -442,6 +442,26 @@ export function pickRecommendedDiveWorld(
 }
 
 /**
+ * A campaign city's place (1-5) for the Home button's "Dive 4 of 5", taken from the world the button
+ * launches; null for anything outside the campaign. Native twin: `campaignStageNumber` in HudHelpers.swift.
+ */
+export function campaignStageNumber(
+  worldId: string,
+  campaignWorldIds: readonly string[] = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5']
+): number | null {
+  const idx = campaignWorldIds.indexOf(worldId);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+/**
+ * "Accra & Colorado Springs" -> "Accra", "Station Aurora (408 km LEO)" -> "Station Aurora": the city's
+ * short name for the Home Dive button. Native twin: `shortCityName` in HudHelpers.swift.
+ */
+export function shortCityName(city: string): string {
+  return city.split(' & ')[0].replace(/\s*\(.*\)\s*$/, '').trim();
+}
+
+/**
  * Counts how many locked Lab upgrades the player can currently afford with Fluoride Ions,
  * surfacing a subtle badge on the collapsed mobile `▴ More` / `🔬 Lab` buttons.
  */

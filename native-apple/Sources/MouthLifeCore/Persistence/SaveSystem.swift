@@ -1056,8 +1056,11 @@ public final class SaveSystem {
     /// each city keeps its best record, counts keep the higher value, unlocks are combined, each
     /// day's reward slots keep the higher count, the companion comes from the newer save, and this
     /// device keeps its own graphics setting. Twin of mergeSaves in SaveSystem.ts.
-    public static func mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2) -> MouthLifeSaveV2 {
-        let newer = imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current
+    /// `preferImported`: this device's save is brand new (the Prologue's "Have a Sync Code?"), so the
+    /// code's tooth, settings and choices win even though the fresh save was written more recently.
+    /// Counts and unlocks still merge the same way.
+    public static func mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2, preferImported: Bool = false) -> MouthLifeSaveV2 {
+        let newer = preferImported || imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current
         func union(_ a: [String], _ b: [String]) -> [String] {
             var seen = Set<String>()
             return (a + b).filter { seen.insert($0).inserted }
@@ -1115,11 +1118,12 @@ public final class SaveSystem {
     @discardableResult
     public func importSyncCode(
         _ code: String,
+        preferImported: Bool = false,
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) throws -> MouthLifeSaveV2 {
         let imported = try Self.decodeSaveFromSyncCode(code, nowEpochMs: nowEpochMs)
         // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
-        var merged = Self.mergeSaves(current: currentSave, imported: imported)
+        var merged = Self.mergeSaves(current: currentSave, imported: imported, preferImported: preferImported)
         _ = CompanionArchSim.reconcileOfflineElapsed(&merged.companion, nowEpochMs: nowEpochMs)
         merged.saveRevision = max(currentSave.saveRevision, imported.saveRevision) + 1
         currentSave = merged

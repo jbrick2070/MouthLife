@@ -1110,7 +1110,10 @@ enum L10nCatalogs {
 "← Hub":"← Basis",
 "Exit to Smooth Bask Hub":"Zurück zur Glattglanz-Basis",
 "Full screen":"Vollbild",
-"Whole mouth":"Ganzer Mund"
+"Whole mouth":"Ganzer Mund",
+"Dive {0} of 5":"Abtauchen {0} von 5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Klick auf einen Zahn und zieh, um zu steuern und zu schrubben. Rechtsklick für Zahnseide, oder zieh den Zahnseide-Ring zum Zielen.",
+"🧵 Right-click to Zip!":"🧵 Rechtsklick zum Flitzen!"
 }
 """###
 
@@ -2206,7 +2209,10 @@ enum L10nCatalogs {
 "← Hub":"← Base",
 "Exit to Smooth Bask Hub":"Salir a la Base de Brillo suave",
 "Full screen":"Pantalla completa",
-"Whole mouth":"Toda la boca"
+"Whole mouth":"Toda la boca",
+"Dive {0} of 5":"Inmersión {0} de 5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Haz clic en un diente y arrastra para moverte y cepillar. Clic derecho para usar el hilo dental, o arrastra el aro del hilo dental para apuntar.",
+"🧵 Right-click to Zip!":"🧵 ¡Clic derecho para lanzar!"
 }
 """###
 
@@ -3302,7 +3308,10 @@ enum L10nCatalogs {
 "← Hub":"← Accueil",
 "Exit to Smooth Bask Hub":"Quitter vers l'Accueil Pause lisse",
 "Full screen":"Plein écran",
-"Whole mouth":"Toute la bouche"
+"Whole mouth":"Toute la bouche",
+"Dive {0} of 5":"Plonger {0} sur 5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Clique sur une dent et fais glisser pour diriger et frotter. Clic droit pour le fil dentaire, ou fais glisser l'anneau du fil dentaire pour viser.",
+"🧵 Right-click to Zip!":"🧵 Clic droit : Glisse-fil !"
 }
 """###
 
@@ -3371,7 +3380,7 @@ enum L10nCatalogs {
 "▼ LOWER ARCH (MANDIBULAR) —":"▼ 下の歯ならび（下あご）—",
 "▾ Less":"▾ とじる",
 "☀️ Morning":"☀️ 朝",
-"☁️ Have a Sync Code?":"☁️ 同期コードをもっていますか？",
+"☁️ Have a Sync Code?":"☁️ シンクコードをもっていますか？",
 "☁️ Move Your Save (No Sign-Up)":"☁️ セーブデータの引っこし（とうろく不要）",
 "☁️ Sync":"☁️ シンク",
 "★ FLUORIDE GOLD":"★ フッそゴールド",
@@ -3884,7 +3893,7 @@ enum L10nCatalogs {
 "Hard scrubbing hurts gums and still misses the gaps between teeth. Gentle tilted brushing plus C-shape flossing protects both teeth and gums.":"ゴシゴシ強くみがくと歯ぐきをいためるうえに、歯と歯のすきまはみがけません。ブラシをななめにしてやさしくみがき、Cの字にフロスをあてると、歯と歯ぐきの両方を守れます。",
 "Has 2 sharp points and often 2 roots. It sits between the tearing canines and the grinding molars.":"とがった山が2つあり、根っこもよく2本あります。ひきさく犬歯と、すりつぶすおく歯のあいだにならんでいます。",
 "Has 4 points, 2 roots and a cross-shaped groove on top. It helps the first molar with heavy chewing.":"山が4つと根っこが2本あり、上の面に十字のみぞがあります。第一おく歯といっしょにしっかりかむのを助けます。",
-"Have a Sync Code?":"同期コードをもっていますか？",
+"Have a Sync Code?":"シンクコードをもっていますか？",
 "Healthy Gums & the 45° Brush Tilt":"健康な歯ぐきとブラシの45°のかたむき",
 "Help fund free 501(c)(3) dental relief through":"501(c)(3)の無料歯科ケアをきふでおうえんするなら",
 "Helper Germs ({0}/{1})":"おたすけきん ({0}/{1})",
@@ -4059,7 +4068,7 @@ enum L10nCatalogs {
 "Paste Clipboard":"クリップボードからはりつけ",
 "Paste ML2:... code here":"ML2:... のコードをここにはりつけ",
 "Paste ML2:... sync code here":"ML2:... のシンクコードをここにはりつけ",
-"Paste the Sync Code from your other phone or computer to bring your progress here.":"べつのスマホやパソコンの同期コードをはりつけると、ここでつづきから遊べます。",
+"Paste the Sync Code from your other phone or computer to bring your progress here.":"べつのスマホやパソコンのシンクコードをはりつけると、ここでつづきから遊べます。",
 "Patching… the pulp is safe!":"しゅうり中… 歯のしんは安全です！",
 "PATIENT LEFT":"かんじゃさんの左",
 "PATIENT RIGHT":"かんじゃさんの右",
@@ -4097,7 +4106,7 @@ enum L10nCatalogs {
 "Privacy Policy":"プライバシーポリシー",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"自動 AVAUDIOENGINE シンセ",
 "Profile & Settings":"プロフィールとせってい",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。同期コードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。シンクコードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"プロローグ 1 / 4 • 星が生みだしたつぶ",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"プロローグ 2 / 4 • つぶのけっしょう",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"プロローグ 3 / 4 • 生きもののふしぎなルール",
@@ -4398,7 +4407,10 @@ enum L10nCatalogs {
 "← Hub":"← ひろば",
 "Exit to Smooth Bask Hub":"つるつるタイムひろばへ出る",
 "Full screen":"全画面",
-"Whole mouth":"口全体"
+"Whole mouth":"口全体",
+"Dive {0} of 5":"ダイブ {0}/5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"歯をクリックしてドラッグすると、そこへ動いてみがけます。右クリックでフロス、またはフロスリングをドラッグしてねらいましょう。",
+"🧵 Right-click to Zip!":"🧵 右クリックでジップ！"
 }
 """###
 
@@ -5494,7 +5506,10 @@ enum L10nCatalogs {
 "← Hub":"← 기지",
 "Exit to Smooth Bask Hub":"매끈 휴식 기지로 나가기",
 "Full screen":"전체 화면",
-"Whole mouth":"입 전체"
+"Whole mouth":"입 전체",
+"Dive {0} of 5":"다이브 {0}/5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"치아를 클릭하고 끌어 조종하고 닦아요. 오른쪽 클릭으로 치실을 쓰거나, 치실 링을 끌어 조준해요.",
+"🧵 Right-click to Zip!":"🧵 오른쪽 클릭으로 집라인!"
 }
 """###
 
@@ -6590,7 +6605,10 @@ enum L10nCatalogs {
 "← Hub":"← Base",
 "Exit to Smooth Bask Hub":"Sair para a Base Descanso Liso",
 "Full screen":"Tela cheia",
-"Whole mouth":"Boca inteira"
+"Whole mouth":"Boca inteira",
+"Dive {0} of 5":"Mergulhar {0} de 5",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Clique em um dente e arraste para guiar e esfregar. Clique com o botão direito para usar o Fio Dental, ou arraste o anel do Fio Dental para mirar.",
+"🧵 Right-click to Zip!":"🧵 Clique com o botão direito para a Tirolesa!"
 }
 """###
 
@@ -7686,7 +7704,10 @@ enum L10nCatalogs {
 "← Hub":"← 基地",
 "Exit to Smooth Bask Hub":"返回光滑沐浴基地",
 "Full screen":"全屏",
-"Whole mouth":"整个口腔"
+"Whole mouth":"整个口腔",
+"Dive {0} of 5":"潜入 第{0}站/共5站",
+"Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"点击牙齿并拖动即可转向和刷洗。点击鼠标右键使用牙线，或拖动牙线环来瞄准。",
+"🧵 Right-click to Zip!":"🧵 点击鼠标右键滑索！"
 }
 """###
 }

@@ -7,6 +7,9 @@ public struct CosmicIntroView: View {
     public let onComplete: () -> Void
     /// A new device: "Have a Sync Code?" on the first part opens the restore sheet.
     public let onRestoreCode: (() -> Void)?
+    /// The specimen picked on the hardness scale (part 2); tapping a chip or a 3D crystal sets it.
+    public let mohsIndex: Int
+    public let onSelectMohs: (Int) -> Void
 
     private struct BeatContent {
         let kicker: String
@@ -46,12 +49,16 @@ public struct CosmicIntroView: View {
         beatIndex: Binding<Int>,
         hasSeenBefore: Bool = false,
         onComplete: @escaping () -> Void,
-        onRestoreCode: (() -> Void)? = nil
+        onRestoreCode: (() -> Void)? = nil,
+        mohsIndex: Int = MohsSpecimens.enamelIndex,
+        onSelectMohs: @escaping (Int) -> Void = { _ in }
     ) {
         self._beatIndex = beatIndex
         self.hasSeenBefore = hasSeenBefore
         self.onComplete = onComplete
         self.onRestoreCode = onRestoreCode
+        self.mohsIndex = mohsIndex
+        self.onSelectMohs = onSelectMohs
     }
 
     public var body: some View {
@@ -155,31 +162,56 @@ public struct CosmicIntroView: View {
         }
     }
 
+    /// Five specimens from soft to hard, the same as the 3D crystals and the web; the picked one's
+    /// line sits underneath (name and note translated, the formula as written).
     private var mohsScaleBar: some View {
-        HStack(spacing: 6) {
-            mohsChip("Talc", "1", active: false)
-            mohsChip("Gypsum", "2", active: false)
-            mohsChip("Calcite", "3", active: false)
-            mohsChip("Fluorite", "4", active: false)
-            mohsChip("Enamel", "5★", active: true)
+        let picked = MohsSpecimens.all[min(max(0, mohsIndex), MohsSpecimens.all.count - 1)]
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(Array(MohsSpecimens.all.enumerated()), id: \.offset) { idx, specimen in
+                    mohsChip(specimen, selected: idx == mohsIndex) { onSelectMohs(idx) }
+                }
+            }
+            (Text("\(L10n.t(picked.name)) (\(picked.formula)): ").bold() + Text(L10n.t(picked.note)))
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(MLTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black.opacity(0.28)))
+                .accessibilityAddTraits(.updatesFrequently)
         }
         .padding(.vertical, 4)
     }
 
-    private func mohsChip(_ name: String, _ rank: String, active: Bool) -> some View {
-        VStack(spacing: 2) {
-            Text(L10n.t(rank))
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.cyanAccent)
-            Text(L10n.t(name))
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundStyle(active ? MLTheme.deepOcean : MLTheme.textSecondary)
+    private func mohsChip(_ specimen: MohsSpecimen, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(specimen.hardness)
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(selected ? MLTheme.deepOcean : (specimen.isEnamel ? MLTheme.mintClean : MLTheme.cyanAccent))
+                Text(L10n.t(specimen.name))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(selected ? MLTheme.deepOcean : MLTheme.textSecondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? MLTheme.fluorapatiteGold : Color.white.opacity(0.07))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(specimen.isEnamel && !selected ? MLTheme.mintClean.opacity(0.6) : Color.clear, lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(active ? MLTheme.fluorapatiteGold : Color.white.opacity(0.07))
-        )
+        .buttonStyle(.plain)
+        .accessibilityLabel("Mohs \(specimen.hardness) \(L10n.t(specimen.name))")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
