@@ -192,7 +192,7 @@ public struct RootContentView: View {
                     onClaimIdleIons: { coordinator.claimIdleIons() },
                     onFeedTreat: { coordinator.feedRegionalTreat() },
                     onStartBrushAlong: { coordinator.startBrushAlong() },
-                    onLaunchWorld: { wid in coordinator.launchArcadeWorld(wid) },
+                    onLaunchWorld: { wid in coordinator.diveFromHome(wid) },
                     onLaunchPulpRescue: { coordinator.launchPulpRescue() },
                     onReplayIntro: { coordinator.replayCosmicIntro() },
                     onOpenSheet: { kind in

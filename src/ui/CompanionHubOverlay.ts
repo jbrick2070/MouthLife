@@ -204,7 +204,21 @@ export class CompanionHubOverlay implements OverlayView {
     shown?.focus({ preventScroll: true });
   }
 
-  private openTutorial(): void {
+  /**
+   * Dive from Home. The first Dive opens How to Play by itself, at its dive cards, and closing or
+   * skipping it starts that dive; after that the guide waits in the Home menu and behind the ?
+   * (the owner, November 2026). Native twin: `AppCoordinator.diveFromHome`.
+   */
+  private launchDive(worldId: string): void {
+    const gate = this.actions.tutorialGate;
+    if (gate && !gate.getProgress().opened && !this.tutorial && this.root) {
+      this.openTutorial('dive', () => this.actions.onLaunchArcadeWorld(worldId));
+      return;
+    }
+    this.actions.onLaunchArcadeWorld(worldId);
+  }
+
+  private openTutorial(startPageId?: TutorialPageId, afterClose?: () => void): void {
     if (this.tutorial || !this.root) return;
     this.actions.onPlayUiTap();
     this.actions.tutorialGate?.markOpened();
@@ -217,9 +231,11 @@ export class CompanionHubOverlay implements OverlayView {
         touchSeen: hasSeenTouch(),
         gamepadConnected: Boolean(this.actions.isGamepadConnected?.()),
       }),
+      startPageId,
       onClose: () => {
         this.tutorial = null;
-        this.focusTutorialButton();
+        if (afterClose) afterClose();
+        else this.focusTutorialButton();
       },
       onDemoSound: (pageId) => this.actions.onPlayTutorialDemo?.(pageId),
       onUiTap: () => this.actions.onPlayUiTap(),
@@ -1534,6 +1550,7 @@ export class CompanionHubOverlay implements OverlayView {
       this.focusTutorialButton();
     });
     this.container.querySelector('#btn-tutorial-accept')?.addEventListener('click', () => this.openTutorial());
+    // (the ? buttons and the menu item open it from the start)
     this.container
       .querySelectorAll('#btn-open-tutorial, #btn-open-tutorial-compact, #btn-open-tutorial-menu')
       .forEach((btn) => btn.addEventListener('click', () => this.openTutorial()));
@@ -1593,7 +1610,7 @@ export class CompanionHubOverlay implements OverlayView {
     this.container.querySelector<HTMLButtonElement>('#btn-launch-arcade')?.addEventListener('click', (e) => {
       this.dismissTutorialOffer();
       const wid = (e.currentTarget as HTMLButtonElement).dataset.worldId ?? 'world_1';
-      this.actions.onLaunchArcadeWorld(wid);
+      this.launchDive(wid);
     });
 
     this.container.querySelector('#btn-globe-dive')?.addEventListener('click', () => {
@@ -1606,7 +1623,7 @@ export class CompanionHubOverlay implements OverlayView {
         city.unlockStampsRequired
       );
       if (city.playableInSlice && isPlayableWorld(city.worldId) && unlocked) {
-        this.actions.onLaunchArcadeWorld(city.worldId);
+        this.launchDive(city.worldId);
       }
     });
 

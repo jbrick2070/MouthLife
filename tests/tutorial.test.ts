@@ -357,6 +357,17 @@ describe('How to Play guide: same words and pictures in the native app', () => {
     expect(nativeHub).toContain('if shortcut == .howToPlay');
   });
 
+  it('opens the guide by itself at the first Dive from Home, in both editions', () => {
+    const hub = readFileSync(join(ROOT, 'src/ui/CompanionHubOverlay.ts'), 'utf8');
+    // both Dive buttons (the deck and the globe) go through the first-Dive check
+    expect(hub.match(/this\.launchDive\(/g)?.length).toBe(2);
+    expect(hub).toContain("this.openTutorial('dive', () => this.actions.onLaunchArcadeWorld(worldId))");
+    const root = readFileSync(join(ROOT, 'native-apple/MouthLifeApp/UI/RootContentView.swift'), 'utf8');
+    expect(root).toContain('onLaunchWorld: { wid in coordinator.diveFromHome(wid) }');
+    const coordinator = readFileSync(join(ROOT, 'native-apple/MouthLifeApp/AppCoordinator.swift'), 'utf8');
+    expect(coordinator).toContain('openTutorial(startingAt: .dive)');
+  });
+
   it('brings the guide back for everyone at the same edition', () => {
     expect(swift).toContain(`static let edition = ${TUTORIAL_EDITION}`);
   });

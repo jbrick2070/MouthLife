@@ -128,6 +128,8 @@ public final class AppCoordinator {
     public var tutorialStartPage: TutorialPageId = .home
     public var showTutorialOffer: Bool = false
     private var tutorialGate = TutorialGate()
+    /// The city whose first Dive waits for the guide to close (see `diveFromHome`).
+    @ObservationIgnored private var pendingDiveAfterTutorial: String?
 
     // Companion & Sheet UI State
     public var activeSheet: HubSheetKind?
@@ -862,6 +864,7 @@ public final class AppCoordinator {
             // Starting a game puts the offer away for this launch, and the guide never follows you into play.
             dismissTutorialOffer()
             isTutorialVisible = false
+            pendingDiveAfterTutorial = nil
         }
         eventBus.emit(.modeChanged(from: prev, to: next))
     }
@@ -882,7 +885,23 @@ public final class AppCoordinator {
     }
 
     public func openTutorial() {
-        tutorialStartPage = .home
+        openTutorial(startingAt: .home)
+    }
+
+    /// Dive from Home. The first Dive opens How to Play by itself, at its dive cards, and closing or
+    /// skipping it starts that dive; after that the guide waits in the Home menu and behind the ?
+    /// (the owner, November 2026). Web twin: `CompanionHubOverlay.launchDive`.
+    public func diveFromHome(_ worldId: String) {
+        guard !tutorialGate.progress.opened, mode == .hub, !isTutorialVisible else {
+            launchArcadeWorld(worldId)
+            return
+        }
+        pendingDiveAfterTutorial = worldId
+        openTutorial(startingAt: .dive)
+    }
+
+    private func openTutorial(startingAt page: TutorialPageId) {
+        tutorialStartPage = page
         NativeSoundEngine.shared.playUiTap()
         if tutorialGate.markOpened() {
             saveTutorialProgress()
@@ -893,6 +912,10 @@ public final class AppCoordinator {
 
     public func closeTutorial() {
         isTutorialVisible = false
+        if let worldId = pendingDiveAfterTutorial {
+            pendingDiveAfterTutorial = nil
+            launchArcadeWorld(worldId)
+        }
     }
 
     public func dismissTutorialOffer() {
