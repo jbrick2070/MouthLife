@@ -53,9 +53,50 @@ Reviewed read-only by agy and Codex (2026-11-19); their corrections are folded i
   In a stage the stick and buttons are on the flat half, which is right for thumbs.
 - **Home Screens.** Cover: a 4-column grid with the dock running down the right edge. Inner (turned
   upright): the same 4-column grid, centred, dock at the bottom. Small widgets take 2 × 2 icons on
-  both. The inner Home Screen laid out as a wide book was not captured.
+  both. Held as a wide book, the inner Home Screen shows two pages of icons side by side
+  (`book-widget.jpg`, with the Today widget; the cover: `cover-widget.jpg`).
 
 ## 2. What to build first
+
+### The idea: two screens, not a big iPad (proposal, 2026-11-19)
+
+The owner's problem statement: a Duo owner should get a game that uses two screens, not the iPad
+layout stretched across a crease. Asked separately, agy and Codex both arrived at the same answer:
+**one screen shows the tooth you are working on, the other shows where it sits in the whole mouth
+or city,** so a child sees one small action change the big picture.
+
+| | Open flat (book) | Tabletop (half-open) |
+|---|---|---|
+| **City stage** | Left page: the 3D city and the stick, as today. Right page: a live top-down **city map** (the scrubber, each district filling as it gets clean, a gold check when it is sealed, Scan's magenta ring) with Scan, Surge and Floss under the right thumb. | Upright: the 3D city, the timer and the goal, above the child's hands. Flat: the map between the stick (left) and the three buttons (right), like a handheld console. |
+| **2-Min Brush** | One page: the 3D close-up, the timer and the cue. Other page: the whole-mouth map showing the same tooth and surface, then the next. | As in item 3 below: the upright half reads at a glance; the flat half is the map and the words, with nothing tappable. |
+| **Home** | Left: the companion arch and Earth (rub a crown). Right: the crown card, the city row, Brush, Dive and Treat; a treat chosen on the right lands on the teeth on the left. | Upright: the companion. Flat: the same deck. |
+
+The cover keeps the iPhone layout. Same rules, rewards and saves on every device; nothing about the
+hinge is rewarded.
+
+- **The map is a cheap 2D `Canvas`, never a second 3D view.** The SceneKit view also steps the game,
+  so a second one risks running it twice and doubles the GPU work. The map reads what the game
+  already publishes about 20 times a second (`AppCoordinator.latestSnapshot`: `probePos`,
+  `probeFacingRad`, `districtCleanRatios`, `sealedDistricts`, `discloseOrigin`,
+  `discloseActiveRemaining`), with the outline cached once from the city's `WorldCartridge`
+  (`playableMaskBoxes`, `districts`, `interdentalAlleys`). Nothing new in the 120 Hz render or audio
+  paths. Neither edition has a minimap today. District-level progress comes free; exact plaque spots
+  would need sampling `OralSurfaceGrid` (later, if at all).
+- **Layout:** the manual split at the fold from items 1-2 (one 3D view whose frame changes; `FoldGuide`
+  with `.fixed`), not `ArrangementView`, which suits independent content such as sheets.
+- **The demo:** Tabletop, Toronto, one district a sweep away from sealed. The child pushes the stick;
+  above, the enamel turns gold and that neighbourhood's skyline lights up; below, the district on
+  the map gets its gold check while the unfinished ones stay visible.
+- **Cost:** about one to two weeks, including tuning: new `FoldGuide.swift` and `StageMapView.swift`;
+  changes to `RootContentView`, `ArcadeHudView`, `BrushAlongView`, `BrushOverviewPanel`,
+  `CompanionHubView` and the geometry cache in `WatchFaces.swift`. The map could later show on iPad
+  too.
+- **The reviewers differed on one point:** agy would let a finger on the map steer the scrubber there;
+  Codex keeps the map read-only. Suggested: **read-only** (one way to steer is simpler for a
+  five-year-old, and nothing new to reset on pause or fold).
+- **On hardware:** steady 8.3 ms frames during Scan and scrubbing, heat, touch on the narrower page,
+  the camera in the short upright half, a held stick across rotation, and whether a five-year-old
+  finds the next district on the map unaided.
 
 Everything Duo-only sits behind `if #available(iOS 27.1, *)` (the app targets iOS 17); on every
 other device nothing changes. Release 1 is items 1-4; the rest follow.
@@ -94,8 +135,10 @@ other device nothing changes. Release 1 is items 1-4; the rest follow.
    (`CosmicIntroView`), the How to Play card (`TutorialView`), the stage pause card, the score
    (`MissionReportView`), the city finale (`CityFinaleView`: keep the Golden Molar and credits off
    the crease) and the sheets with their nested pages (grown-up gate, privacy policy).
-5. **Stage on the inner screen (P1).** `ArcadeHudView.swift`: the top bar's groups split at the fold
-   (house and pause on one side, timer on the other). The play field stays full screen.
+5. **Stage on the inner screen (P1; the first prototype if the owner picks the two-screen idea).**
+   `ArcadeHudView.swift`: the top bar's groups split at the fold (house and pause on one side, timer
+   on the other). Without the two-screen idea the play field stays full screen; with it, the 3D city
+   takes one page and the city map and buttons the other (above).
 6. **Mirror labels pinned left-to-right (P1, small, all devices).** `.fixed` only covers the fold
    query. `MirrorArchCompassView` and `MouthwashGyroLevelBar` (`BrushAlongView.swift`) place "LEFT"
    and "RIGHT" in `HStack`s, which a right-to-left layout would swap. Pin those two views with
@@ -191,7 +234,11 @@ for the cover, which runs the full app. The web files named in the notes are out
    audible purpose for App Review, costs battery, and leaves a brush running that nobody sees.
 3. **A Live Activity for a running brush?** Both reviewers: **defer**; see the widget plan.
 4. **Release 1 = items 1-4** (3D rule, fold helper, brush, Home and the first screens), then 5-8?
-5. (Asked in chat) **Apple TV**: not planned; MouthLife lives by the bathroom sink, and widgets are
+5. **Two screens, not a big iPad** (above): build the city map and the paired pages, starting with
+   the stage prototype? If yes, is the map read-only (suggested) or can a finger steer on it? And
+   does the map come to iPad and the web edition too (the house rule is that both editions match),
+   or stay a Duo presentation?
+6. (Asked in chat) **Apple TV**: not planned; MouthLife lives by the bathroom sink, and widgets are
    the cheaper way onto Apple's home screens.
 
 ## 9. Acceptance checks (when built)

@@ -18,6 +18,11 @@ let package = Package(
         .library(
             name: "MouthLifeWatchUI",
             targets: ["MouthLifeWatchUI"]
+        ),
+        // the Home Screen and Lock Screen widgets' views: plain SwiftUI, rendered on a Mac in tests
+        .library(
+            name: "MouthLifeWidgetUI",
+            targets: ["MouthLifeWidgetUI"]
         )
     ],
     targets: [
@@ -29,6 +34,16 @@ let package = Package(
             name: "MouthLifeWatchUI",
             dependencies: ["MouthLifeCore"],
             path: "Sources/MouthLifeWatchUI"
+        ),
+        .target(
+            name: "MouthLifeWidgetUI",
+            dependencies: ["MouthLifeCore"],
+            path: "Sources/MouthLifeWidgetUI"
+        ),
+        .testTarget(
+            name: "MouthLifeWidgetUITests",
+            dependencies: ["MouthLifeWidgetUI", "MouthLifeCore"],
+            path: "Tests/MouthLifeWidgetUITests"
         ),
         .testTarget(
             name: "MouthLifeCoreTests",

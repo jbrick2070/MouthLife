@@ -377,13 +377,16 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     // MARK: - Queued Actuator Actions From SwiftUI HUD
 
+    // Nothing queues while the stage is paused: a finger lifted after the pause card opened must
+    // not fire on Resume (the web's pause card covers the buttons).
     public func requestSmartFloss() {
+        guard !arcadePaused else { return }
         pendingFlossFire = true
         pendingFlossAimPos = nil
     }
 
     public func requestDirectionalFloss(dir: Vec2) {
-        guard let session = activeSession else { return }
+        guard !arcadePaused, let session = activeSession else { return }
         pendingFlossFire = true
         pendingFlossAimPos = Vec2(
             x: session.probePos.x + dir.x * GameConfig.flossLength,
@@ -392,10 +395,12 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     public func requestIonRinse() {
+        guard !arcadePaused else { return }
         pendingRinseFire = true
     }
 
     public func requestDiscloseScan() {
+        guard !arcadePaused else { return }
         pendingDiscloseFire = true
     }
 

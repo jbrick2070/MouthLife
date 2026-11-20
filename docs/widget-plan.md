@@ -134,8 +134,10 @@ Checked on the iPhone Duo simulator (screenshots in [`duo-captures/`](duo-captur
 
 - **Same widgets, same sizes on both Home Screens.** The cover and the inner screen both use a
   4-column grid; a small widget is 2 × 2 icons on both (see `cover-homescreen.jpg` and
-  `inner-homescreen-upright.jpg`; the inner screen held as a wide book was not captured, and the
-  tiles are not exactly the same width, so render each family at both sizes). The cover's dock runs
+  `inner-homescreen-upright.jpg`). Held as a wide book, the inner Home Screen shows two pages of
+  icons side by side, and the widgets sit on them like on any page (`book-widget.jpg`; the cover:
+  `cover-widget.jpg`). The tiles are not exactly the same width, so each family is rendered at both
+  sizes. The cover's dock runs
   down its right edge, which does not affect widgets. No Duo-only widget and no Duo-only size.
 - **Cover Home Screen** (the screen in hand most of the day): the small **Today** smile is the best
   fit; two small widgets sit side by side there, as Apple's own do.
@@ -208,8 +210,9 @@ files they name exist (`BrushDays.swift`, `BrushWeekStrip`, `PhoneWatchBridge.sw
 - **Timeline:** one entry per local midnight, refreshed with `.atEnd`. The notes' extra entries at
   reminder times only matter with a sun and a moon; without them nothing changes at 07:30 or 19:30.
 - **Lock Screen "next brush" rectangle** ("Morning", "Bedtime" beside two small marks): not planned.
-  It needs brush times, shows a child's routine on a locked screen, and repeats the reminder
-  notifications the app already has (`BrushReminderScheduler`). Owner question.
+  It could be worked out from the reminder times and today's count (`BrushDays.plan`), but it shows
+  a child's routine on a locked screen and repeats the reminder notifications the app already has
+  (`BrushReminderScheduler`).
 - **Live Activity with Pause and Finish buttons:** still deferred (see the iPhone Duo section and
   `duo-plan.md`): today the brush pauses when the phone locks, and Apple does not list HomeView for
   Live Activities.
@@ -261,3 +264,104 @@ files they name exist (`BrushDays.swift`, `BrushWeekStrip`, `PhoneWatchBridge.sw
    Apple's redaction on the Lock Screen depends on the user's settings.)
 3. **The "next brush" rectangle on the Lock Screen:** skip (suggested) or build?
 4. **Android:** a separate project after the Apple widgets, or not at all?
+
+## v1 update: the owner's review of the first build (2026-11-19)
+
+The owner looked at the first renders and changed the brief. These points replace the matching
+decisions below:
+
+- **Today shows "when did you last brush"** ("Last brush · 7:42 AM", "Yesterday 8:05 PM") and one
+  line about what comes next: **"Time to brush!"** when a brush is due (no full brush yet and the
+  morning time has passed, or one and the evening time has passed), **"Brush before bed · 7:30 PM"**
+  after the first brush, **"All done today!"** after both, otherwise **"Next · 7:30 AM"**. "Due" is
+  never "late": no red, no count of missed brushes.
+- **Teeth, not circles:** a tooth character that is calm before the first brush, happy after one and
+  smiling with sparkles at the end of a day with both brushes (agy's design, below).
+- **No "Good try"** on the widgets ("what's that?"): they show full 2-minute brushes only; a short
+  brush still moves "Last brush".
+- **A tap on Today or the Lock Screen tooth starts the 2-Minute Brush** (from Home, or from a
+  returning player's Prologue; a brush or a city stage in progress is never interrupted, and a
+  first-time player still sees the Prologue). This week opens Home.
+- **The last brush time** is kept on the device for the widget only (not in the save or the Sync
+  Code, which stay unchanged); the brush times come from the grown-up's reminder times (07:30 and
+  19:30 unless changed), whether or not reminders are switched on. The timeline adds entries at
+  those times so "next" moves on by itself.
+- Privacy: the Today widget now shows times, on the Home Screen, StandBy and, if a grown-up puts it
+  there, HomeView's shared face; still no name or other detail. The Lock Screen stays the neutral
+  tooth.
+
+## v1: decided and being built (2026-11-19)
+
+The owner asked for the best plan to be decided here and built. Decisions, with the reviewers'
+agreement (agy confirmed each; Codex confirmed the design before the build):
+
+1. **Widgets in v1:** **Today** (small: iPhone and iPad Home Screen, StandBy, HomeView), **This week**
+   (medium: iPhone and iPad Home Screen), and a **Lock Screen** circular widget. Not in v1: inline and
+   rectangular Lock Screen widgets, the Control Center launcher (it needs the project's first App
+   Intent; v1.1 if wanted), the Live Activity, Android.
+2. **Two identical marks**, filled left to right; no sun and moon; the save and the Sync Code stay as
+   they are.
+3. **Four states:** two calm outlines with "Ready"; a dashed half-glow with a sparkle and "Good try!"
+   (only when there are tries and fewer than two full brushes; with one full brush the second mark
+   shows the glow); one gold mark; two gold marks with a sparkle arc and "Done!". The word is hidden
+   when the background is removed (StandBy, HomeView's shared face). No snapshot yet: a tooth and
+   "Open MouthLife".
+4. **Lock Screen: the neutral tooth** (a launcher, no progress). iOS shows Lock Screen widgets while
+   locked unless the user turns that off, so `.privacySensitive()` alone would not hide progress.
+5. **Words** in a small 8-language table (`WidgetCopy`, like `WatchCopy`), reusing the watch's
+   "Good try!" and "Done!"; weekday letters from a calendar in the coach language.
+6. **Data:** an anonymous JSON snapshot in the App Group `group.org.mouthlife.plaque` (14 days of
+   counts and tries, the coach language), written from one place, whenever the coordinator's save
+   changes, and widgets reloaded only when the snapshot changes. The widget works out "today"
+   itself; timeline entries at each midnight for a week, `.atEnd`.
+7. **A tap opens the app:** a returning player on the Prologue goes straight Home; a brush or a stage
+   in progress is never interrupted; nothing starts by itself.
+8. **Signing:** this Apple account is a free personal team (its profiles last 7 days), which cannot
+   use App Groups. So the App Group is switched on for the simulator, and for devices only when the
+   build setting `MOUTHLIFE_DEVICE_ENTITLEMENTS` points at the entitlements file (after joining the
+   Apple Developer Program). Until then the phone build keeps working and its widgets show the tooth
+   and "Open MouthLife".
+9. **Rendering:** removable purple background; bigger marks and thicker strokes without background;
+   only finished marks accented; `.widgetAccentedRenderingMode` guarded for iOS 18; round shapes
+   only, calm under the red night tint.
+10. **Android:** not now. The web edition stays an installable PWA without widgets: a Play Store app
+    needs a public developer contact email, which the house rules do not allow.
+
+## v1 as built (2026-11-19)
+
+Built, checked on the iPhone and Duo simulators, and reviewed (agy's full QA pass, Sonnet's QA
+passes). What changed from the decisions above, in the owner's own words where given:
+
+- **Today** (small): the tooth of the day on the left; on the right "Last brush" with the time
+  (the day too when it was not today: "Yesterday", a weekday; left out after a week) and two small
+  teeth counting today's full brushes. One line underneath: **"Time to brush!"** (gold) when the
+  morning time has passed with no brush; **"Brush before bed"** (gold, a moon) when the evening time
+  has passed with fewer than two; **"Before bed · 7:30 PM"** after the first brush;
+  **"All done today!"** after both; otherwise **"Next · 7:30 AM"**. After a bedtime brush alone the
+  day's brushing is over: **"Next · Tomorrow 7:30 AM"**, never "brush again". A tap starts the
+  2-Minute Brush.
+- **The tooth's face follows the day** (the owner's rule, in line with the advice to brush in the
+  morning and before bed): neutral when the day starts at 5 AM; smiling after a morning brush
+  until noon (after a later first brush, until the evening time); "meh" (relaxed lids, a flat
+  mouth, never sad) while the next brush waits; **happy** after the bedtime brush or both brushes,
+  until 5 AM. The happy tooth is the gold molar with the face of the game's ending (big eyes with a
+  shine, a wide smile, pink cheeks) and sparkles. It holds a toothbrush while a brush is due, and is
+  never gold then. The face follows full 2-minute brushes only; a short brush still moves "Last
+  brush".
+- **Without background** (StandBy, HomeView's shared face): the big tooth and the two small teeth,
+  no words. **Tinted and clear Home Screens:** the tooth is drawn as an outline with an outlined
+  face, so it keeps its expression in one colour.
+- **This week** (medium): seven columns of two small teeth, today ringed; a tap opens Home.
+  **Lock Screen:** the neutral tooth, starting the 2-Minute Brush; one timeline entry, no schedule.
+- **Data:** the snapshot also carries the last brush and last full brush times (kept on the device
+  only, outside the save and the Sync Code) and the grown-up's two times, put in order if set the
+  wrong way round. It is excluded from backups, written only when it changes, with one WidgetKit
+  reload per brush. Timeline entries: now, then each midnight, 5 AM, noon and the two brush times
+  for a week; a new time zone or a clock change reloads them. A bedtime brush just after midnight
+  still counts for the evening before (the tooth's day runs from 5 AM to 5 AM).
+- **Words and times** follow the coach language, like the rest of the widget ("19:30" with a
+  Spanish coach). On the smallest iPhone the "Last brush" label wraps rather than shrinks.
+- **The gallery** shows a happy day (both brushes done) in the device's language.
+- **Free developer team:** on a device the widgets show the tooth and "Open MouthLife" until the
+  App Group is switched on (`MOUTHLIFE_DEVICE_ENTITLEMENTS`, after joining the Apple Developer
+  Program). On the simulator everything works.

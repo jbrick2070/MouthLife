@@ -6,6 +6,9 @@ import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
+#if os(iOS)
+import WidgetKit
+#endif
 
 @Observable
 @MainActor
@@ -16,7 +19,17 @@ public final class AppCoordinator {
 
     // Observable UI State
     public var mode: AppMode = .hub
-    public var save: MouthLifeSaveV2
+    public var save: MouthLifeSaveV2 {
+        // The Home Screen widgets follow the brush log (written only when it really changed).
+        didSet { publishWidgetSnapshot() }
+    }
+    /// The last snapshot written for the widgets, so an unchanged log is not written again.
+    @ObservationIgnored private var lastWidgetSnapshot: WidgetSnapshot?
+    @ObservationIgnored private var lastWidgetDayKey: String = HabitBank.localDateKey()
+    /// When the last brush on this device ended (shown by the Today widget). Device-only: not part
+    /// of the save or the Sync Code.
+    private static let lastBrushDefaultsKey = "mouthlife.widget.lastBrushAt"
+    private static let lastFullBrushDefaultsKey = "mouthlife.widget.lastFullBrushAt"
     public var earthRadioEnabled: Bool = NativeSoundEngine.shared.isEarthRadioEnabled
     public var hubRadioStation: RadioStation = NativeSoundEngine.shared.isEarthRadioEnabled ? .city("world_1") : .sanctuary
     public var brushRadioStation: RadioStation = .livingClock
@@ -187,6 +200,77 @@ public final class AppCoordinator {
         syncSceneMode()
         startWatchLink()
         refreshReminders()
+        publishWidgetSnapshot()
+    }
+
+    // MARK: - Home Screen widgets
+
+    /// Writes the widgets' anonymous snapshot (brush counts and the language) into the App Group and
+    /// asks WidgetKit to redraw, but only when it changed. Without an App Group (a free developer
+    /// team, the Mac) nothing is written and the widgets show "Open MouthLife".
+    private func publishWidgetSnapshot() {
+        #if os(iOS)
+        // a time in the future (a clock or time-zone change) is not a last brush
+        let now = Date()
+        let lastBrush = (UserDefaults.standard.object(forKey: Self.lastBrushDefaultsKey) as? Date).flatMap { $0 <= now ? $0 : nil }
+        let lastFull = (UserDefaults.standard.object(forKey: Self.lastFullBrushDefaultsKey) as? Date).flatMap { $0 <= now ? $0 : nil }
+        let snapshot = WidgetSnapshot.from(
+            slots: save.dailySlotsByDate,
+            language: coachLanguage,
+            lastBrushAt: lastBrush,
+            lastFullBrushAt: lastFull,
+            morning: reminderMorning,
+            evening: reminderEvening
+        )
+        guard snapshot != lastWidgetSnapshot else { return }
+        if snapshot.save() {
+            lastWidgetSnapshot = snapshot
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        #endif
+    }
+
+    /// Remembers when a brush ended, for the Today widget: "Last brush" (any brush) and the tooth's
+    /// face (full 2-minute brushes only). Each time only ever moves forward. Call it just before
+    /// `save` takes the new brush, whose `didSet` then publishes both together (one reload).
+    private func noteBrushEnded(at date: Date, full: Bool) {
+        let now = Date()
+        func advance(_ key: String) {
+            if let known = UserDefaults.standard.object(forKey: key) as? Date, known >= date, known <= now { return }
+            UserDefaults.standard.set(min(date, now), forKey: key)
+        }
+        advance(Self.lastBrushDefaultsKey)
+        if full { advance(Self.lastFullBrushDefaultsKey) }
+    }
+
+    /// A widget was tapped. `mouthlife://brush` (Today, the Lock Screen tooth) starts the 2-Minute
+    /// Brush from Home or from a returning player's Prologue; `mouthlife://home` (This week) just
+    /// opens Home from the Prologue. A brush or a city stage already in progress is never
+    /// interrupted, and a first-time player still sees the Prologue.
+    public func openFromWidget(_ url: URL) {
+        #if os(iOS)
+        guard url.scheme == "mouthlife", save.hasSeenCosmicIntro else { return }
+        // not over a city finale or the ending either (Home stays underneath them)
+        guard mode == .hub || mode == .cosmicIntro, finale == nil else { return }
+        if url.host == "brush" {
+            // close whatever is open on Home first (a sheet, How to Play)
+            activeSheet = nil
+            if isTutorialVisible { closeTutorial() }
+            startBrushAlong()
+        } else if mode == .cosmicIntro {
+            transition(to: .hub)
+        }
+        #endif
+    }
+
+    /// The clock changed under the widgets (a new time zone, a manual clock change): their timeline
+    /// was worked out on the old clock, so write and reload even if the snapshot is the same.
+    public func clockChangedForWidgets() {
+        #if os(iOS)
+        lastWidgetDayKey = HabitBank.localDateKey()
+        lastWidgetSnapshot = nil
+        publishWidgetSnapshot()
+        #endif
     }
 
     // MARK: - Brush log and reminders
@@ -225,6 +309,7 @@ public final class AppCoordinator {
         UserDefaults.standard.set(reminderMorning, forKey: Self.reminderMorningDefaultsKey)
         UserDefaults.standard.set(reminderEvening, forKey: Self.reminderEveningDefaultsKey)
         refreshReminders()
+        publishWidgetSnapshot()
     }
 
     /// The next week of reminders, quiet today once that brush is done (called on launch, on return
@@ -279,6 +364,7 @@ public final class AppCoordinator {
                 UserDefaults.standard.set(data, forKey: Self.watchLedgerDefaultsKey)
             }
         }
+        noteBrushEnded(at: record.completedAt, full: record.rewardInputs.fullBrush)
         save = saveSystem.getSave()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
         refreshReminders()
@@ -676,6 +762,9 @@ public final class AppCoordinator {
 
     public func replayCosmicIntro() {
         cosmicBeatIndex = 0
+        // the hardness ring starts on tooth enamel again, as on the web (quietly: no chip was tapped)
+        cosmicMohsIndex = MohsSpecimens.enamelIndex
+        sceneController.selectCosmicMohs(MohsSpecimens.enamelIndex)
         transition(to: .cosmicIntro)
     }
 
@@ -901,6 +990,7 @@ public final class AppCoordinator {
         L10n.setLanguage(language.rawValue)
         coachLanguage = language
         NativeSoundEngine.shared.setCoachLanguage(language)
+        publishWidgetSnapshot()
         NativeSoundEngine.shared.playUiTap()
         pushWatchSettings()
         refreshReminders()
@@ -1032,6 +1122,7 @@ public final class AppCoordinator {
             fullBrush: fullBrush,
             rinseStepOff: !includeRinse
         )
+        noteBrushEnded(at: Date(), full: fullBrush)
         save = saveSystem.getSave()
         refreshReminders()
         sceneController.touchSystem.clearAll()
@@ -1170,6 +1261,16 @@ public final class AppCoordinator {
         case .active:
             NativeSoundEngine.shared.resumeFromForeground()
             refreshReminders()
+            #if os(iOS)
+            // the 14 days kept move on with the date; also rewrites a file removed while away
+            let dayKey = HabitBank.localDateKey()
+            let fileMissing = WidgetSnapshot.fileURL().map { !FileManager.default.fileExists(atPath: $0.path) } ?? false
+            if dayKey != lastWidgetDayKey || fileMissing {
+                lastWidgetDayKey = dayKey
+                lastWidgetSnapshot = nil
+            }
+            publishWidgetSnapshot()
+            #endif
             if mode == .brushAlong {
                 if pacerSuspendedBySystem && !pacerPausedByUser {
                     pacerSuspendedBySystem = false

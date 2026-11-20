@@ -53,6 +53,13 @@ public struct RootContentView: View {
             .background(MLTheme.deepOcean.ignoresSafeArea())
         }
         .ignoresSafeArea(.keyboard)
+        // a Home Screen or Lock Screen widget was tapped
+        .onOpenURL { coordinator.openFromWidget($0) }
+        #if os(iOS)
+        // a new time zone or a clock change: the widgets' timeline moves with it
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in coordinator.clockChangedForWidgets() }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in coordinator.clockChangedForWidgets() }
+        #endif
     }
 
     /// The 3D scene with the overlay for the current mode. `trailingInset` leaves room on the right

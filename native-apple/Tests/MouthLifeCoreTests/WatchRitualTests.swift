@@ -155,6 +155,18 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertTrue(inputs.fullBrush)
     }
 
+    /// A watch brush counts as full from 118 s (the same 2 s grace as the phone); the phone's
+    /// widget uses this to decide the tooth's face.
+    func testAWatchBrushIsFullFromTheSameGraceAsThePhone() {
+        func full(_ sec: Double) -> Bool {
+            WatchBrushRecord(sessionId: "s", brushedSec: sec, floss: .skipped, rinse: .notOffered, rinseOffered: false, completedAt: t0).rewardInputs.fullBrush
+        }
+        XCTAssertFalse(full(60))
+        XCTAssertFalse(full(GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec - 0.01))
+        XCTAssertTrue(full(GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec))
+        XCTAssertTrue(full(GameConfig.brushAlongTotalSec))
+    }
+
     func testRecordsSurviveTheTripAsADictionary() {
         var r = WatchRitual(startedAt: t0, includeRinse: false)
         _ = run(&r, seconds: 165)
