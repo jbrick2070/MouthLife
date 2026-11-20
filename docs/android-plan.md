@@ -1,7 +1,8 @@
 # MouthLife on Android, including foldables (plan, 2026-11-19)
 
 The plan for the PC session. Nothing here is built yet. Read `AGENTS.md`, `docs/duo-plan.md` (the
-two-screen layouts built for the iPhone Duo) and `docs/widget-plan.md` first.
+two-screen layouts built for the iPhone Duo) and `docs/widget-plan.md` first. Reviewed by agy
+("approve with changes"; its changes are folded in below and marked *agy*).
 
 ## 1. The decision
 
@@ -52,17 +53,41 @@ On the PC: Node 22, Android Studio with SDK 36, and emulators for a phone (Pixel
 2. **Settings:** `targetSdk 36`; edge to edge, with `viewport-fit=cover` so the existing
    `env(safe-area-inset-*)` CSS works; dark system bars; any orientation, as in
    `manifest.webmanifest`.
-3. **Offline and private:** the files load from the app, so the service worker (`public/sw.js`) is
-   not registered inside the app (detect Capacitor in `src/main.ts`). Take the `INTERNET`
-   permission out of the manifest if nothing needs it; the charity links open in the phone's
-   browser after the grown-up gate (`src/ui/parentGate.ts`), which needs no permission.
+3. **Offline and private:**
+   - The files load from the app, so the service worker (`public/sw.js`) is not registered inside
+     the app: guard it in `src/main.ts` with `!Capacitor.isNativePlatform()` (the app's
+     `https://localhost` origin would otherwise pass the current check). *agy*
+   - Remove the merged `INTERNET` permission (`tools:node="remove"`); the app's own files need no
+     network. *agy*
+   - Charity links open in the phone's browser through an Android `ACTION_VIEW` intent after the
+     grown-up gate (`src/ui/parentGate.ts` uses `window.open` today). The privacy page shows inside
+     the app; its charity links go behind the gate too (Families policy), and its header names
+     Android. *agy*
+   - Hide or replace the save-file download (`btn-download-json` in `CompanionHubOverlay.ts`):
+     WebView ignores `blob:` downloads. Sync Codes still work. *agy*
+   - `android:allowBackup="false"` with data extraction rules, so Android's Auto Backup never copies
+     the save off the device; keep Capacitor's scheme and hostname fixed so local storage is never
+     orphaned by an update. *agy*
 4. **Phone behaviour:**
-   - The back button pauses a stage (the same pause card as the house button), closes a sheet or How
-     to Play, and never ends a brush by itself.
-   - The screen stays awake during a brush (a keep-awake plugin if the web Wake Lock is not
-     available in the WebView).
-   - Sound starts after the first tap (WebView autoplay rules).
+   - **The voice coach needs a native plugin.** `src/engine/audio/VoiceCoach.ts` uses
+     `window.speechSynthesis`, which Android's WebView does not have: wrap Android's
+     `TextToSpeech` (ducking the music) in a small plugin, or the hands-free brush ("One" to
+     "Four", "Floss", "Rinse", "Done") is silent. *agy*
+   - The back button (Android 16's predictive back, `OnBackPressedCallback`) pauses a stage (the
+     same pause card as the house button), closes a sheet or How to Play, and pauses a brush rather
+     than ending it (today `Escape` in `BrushAlongOverlay.ts` goes Home). *agy*
+   - The screen stays awake during a brush with the native `FLAG_KEEP_SCREEN_ON` (the web Wake Lock
+     is unreliable in WebView). *agy*
+   - Edge to edge: pass the system bar and cutout insets (`WindowInsetsCompat`) into CSS variables
+     from the native side; `env(safe-area-inset-*)` alone is unreliable in WebView. *agy*
+   - Sound: `mediaPlaybackRequiresUserGesture = false`; suspend the audio when the app goes to the
+     background. The ~76 MB of music in `dist/music/` must not be compressed in the APK
+     (`noCompress` m4a/mp3/ogg); test streaming and looping from Capacitor's local server early
+     (a failure falls back to the synth silently). *agy*
    - Haptics through `navigator.vibrate` or Capacitor Haptics.
+   - Performance: the quality ladder (`FPS_UPGRADE_THRESHOLD`, `QUALITY_ROLLING_FRAMES` in
+     `src/config/gameConfig.ts`) may promote a 120 Hz phone to the top setting too eagerly; profile
+     the CSS `backdrop-filter` blur and multisampling on mid-range Adreno and Mali GPUs. *agy*
 5. **Saves:** the web edition's local storage persists in the app; Sync Codes are unchanged.
 6. **Checks:** `npx tsc --noEmit`, `npx vitest run`, `npm run build`; the emulators above and one
    real mid-range phone (frame rate in a stage, audio, back button, airplane mode, rotation); the
@@ -86,12 +111,16 @@ foldable:
 
 How:
 
-- **The fold:** the Viewport Segments API (CSS `horizontal-viewport-segments` /
-  `vertical-viewport-segments` media queries and `env(viewport-segment-*)`, JS
-  `window.viewport.segments`) and the Device Posture API where the browser has them. If Android's
-  WebView does not expose them, a small Capacitor plugin reads Jetpack WindowManager's
-  `FoldingFeature` (its bounds, orientation and FLAT / HALF_OPENED state) and passes the fold's
-  rectangle to the page.
+- **The fold, inside the app: a Jetpack WindowManager plugin (required).** The web's Viewport
+  Segments and Device Posture APIs report two segments only for a half-open or separating fold; an
+  unfolded, flat Pixel Fold or Galaxy Z Fold reports one. So a small Capacitor plugin reads
+  `WindowInfoTracker`'s `FoldingFeature` (bounds, orientation, FLAT / HALF_OPENED) and passes the
+  fold's rectangle to the page. In a browser on a foldable, the web APIs give the half-open case.
+  *agy*
+- `MainActivity` handles `screenLayout|smallestScreenSize|orientation|screenSize|density` itself, so
+  folding never recreates the activity and the WebGL context; `SceneManager.ts` and
+  `InputManager.ts` size and raycast from the canvas's own rectangle, not
+  `window.innerWidth/Height`. *agy*
 - **Port the native rules as they are:** `DuoSplit` (pages at least 300 pt, a 24 pt clear band
   each side of the fold, the 3D page left or upright, finales whole), `StageMapView` (a 2D canvas
   fitted to the playable boxes, +x to the right and +z downward like the stage camera) and the
@@ -105,13 +134,20 @@ How:
 
 1. **Brush reminders:** local notifications (Capacitor Local Notifications) on the plan already in
    `src/config/brushDays.ts` (the same rules as the iPhone), asking for Android 13's notification
-   permission only when a grown-up turns reminders on.
+   permission only when a grown-up turns reminders on. Inexact alarms only (Play rejects
+   `USE_EXACT_ALARM` here), rescheduled after a restart (`BOOT_COMPLETED`) and beyond the 7 days
+   ahead. *agy*
 2. **Home Screen widgets:** "Today" and "This week", as on the iPhone (`docs/widget-plan.md`, "v1 as
    built"): Jetpack Glance widgets reading a small JSON snapshot the app writes through a plugin,
    with the same fields and rules as `WidgetSnapshot` (the tooth's face from 5 AM to 5 AM, "Time to
    brush!", "Brush before bed", "Next · Tomorrow 7:30 AM", no "Good try", never "late"). Port the
    rules to Kotlin with the same test cases as `WidgetSnapshotTests`. A tap opens the 2-Minute
-   Brush.
+   Brush (Today) or Home (This week), from a cold start and from `onNewIntent`. *agy*
+   - Glance has no WidgetKit-style timeline: schedule refreshes at midnight, 5 AM, noon and the two
+     brush times with WorkManager or inexact alarms, plus time and time-zone change receivers.
+   - Glance has no Compose canvas: draw the tooth faces as vector drawables or a bitmap.
+   - The web edition keeps the last brush and last full brush times outside the save (as the
+     iPhone does), for the snapshot.
 3. Wear OS: not planned.
 
 ## 6. Gaps against the iPhone today
@@ -124,5 +160,7 @@ and 3 close the first three.
 - Three.js in Android's WebView on low-end phones: test a mid-range device early; the quality
   setting already exists.
 - Viewport Segments support inside the WebView (the plugin is the fallback).
-- The Families policy review, and finding 12 testers for 14 days.
+- The Families policy review, and finding 12 testers for 14 days (who actually open the app during
+  the test). Start the closed test as soon as Phase 1 works, and build Phases 2 and 3 meanwhile.
+- Any native plugin library must be 16 KB page aligned for current Android. *agy*
 - Do not lose the upload key.
