@@ -1095,12 +1095,27 @@ export interface EndingPiece {
   arrived: boolean;
 }
 
-/** Where the molar sits during each part of the ending (stage units) and how big it is. */
-export function endingMolarPlace(t: number): { x: number; y: number; scale: number; alpha: number } {
+/** How long the molar takes to fade out before, and back in after, each move with Reduce Motion. */
+export const ENDING_MOLAR_SWAP = 0.6;
+
+/**
+ * Where the molar sits during each part of the ending (stage units) and how big it is. It glides
+ * and shrinks up out of the way of the credits, then comes back for the last scene; with Reduce
+ * Motion it never moves or grows: it fades out where it is just before each cut and fades back in
+ * at its next spot just after.
+ */
+export function endingMolarPlace(t: number, reducedMotion = false): { x: number; y: number; scale: number; alpha: number } {
   const E = ENDING_TIMES;
   const big = { x: 0, y: 0.02, scale: GOLDEN_MOLAR.scale * 1.3 };
   const small = { x: 0, y: 0.66, scale: GOLDEN_MOLAR.scale * 0.5 };
   const alpha = smooth01((t - 0.4) / 0.6);
+  if (reducedMotion) {
+    const fadeOut = (cut: number): number => 1 - smooth01((t - (cut - ENDING_MOLAR_SWAP)) / ENDING_MOLAR_SWAP);
+    const fadeIn = (cut: number): number => smooth01((t - cut) / ENDING_MOLAR_SWAP);
+    if (t < E.creditsStart) return { ...big, alpha: alpha * fadeOut(E.creditsStart) };
+    if (t < E.finaleStart) return { ...small, alpha: alpha * fadeIn(E.creditsStart) * fadeOut(E.finaleStart) };
+    return { ...big, alpha: alpha * fadeIn(E.finaleStart) };
+  }
   if (t < E.creditsStart - 0.6) return { ...big, alpha };
   if (t < E.creditsStart + 0.4) {
     const s = smooth01((t - (E.creditsStart - 0.6)) / 1.0);
@@ -1114,7 +1129,7 @@ export function endingMolarPlace(t: number): { x: number; y: number; scale: numb
 /** The five pieces flying in, one per city, during the ending's opening. */
 export function endingPiece(i: number, t: number, reducedMotion: boolean): EndingPiece {
   const E = ENDING_TIMES;
-  const place = endingMolarPlace(t);
+  const place = endingMolarPlace(t, reducedMotion);
   const slot = finaleSlotPosition(i, place, place.scale);
   const start = E.firstPiece + i * E.pieceGap;
   const s = (t - start) / E.pieceFlight;
@@ -1153,10 +1168,10 @@ export function endingEmblemOrbit(i: number, t: number, reducedMotion: boolean):
   return { x: Math.cos(angle) * 1.05, y: 0.05 + Math.sin(angle) * 0.82, alpha };
 }
 
-/** Gold in every city: the molar smiles, then winks. */
-export function endingFace(t: number): { alpha: number; wink: boolean } {
+/** The molar smiles at everyone who finishes; gold in every city also earns the wink. */
+export function endingFace(t: number, allGold: boolean): { alpha: number; wink: boolean } {
   const E = ENDING_TIMES;
-  return { alpha: smooth01((t - E.face) / 0.5), wink: t >= E.wink && t < E.wink + 0.35 };
+  return { alpha: smooth01((t - E.face) / 0.5), wink: allGold && t >= E.wink && t < E.wink + 0.35 };
 }
 
 /** The ending's own fireworks, in stage space, round the finished molar. */
@@ -1333,7 +1348,7 @@ export function finaleChecksum(plan: CityFinalePlan, emblem: readonly SkylinePie
 export function endingChecksum(plans: readonly CityFinalePlan[], allGold: boolean, reducedMotion: boolean): number {
   let sum = 0;
   for (let t = 0; t <= ENDING_TIMES.end; t += 0.41) {
-    const place = endingMolarPlace(t);
+    const place = endingMolarPlace(t, reducedMotion);
     sum += place.x + place.y * 1.3 + place.scale + place.alpha;
     for (let i = 0; i < CAMPAIGN_PIECES; i++) {
       const p = endingPiece(i, t, reducedMotion);
@@ -1343,13 +1358,19 @@ export function endingChecksum(plans: readonly CityFinalePlan[], allGold: boolea
     }
     const credit = endingCredit(t);
     sum += credit.index + credit.alpha;
-    const face = endingFace(t);
+    const face = endingFace(t, allGold);
     sum += face.alpha + (face.wink ? 1 : 0);
     const showT = t - ENDING_TIMES.finaleStart;
     ENDING_BURSTS.forEach((burst, b) => {
       for (const s of finaleBurstSparks(burst, b, showT, 'fireworks', ENDING_BURST_SCALE)) sum += s.x + s.y * 2 + s.alpha;
     });
     for (const d of endingGoldRain(t, 1.6)) sum += d.x + d.y * 1.3 + d.alpha;
+  }
+  // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeeze, the eyes, the hearts
+  for (let t = ENDING_TIMES.face; t <= ENDING_TIMES.end; t += 0.1) {
+    const hug = endingHug(t, reducedMotion);
+    sum += hug.arms * 1.3 + hug.open * 1.7 + hug.fold * 1.9;
+    sum += hug.squeeze * 2.3 + (hug.happyEyes ? 1 : 0) + hug.hearts * 2.9;
   }
   sum += sumNotes(endingNotes(plans, allGold)) * 0.001;
   return Math.round(sum * 1000) / 1000;

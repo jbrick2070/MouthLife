@@ -18,6 +18,12 @@ import type {
 
 export const SAVE_STORAGE_KEY = 'mouthlife_save_v2';
 export const SYNC_CODE_PREFIX = 'ML2:';
+/** Changes on every Erase Save, so another tab knows a fresh save replaced the old one (H01). */
+export const SAVE_GENERATION_KEY = 'mouthlife_save_generation';
+/** The bytes of a stored save this build could not read, kept before anything replaces them (H02). */
+export const SAVE_UNREADABLE_COPY_KEY = 'mouthlife_save_v2_unreadable';
+/** A copy of a version-1 save, kept before its first rewrite in the version-2 shape (H02). */
+export const SAVE_V1_COPY_KEY = 'mouthlife_save_v1_copy';
 
 const GRADE_ORDER: Record<MasteryGrade, number> = {
   NONE: 0,
@@ -154,9 +160,13 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
 
   // Daily slots (V1 stored numbers; V2 stores { fullRewards, tips })
   if (obj.dailySlotsByDate && typeof obj.dailySlotsByDate === 'object') {
-    const entries = Object.entries(obj.dailySlotsByDate as Record<string, unknown>).slice(-45);
+    // Keep the 45 most recent days by date, not by the order the keys happen to be stored in:
+    // a merged Sync Code can list an old day after a new one (M01). Same as the Swift twin.
+    const entries = Object.entries(obj.dailySlotsByDate as Record<string, unknown>)
+      .filter(([dateKey]) => /^\d{4}-\d{2}-\d{2}$/.test(dateKey))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .slice(-45);
     for (const [dateKey, val] of entries) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
       if (typeof val === 'number') {
         base.dailySlotsByDate[dateKey] = {
           fullRewards: clampInt(val, 0, 2, 0),
@@ -381,7 +391,11 @@ export function decodeSaveFromSyncCode(
   } catch {
     throw new Error(damaged);
   }
-  if (!parsed || typeof parsed !== 'object' || !('schemaVersion' in parsed)) {
+  return migrateCheckedSave(parsed, nowEpochMs);
+}
+
+function migrateCheckedSave(parsed: unknown, nowEpochMs: number): MouthLifeSaveV2 {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('schemaVersion' in parsed)) {
     throw new Error('This code is missing its version number.');
   }
   const v = (parsed as { schemaVersion?: unknown }).schemaVersion;
@@ -391,14 +405,76 @@ export function decodeSaveFromSyncCode(
   return migrateSave(parsed, nowEpochMs);
 }
 
+/**
+ * What the Import box and the backup-file button accept: an `ML2:` Sync Code, or the text of a
+ * `backup.mouthlife.json` file from the Download button (H08). Both go through the same checks
+ * and migration. The Swift twin is `SaveSystem.decodeSaveFromText`.
+ */
+export function decodeSaveFromText(text: string, nowEpochMs = Date.now()): MouthLifeSaveV2 {
+  const trimmed = text.trim().replace(/^﻿/, '');
+  if (!trimmed.startsWith('{')) {
+    return decodeSaveFromSyncCode(trimmed, nowEpochMs);
+  }
+  if (trimmed.length > 262144) {
+    throw new Error('This code is damaged and can’t be read.');
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    throw new Error('This code is damaged and can’t be read.');
+  }
+  return migrateCheckedSave(parsed, nowEpochMs);
+}
+
+/** A save as read back from storage: readable, damaged, or written by a newer version (H02). */
+export type StoredSaveRead =
+  | { kind: 'ok'; save: MouthLifeSaveV2; schemaVersion: 1 | 2 }
+  | { kind: 'unreadable' }
+  | { kind: 'newer-version'; schemaVersion: number };
+
+export function readStoredSave(rawText: string, nowEpochMs = Date.now()): StoredSaveRead {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    return { kind: 'unreadable' };
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { kind: 'unreadable' };
+  const v = (parsed as { schemaVersion?: unknown }).schemaVersion;
+  if (v === 1 || v === 2) return { kind: 'ok', save: migrateSave(parsed, nowEpochMs), schemaVersion: v };
+  if (typeof v === 'number' && Number.isFinite(v) && v > 2) return { kind: 'newer-version', schemaVersion: v };
+  return { kind: 'unreadable' };
+}
+
+/** How `SaveSystem.load` found the stored save. */
+export type SaveLoadOutcome = 'new' | 'loaded' | 'unreadable' | 'newer-version';
+
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
 
+/**
+ * One player's save, kept in `localStorage`, which every open tab of the game shares.
+ *
+ * Tabs never trust their own copy blindly (H01). Before every write, a tab folds in any save
+ * another tab stored since it last looked, merging with `mergeConcurrentSaves` so that one tab's
+ * city clear and another's profile edit both survive. Erase Save changes the generation key, and
+ * a tab that sees a new generation takes the fresh save as it is, so closing an old tab can never
+ * write erased progress back. Page hide writes only when this tab holds something the store lacks.
+ */
 export class SaveSystem {
   private memoryStore = new Map<string, string>();
   private currentSave: MouthLifeSaveV2;
+  /** The stored text this tab last read or wrote, and that save as parsed: the common ancestor
+   *  when another tab's newer write has to be merged in. */
+  private lastSeenRaw: string | null = null;
+  private lastSeenSave: MouthLifeSaveV2 | null = null;
+  private generation = '';
+  /** True while the stored save came from a newer version: play continues, nothing is written. */
+  private persistenceSuspended = false;
+  private outcome: SaveLoadOutcome = 'new';
 
   constructor(
     private readonly bus: EventBus,
@@ -420,37 +496,135 @@ export class SaveSystem {
     };
   }
 
-  load(nowEpochMs = Date.now()): MouthLifeSaveV2 {
+  /** Storage can be missing or throw (private browsing, blocked site data): treat that as empty. */
+  private readKey(key: string): string | null {
     try {
-      const rawText = this.getStorage().getItem(SAVE_STORAGE_KEY);
-      if (!rawText) {
-        this.currentSave = createDefaultSave(nowEpochMs);
-        this.persistInternal(nowEpochMs);
-        return this.currentSave;
-      }
-      const parsed: unknown = JSON.parse(rawText);
-      this.currentSave = migrateSave(parsed, nowEpochMs);
-      this.checkThresholdAutoUnlocks();
-      return this.currentSave;
+      return this.getStorage().getItem(key);
     } catch {
+      return null;
+    }
+  }
+
+  private writeKey(key: string, value: string): boolean {
+    try {
+      this.getStorage().setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Keeps the first copy only, so a later problem never overwrites the bytes worth recovering. */
+  private keepCopy(key: string, rawText: string): void {
+    if (this.readKey(key) === null) this.writeKey(key, rawText);
+  }
+
+  private markSeen(rawText: string, save: MouthLifeSaveV2): void {
+    this.lastSeenRaw = rawText;
+    this.lastSeenSave = cloneSave(save);
+  }
+
+  load(nowEpochMs = Date.now()): MouthLifeSaveV2 {
+    this.persistenceSuspended = false;
+    this.generation = this.readKey(SAVE_GENERATION_KEY) ?? '';
+    const rawText = this.readKey(SAVE_STORAGE_KEY);
+    if (!rawText) {
+      // Only a missing save starts a new one in storage (H02).
+      this.outcome = 'new';
       this.currentSave = createDefaultSave(nowEpochMs);
+      this.persistInternal(nowEpochMs);
       return this.currentSave;
     }
+    const read = readStoredSave(rawText, nowEpochMs);
+    if (read.kind === 'ok') {
+      if (read.schemaVersion === 1) this.keepCopy(SAVE_V1_COPY_KEY, rawText);
+      this.outcome = 'loaded';
+      this.currentSave = read.save;
+      this.markSeen(rawText, read.save);
+      this.checkThresholdAutoUnlocks();
+      return this.currentSave;
+    }
+    this.keepCopy(SAVE_UNREADABLE_COPY_KEY, rawText);
+    this.currentSave = createDefaultSave(nowEpochMs);
+    if (read.kind === 'newer-version') {
+      // A newer version wrote this save, and an older copy of the app is running (an old cached
+      // page, say). Play goes on with a fresh save in memory, and the stored one is left exactly
+      // as it is until the player imports a code or erases on purpose.
+      this.outcome = 'newer-version';
+      this.persistenceSuspended = true;
+      this.lastSeenRaw = rawText;
+      this.lastSeenSave = null;
+      return this.currentSave;
+    }
+    // Damaged past reading, by any version: its bytes are kept under SAVE_UNREADABLE_COPY_KEY and
+    // a fresh save takes its place, so progress is saved again from now on.
+    this.outcome = 'unreadable';
+    this.persistInternal(nowEpochMs);
+    return this.currentSave;
+  }
+
+  /** How the last `load` found the stored save. */
+  getLoadOutcome(): SaveLoadOutcome {
+    return this.outcome;
+  }
+
+  /** True while nothing is written because the stored save came from a newer version. */
+  isPersistenceSuspended(): boolean {
+    return this.persistenceSuspended;
   }
 
   getSave(): MouthLifeSaveV2 {
     return this.currentSave;
   }
 
-  save(mutatedSave = this.currentSave, nowEpochMs = Date.now()): MouthLifeSaveV2 {
-    // Enforce monotonic totalBrushStamps invariant
-    mutatedSave.totalBrushStamps = Math.max(
-      this.currentSave.totalBrushStamps,
-      Math.floor(mutatedSave.totalBrushStamps)
+  /**
+   * Folds a save another tab stored since this tab last looked into this tab's save, in place
+   * (references to the save object stay valid). Returns false when there is nothing new.
+   */
+  private absorbStoredSave(nowEpochMs: number): boolean {
+    if (this.persistenceSuspended) return false;
+    const rawText = this.readKey(SAVE_STORAGE_KEY);
+    if (rawText === null || rawText === this.lastSeenRaw) return false;
+    const read = readStoredSave(rawText, nowEpochMs);
+    // Never adopt a write this version cannot read; the next write replaces it.
+    if (read.kind !== 'ok') return false;
+    const generation = this.readKey(SAVE_GENERATION_KEY) ?? '';
+    const next =
+      generation !== this.generation || !this.lastSeenSave
+        ? read.save
+        : mergeConcurrentSaves(this.lastSeenSave, this.currentSave, read.save);
+    this.generation = generation;
+    assignInPlace(
+      this.currentSave as unknown as Record<string, unknown>,
+      next as unknown as Record<string, unknown>
     );
-    mutatedSave.saveRevision = Math.max(this.currentSave.saveRevision, mutatedSave.saveRevision) + 1;
-    mutatedSave.lastSavedEpochMs = nowEpochMs;
+    this.markSeen(rawText, read.save);
+    return true;
+  }
+
+  /** Another tab wrote the save, or this tab came back into view: pick up what changed. */
+  refreshFromStorage(nowEpochMs = Date.now()): boolean {
+    if (!this.absorbStoredSave(nowEpochMs)) return false;
+    this.checkThresholdAutoUnlocks();
+    this.bus.emit('save:updated', { save: this.currentSave });
+    return true;
+  }
+
+  save(mutatedSave = this.currentSave, nowEpochMs = Date.now()): MouthLifeSaveV2 {
+    const stampsBefore = this.currentSave.totalBrushStamps;
+    const revisionBefore = this.currentSave.saveRevision;
+    const generationBefore = this.generation;
     this.currentSave = mutatedSave;
+    // Another tab may have saved since this one last looked: merge its progress in first.
+    this.absorbStoredSave(nowEpochMs);
+    const next = this.currentSave;
+    // Enforce monotonic totalBrushStamps invariant (an erase in another tab starts a new count)
+    if (this.generation === generationBefore) {
+      next.totalBrushStamps = Math.max(stampsBefore, Math.floor(next.totalBrushStamps));
+    }
+    next.saveRevision =
+      Math.max(revisionBefore, next.saveRevision, this.lastSeenSave?.saveRevision ?? 0) + 1;
+    next.lastSavedEpochMs = nowEpochMs;
 
     this.checkThresholdAutoUnlocks();
     this.persistInternal(nowEpochMs);
@@ -459,10 +633,34 @@ export class SaveSystem {
   }
 
   /**
+   * Page hide or a hidden tab: write only if this tab holds changes the store lacks, after taking
+   * in what other tabs stored. A stale tab therefore never writes old progress over a newer save
+   * or over an erase (H01).
+   */
+  flushIfChanged(nowEpochMs = Date.now()): void {
+    if (this.persistenceSuspended) return;
+    const absorbed = this.absorbStoredSave(nowEpochMs);
+    if (this.lastSeenSave && savesMatch(this.currentSave, this.lastSeenSave)) {
+      if (absorbed) {
+        this.checkThresholdAutoUnlocks();
+        this.bus.emit('save:updated', { save: this.currentSave });
+      }
+      return;
+    }
+    this.save(this.currentSave, nowEpochMs);
+  }
+
+  /**
    * Resets local progress to a brand-new Day-1 save (for beta testing or fresh-start requests).
+   * A new generation tells every other open tab to take the fresh save rather than merge into it.
    */
   resetToFreshSave(nowEpochMs = Date.now()): MouthLifeSaveV2 {
+    const revisionBefore = Math.max(this.currentSave.saveRevision, this.lastSeenSave?.saveRevision ?? 0);
+    this.persistenceSuspended = false;
+    this.generation = newGenerationId();
+    this.writeKey(SAVE_GENERATION_KEY, this.generation);
     this.currentSave = createDefaultSave(nowEpochMs);
+    this.currentSave.saveRevision = revisionBefore + 1;
     this.persistInternal(nowEpochMs);
     this.bus.emit('save:updated', { save: this.currentSave });
     return this.currentSave;
@@ -470,33 +668,12 @@ export class SaveSystem {
 
   private persistInternal(nowEpochMs: number): void {
     this.currentSave.lastSavedEpochMs = nowEpochMs;
+    // A save from a newer version stays untouched until the player imports or erases (H02).
+    if (this.persistenceSuspended) return;
     const serialized = JSON.stringify(this.currentSave);
-    this.memoryStore.set(SAVE_STORAGE_KEY, serialized);
-    try {
-      this.getStorage().setItem(SAVE_STORAGE_KEY, serialized);
-    } catch {
-      // Fallback already retained in memoryStore
+    if (this.writeKey(SAVE_STORAGE_KEY, serialized)) {
+      this.markSeen(serialized, this.currentSave);
     }
-  }
-
-  reconcileExternalStorageEvent(rawJson: string | null, nowEpochMs = Date.now()): boolean {
-    if (!rawJson) return false;
-    try {
-      const incoming = migrateSave(JSON.parse(rawJson), nowEpochMs);
-      if (incoming.saveRevision > this.currentSave.saveRevision) {
-        incoming.totalBrushStamps = Math.max(
-          incoming.totalBrushStamps,
-          this.currentSave.totalBrushStamps
-        );
-        this.currentSave = incoming;
-        this.checkThresholdAutoUnlocks();
-        this.bus.emit('save:updated', { save: this.currentSave });
-        return true;
-      }
-    } catch {
-      // Ignore malformed external writes
-    }
-    return false;
   }
 
   consumeSingleSupplyBeacon(nowEpochMs = Date.now()): void {
@@ -637,12 +814,18 @@ export class SaveSystem {
 
   /** `preferImported`: see `mergeSaves` (the Prologue's restore on a brand-new save). */
   importSyncCode(code: string, nowEpochMs = Date.now(), preferImported = false): MouthLifeSaveV2 {
-    const imported = decodeSaveFromSyncCode(code, nowEpochMs);
+    // An ML2: code, or the text of a downloaded backup.mouthlife.json (H08).
+    const imported = decodeSaveFromText(code, nowEpochMs);
+    // Merge into the newest stored save, not a stale copy in this tab (H01).
+    this.absorbStoredSave(nowEpochMs);
     // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
     const merged = mergeSaves(this.currentSave, imported, preferImported);
     CompanionArchSim.reconcileOfflineElapsed(merged.companion, nowEpochMs);
-    merged.saveRevision = Math.max(this.currentSave.saveRevision, imported.saveRevision) + 1;
+    merged.saveRevision =
+      Math.max(this.currentSave.saveRevision, imported.saveRevision, this.lastSeenSave?.saveRevision ?? 0) + 1;
     this.currentSave = merged;
+    // Importing on purpose is the player's choice to replace a save this version can't read.
+    this.persistenceSuspended = false;
     this.checkThresholdAutoUnlocks();
     this.persistInternal(nowEpochMs);
     this.bus.emit('save:updated', { save: this.currentSave });
@@ -698,16 +881,20 @@ export function mergeSaves(
     const want = newer.equippedUpgrades[slot] ?? current.equippedUpgrades[slot] ?? imported.equippedUpgrades[slot];
     return want && unlockedUpgrades.includes(want) ? want : null;
   };
+  // A code that brings nothing new is an older copy of this save (M03): spent ions, beacons and
+  // Overdrive charges stay spent instead of coming back with it.
+  const keepWallet = !preferImported && isSupersededBy(imported, current);
+  const wallet = (a: number, b: number): number => (keepWallet ? a : Math.max(a, b));
   return {
     ...newer,
     hasSeenCosmicIntro: current.hasSeenCosmicIntro || imported.hasSeenCosmicIntro,
     playerProfile: { ...imported.playerProfile },
     companion: structuredCloneSafe(newer.companion),
     totalBrushStamps: Math.max(current.totalBrushStamps, imported.totalBrushStamps),
-    fluorideIons: Math.max(current.fluorideIons, imported.fluorideIons),
+    fluorideIons: wallet(current.fluorideIons, imported.fluorideIons),
     dailySlotsByDate: daily,
-    pendingSupplyBeacons: Math.max(current.pendingSupplyBeacons, imported.pendingSupplyBeacons),
-    remineralizedOverdriveRuns: Math.max(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns),
+    pendingSupplyBeacons: wallet(current.pendingSupplyBeacons, imported.pendingSupplyBeacons),
+    remineralizedOverdriveRuns: wallet(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns),
     unlockedUpgrades,
     equippedUpgrades: { brush: pick('brush'), floss: pick('floss'), rinse: pick('rinse') },
     unlockedHistoryNotes: union(current.unlockedHistoryNotes, imported.unlockedHistoryNotes),
@@ -719,4 +906,191 @@ export function mergeSaves(
 
 function structuredCloneSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cloneSave(save: MouthLifeSaveV2): MouthLifeSaveV2 {
+  return structuredCloneSafe(save);
+}
+
+function newGenerationId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Equal values, ignoring the order of object keys (a stored save and a merged one list keys differently). */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual(a[k], b[k]));
+}
+
+/** The same progress and settings, whatever the revision number and save time. */
+function savesMatch(a: MouthLifeSaveV2, b: MouthLifeSaveV2): boolean {
+  return deepEqual(
+    { ...a, saveRevision: 0, lastSavedEpochMs: 0 },
+    { ...b, saveRevision: 0, lastSavedEpochMs: 0 }
+  );
+}
+
+/** Makes `target` hold `source`'s contents without replacing nested objects that callers may hold. */
+function assignInPlace(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const key of Object.keys(target)) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
+  }
+  for (const [key, value] of Object.entries(source)) {
+    const cur = target[key];
+    if (isPlainObject(cur) && isPlainObject(value)) assignInPlace(cur, value);
+    else target[key] = value;
+  }
+}
+
+/**
+ * True when `older` holds nothing that `newer` lacks: every city record, brushing day, unlock and
+ * history note is matched or beaten, and no more stamps. Replaying such a code must not refill
+ * what `newer` has spent since (M03). Days `newer` has already let go of (it keeps 45) are not
+ * counted against it. The Swift twin is `SaveSystem.isSuperseded`.
+ */
+export function isSupersededBy(older: MouthLifeSaveV2, newer: MouthLifeSaveV2): boolean {
+  // An earlier copy was saved earlier and has a lower revision: every save and import raises it.
+  if (older.saveRevision >= newer.saveRevision || older.lastSavedEpochMs > newer.lastSavedEpochMs) return false;
+  if (older.totalBrushStamps > newer.totalBrushStamps) return false;
+  // Treats pay ions too; they leave their times on the tooth (newer keeps the latest 12).
+  const newerTreats = newer.companion.recentTreatTimestampsMs;
+  const oldestTreatKept = newerTreats.length >= 12 ? Math.min(...newerTreats) : -Infinity;
+  if (older.companion.recentTreatTimestampsMs.some((ts) => ts >= oldestTreatKept && !newerTreats.includes(ts))) {
+    return false;
+  }
+  for (const [id, a] of Object.entries(older.worlds)) {
+    const b = newer.worlds[id];
+    if (!b) {
+      if (a.completed || a.timesCleared > 0 || a.bestScore > 0) return false;
+      continue;
+    }
+    if (
+      (a.completed && !b.completed) ||
+      (a.unlocked && !b.unlocked) ||
+      a.timesCleared > b.timesCleared ||
+      a.bestScore > b.bestScore ||
+      GRADE_ORDER[a.bestGrade] > GRADE_ORDER[b.bestGrade] ||
+      a.bestCleanlinessPct > b.bestCleanlinessPct ||
+      a.sitesRestoredMax > b.sitesRestoredMax
+    ) {
+      return false;
+    }
+  }
+  const newerDays = Object.keys(newer.dailySlotsByDate).sort();
+  const oldestKept = newerDays.length >= 45 ? newerDays[0] : '';
+  for (const [day, a] of Object.entries(older.dailySlotsByDate)) {
+    if (day < oldestKept) continue;
+    const b = newer.dailySlotsByDate[day];
+    if (a.fullRewards > (b?.fullRewards ?? 0) || a.tips > (b?.tips ?? 0)) return false;
+  }
+  const upgrades = new Set(newer.unlockedUpgrades);
+  if (older.unlockedUpgrades.some((id) => !upgrades.has(id))) return false;
+  const notes = new Set(newer.unlockedHistoryNotes);
+  if (older.unlockedHistoryNotes.some((id) => !notes.has(id))) return false;
+  return true;
+}
+
+/**
+ * Two tabs changed the same save at once (H01): `base` is the save both started from, `ours` this
+ * tab's version, `theirs` the one the other tab stored. A setting changed on one side only keeps
+ * that change, and this tab's choice wins when both changed it. City records and unlocks only
+ * ever grow, so the best of each is kept. Ions, beacons and Overdrive charges add up both tabs'
+ * gains and spending against the starting balance, so neither a purchase nor a payout is undone.
+ */
+export function mergeConcurrentSaves(
+  base: MouthLifeSaveV2,
+  ours: MouthLifeSaveV2,
+  theirs: MouthLifeSaveV2
+): MouthLifeSaveV2 {
+  const pick = <T>(b: T, o: T, t: T): T => (deepEqual(o, b) ? t : o);
+  const shift = (b: number, o: number, t: number, max = Number.MAX_SAFE_INTEGER): number =>
+    Math.max(0, Math.min(max, t + (o - b)));
+  const union = (t: readonly string[], o: readonly string[]): string[] => [...new Set([...t, ...o])];
+
+  const worlds: Record<string, WorldRecord> = {};
+  for (const id of new Set([...Object.keys(theirs.worlds), ...Object.keys(ours.worlds)])) {
+    const o = ours.worlds[id];
+    const t = theirs.worlds[id];
+    if (!o || !t) {
+      worlds[id] = { ...(t ?? o) } as WorldRecord;
+      continue;
+    }
+    worlds[id] = {
+      unlocked: o.unlocked || t.unlocked,
+      completed: o.completed || t.completed,
+      timesCleared: Math.max(o.timesCleared, t.timesCleared),
+      bestScore: Math.max(o.bestScore, t.bestScore),
+      bestGrade: GRADE_ORDER[o.bestGrade] >= GRADE_ORDER[t.bestGrade] ? o.bestGrade : t.bestGrade,
+      bestCleanlinessPct: Math.max(o.bestCleanlinessPct, t.bestCleanlinessPct),
+      sitesRestoredMax: Math.max(o.sitesRestoredMax, t.sitesRestoredMax),
+    };
+  }
+
+  const daily: Record<string, { fullRewards: number; tips: number }> = {};
+  for (const day of new Set([...Object.keys(theirs.dailySlotsByDate), ...Object.keys(ours.dailySlotsByDate)])) {
+    const o = ours.dailySlotsByDate[day] ?? { fullRewards: 0, tips: 0 };
+    const t = theirs.dailySlotsByDate[day] ?? { fullRewards: 0, tips: 0 };
+    daily[day] = { fullRewards: Math.max(o.fullRewards, t.fullRewards), tips: Math.max(o.tips, t.tips) };
+  }
+
+  const unlockedUpgrades = union(theirs.unlockedUpgrades, ours.unlockedUpgrades);
+  const equip = (slot: 'brush' | 'floss' | 'rinse'): string | null => {
+    const want = pick(base.equippedUpgrades[slot], ours.equippedUpgrades[slot], theirs.equippedUpgrades[slot]);
+    return want && unlockedUpgrades.includes(want) ? want : null;
+  };
+
+  let companion = theirs.companion;
+  if (!deepEqual(ours.companion, base.companion)) {
+    companion =
+      deepEqual(theirs.companion, base.companion) ||
+      ours.companion.lastEvaluatedEpochMs >= theirs.companion.lastEvaluatedEpochMs
+        ? ours.companion
+        : theirs.companion;
+  }
+
+  return {
+    schemaVersion: 2,
+    saveRevision: Math.max(ours.saveRevision, theirs.saveRevision),
+    lastSavedEpochMs: Math.max(ours.lastSavedEpochMs, theirs.lastSavedEpochMs),
+    hasSeenCosmicIntro: ours.hasSeenCosmicIntro || theirs.hasSeenCosmicIntro,
+    playerProfile: {
+      displayName: pick(base.playerProfile.displayName, ours.playerProfile.displayName, theirs.playerProfile.displayName),
+      skinToneIndex: pick(base.playerProfile.skinToneIndex, ours.playerProfile.skinToneIndex, theirs.playerProfile.skinToneIndex),
+      homeCityId: pick(base.playerProfile.homeCityId, ours.playerProfile.homeCityId, theirs.playerProfile.homeCityId),
+    },
+    companion: structuredCloneSafe(companion),
+    totalBrushStamps: Math.max(ours.totalBrushStamps, theirs.totalBrushStamps),
+    fluorideIons: shift(base.fluorideIons, ours.fluorideIons, theirs.fluorideIons),
+    dailySlotsByDate: daily,
+    pendingSupplyBeacons: shift(
+      base.pendingSupplyBeacons,
+      ours.pendingSupplyBeacons,
+      theirs.pendingSupplyBeacons,
+      MAX_SUPPLY_BEACONS
+    ),
+    remineralizedOverdriveRuns: shift(
+      base.remineralizedOverdriveRuns,
+      ours.remineralizedOverdriveRuns,
+      theirs.remineralizedOverdriveRuns,
+      MAX_OVERDRIVE_RUNS
+    ),
+    unlockedUpgrades,
+    equippedUpgrades: { brush: equip('brush'), floss: equip('floss'), rinse: equip('rinse') },
+    unlockedHistoryNotes: union(theirs.unlockedHistoryNotes, ours.unlockedHistoryNotes),
+    qualityPreference: pick(base.qualityPreference, ours.qualityPreference, theirs.qualityPreference),
+    worlds,
+  };
 }

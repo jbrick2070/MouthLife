@@ -20,6 +20,10 @@ interface Deck {
   file: string | null;
   /** The recording has actually started sounding (its first `playing` event since `file` was set). */
   audible: boolean;
+  /** A play() inside a tap went through, so iOS lets this element start later with no tap. */
+  primed: boolean;
+  /** The priming attempt still waiting on play() (0 when none); a newer attempt or source makes it stale. */
+  priming: number;
 }
 
 /** An opening recording that started downloading before the first tap (see `preloadOpeningTrack`). */
@@ -45,7 +49,9 @@ export class MusicTrackDeck {
   private readonly decks: Deck[] = [];
   private active = -1;
   private readonly failed = new Set<string>();
-  private unlocked = false;
+  private primeSeq = 0;
+  /** What the last sync() asked of the active deck: playing, or held. */
+  private wantPlaying = false;
   /** Fires after a file failed to load or decode, so the caller can fall back to the synth. */
   onTrackFailed: ((file: string) => void) | null = null;
   /** Fires when the active recording starts sounding, so the synth can hand over to it. */
@@ -76,7 +82,7 @@ export class MusicTrackDeck {
         return;
       }
       gain.connect(out);
-      const deck: Deck = { el, gain, file: early?.file ?? null, audible: false };
+      const deck: Deck = { el, gain, file: early?.file ?? null, audible: false, primed: false, priming: 0 };
       el.addEventListener('error', () => this.markFailed(deck));
       el.addEventListener('playing', () => {
         // The silent unlock clip plays with no file set: that is not music.
@@ -118,29 +124,48 @@ export class MusicTrackDeck {
     return this.decks[this.active]?.audible ?? false;
   }
 
-  /** Call synchronously inside a user gesture, so both decks may start later without another tap. */
+  /**
+   * Call synchronously inside every user gesture, so both decks may start later without another
+   * tap. Each element counts as unlocked only once a play() of it really went through: one that was
+   * refused (iOS turns down a touchstart, say) tries again on the next gesture.
+   */
   unlock(): void {
-    if (this.unlocked || !this.hasTracks()) return;
-    this.unlocked = true;
+    if (!this.hasTracks()) return;
     for (const deck of this.decks) {
-      if (deck.file !== null) {
-        // The preloaded opener: start it inside this tap too (its gain is still 0, so it is silent),
-        // or iOS may refuse to play it later. sync() keeps it going if it is the one wanted.
-        const p = deck.el.paused ? deck.el.play() : undefined;
-        if (p) {
-          p.then(() => {
-            if (this.decks[this.active] !== deck) deck.el.pause();
-          }).catch(() => {});
-        }
+      if (deck.primed || deck.priming !== 0) continue;
+      const opener = deck.file !== null;
+      if (opener && !deck.el.paused) {
+        deck.primed = true; // already playing, so already allowed
         continue;
       }
-      deck.el.src = SILENT_WAV;
+      // The preloaded opener starts inside this tap too (its gain is still 0, so it is silent), or
+      // iOS may refuse to play it later; sync() keeps it going if it is the one wanted. An empty
+      // deck plays a silent clip instead.
+      if (!opener) deck.el.src = SILENT_WAV;
+      const token = ++this.primeSeq;
       const p = deck.el.play();
-      if (p) {
-        p.then(() => {
-          if (deck.file === null) deck.el.pause();
-        }).catch(() => {});
+      if (!p) {
+        deck.primed = true; // an old browser with no promise: nothing to wait for
+        continue;
       }
+      deck.priming = token;
+      p.then(
+        () => {
+          if (deck.priming !== token) return; // stale: the deck has moved on to another source
+          deck.priming = 0;
+          deck.primed = true;
+          const wanted = deck.file !== null && this.decks[this.active] === deck && this.wantPlaying;
+          if (!wanted) deck.el.pause();
+        },
+        (err: unknown) => {
+          if (deck.priming !== token) return;
+          deck.priming = 0;
+          // Refused (or cut short): this element stays eligible for the next gesture. Anything else
+          // (a clip this browser cannot play) would only fail again, so it is not retried.
+          const name = (err as { name?: string } | null)?.name;
+          if (name !== 'NotAllowedError' && name !== 'AbortError') deck.primed = true;
+        }
+      );
     }
   }
 
@@ -152,6 +177,7 @@ export class MusicTrackDeck {
     if (!this.hasTracks()) return false;
     const now = this.ctx.currentTime;
     const tau = TRACK_CROSSFADE_SEC / 3;
+    this.wantPlaying = file !== null && playing;
     if (file === null) {
       for (const deck of this.decks) this.fadeOut(deck, now, tau);
       this.active = -1;
@@ -168,6 +194,8 @@ export class MusicTrackDeck {
       if (deck.file !== file) {
         deck.file = file;
         deck.audible = false;
+        // a priming play() still pending belonged to the old source: its outcome no longer counts
+        deck.priming = 0;
         deck.el.src = this.baseUrl + encodeURIComponent(file);
         deck.el.load();
       }
@@ -184,12 +212,18 @@ export class MusicTrackDeck {
         deck.audible = false;
         const p = deck.el.play();
         if (p) {
-          p.catch((err: unknown) => {
-            // An autoplay refusal clears on the next tap (the engine re-syncs on every gesture);
-            // a pause() cutting in is harmless; anything else means the file itself is bad.
-            const name = (err as { name?: string } | null)?.name;
-            if (name !== 'NotAllowedError' && name !== 'AbortError') this.markFailed(target);
-          });
+          p.then(
+            () => {
+              // it played, so this element is allowed to start again later without a tap
+              target.primed = true;
+            },
+            (err: unknown) => {
+              // An autoplay refusal clears on the next tap (the engine re-syncs and re-primes on
+              // every gesture); a pause() cutting in is harmless; anything else means the file is bad.
+              const name = (err as { name?: string } | null)?.name;
+              if (name !== 'NotAllowedError' && name !== 'AbortError') this.markFailed(target);
+            }
+          );
         }
       }
     } else {

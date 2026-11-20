@@ -1296,7 +1296,7 @@ struct FinalePainter {
             paintHost(&ctx, c, onLeft: c.plan.hostOnLeft, rise: credit.alpha, wave: rm ? 0 : 0.5 * sin(Double.pi * 2 * 1.4 * t))
         }
 
-        let place = CityFinale.endingMolarPlace(t)
+        let place = CityFinale.endingMolarPlace(t, reducedMotion: rm)
         let snapped = t >= E.snap
         let bodyFinish: MolarFinish = snapped ? (allGold ? .gold : .pearl) : .empty
         if place.alpha > 0 {
@@ -1337,7 +1337,7 @@ struct FinalePainter {
                 paintEmblem(&ctx, c, x: sx(o.x), y: sy(o.y), radius: 0.11 * unit, alpha: o.alpha)
             }
             if allGold {
-                let face = CityFinale.endingFace(t)
+                let face = CityFinale.endingFace(t, allGold: allGold)
                 if face.alpha > 0 { paintFace(&ctx, cx: place.x, cy: place.y, scale: place.scale, alpha: face.alpha, wink: face.wink) }
                 if !rm {
                     for drop in CityFinale.endingGoldRain(t, halfWidth: w / 2 / unit) {

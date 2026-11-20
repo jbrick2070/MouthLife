@@ -277,7 +277,8 @@ for the cover, which runs the full app. The web files named in the notes are out
    one single-tap Pause on the upright half, the same as on every other device.
 2. **Keep the voice and music going while the phone is locked** (background audio)? Both reviewers:
    **not for now**. The screen already stays awake during a brush (`isIdleTimerDisabled`), so a lock
-   is a grown-up's deliberate stop, and today it pauses cleanly. Background audio needs a genuine
+   is a grown-up's deliberate stop. Since November 2026 (review H04) the sound stops while locked but the
+   brush timer keeps real time, and the ritual catches up when the phone is unlocked. Background audio needs a genuine
    audible purpose for App Review, costs battery, and leaves a brush running that nobody sees.
 3. **A Live Activity for a running brush?** Both reviewers: **defer**; see the widget plan.
 4. **Release 1 = items 1-4** (3D rule, fold helper, brush, Home and the first screens), then 5-8?

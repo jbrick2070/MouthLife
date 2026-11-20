@@ -26,6 +26,10 @@ jobs:
     defaults:
       run:
         working-directory: native-apple
+        # An explicit `bash` runs every step as `bash --noprofile --norc -eo pipefail {0}`. Without
+        # it GitHub uses `bash -e {0}`, and a piped command (`swift test | tee`) takes the exit
+        # code of its last stage, so failing tests turned the job green.
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,9 +41,14 @@ jobs:
           mkdir -p ../native-out
 
       - name: Swift engine tests
-        run: swift test 2>&1 | tee ../native-out/swift-test.log
+        shell: bash
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee ../native-out/swift-test.log
 
+      # Still build after a test failure, so one run reports both (the summary and logs always run).
       - name: Build for iPhone simulator
+        if: ${{ !cancelled() }}
         run: |
           xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build \

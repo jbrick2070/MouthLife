@@ -454,7 +454,7 @@ struct BrushWeekStrip: View {
 }
 
 /// The privacy policy, in the app (no link out): what MouthLife keeps, where, and what it never does.
-/// The web edition has the same text in public/privacy.html.
+/// The web edition shows the same sections, in the same words, from src/ui/privacyNotice.ts.
 struct PrivacyPolicyView: View {
     @Environment(\.dismiss) private var dismiss
 

@@ -162,7 +162,13 @@ public struct TouchFeedback: Codable, Equatable, Sendable {
 }
 
 /// Direct touch-the-teeth "Smooth Bask" toy interactivity for the 14-crown Companion Arch (HUB & REPORT).
-public final class CompanionTouchSystem {
+///
+/// Thread safety: touches arrive on the main thread (UIKit / AppKit) while SceneKit's render thread
+/// steps the animation and reads the ripples and splats every frame. Every public member holds
+/// `lock` for its whole call, so each call sees and leaves one consistent state. The lock is held for
+/// a few microseconds, never across I/O, and the render-side calls (`step`, `fadeSplatsForPacer`,
+/// `fillActiveRipples`, `fillRenderSplats`) do not allocate under it.
+public final class CompanionTouchSystem: @unchecked Sendable {
     public static let crownCount: Int = 14
     public static let glassHarpSmoothness: Double = 50.0
     public static let maxSplats: Int = 6
@@ -225,9 +231,11 @@ public final class CompanionTouchSystem {
         return defaultCrownAnchors[clamped]
     }
 
-    public private(set) var splats: [SugarSplat] = []
-    public private(set) var ripples: [TouchRipple] = []
-    public private(set) var splatsClearedTotal: Int = 0
+    /// Guards every stored property below (see the type's note on thread safety).
+    private let lock = NSLock()
+    private var liveSplats: [SugarSplat] = []
+    private var liveRipples: [TouchRipple] = []
+    private var liveClearedTotal: Int = 0
 
     private var nextSplatId: Int = 1
     private var nextRippleId: Int = 1
@@ -238,10 +246,33 @@ public final class CompanionTouchSystem {
     private var noteStep: Int = 0
     private var lastNoteSec: Double = -99.0
 
-    public init() {}
+    public init() {
+        liveSplats.reserveCapacity(Self.maxSplats)
+        liveRipples.reserveCapacity(Self.maxRipples)
+    }
+
+    public var splats: [SugarSplat] {
+        lock.lock()
+        defer { lock.unlock() }
+        return liveSplats
+    }
+
+    public var ripples: [TouchRipple] {
+        lock.lock()
+        defer { lock.unlock() }
+        return liveRipples
+    }
+
+    public var splatsClearedTotal: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return liveClearedTotal
+    }
 
     public var activeSplatCount: Int {
-        splats.count
+        lock.lock()
+        defer { lock.unlock() }
+        return liveSplats.count
     }
 
     /// Splats localized sticky sugar-plaque onto up to `count` tooth anchor points.
@@ -251,6 +282,8 @@ public final class CompanionTouchSystem {
         count: Int = 3,
         seed: Int64 = CompanionArchSim.currentEpochMs()
     ) -> [SugarSplat] {
+        lock.lock()
+        defer { lock.unlock() }
         var added: [SugarSplat] = []
         guard !anchors.isEmpty, count > 0 else { return added }
 
@@ -283,10 +316,10 @@ public final class CompanionTouchSystem {
                 grow: 0.0
             )
             nextSplatId += 1
-            if splats.count >= Self.maxSplats {
-                splats.removeFirst()
+            if liveSplats.count >= Self.maxSplats {
+                liveSplats.removeFirst()
             }
-            splats.append(splat)
+            liveSplats.append(splat)
             added.append(splat)
         }
         return added
@@ -294,41 +327,73 @@ public final class CompanionTouchSystem {
 
     /// Effective (animated) splat coverage for shader upload.
     public func getRenderSplats() -> [RenderSplat] {
-        splats.map { s in
-            let pop: Double
-            if s.grow < 1.0 {
-                pop = sin(s.grow * .pi * 0.5) * (1.0 + 0.25 * sin(s.grow * .pi))
-            } else {
-                pop = 1.0
-            }
-            return RenderSplat(
-                id: s.id,
-                crownIndex: s.crownIndex,
-                x: s.x,
-                y: s.y,
-                z: s.z,
-                amount: s.amount * pop
-            )
-        }
+        var out: [RenderSplat] = []
+        fillRenderSplats(into: &out)
+        return out
     }
 
     /// Returns active ripples with smooth linear/cosine decay over `rippleLifetimeSec`.
     public func activeRipples(nowSec: Double) -> [ActiveTouchRipple] {
-        ripples.compactMap { r in
-            let age = nowSec - r.t
-            guard age >= 0.0, age < Self.rippleLifetimeSec else { return nil }
-            let norm = age / Self.rippleLifetimeSec
-            let strength = 0.5 * (1.0 + cos(norm * .pi))
-            return ActiveTouchRipple(
-                id: r.id,
-                x: r.x,
-                y: r.y,
-                z: r.z,
-                crownIndex: r.crownIndex,
-                ageSec: age,
-                strength: strength
-            )
+        var out: [ActiveTouchRipple] = []
+        fillActiveRipples(nowSec: nowSec, into: &out)
+        return out
+    }
+
+    /// `getRenderSplats()` for the 120 Hz renderer: empties `out` (keeping its capacity) and appends
+    /// the same values in the same order. Reserve `maxSplats` once and no frame allocates.
+    public func fillRenderSplats(into out: inout [RenderSplat]) {
+        lock.lock()
+        defer { lock.unlock() }
+        out.removeAll(keepingCapacity: true)
+        for s in liveSplats {
+            out.append(Self.renderSplat(for: s))
         }
+    }
+
+    /// `activeRipples(nowSec:)` for the 120 Hz renderer: empties `out` (keeping its capacity) and
+    /// appends the same values in the same order. Reserve `maxRipples` once and no frame allocates.
+    public func fillActiveRipples(nowSec: Double, into out: inout [ActiveTouchRipple]) {
+        lock.lock()
+        defer { lock.unlock() }
+        out.removeAll(keepingCapacity: true)
+        for r in liveRipples {
+            if let active = Self.activeRipple(for: r, nowSec: nowSec) {
+                out.append(active)
+            }
+        }
+    }
+
+    private static func renderSplat(for s: SugarSplat) -> RenderSplat {
+        let pop: Double
+        if s.grow < 1.0 {
+            pop = sin(s.grow * .pi * 0.5) * (1.0 + 0.25 * sin(s.grow * .pi))
+        } else {
+            pop = 1.0
+        }
+        return RenderSplat(
+            id: s.id,
+            crownIndex: s.crownIndex,
+            x: s.x,
+            y: s.y,
+            z: s.z,
+            amount: s.amount * pop
+        )
+    }
+
+    private static func activeRipple(for r: TouchRipple, nowSec: Double) -> ActiveTouchRipple? {
+        let age = nowSec - r.t
+        guard age >= 0.0, age < rippleLifetimeSec else { return nil }
+        let norm = age / rippleLifetimeSec
+        let strength = 0.5 * (1.0 + cos(norm * .pi))
+        return ActiveTouchRipple(
+            id: r.id,
+            x: r.x,
+            y: r.y,
+            z: r.z,
+            crownIndex: r.crownIndex,
+            ageSec: age,
+            strength: strength
+        )
     }
 
     private static func distance3D(_ a: TouchHit, _ b: TouchHit) -> Double {
@@ -345,8 +410,20 @@ public final class CompanionTouchSystem {
         nowSec: Double,
         smoothness: Double
     ) -> TouchFeedback {
+        lock.lock()
+        defer { lock.unlock() }
+        return registerTouchLocked(hit: hit, phase: phase, nowSec: nowSec, smoothness: smoothness)
+    }
+
+    /// `registerTouch` with `lock` already held.
+    private func registerTouchLocked(
+        hit: TouchHit,
+        phase: TouchPhase,
+        nowSec: Double,
+        smoothness: Double
+    ) -> TouchFeedback {
         if phase == .up {
-            endTouch()
+            endTouchLocked()
             return TouchFeedback()
         }
 
@@ -368,19 +445,19 @@ public final class CompanionTouchSystem {
 
         // Mini-polish strokes scrub nearby sugar splats
         let polish = (phase == .down) ? Self.polishPerTap : (travelled * Self.polishPerUnit)
-        for idx in splats.indices.reversed() {
-            let s = splats[idx]
+        for idx in liveSplats.indices.reversed() {
+            let s = liveSplats[idx]
             let dx = hit.x - s.x
             let dy = hit.y - s.y
             let dz = hit.z - s.z
             let d = (dx * dx + dy * dy + dz * dz).squareRoot()
             if d > Self.splatPolishRadius { continue }
             feedback.onSplat = true
-            splats[idx].amount -= polish * (1.0 - 0.5 * (d / Self.splatPolishRadius))
-            if splats[idx].amount <= 0.04 {
-                splats.remove(at: idx)
+            liveSplats[idx].amount -= polish * (1.0 - 0.5 * (d / Self.splatPolishRadius))
+            if liveSplats[idx].amount <= 0.04 {
+                liveSplats.remove(at: idx)
                 feedback.splatsCleared += 1
-                splatsClearedTotal += 1
+                liveClearedTotal += 1
             }
         }
 
@@ -406,10 +483,10 @@ public final class CompanionTouchSystem {
                 t: nowSec
             )
             nextRippleId += 1
-            if ripples.count < Self.maxRipples {
-                ripples.append(ripple)
+            if liveRipples.count < Self.maxRipples {
+                liveRipples.append(ripple)
             } else {
-                ripples[rippleCursor] = ripple
+                liveRipples[rippleCursor] = ripple
             }
             rippleCursor = (rippleCursor + 1) % Self.maxRipples
         }
@@ -462,17 +539,15 @@ public final class CompanionTouchSystem {
         nowSec: Double,
         smoothness: Double
     ) -> TouchFeedback {
-        guard let target = splats.first(where: { $0.id == splatId }) else {
-            return TouchFeedback()
-        }
-        let jitterX = (phase == .move) ? sin(nowSec * 24.0) * strokeOffset : 0.0
-        let hit = TouchHit(
-            x: target.x + jitterX,
-            y: target.y,
-            z: target.z,
-            crownIndex: target.crownIndex
+        lock.lock()
+        defer { lock.unlock() }
+        return rubSplatLocked(
+            splatId: splatId,
+            strokeOffset: strokeOffset,
+            phase: phase,
+            nowSec: nowSec,
+            smoothness: smoothness
         )
-        return registerTouch(hit: hit, phase: phase, nowSec: nowSec, smoothness: smoothness)
     }
 
     /// Convenience direct-rub entry point targeting an active sugar splat by array index.
@@ -483,11 +558,13 @@ public final class CompanionTouchSystem {
         nowSec: Double,
         smoothness: Double
     ) -> TouchFeedback {
-        guard splats.indices.contains(index) else {
+        lock.lock()
+        defer { lock.unlock() }
+        guard liveSplats.indices.contains(index) else {
             return TouchFeedback()
         }
-        return rubSplat(
-            splatId: splats[index].id,
+        return rubSplatLocked(
+            splatId: liveSplats[index].id,
             strokeOffset: strokeOffset,
             phase: phase,
             nowSec: nowSec,
@@ -495,7 +572,34 @@ public final class CompanionTouchSystem {
         )
     }
 
+    /// `rubSplat(splatId:...)` with `lock` already held.
+    private func rubSplatLocked(
+        splatId: Int,
+        strokeOffset: Double,
+        phase: TouchPhase,
+        nowSec: Double,
+        smoothness: Double
+    ) -> TouchFeedback {
+        guard let target = liveSplats.first(where: { $0.id == splatId }) else {
+            return TouchFeedback()
+        }
+        let jitterX = (phase == .move) ? sin(nowSec * 24.0) * strokeOffset : 0.0
+        let hit = TouchHit(
+            x: target.x + jitterX,
+            y: target.y,
+            z: target.z,
+            crownIndex: target.crownIndex
+        )
+        return registerTouchLocked(hit: hit, phase: phase, nowSec: nowSec, smoothness: smoothness)
+    }
+
     public func endTouch() {
+        lock.lock()
+        defer { lock.unlock() }
+        endTouchLocked()
+    }
+
+    private func endTouchLocked() {
         lastHit = nil
         distSinceNote = 0.0
         distSinceRipple = 0.0
@@ -503,26 +607,32 @@ public final class CompanionTouchSystem {
 
     public func step(dt: Double, nowSec: Double? = nil) {
         guard dt > 0 else { return }
-        for idx in splats.indices where splats[idx].grow < 1.0 {
-            splats[idx].grow = min(1.0, splats[idx].grow + dt / 0.35)
+        lock.lock()
+        defer { lock.unlock() }
+        for idx in liveSplats.indices where liveSplats[idx].grow < 1.0 {
+            liveSplats[idx].grow = min(1.0, liveSplats[idx].grow + dt / 0.35)
         }
         if let nowSec {
-            ripples.removeAll { nowSec - $0.t > Self.rippleLifetimeSec * 4.0 }
-            if rippleCursor >= max(1, ripples.count) {
-                rippleCursor = ripples.count % Self.maxRipples
+            liveRipples.removeAll { nowSec - $0.t > Self.rippleLifetimeSec * 4.0 }
+            if rippleCursor >= max(1, liveRipples.count) {
+                rippleCursor = liveRipples.count % Self.maxRipples
             }
         }
     }
 
     public func fadeSplatsForPacer(elapsedSec: Double) {
         let cap = max(0.0, 1.0 - elapsedSec / 40.0)
-        for idx in splats.indices {
-            splats[idx].amount = min(splats[idx].amount, cap)
+        lock.lock()
+        defer { lock.unlock() }
+        for idx in liveSplats.indices {
+            liveSplats[idx].amount = min(liveSplats[idx].amount, cap)
         }
     }
 
     public func clearAll() {
-        splats.removeAll()
-        endTouch()
+        lock.lock()
+        defer { lock.unlock() }
+        liveSplats.removeAll(keepingCapacity: true)
+        endTouchLocked()
     }
 }

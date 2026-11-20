@@ -105,7 +105,16 @@ public final class AppCoordinator {
     private var announcedFlossLowerHalf: Bool = false
     private var lastAnnouncedMouthwashStep: Int = 0
     private var pacerTimer: Timer?
+    /// The last pacer tick, on `pacerClockSec()` (a clock that keeps counting while the phone sleeps).
     private var lastPacerTickUptime: TimeInterval?
+    /// The ritual's session clock on real time, through a locked phone or the background (H04).
+    @ObservationIgnored private var pacerClock = PacerSessionClock()
+    private static let pacerClockOrigin = ContinuousClock.now
+    /// Seconds on a clock that, unlike `systemUptime`, keeps counting while the device sleeps.
+    private static func pacerClockSec() -> Double {
+        let d = ContinuousClock.now - pacerClockOrigin
+        return Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+    }
     private var lastAnnouncedQuadrant: Int = -1
     private var lastAnnouncedSurface: Int = -1
     private var lastCountdownPipKey: String = ""
@@ -324,6 +333,7 @@ public final class AppCoordinator {
     // MARK: - Apple Watch
 
     private static let watchLedgerDefaultsKey = "mouthlife.watch.importLedger"
+    private static let watchSettingsRevisionDefaultsKey = "mouthlife.watch.settingsRevision"
 
     /// Listens for brushes finished on the paired Apple Watch and tells it the grown-up's settings.
     private func startWatchLink() {
@@ -340,11 +350,17 @@ public final class AppCoordinator {
     /// The watch's settings: the rinse step only if a grown-up turned it on here, its length, the language.
     private func pushWatchSettings() {
         #if os(iOS) && canImport(WatchConnectivity)
+        // An ever-rising revision, not the clock: a clock set back must not make the watch ignore
+        // a grown-up turning rinse off (M05).
+        let revision = WatchPhoneSettings.nextRevision(
+            after: UserDefaults.standard.double(forKey: Self.watchSettingsRevisionDefaultsKey)
+        )
+        UserDefaults.standard.set(revision, forKey: Self.watchSettingsRevisionDefaultsKey)
         PhoneWatchBridge.shared.push(WatchPhoneSettings(
             includeRinse: includeRinse,
             rinseSec: mouthwashDurationStyle.durationSec,
             language: coachLanguage,
-            revision: Date().timeIntervalSince1970
+            revision: revision
         ))
         #endif
     }
@@ -942,6 +958,7 @@ public final class AppCoordinator {
 
     public func startBrushAlong() {
         pacerElapsedSec = 0
+        pacerClock = PacerSessionClock()
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
@@ -1036,8 +1053,8 @@ public final class AppCoordinator {
         let oldDur = max(6.0, mouthwashDurationStyle.durationSec)
         let newDur = max(6.0, style.durationSec)
         if pacerStage == .mouthwashBonus {
-            let frac = min(0.98, max(0.0, (pacerElapsedSec - mwStart) / oldDur))
-            pacerElapsedSec = mwStart + frac * newDur
+            pacerClock.rescaleRinse(from: oldDur, to: newDur)
+            pacerElapsedSec = max(mwStart, pacerClock.elapsedSec(in: .mouthwashBonus, mouthwashDurationSec: newDur))
             sceneController.pacerElapsedSec = pacerElapsedSec
         }
         mouthwashDurationStyle = style
@@ -1051,7 +1068,7 @@ public final class AppCoordinator {
         pacerIsPaused.toggle()
         pacerPausedByUser = pacerIsPaused
         pacerSuspendedBySystem = false
-        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        lastPacerTickUptime = Self.pacerClockSec()
         NativeSoundEngine.shared.setPaused(pacerIsPaused)
         updateIdleTimerPolicy()
         eventBus.emit(.pacerPaused(paused: pacerIsPaused))
@@ -1061,6 +1078,10 @@ public final class AppCoordinator {
         if pacerStage == .brushing {
             pacerBrushedFullTime = pacerElapsedSec >= GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec
         }
+        // Time already past the end of brushing (the phone was locked) carries into floss (H04).
+        let mwDur = mouthwashDurationStyle.durationSec
+        pacerClock.enter(.flossBonus, from: pacerStage, mouthwashDurationSec: mwDur)
+        let passingThrough = pacerClock.overflowSec(in: .flossBonus, mouthwashDurationSec: mwDur) > 0
         pacerStage = .flossBonus
         pacerInFlossBonus = true
         pacerIsPaused = false
@@ -1068,23 +1089,29 @@ public final class AppCoordinator {
         pacerSuspendedBySystem = false
         announcedFlossLowerHalf = false
         lastCountdownPipKey = ""
-        pacerElapsedSec = GameConfig.brushAlongTotalSec
+        pacerElapsedSec = pacerClock.elapsedSec(in: .flossBonus, mouthwashDurationSec: mwDur)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = true
         sceneController.pacerStage = .flossBonus
         sceneController.pacerFlossToolStyle = flossToolStyle
-        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        lastPacerTickUptime = Self.pacerClockSec()
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true)
-        NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
-        NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenStageWord(.floss, lang: coachLanguage)
-        )
+        // Back from a lock that also outlasted floss: pass through quietly, speak only where it is now.
+        if !passingThrough {
+            NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
+            NativeSoundEngine.shared.speakCoachingPhrase(
+                BrushCoachCopy.spokenStageWord(.floss, lang: coachLanguage)
+            )
+        }
         updateIdleTimerPolicy()
     }
 
     public func enterMouthwashBonusNow(completedFloss: Bool = true) {
         pacerCompletedFlossStage = completedFloss
+        let mwDur = mouthwashDurationStyle.durationSec
+        pacerClock.enter(.mouthwashBonus, from: pacerStage, mouthwashDurationSec: mwDur)
+        let passingThrough = pacerClock.overflowSec(in: .mouthwashBonus, mouthwashDurationSec: mwDur) > 0
         pacerStage = .mouthwashBonus
         pacerInFlossBonus = false
         pacerIsPaused = false
@@ -1094,18 +1121,20 @@ public final class AppCoordinator {
         lastCountdownPipKey = ""
         mouthwashGyro = .idle
         sceneController.resetMouthwashGyroSession()
-        pacerElapsedSec = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
+        pacerElapsedSec = pacerClock.elapsedSec(in: .mouthwashBonus, mouthwashDurationSec: mwDur)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = false
         sceneController.pacerStage = .mouthwashBonus
-        sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
-        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        sceneController.pacerMouthwashDurationSec = mwDur
+        lastPacerTickUptime = Self.pacerClockSec()
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 3, inFlossBonus: true, inRinse: true)
-        NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: 0)
-        NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenStageWord(.rinse, lang: coachLanguage)
-        )
+        if !passingThrough {
+            NativeSoundEngine.shared.playMouthwashSwishMotif(stepIndex: 0)
+            NativeSoundEngine.shared.speakCoachingPhrase(
+                BrushCoachCopy.spokenStageWord(.rinse, lang: coachLanguage)
+            )
+        }
         updateIdleTimerPolicy()
     }
 
@@ -1149,7 +1178,7 @@ public final class AppCoordinator {
 
     private func startPacerTimer() {
         stopPacerTimer()
-        lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
+        lastPacerTickUptime = Self.pacerClockSec()
         let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.tickPacer()
@@ -1168,22 +1197,16 @@ public final class AppCoordinator {
     private func tickPacer() {
         guard mode == .brushAlong, !pacerIsPaused else { return }
         ensureIdleTimerDisabledIfNeeded()
-        let now = ProcessInfo.processInfo.systemUptime
-        let dt = min(0.5, max(0.0, now - (lastPacerTickUptime ?? now)))
+        // Real time in full, including any time the phone spent locked since the last tick (H04).
+        let now = Self.pacerClockSec()
+        let dt = max(0.0, now - (lastPacerTickUptime ?? now))
         lastPacerTickUptime = now
 
         let flossEnd = GameConfig.brushAlongTotalSec + GameConfig.brushAlongFlossBonusSec
         let mwDur = mouthwashDurationStyle.durationSec
-        let cap: Double
-        switch pacerStage {
-        case .brushing:
-            cap = GameConfig.brushAlongTotalSec
-        case .flossBonus:
-            cap = flossEnd
-        case .mouthwashBonus:
-            cap = flossEnd + mwDur
-        }
-        pacerElapsedSec = min(cap, pacerElapsedSec + dt)
+        let cap = PacerSessionClock.stageEndSec(pacerStage, mouthwashDurationSec: mwDur)
+        pacerClock.advance(by: dt)
+        pacerElapsedSec = pacerClock.elapsedSec(in: pacerStage, mouthwashDurationSec: mwDur)
         sceneController.pacerElapsedSec = pacerElapsedSec
         sceneController.pacerInFlossBonus = pacerInFlossBonus
         sceneController.pacerStage = pacerStage
@@ -1271,17 +1294,15 @@ public final class AppCoordinator {
             }
             publishWidgetSnapshot()
             #endif
-            if mode == .brushAlong {
-                if pacerSuspendedBySystem && !pacerPausedByUser {
-                    pacerSuspendedBySystem = false
-                    pacerIsPaused = false
-                    NativeSoundEngine.shared.setPaused(false)
-                    eventBus.emit(.pacerPaused(paused: false))
-                }
-                lastPacerTickUptime = ProcessInfo.processInfo.systemUptime
-                if !pacerIsPaused && pacerTimer == nil {
+            if mode == .brushAlong && !pacerIsPaused {
+                // The session clock ran on while locked (H04): bring the sound back and catch up
+                // now. The ticks pass through any stages that ended meanwhile, speaking only the
+                // current cue (or Done).
+                NativeSoundEngine.shared.setPaused(false)
+                if pacerTimer == nil {
                     startPacerTimer()
                 }
+                tickPacer()
             }
             updateIdleTimerPolicy()
 
@@ -1291,10 +1312,9 @@ public final class AppCoordinator {
 
         case .background:
             if mode == .brushAlong && !pacerIsPaused {
-                pacerIsPaused = true
-                pacerSuspendedBySystem = true
+                // Locked or in the background, the ritual keeps its time (H04); only the sound and
+                // the stay-awake stop. Brushing goes on at the sink.
                 NativeSoundEngine.shared.setPaused(true)
-                eventBus.emit(.pacerPaused(paused: true))
             }
             _ = saveSystem.save()
             setIdleTimerDisabled(false)
@@ -1365,6 +1385,8 @@ public final class AppCoordinator {
             // Merge, never overwrite: an older code must not erase this device's newer progress.
             save = try saveSystem.importSyncCode(code, preferImported: preferImported)
             sceneController.companionSmoothness = save.companion.smoothnessIndex
+            // Today's brushes may have come with the code: drop reminders that are now done (M20).
+            refreshReminders()
             if !isWorldUnlocked(activeRadioWorldId) {
                 activeRadioWorldId = pickRecommendedDiveWorld(from: save)
                 NativeSoundEngine.shared.setEarthRadio(

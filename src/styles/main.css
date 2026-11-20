@@ -770,14 +770,16 @@ textarea:focus-visible {
   .thumb-deck {
     display: none;
   }
-  /* A touch laptop (touched, or reporting touch): the thumbstick appears bottom-left; the desktop
-     button bar above already works by touch, so the round buttons stay hidden. */
-  .thumb-deck.touch-capable:not(.pad-hidden) {
+  /* The thumbstick appears bottom-left whenever the HUD asks for it (shouldShowVirtualThumbPad): on a
+     touch laptop (touched, or reporting touch), and with a mouse after Steer OFF, where it is dragged
+     like a stick (the native Mac app always shows it). The desktop button bar above already has
+     Floss, Surge and Scan, so the round buttons stay hidden. */
+  .thumb-deck:not(.pad-hidden) {
     display: flex;
     justify-content: flex-start;
     max-width: none;
   }
-  .thumb-deck.touch-capable .actuator-cluster {
+  .thumb-deck .actuator-cluster {
     display: none;
   }
 }

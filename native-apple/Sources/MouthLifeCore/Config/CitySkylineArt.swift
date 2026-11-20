@@ -85,10 +85,10 @@ public enum CitySkylineArt {
 
     /// The ending's checksum for every combination of (all gold, Reduce Motion), and two hash values.
     public static let expectedEnding: [String: Double] = [
-        "gold": 6764.942,
-        "gold-reduced": 6744.621,
-        "mixed": 6761.944,
-        "mixed-reduced": 6741.622,
+        "gold": 7109.064,
+        "gold-reduced": 7066.056,
+        "mixed": 7105.066,
+        "mixed-reduced": 7062.058,
     ]
     public static let expectedHash: [Double] = [0.10232719359919429, 0.7369172223843634, 0.5687719557899982]
 

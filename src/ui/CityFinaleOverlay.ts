@@ -225,6 +225,87 @@ function cityInfo(worldId: string): CityInfo | null {
   return info;
 }
 
+type FinalePart = 'city' | 'ending';
+
+/**
+ * The show's score: the city's notes (if any), then the ending's (if any) shifted to start where the
+ * city part ends. A part whose recorded song is ready keeps only the score's sound effects; a part
+ * without one (offline, still loading, none bundled) keeps the whole synth score.
+ */
+export function finaleScore(
+  city: { plan: CityFinalePlan; worldIndex: number } | null,
+  ending: { plans: readonly CityFinalePlan[]; allGold: boolean } | null,
+  finishes: readonly MolarFinish[],
+  reducedMotion: boolean,
+  songReady: Readonly<Record<FinalePart, boolean>>
+): FinaleNote[] {
+  const effectsOnly = (part: FinalePart) => (note: FinaleNote) => !songReady[part] || FINALE_EFFECT_VOICES.includes(note.voice);
+  const notes: FinaleNote[] = [];
+  if (city) notes.push(...finaleNotes(city.plan, finishes, city.worldIndex, reducedMotion).filter(effectsOnly('city')));
+  const offset = city ? FINALE_TIMES.end : 0;
+  if (ending) {
+    for (const n of endingNotes(ending.plans, ending.allGold).filter(effectsOnly('ending'))) notes.push({ ...n, t: n.t + offset });
+  }
+  return notes.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Which recorded song plays under the show. It follows the show's own clock, never what happens to
+ * be playing: the opening part's song at the start, and the ending's exactly once, the moment the
+ * timeline crosses into the ending (late frames seek into it) or Skip jumps there. A part whose song
+ * is not ready plays no recording (its synth score carries it) and stops the one before.
+ */
+export class FinaleSoundtrack {
+  private part: FinalePart | null = null;
+  private endingBegun = false;
+
+  constructor(
+    /** Where the ending begins on the show's clock (0 when there is no city part). */
+    private readonly cityLength: number,
+    private readonly total: number,
+    private readonly songReady: Readonly<Record<FinalePart, boolean>>,
+    private readonly onTrack?: (part: FinalePart | null, offsetSec: number) => void
+  ) {}
+
+  /** The song whose recording is playing, or null while the synth carries the show. */
+  playing(): FinalePart | null {
+    return this.part;
+  }
+
+  /** The show starts: the opening part's song. */
+  begin(): void {
+    if (this.cityLength > 0) this.start('city', 0);
+    else this.beginEnding(0);
+  }
+
+  /** Every frame, with the show's time. */
+  update(t: number): void {
+    if (this.cityLength > 0 && this.total > this.cityLength && t >= this.cityLength) this.beginEnding(t - this.cityLength);
+  }
+
+  /** The ending starts (on time, or by Skip), `offsetSec` into it; only the first call counts. */
+  beginEnding(offsetSec: number): void {
+    if (this.endingBegun || this.total <= this.cityLength) return;
+    this.endingBegun = true;
+    this.start('ending', Math.max(0, offsetSec));
+  }
+
+  stop(): void {
+    if (this.part) this.onTrack?.(null, 0);
+    this.part = null;
+  }
+
+  private start(part: FinalePart, offsetSec: number): void {
+    if (this.part === part) return;
+    if (!this.songReady[part]) {
+      this.stop();
+      return;
+    }
+    this.part = part;
+    this.onTrack?.(part, offsetSec);
+  }
+}
+
 const FINISH_LABEL: Record<MolarFinish, string> = {
   empty: '',
   pearl: 'Pearl piece',
@@ -256,11 +337,12 @@ export class CityFinaleOverlay implements OverlayView {
   private readonly atTop: boolean;
   private readonly climbLeft: number;
   private readonly nextCity: number;
-  /** Which part's song is playing ('city' until the ending starts). */
-  private trackPart: 'city' | 'ending' | null = null;
-  private readonly songReady: { city: boolean; ending: boolean };
+  /** Which part's recorded song plays, handed over to the ending by the show's clock. */
+  private readonly soundtrack: FinaleSoundtrack;
   private readonly stars: { x: number; y: number; r: number; p: number }[] = [];
   private readonly textEls = new Map<string, HTMLElement>();
+  /** Undoes the modal (page inert, focus inside) and puts focus back on whatever opened the show. */
+  private releaseModal: (() => void) | null = null;
   private w = 0;
   private h = 0;
   private dpr = 1;
@@ -281,25 +363,25 @@ export class CityFinaleOverlay implements OverlayView {
     const hasEnding = opts.kind !== 'city';
     this.total = this.cityLength + (hasEnding ? ENDING_TIMES.end : 0);
     this.allGold = opts.finishes.length === CAMPAIGN_PIECES && opts.finishes.every((f) => f === 'gold');
-    const notes: FinaleNote[] = [];
-    // With a recorded song for a part, only the score's sound effects play over it.
     // Whether each part's song is ready to play now (loaded), decided once: a part with a song plays
     // only the score's effects; a part without one (say, offline) keeps the whole synth score.
-    this.songReady = { city: Boolean(opts.hasTrack?.('city')), ending: Boolean(opts.hasTrack?.('ending')) };
-    const effectsOnly = (part: 'city' | 'ending') => (note: FinaleNote) =>
-      !this.songReady[part] || FINALE_EFFECT_VOICES.includes(note.voice);
-    if (this.city) {
-      notes.push(...finaleNotes(this.city.plan, opts.finishes, opts.worldIndex, opts.reducedMotion).filter(effectsOnly('city')));
-    }
-    if (hasEnding) {
-      const plans = this.cities.map((c) => c?.plan).filter((p): p is CityFinalePlan => Boolean(p));
-      for (const n of endingNotes(plans, this.allGold).filter(effectsOnly('ending'))) notes.push({ ...n, t: n.t + this.cityLength });
-    }
+    const songReady = {
+      city: Boolean(this.city && opts.hasTrack?.('city')),
+      ending: Boolean(hasEnding && opts.hasTrack?.('ending')),
+    };
+    this.soundtrack = new FinaleSoundtrack(this.cityLength, this.total, songReady, opts.onTrack);
+    const plans = this.cities.map((c) => c?.plan).filter((p): p is CityFinalePlan => Boolean(p));
+    this.notes = finaleScore(
+      this.city ? { plan: this.city.plan, worldIndex: opts.worldIndex } : null,
+      hasEnding ? { plans, allGold: this.allGold } : null,
+      opts.finishes,
+      opts.reducedMotion,
+      songReady
+    );
     const status = finaleClimbStatus(opts.finishes);
     this.atTop = status.left === 0;
     this.climbLeft = status.left;
     this.nextCity = status.next;
-    this.notes = notes.sort((a, b) => a.t - b.t);
     for (let i = 0; i < 110; i++) {
       // Fixed pattern, so the sky is the same every time.
       const a = Math.sin(i * 12.9898) * 43758.5453;
@@ -371,8 +453,10 @@ export class CityFinaleOverlay implements OverlayView {
     shell.querySelector<HTMLButtonElement>('.finale-skip')?.addEventListener('click', () => this.skip());
     window.addEventListener('keydown', this.onKey, true);
     this.startMs = performance.now();
-    this.startTrack(this.city ? 'city' : 'ending', 0);
-    this.shell.focus?.();
+    this.soundtrack.begin();
+    // A real modal: everything else on the page (Home under the ending replay) is inert until the
+    // show ends, so Tab and Shift+Tab cannot reach a button behind it; focus goes back where it was.
+    this.releaseModal = holdModalFocus(shell, document.activeElement as HTMLElement | null);
     const frame = (): void => {
       this.raf = requestAnimationFrame(frame);
       this.tick();
@@ -381,8 +465,7 @@ export class CityFinaleOverlay implements OverlayView {
   }
 
   dispose(): void {
-    if (this.trackPart) this.opts.onTrack?.(null, 0);
-    this.trackPart = null;
+    this.soundtrack.stop();
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKey, true);
     if (this.covered) this.opts.onCovered?.(false);
@@ -391,18 +474,15 @@ export class CityFinaleOverlay implements OverlayView {
     this.stage3d = null;
     this.shell?.remove();
     this.shell = null;
+    const release = this.releaseModal;
+    this.releaseModal = null;
+    release?.();
   }
 
-  private startTrack(part: 'city' | 'ending', offsetSec: number): void {
-    if (this.trackPart === part) return;
-    // a part without a ready song keeps the synth score: stop any earlier song, start nothing
-    if (!this.songReady[part]) {
-      if (this.trackPart) this.opts.onTrack?.(null, 0);
-      this.trackPart = null;
-      return;
-    }
-    this.trackPart = part;
-    this.opts.onTrack?.(part, offsetSec);
+  /** Follows a Reduce Motion change mid-show (the system setting or the in-app switch). */
+  setReducedMotion(reduced: boolean): void {
+    this.opts.reducedMotion = reduced;
+    this.stage3d?.setReducedMotion(reduced);
   }
 
   private elapsed(): number {
@@ -422,7 +502,7 @@ export class CityFinaleOverlay implements OverlayView {
     if (t < this.skipAfter()) return;
     if (this.city && t < this.cityLength && this.total > this.cityLength) {
       this.startMs = performance.now() - this.cityLength * 1000;
-      this.startTrack('ending', 0);
+      this.soundtrack.beginEnding(0);
       this.lastT = this.cityLength;
       while (this.noteIdx < this.notes.length && this.notes[this.noteIdx].t < this.cityLength) this.noteIdx++;
       return;
@@ -452,7 +532,8 @@ export class CityFinaleOverlay implements OverlayView {
       this.noteIdx++;
     }
     if (due.length) this.opts.onNotes(due);
-    if (this.trackPart === 'city' && this.total > this.cityLength && t >= this.cityLength) this.startTrack('ending', t - this.cityLength);
+    // the city's song hands over to the ending's by the show's clock, whichever songs are ready
+    this.soundtrack.update(t);
     this.lastT = t;
 
     const cover = this.coverAlpha(t);
@@ -1461,7 +1542,7 @@ export class CityFinaleOverlay implements OverlayView {
       }
     }
 
-    const place = endingMolarPlace(t);
+    const place = endingMolarPlace(t, rm);
     const snapped = t >= E.snap;
     const bodyFinish: MolarFinish = snapped ? (this.allGold ? 'gold' : 'pearl') : 'empty';
     if (place.alpha > 0) {
@@ -1511,8 +1592,8 @@ export class CityFinaleOverlay implements OverlayView {
         this.paintGlow(ctx, this.stageX(o.x), this.stageY(o.y), 0.2 * this.unit, 'rgba(253,230,138,0.45)', o.alpha);
         this.paintEmblem(ctx, city, this.stageX(o.x), this.stageY(o.y), 0.11 * this.unit, 1, o.alpha);
       }
-      // the happy tooth: its face (for everyone who finishes), then "a hug for you"
-      const face = endingFace(t);
+      // the happy tooth: its face (for everyone who finishes; the wink only for all gold), then "a hug for you"
+      const face = endingFace(t, this.allGold);
       if (face.alpha > 0) {
         const fx = this.stageX(place.x + GOLDEN_MOLAR.bodyCenter.x * place.scale);
         const fy = this.stageY(place.y + GOLDEN_MOLAR.bodyCenter.y * place.scale);
@@ -1560,9 +1641,9 @@ export class CityFinaleOverlay implements OverlayView {
         this.paintBubbleRim(ctx, x, b.y, b.r, homes);
       }
     }
-    // the happy tooth: its face (for everyone who finishes), then "a hug for you"
+    // the happy tooth: its face (for everyone who finishes; the wink only for all gold), then "a hug for you"
     if (t >= E.finaleStart) {
-      const face = endingFace(t);
+      const face = endingFace(t, this.allGold);
       const spot = face.alpha > 0 ? stage.molarFaceOnScreen(this.w, this.h) : null;
       if (spot) {
         const u = spot.u * 0.78;
@@ -1778,6 +1859,43 @@ function backOutPop(x: number): number {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+}
+
+/**
+ * Makes `dialog` modal: every other element on the page (each sibling of the dialog and of each of
+ * its ancestors, up to <body>) becomes inert, so neither Tab, Shift+Tab, a click nor a screen reader
+ * reaches Home underneath, and focus moves into the dialog. The returned function undoes exactly
+ * that (anything already inert stays inert), once, and puts focus back on `trigger` if it is still
+ * on the page.
+ */
+export function holdModalFocus(dialog: HTMLElement, trigger: HTMLElement | null): () => void {
+  const madeInert: HTMLElement[] = [];
+  // Tag names are matched with patterns, not string literals, so the screen-text list skips them.
+  const isBody = (el: HTMLElement): boolean => /^body$/i.test(el.tagName);
+  for (let node: HTMLElement = dialog; node.parentElement && !isBody(node); node = node.parentElement) {
+    const siblings = node.parentElement.children;
+    for (let i = 0; i < siblings.length; i++) {
+      const el = siblings[i] as HTMLElement;
+      if (el === node || el.inert || /^(script|style)$/i.test(el.tagName)) continue;
+      el.inert = true;
+      madeInert.push(el);
+    }
+  }
+  dialog.focus?.({ preventScroll: true });
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    for (const el of madeInert) el.inert = false;
+    if (!trigger || trigger === dialog || isBody(trigger)) return;
+    // the menu may have redrawn meanwhile: then the button with the same id stands in for it
+    const target = trigger.isConnected
+      ? trigger
+      : trigger.id && typeof document !== 'undefined'
+        ? document.getElementById(trigger.id)
+        : null;
+    target?.focus?.({ preventScroll: true });
+  };
 }
 
 /** The small Golden Molar on the main menu, as inline SVG: each cusp in its finish. */

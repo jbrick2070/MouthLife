@@ -51,9 +51,10 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.language = language
         self.lastBrushAt = lastBrushAt
         self.lastFullBrushAt = lastFullBrushAt
-        // the grown-up's two times in order (Settings lets them be set either way round)
-        self.morning = min(morning, evening)
-        self.evening = max(morning, evening)
+        // the grown-up's two times in order, exactly as the reminders use them (M19)
+        let ordered = BrushDays.orderedTimes(morning: morning, evening: evening)
+        self.morning = ordered.morning
+        self.evening = ordered.evening
     }
 
     /// The last `daysKept` days of the save's brush log (empty days left out), the last brush and

@@ -105,15 +105,6 @@ public enum CharityInfo {
         return url
     }()
 
-    public static let contactEmail = "info@smileonu.org"
-    public static let contactMailto = "mailto:info@smileonu.org"
-    public static let contactMailtoUrl: URL = {
-        guard let url = URL(string: "mailto:info@smileonu.org") else {
-            preconditionFailure("Invalid static SmileOnU mailto URL")
-        }
-        return url
-    }()
-
     public static let independenceNote = "MouthLife is a free game and brushing timer. If you liked it, you can help real people get dental care at SmileOnU.org."
     public static let transparencyNote = independenceNote
     public static let clinicalDisclaimer = "MouthLife is a learning game and brushing timer. It is not a medical tool. Always ask a dentist or dental hygienist about your own teeth."

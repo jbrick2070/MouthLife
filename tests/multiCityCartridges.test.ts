@@ -376,10 +376,17 @@ describe('World 2 — Crescent Sulcus (1819 Parmly & 1948 Bass gumIrritation)', 
   });
 
   it('is fully clearable: seals all districts, unlocks the Parmly/Bass note and Hydro-Sonic upgrade', () => {
-    const { bus, saveSys, session } = makeSession(crescentSulcusCartridge);
+    // Real progress to keep (below the 6-stamp Hydro-Sonic threshold, so the clear must unlock it).
+    const SEEDED_STAMPS = 2;
+    const { bus, saveSys, session } = makeSession(crescentSulcusCartridge, (s) => {
+      s.totalBrushStamps = SEEDED_STAMPS;
+    });
+    expect(saveSys.getSave().totalBrushStamps).toBe(SEEDED_STAMPS);
     let won = false;
+    const cleared: { worldId: string; breakdown: Parameters<SaveSystem['recordMissionCompletion']>[0]['breakdown'] }[] = [];
     bus.on('mission:complete', ({ won: w, breakdown, worldId }) => {
       won = w;
+      cleared.push({ worldId, breakdown });
       saveSys.recordMissionCompletion({
         mode: 'ARCADE',
         worldId,
@@ -394,8 +401,20 @@ describe('World 2 — Crescent Sulcus (1819 Parmly & 1948 Bass gumIrritation)', 
     expect(won).toBe(true);
     expect(saveSys.getSave().unlockedHistoryNotes).toContain('1819_1948_new_orleans');
     expect(saveSys.getSave().unlockedUpgrades).toContain('hydro_sonic_pulse');
-    // Zero streak loss: stamps never decay through play
-    expect(saveSys.getSave().totalBrushStamps).toBeGreaterThanOrEqual(0);
+    // Zero streak loss (L07): the stamps already earned stay, and the first clear adds exactly one.
+    expect(saveSys.getSave().totalBrushStamps).toBe(SEEDED_STAMPS + 1);
+
+    // Clearing the same city again pays no second first-clear stamp.
+    expect(cleared).toHaveLength(1);
+    const { worldId, breakdown } = cleared[0];
+    const replay = { mode: 'ARCADE' as const, worldId, breakdown, historyNoteIds: crescentSulcusCartridge.historyNoteIds };
+    saveSys.recordMissionCompletion({ ...replay, won: true });
+    expect(saveSys.getSave().worlds[worldId].timesCleared).toBe(2);
+    expect(saveSys.getSave().totalBrushStamps).toBe(SEEDED_STAMPS + 1);
+
+    // A lost or abandoned run takes nothing away.
+    saveSys.recordMissionCompletion({ ...replay, won: false });
+    expect(saveSys.getSave().totalBrushStamps).toBe(SEEDED_STAMPS + 1);
   });
 });
 

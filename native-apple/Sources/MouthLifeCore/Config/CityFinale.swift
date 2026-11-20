@@ -1037,10 +1037,26 @@ public enum CityFinale {
 
     // MARK: - The ending
 
-    public static func endingMolarPlace(_ t: Double) -> (x: Double, y: Double, scale: Double, alpha: Double) {
+    /// How long the molar takes to fade out before, and back in after, each move with Reduce Motion.
+    public static let endingMolarSwap = 0.6
+
+    /// Where the molar sits during each part of the ending (stage units) and how big it is. It glides
+    /// and shrinks up out of the way of the credits, then comes back for the last scene; with Reduce
+    /// Motion it never moves or grows: it fades out where it is just before each cut and fades back in
+    /// at its next spot just after. (The web's endingMolarPlace.)
+    public static func endingMolarPlace(_ t: Double, reducedMotion: Bool = false) -> (x: Double, y: Double, scale: Double, alpha: Double) {
         let big = (x: 0.0, y: 0.02, scale: Molar.scale * 1.3)
         let small = (x: 0.0, y: 0.66, scale: Molar.scale * 0.5)
         let alpha = smooth01((t - 0.4) / 0.6)
+        if reducedMotion {
+            func fadeOut(_ cut: Double) -> Double { 1 - smooth01((t - (cut - endingMolarSwap)) / endingMolarSwap) }
+            func fadeIn(_ cut: Double) -> Double { smooth01((t - cut) / endingMolarSwap) }
+            if t < Ending.creditsStart { return (big.x, big.y, big.scale, alpha * fadeOut(Ending.creditsStart)) }
+            if t < Ending.finaleStart {
+                return (small.x, small.y, small.scale, alpha * fadeIn(Ending.creditsStart) * fadeOut(Ending.finaleStart))
+            }
+            return (big.x, big.y, big.scale, alpha * fadeIn(Ending.finaleStart))
+        }
         if t < Ending.creditsStart - 0.6 { return (big.x, big.y, big.scale, alpha) }
         if t < Ending.creditsStart + 0.4 {
             let s = smooth01((t - (Ending.creditsStart - 0.6)) / 1.0)
@@ -1061,7 +1077,7 @@ public enum CityFinale {
     }
 
     public static func endingPiece(_ i: Int, t: Double, reducedMotion: Bool) -> EndingPiece {
-        let place = endingMolarPlace(t)
+        let place = endingMolarPlace(t, reducedMotion: reducedMotion)
         let slotPos = slotPosition(i, center: FinalePoint(x: place.x, y: place.y), scale: place.scale)
         let start = Ending.firstPiece + Double(i) * Ending.pieceGap
         let s = (t - start) / Ending.pieceFlight
@@ -1096,8 +1112,9 @@ public enum CityFinale {
         return (cos(angle) * 1.05, 0.05 + sin(angle) * 0.82, alpha)
     }
 
-    public static func endingFace(_ t: Double) -> (alpha: Double, wink: Bool) {
-        (smooth01((t - Ending.face) / 0.5), t >= Ending.wink && t < Ending.wink + 0.35)
+    /// The molar smiles at everyone who finishes; gold in every city also earns the wink.
+    public static func endingFace(_ t: Double, allGold: Bool) -> (alpha: Double, wink: Bool) {
+        (smooth01((t - Ending.face) / 0.5), allGold && t >= Ending.wink && t < Ending.wink + 0.35)
     }
 
     public static let endingBursts: [FinaleBurst] = [
@@ -1253,7 +1270,7 @@ public enum CityFinale {
         var sum = 0.0
         var t = 0.0
         while t <= Ending.end {
-            let place = endingMolarPlace(t)
+            let place = endingMolarPlace(t, reducedMotion: reducedMotion)
             sum += place.x + place.y * 1.3 + place.scale + place.alpha
             for i in 0..<campaignPieces {
                 let p = endingPiece(i, t: t, reducedMotion: reducedMotion)
@@ -1263,7 +1280,7 @@ public enum CityFinale {
             }
             let credit = endingCredit(t)
             sum += Double(credit.index) + credit.alpha
-            let face = endingFace(t)
+            let face = endingFace(t, allGold: allGold)
             sum += face.alpha + (face.wink ? 1 : 0)
             let showT = t - Ending.finaleStart
             for (b, burst) in endingBursts.enumerated() {
@@ -1271,6 +1288,14 @@ public enum CityFinale {
             }
             for d in endingGoldRain(t, halfWidth: 1.6) { sum += d.x + d.y * 1.3 + d.alpha }
             t += 0.41
+        }
+        // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeeze, the eyes, the hearts
+        var h = Ending.face
+        while h <= Ending.end {
+            let hug = endingHug(h, reducedMotion: reducedMotion)
+            sum += hug.arms * 1.3 + hug.open * 1.7 + hug.fold * 1.9
+            sum += hug.squeeze * 2.3 + (hug.happyEyes ? 1.0 : 0.0) + hug.hearts * 2.9
+            h += 0.1
         }
         sum += sumNotes(endingNotes(plans, allGold: allGold)) * 0.001
         return (sum * 1000).rounded() / 1000

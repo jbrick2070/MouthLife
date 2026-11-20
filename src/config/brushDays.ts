@@ -82,15 +82,25 @@ export function reminderWanted(slot: ReminderSlot, fullToday: number): boolean {
 }
 
 /**
+ * The two times in order. Settings lets them be set either way round; the earlier one is the
+ * morning brush and the later one the evening brush, everywhere (M19). Native twin:
+ * `BrushDays.orderedTimes`.
+ */
+export function orderedReminderTimes(times: ReminderTimes): ReminderTimes {
+  return { morning: Math.min(times.morning, times.evening), evening: Math.max(times.morning, times.evening) };
+}
+
+/**
  * The reminders to schedule from `now`: each morning and evening for the next days, leaving out
  * today's when the time has passed or that brush is already done.
  */
 export function reminderPlan(
   now: Date,
-  times: ReminderTimes,
+  timesAsSet: ReminderTimes,
   fullToday: number,
   days = REMINDER_DAYS_AHEAD
 ): { at: Date; slot: ReminderSlot }[] {
+  const times = orderedReminderTimes(timesAsSet);
   const out: { at: Date; slot: ReminderSlot }[] = [];
   for (let day = 0; day < days; day++) {
     for (const slot of ['morning', 'evening'] as const) {
@@ -108,7 +118,8 @@ export function reminderPlan(
  * The reminder due right now, for a page that can only remind while it is open: the evening one once
  * its time has come, else the morning one; none when that brush is done.
  */
-export function dueReminder(now: Date, times: ReminderTimes, fullToday: number): ReminderSlot | null {
+export function dueReminder(now: Date, timesAsSet: ReminderTimes, fullToday: number): ReminderSlot | null {
+  const times = orderedReminderTimes(timesAsSet);
   const minutes = now.getHours() * 60 + now.getMinutes();
   if (minutes >= times.evening) return reminderWanted('evening', fullToday) ? 'evening' : null;
   if (minutes >= times.morning) return reminderWanted('morning', fullToday) ? 'morning' : null;

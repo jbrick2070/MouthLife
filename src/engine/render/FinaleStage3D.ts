@@ -1263,6 +1263,7 @@ export class FinaleStage3D {
   /** The wormhole to the next city: its rings of porcelain and gold teeth. */
   private readonly wormholePorcelain: THREE.InstancedMesh;
   private readonly wormholeGold: THREE.InstancedMesh;
+  private disposed = false;
   private readonly molarBodyGlass: THREE.MeshPhysicalMaterial;
   private readonly molarBodyGold: THREE.MeshPhysicalMaterial;
   private readonly molarBody: THREE.Mesh;
@@ -1301,7 +1302,7 @@ export class FinaleStage3D {
     private readonly cities: (FinaleCity3D | null)[],
     private readonly worldIndex: number,
     private readonly finishes: readonly MolarFinish[],
-    private readonly reducedMotion: boolean
+    private reducedMotion: boolean
   ) {
     try {
       this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -2135,6 +2136,9 @@ export class FinaleStage3D {
       coin.position.set(top[0], top[1], top[2] + 0.03);
       const s = GOLDEN_MOLAR.cuspRadius * 0.88 * (i === shineIndex ? 1 + 0.25 * shine : 1);
       coin.scale.setScalar(s);
+      // the pieces fade with the tooth they sit in (as SceneKit's node opacity does natively), so a
+      // Reduce Motion cross-fade never leaves them hanging in the air
+      setOpacity(coin, alpha);
     }
   }
 
@@ -2475,7 +2479,7 @@ export class FinaleStage3D {
     }
 
     // the molar, its pieces flying in, then gold with a light sweep across it on snap
-    const place = endingMolarPlace(t);
+    const place = endingMolarPlace(t, this.reducedMotion);
     const snapped = t >= E.snap;
     const isGold = snapped && allGold;
     let sweepPos = -3;
@@ -2600,7 +2604,7 @@ export class FinaleStage3D {
           }
         });
       }
-      if (allGold && !this.reducedMotion && endingFace(t).alpha > 0) {
+      if (allGold && !this.reducedMotion && endingFace(t, allGold).alpha > 0) {
         // golden rain over everything as delicate shimmering streaks
         this.colA.setHex(0xfde047);
         for (let k = 0; k < 120; k++) {
@@ -2660,7 +2664,14 @@ export class FinaleStage3D {
     return { x, y, u: Math.hypot(sx - x, sy - y) };
   }
 
+  /** Follows a Reduce Motion change mid-show: every frame reads it, so the next one fades instead. */
+  setReducedMotion(reduced: boolean): void {
+    this.reducedMotion = reduced;
+  }
+
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const r of this.reliefs.values()) r.dispose();
     for (const d of this.disposables) d.dispose();
     this.sparks.dispose();
@@ -2671,6 +2682,9 @@ export class FinaleStage3D {
     this.mountain.traverse((o) => {
       if (o instanceof THREE.InstancedMesh) o.dispose();
     });
+    // the wormhole's two rings of teeth hang straight off the scene, not under the mountain
+    this.wormholePorcelain.dispose();
+    this.wormholeGold.dispose();
     this.envTarget?.dispose();
     this.env?.dispose();
     this.renderer?.dispose();

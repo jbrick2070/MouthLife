@@ -77,4 +77,13 @@ describe('brush reminders', () => {
     expect(clockToMinutes('24:00')).toBeNull();
     expect(clockToMinutes('')).toBeNull();
   });
+
+  it('treats times set the wrong way round the same as the native widget does (M19)', () => {
+    const reversed = { morning: 20 * 60, evening: 8 * 60 };
+    const plan = reminderPlan(at(2026, 11, 19, 6, 0), reversed, 0);
+    expect(plan[0]).toEqual({ at: at(2026, 11, 19, 8, 0), slot: 'morning' });
+    expect(plan[1]).toEqual({ at: at(2026, 11, 19, 20, 0), slot: 'evening' });
+    expect(dueReminder(at(2026, 11, 19, 9, 0), reversed, 0)).toBe('morning');
+    expect(dueReminder(at(2026, 11, 19, 21, 0), reversed, 1)).toBe('evening');
+  });
 });

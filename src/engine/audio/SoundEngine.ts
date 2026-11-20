@@ -112,6 +112,8 @@ export class SoundEngine {
   private readonly finaleBuffers = new Map<string, Promise<AudioBuffer | null>>();
   /** Songs whose audio is decoded and ready to start this moment. */
   private readonly finaleDecoded = new Set<string>();
+  /** Songs asked for before the first tap (no audio context yet): they load on that tap. */
+  private readonly finaleWanted = new Set<string>();
   /** Bumped on every start/stop, so a song that finishes loading late never starts out of turn. */
   private finaleToken = 0;
   private hidden = false;
@@ -155,6 +157,10 @@ export class SoundEngine {
     };
     window.addEventListener('pointerdown', unlock, { capture: true, passive: true });
     window.addEventListener('touchstart', unlock, { capture: true, passive: true });
+    // A touch only counts as a user gesture (for iOS media) when it lifts: a deck refused on the
+    // way down gets its second chance here, even if the tap turns into no click.
+    window.addEventListener('touchend', unlock, { capture: true, passive: true });
+    window.addEventListener('pointerup', unlock, { capture: true, passive: true });
     window.addEventListener('mousedown', unlock, { capture: true, passive: true });
     window.addEventListener('click', unlock, { capture: true, passive: true });
     window.addEventListener('keydown', unlock, { capture: true, passive: true });
@@ -205,6 +211,9 @@ export class SoundEngine {
         this.ctx = null;
         return;
       }
+      // finale songs asked for before there was anything to decode them with
+      for (const file of this.finaleWanted) void this.loadFinaleBuffer(file);
+      this.finaleWanted.clear();
     }
     // Still inside the tap that got us here, which is what iOS needs to let the decks play later.
     this.trackDeck?.unlock();
@@ -508,17 +517,44 @@ export class SoundEngine {
     this.applyPlaybackState();
   }
 
-  /** True when the music folder has a song for a city's finale (0..4) or the ending (-1). */
-  /** True when a finale's song is loaded and ready to play this moment (not merely bundled). */
+  /** True when a finale's song (a city's 0..4, the ending's -1) is loaded and ready to play this moment (not merely bundled). */
   hasFinaleTrack(index: number): boolean {
     const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
     return file !== null && this.finaleDecoded.has(file);
   }
 
-  /** Starts loading a finale's song, so it is ready the moment the last zone seals. */
+  /**
+   * Starts loading a finale's song, so it is ready the moment the last zone seals. Before the first
+   * tap there is nothing to decode with yet: the song is remembered and loads on that tap.
+   */
   preloadFinaleTrack(index: number): void {
     const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
-    if (file) void this.loadFinaleBuffer(file);
+    if (!file) return;
+    if (this.ctx) void this.loadFinaleBuffer(file);
+    else this.finaleWanted.add(file);
+  }
+
+  /**
+   * Gets a finale's song ready to start (Watch the Ending from Home, say, on a fresh page): true once
+   * it is decoded, false if it fails, is muted, or takes longer than `maxWaitMs`, so the show never
+   * waits long and the synth score plays it instead. A song that arrives late is kept for next time.
+   */
+  prepareFinaleTrack(index: number, maxWaitMs: number): Promise<boolean> {
+    const file = resolveFinaleTrack(index, BUNDLED_MUSIC_FILES);
+    if (!file || this.prefs.muted) return Promise.resolve(false);
+    if (this.finaleDecoded.has(file)) return Promise.resolve(true);
+    if (!this.ctx) {
+      this.finaleWanted.add(file);
+      return Promise.resolve(false);
+    }
+    const loaded = this.loadFinaleBuffer(file).then((buf) => buf !== null && this.finaleDecoded.has(file));
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), Math.max(0, maxWaitMs));
+      void loaded.then((ok) => {
+        clearTimeout(timer);
+        resolve(ok);
+      });
+    });
   }
 
   private loadFinaleBuffer(file: string): Promise<AudioBuffer | null> {

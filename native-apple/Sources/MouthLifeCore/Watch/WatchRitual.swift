@@ -374,6 +374,14 @@ public struct WatchPhoneSettings: Codable, Equatable, Sendable {
         return d
     }
 
+    /// The next settings revision the iPhone sends: always above the last one it sent, so a grown-up
+    /// turning rinse off still reaches the watch after the clock is set back (M05). Starts from the
+    /// clock time so it also stays above revisions earlier builds sent as timestamps.
+    public static func nextRevision(after last: Double, now: Date = Date()) -> Double {
+        let lastSent = last.isFinite ? last : 0
+        return max(lastSent + 1, now.timeIntervalSince1970.rounded(.down))
+    }
+
     public init?(dictionary d: [String: Any]) {
         guard d["kind"] as? String == "settings", let rinse = d["rinse"] as? Bool else { return nil }
         self.includeRinse = rinse
@@ -389,6 +397,23 @@ public struct WatchImportLedger: Codable, Equatable, Sendable {
     public static let keep = 200
     public private(set) var acks: [String: WatchBrushAck] = [:]
     public private(set) var order: [String] = []
+    /// Payments started but not yet confirmed, by session id (H03). Optional so ledgers saved by
+    /// earlier builds still read.
+    public private(set) var pending: [String: PendingPayment]?
+
+    /// A payment in progress: the day it counts for, that day's reward slots just before paying,
+    /// and the answer paying from those slots gives.
+    public struct PendingPayment: Codable, Equatable, Sendable {
+        public var dayKey: String
+        public var slotBefore: DailySlotLog
+        public var ack: WatchBrushAck
+
+        public init(dayKey: String, slotBefore: DailySlotLog, ack: WatchBrushAck) {
+            self.dayKey = dayKey
+            self.slotBefore = slotBefore
+            self.ack = ack
+        }
+    }
 
     public init() {}
 
@@ -401,8 +426,15 @@ public struct WatchImportLedger: Codable, Equatable, Sendable {
     ///
     /// - `rinseAllowed`: whether a grown-up has the rinse step on here; if not, a watch still on an old
     ///   setting is paid like a brush with the rinse step off.
-    /// - `persist`: called with the ledger before the reward is paid (so a crash in between can never
-    ///   pay the same brush twice) and again after.
+    /// - `persist`: called with the ledger before the reward is paid and again after.
+    ///
+    /// Before paying, the ledger stores the payment as pending, with the day's slots as they were.
+    /// If the app stops before the answer is stored, the resent record finds it pending (H03): when
+    /// the day's slots have moved on, the payment landed, and the stored answer goes back without
+    /// paying again; when they have not, nothing landed, and it is paid now. Every reward that pays
+    /// anything moves the day's slots, so a brush is never paid twice and never lost. (Only another
+    /// brush credited to the same day between the stop and the resend would read as "landed".)
+    /// Answers already stored, including zeros saved by earlier builds, are final.
     public mutating func apply(
         _ record: WatchBrushRecord,
         to saveSystem: SaveSystem,
@@ -411,9 +443,14 @@ public struct WatchImportLedger: Codable, Equatable, Sendable {
         persist: (WatchImportLedger) -> Void = { _ in }
     ) -> WatchBrushAck {
         if let done = acks[record.sessionId] { return done }
-        // reserve it first: if anything stops below, it is never paid twice
-        remember(WatchBrushAck(sessionId: record.sessionId, ionsAwarded: 0, stampAwarded: false, fullReward: false))
-        persist(self)
+        if let started = pending?[record.sessionId] {
+            let slotNow = saveSystem.getSave().dailySlotsByDate[started.dayKey] ?? DailySlotLog()
+            if slotNow != started.slotBefore {
+                finish(started.ack)
+                persist(self)
+                return started.ack
+            }
+        }
         var inputs = record.rewardInputs
         if !rinseAllowed {
             inputs.withRinse = false
@@ -422,6 +459,32 @@ public struct WatchImportLedger: Codable, Equatable, Sendable {
         // credited to the day it was brushed, but a brush from the future (a wrong clock) or one
         // more than two days old counts as now
         let day = record.completedAt > now || record.completedAt < now.addingTimeInterval(-Self.backdateLimit) ? now : record.completedAt
+        let dayKey = HabitBank.localDateKey(for: day)
+        let current = saveSystem.getSave()
+        let slotBefore = current.dailySlotsByDate[dayKey] ?? DailySlotLog()
+        let expected = HabitBank.evaluatePacerReward(
+            currentSlot: slotBefore,
+            withFlossBonus: inputs.withFloss,
+            withMouthwashBonus: inputs.withRinse,
+            fullBrush: inputs.fullBrush,
+            rinseStepOff: inputs.rinseStepOff,
+            currentBeacons: current.pendingSupplyBeacons,
+            currentOverdriveRuns: current.remineralizedOverdriveRuns,
+            dateKey: dayKey
+        )
+        var started = pending ?? [:]
+        started[record.sessionId] = PendingPayment(
+            dayKey: dayKey,
+            slotBefore: slotBefore,
+            ack: WatchBrushAck(
+                sessionId: record.sessionId,
+                ionsAwarded: expected.ionsAwarded,
+                stampAwarded: expected.stampAwarded,
+                fullReward: expected.slotType == .full
+            )
+        )
+        pending = started
+        persist(self)
         let outcome = saveSystem.recordBrushAlongCompletion(
             withFlossBonus: inputs.withFloss,
             withMouthwashBonus: inputs.withRinse,
@@ -431,9 +494,15 @@ public struct WatchImportLedger: Codable, Equatable, Sendable {
             rewardDay: day
         )
         let ack = WatchBrushAck(sessionId: record.sessionId, ionsAwarded: outcome.ionsAwarded, stampAwarded: outcome.stampAwarded, fullReward: outcome.slotType == .full)
-        remember(ack)
+        finish(ack)
         persist(self)
         return ack
+    }
+
+    private mutating func finish(_ ack: WatchBrushAck) {
+        pending?.removeValue(forKey: ack.sessionId)
+        if pending?.isEmpty == true { pending = nil }
+        remember(ack)
     }
 
     private mutating func remember(_ ack: WatchBrushAck) {

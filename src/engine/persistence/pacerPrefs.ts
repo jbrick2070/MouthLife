@@ -9,24 +9,31 @@
  */
 export const INCLUDE_RINSE_KEY = 'mouthlife.pacer.includeRinse';
 
-/** The last choice made on this page, for when storage is blocked. */
-let thisVisit: boolean | null = null;
+/**
+ * A choice made on this page that storage refused to keep. It wins over whatever storage still
+ * holds for the rest of the visit, so a grown-up turning rinse off is obeyed at once even when the
+ * old "on" can still be read (M06).
+ */
+let unsavedThisVisit: boolean | null = null;
 
 export function readIncludeRinse(): boolean {
+  if (unsavedThisVisit !== null) return unsavedThisVisit;
   try {
-    const stored = window.localStorage.getItem(INCLUDE_RINSE_KEY);
-    return stored === null ? (thisVisit ?? false) : stored === '1';
+    return window.localStorage.getItem(INCLUDE_RINSE_KEY) === '1';
   } catch {
-    return thisVisit ?? false;
+    return false;
   }
 }
 
-export function writeIncludeRinse(on: boolean): void {
-  thisVisit = on;
+/** Returns false when the choice could not be kept past this visit. */
+export function writeIncludeRinse(on: boolean): boolean {
   try {
     window.localStorage.setItem(INCLUDE_RINSE_KEY, on ? '1' : '0');
+    unsavedThisVisit = null;
+    return true;
   } catch {
-    // Storage blocked: the choice lasts for this visit only.
+    unsavedThisVisit = on;
+    return false;
   }
 }
 
@@ -54,9 +61,10 @@ function readMinutes(key: string, fallback: number): number {
 }
 
 export function readReminders(): ReminderPrefs {
+  // A choice storage refused to keep wins for the rest of the visit (as for rinse, M06).
+  if (remindersThisVisit) return { ...remindersThisVisit };
   try {
     const on = window.localStorage.getItem(REMINDERS_ON_KEY);
-    if (on === null && remindersThisVisit) return { ...remindersThisVisit };
     return {
       on: on === '1',
       morning: readMinutes(REMINDER_MORNING_KEY, DEFAULT_REMINDERS.morning),
@@ -68,12 +76,13 @@ export function readReminders(): ReminderPrefs {
 }
 
 export function writeReminders(prefs: ReminderPrefs): void {
-  remindersThisVisit = { ...prefs };
   try {
     window.localStorage.setItem(REMINDERS_ON_KEY, prefs.on ? '1' : '0');
     window.localStorage.setItem(REMINDER_MORNING_KEY, String(prefs.morning));
     window.localStorage.setItem(REMINDER_EVENING_KEY, String(prefs.evening));
+    remindersThisVisit = null;
   } catch {
     // Storage blocked: the choice lasts for this visit only.
+    remindersThisVisit = { ...prefs };
   }
 }

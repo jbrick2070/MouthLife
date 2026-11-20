@@ -436,6 +436,23 @@ private struct ActiveSynthVoice {
     var svfBand: Float = 0
 }
 
+/// The mix and brush targets the control thread sets for the synth kernel. Plain values, so a copy
+/// is one coherent set with no allocation.
+private struct SynthControlTargets {
+    var muted: Float = 0
+    var musicGain: Float = 0.385
+    var sfxGain: Float = 0.8075
+    var musicCutoffHz: Float = 16000
+    var delaySec: Float = 0.32
+
+    var scrubActive: Float = 0
+    var scrubSpeed01: Float = 0
+    var scrubClean01: Float = 0
+    var scrubPlaqueBite01: Float = 0
+    var scrubHarmonicHz: Float = 523.25
+    var scrubBrushProfile: Int32 = 0
+}
+
 /// Self-contained C-style scalar DSP engine executed inside `AVAudioSourceNode`'s render callback.
 /// Uses zero heap allocations, zero Objective-C messaging, and non-blocking `os_unfair_lock_trylock`
 /// so real-time CoreAudio rendering never glitches or blocks.
@@ -452,19 +469,12 @@ private final class RealtimeSynthKernel {
     private var writeIndex: Int = 0
     private var readIndex: Int = 0
 
-    // Shared control parameters (updated from control thread, slewed on audio thread)
-    private var targetMuted: Float = 0
-    private var targetMusicGain: Float = 0.385
-    private var targetSfxGain: Float = 0.8075
-    private var targetMusicCutoffHz: Float = 16000
-    private var targetDelaySec: Float = 0.32
-
-    private var targetScrubActive: Float = 0
-    private var targetScrubSpeed01: Float = 0
-    private var targetScrubClean01: Float = 0
-    private var targetScrubPlaqueBite01: Float = 0
-    private var targetScrubHarmonicHz: Float = 523.25
-    private var targetScrubBrushProfile: Int32 = 0
+    // Shared control parameters: written by the control thread under `lockPtr`, slewed on the audio
+    // thread. The audio thread copies them only while it holds the lock (after a successful
+    // try-lock) and otherwise keeps using its previous copy, `audioTargets`.
+    private var targets = SynthControlTargets()
+    /// Audio-thread-only copy of the last coherent `targets` (starts at the same defaults).
+    private var audioTargets = SynthControlTargets()
 
     // Audio-thread exclusive DSP state
     private let voices: UnsafeMutableBufferPointer<ActiveSynthVoice>
@@ -623,11 +633,11 @@ private final class RealtimeSynthKernel {
 
     func setMixTargets(muted: Bool, musicGain: Float, sfxGain: Float, musicCutoffHz: Float, delaySec: Float) {
         os_unfair_lock_lock(lockPtr)
-        targetMuted = muted ? 1.0 : 0.0
-        targetMusicGain = musicGain
-        targetSfxGain = sfxGain
-        targetMusicCutoffHz = musicCutoffHz
-        targetDelaySec = min(1.4, max(0.08, delaySec))
+        targets.muted = muted ? 1.0 : 0.0
+        targets.musicGain = musicGain
+        targets.sfxGain = sfxGain
+        targets.musicCutoffHz = musicCutoffHz
+        targets.delaySec = min(1.4, max(0.08, delaySec))
         os_unfair_lock_unlock(lockPtr)
     }
 
@@ -640,12 +650,12 @@ private final class RealtimeSynthKernel {
         profile: BrushSonicProfile
     ) {
         os_unfair_lock_lock(lockPtr)
-        targetScrubActive = active ? 1.0 : 0.0
-        targetScrubSpeed01 = speed01
-        targetScrubClean01 = clean01
-        targetScrubPlaqueBite01 = plaqueBite01
-        targetScrubHarmonicHz = min(1760.0, max(260.0, harmonicHz))
-        targetScrubBrushProfile = profile.rawValue
+        targets.scrubActive = active ? 1.0 : 0.0
+        targets.scrubSpeed01 = speed01
+        targets.scrubClean01 = clean01
+        targets.scrubPlaqueBite01 = plaqueBite01
+        targets.scrubHarmonicHz = min(1760.0, max(260.0, harmonicHz))
+        targets.scrubBrushProfile = profile.rawValue
         os_unfair_lock_unlock(lockPtr)
     }
 
@@ -746,37 +756,28 @@ private final class RealtimeSynthKernel {
     }
 
     func render(frameCount: Int, outL: UnsafeMutablePointer<Float>, outR: UnsafeMutablePointer<Float>?) {
-        var locMuted = targetMuted
-        var locMusicGain = targetMusicGain
-        var locSfxGain = targetSfxGain
-        var locCutoff = targetMusicCutoffHz
-        var locDelaySec = targetDelaySec
-        var locScrubAct = targetScrubActive
-        var locScrubSpd = targetScrubSpeed01
-        var locScrubCln = targetScrubClean01
-        var locPlaqueBite = targetScrubPlaqueBite01
-        var locHarmonicHz = targetScrubHarmonicHz
-        var locScrubProf = targetScrubBrushProfile
-
+        // The shared targets are read only inside the lock. When the control thread holds it, this
+        // block keeps the previous coherent copy (never waits, never allocates).
         if os_unfair_lock_trylock(lockPtr) {
             while readIndex < writeIndex {
                 let cmd = ringBuffer[readIndex & Self.ringMask]
                 readIndex += 1
                 spawnVoice(cmd)
             }
-            locMuted = targetMuted
-            locMusicGain = targetMusicGain
-            locSfxGain = targetSfxGain
-            locCutoff = targetMusicCutoffHz
-            locDelaySec = targetDelaySec
-            locScrubAct = targetScrubActive
-            locScrubSpd = targetScrubSpeed01
-            locScrubCln = targetScrubClean01
-            locPlaqueBite = targetScrubPlaqueBite01
-            locHarmonicHz = targetScrubHarmonicHz
-            locScrubProf = targetScrubBrushProfile
+            audioTargets = targets
             os_unfair_lock_unlock(lockPtr)
         }
+        let locMuted = audioTargets.muted
+        let locMusicGain = audioTargets.musicGain
+        let locSfxGain = audioTargets.sfxGain
+        let locCutoff = audioTargets.musicCutoffHz
+        let locDelaySec = audioTargets.delaySec
+        let locScrubAct = audioTargets.scrubActive
+        let locScrubSpd = audioTargets.scrubSpeed01
+        let locScrubCln = audioTargets.scrubClean01
+        let locPlaqueBite = audioTargets.scrubPlaqueBite01
+        let locHarmonicHz = audioTargets.scrubHarmonicHz
+        let locScrubProf = audioTargets.scrubBrushProfile
 
         let desiredMaster: Float = locMuted > 0.5 ? 0.0 : 0.85
         let targetLpCoeff = min(0.98, max(0.04, 1.0 - exp(-2.0 * .pi * locCutoff * invSampleRate)))
@@ -1267,15 +1268,36 @@ private final class SunoStreamDeck {
     private var activePlayer: AVAudioPlayer?
     private var activeURL: URL?
     private var fadingOutPlayers: [AVAudioPlayer] = []
+    /// What `sampleReactiveBands` returned last, reused while another thread holds `lock`. Touched
+    /// only by the sampler (SceneKit's renderer, one frame at a time), so it needs no lock.
+    private var lastSampledBands: AudioReactiveBands = .zero
+    /// The mix most recently asked for (guarded by `lock`): a song that finishes opening outside the
+    /// lock starts at this level, not at the one its own `sync` call saw.
+    private var latestGain: Float = 0
+    private var latestMuted = false
+    private var latestInterrupted = false
+    /// Songs being opened outside the lock by `sync` (guarded by `lock`).
+    private var songsOpening = 0
+
+    /// A player that would not resume and has to be opened again: done outside the lock.
+    private struct ReopenRequest {
+        let stalled: AVAudioPlayer
+        let url: URL
+        let resumeTime: TimeInterval
+        let gain: Float
+        let fadeSec: TimeInterval
+    }
 
     var isPlayingRecordedTrack: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return activePlayer != nil
+        return activePlayer != nil || songsOpening > 0
     }
 
+    /// Called by the renderer every 120 Hz frame: it never waits for the lock (a song change, the fade
+    /// reaper or the envelope analysis may hold it) and reuses the previous sample instead.
     func sampleReactiveBands() -> AudioReactiveBands {
-        lock.lock()
+        guard lock.try() else { return lastSampledBands }
         guard let player = activePlayer,
               player.isPlaying,
               player.volume > 0.001,
@@ -1284,6 +1306,7 @@ private final class SunoStreamDeck {
               !env.frames.isEmpty
         else {
             lock.unlock()
+            lastSampledBands = .zero
             return .zero
         }
         let curTime = player.currentTime
@@ -1300,7 +1323,9 @@ private final class SunoStreamDeck {
         let frac = pos - Float(Int(pos))
         let interp = env.frames[i0] * (1.0 - frac) + env.frames[i1] * frac
         let scaled = simd_clamp(interp * gainScale, .zero, SIMD4<Float>(repeating: 1.0))
-        return AudioReactiveBands(bass: scaled.x, mid: scaled.y, high: scaled.z, beatPulse: scaled.w)
+        let bands = AudioReactiveBands(bass: scaled.x, mid: scaled.y, high: scaled.z, beatPulse: scaled.w)
+        lastSampledBands = bands
+        return bands
     }
 
     func sync(
@@ -1311,17 +1336,20 @@ private final class SunoStreamDeck {
         preferredStems: [String] = []
     ) {
         lock.lock()
-        defer { lock.unlock() }
-
         reapFinishedFadesLocked()
         let nextURL = resolvePreferredStemsLocked(preferredStems) ?? resolveTrackURLLocked(for: themeId)
         if let url = nextURL {
             triggerEnvelopeAnalysisIfNeededLocked(for: url)
         }
         let clampedGain = min(1.0, max(0.0, targetVolume))
+        latestGain = clampedGain
+        latestMuted = muted
+        latestInterrupted = interrupted
 
         if nextURL == activeURL {
-            applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.22)
+            let reopen = applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.22)
+            lock.unlock()
+            if let reopen { reopenStalledPlayer(reopen) }
             return
         }
 
@@ -1332,27 +1360,49 @@ private final class SunoStreamDeck {
         }
         activePlayer = nil
         activeURL = nextURL
-
-        guard let url = nextURL, let incoming = try? AVAudioPlayer(contentsOf: url) else {
+        guard let url = nextURL else {
+            lock.unlock()
             return
         }
-        incoming.numberOfLoops = -1
-        incoming.volume = 0
-        incoming.prepareToPlay()
-        activePlayer = incoming
+        // Counts as a recorded track while it opens, so the procedural music stays asleep (it used to
+        // wait on the lock for the same moment).
+        songsOpening += 1
+        lock.unlock()
 
-        if !muted && !interrupted && clampedGain > 0.0005 {
+        // Opening and preparing a song reads the file, so it happens without the lock (the renderer
+        // samples this deck every frame, and other threads sync it too).
+        var opened: AVAudioPlayer?
+        if let player = try? AVAudioPlayer(contentsOf: url) {
+            player.numberOfLoops = -1
+            player.volume = 0
+            player.prepareToPlay()
+            opened = player
+        }
+
+        lock.lock()
+        defer { lock.unlock() }
+        songsOpening -= 1
+        // A newer sync may have chosen another song (or started this one) meanwhile: then this player
+        // is dropped without ever playing.
+        guard let incoming = opened, activeURL == url, activePlayer == nil else { return }
+        activePlayer = incoming
+        // The latest mix wins, in case another sync or updateMix arrived while the file opened.
+        if !latestMuted && !latestInterrupted && latestGain > 0.0005 {
             incoming.play()
-            incoming.setVolume(clampedGain, fadeDuration: 0.85)
+            incoming.setVolume(latestGain, fadeDuration: 0.85)
         }
     }
 
     func updateMix(targetVolume: Float, muted: Bool, interrupted: Bool) {
         lock.lock()
-        defer { lock.unlock() }
         reapFinishedFadesLocked()
         let clampedGain = min(1.0, max(0.0, targetVolume))
-        applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.20)
+        latestGain = clampedGain
+        latestMuted = muted
+        latestInterrupted = interrupted
+        let reopen = applyGainLocked(to: activePlayer, gain: clampedGain, muted: muted, interrupted: interrupted, fadeSec: 0.20)
+        lock.unlock()
+        if let reopen { reopenStalledPlayer(reopen) }
     }
 
     func stopAll() {
@@ -1368,37 +1418,56 @@ private final class SunoStreamDeck {
         for p in fading { p.stop() }
     }
 
+    /// Applies the mix to the active player. If it will not resume, returns what is needed to open it
+    /// again; the caller does that after unlocking (`reopenStalledPlayer`), never under the lock.
     private func applyGainLocked(
         to player: AVAudioPlayer?,
         gain: Float,
         muted: Bool,
         interrupted: Bool,
         fadeSec: TimeInterval
-    ) {
-        guard let player else { return }
+    ) -> ReopenRequest? {
+        guard let player else { return nil }
         if interrupted {
             if player.isPlaying { player.pause() }
-            return
+            return nil
         }
         if muted || gain <= 0.0005 {
             player.setVolume(0, fadeDuration: min(0.18, fadeSec))
-            return
+            return nil
         }
         if !player.isPlaying {
             player.prepareToPlay()
-            if !player.play(), let url = activeURL, let fresh = try? AVAudioPlayer(contentsOf: url) {
-                let resumeTime = player.currentTime
-                fresh.numberOfLoops = -1
-                fresh.currentTime = resumeTime
-                fresh.volume = 0
-                fresh.prepareToPlay()
-                _ = fresh.play()
-                activePlayer = fresh
-                fresh.setVolume(gain, fadeDuration: fadeSec)
-                return
+            if !player.play(), let url = activeURL {
+                player.setVolume(gain, fadeDuration: fadeSec)
+                return ReopenRequest(
+                    stalled: player,
+                    url: url,
+                    resumeTime: player.currentTime,
+                    gain: gain,
+                    fadeSec: fadeSec
+                )
             }
         }
         player.setVolume(gain, fadeDuration: fadeSec)
+        return nil
+    }
+
+    /// Opens a fresh player for a stalled one without the lock, then swaps it in only if the stalled
+    /// player is still the active one (no newer song was chosen meanwhile).
+    private func reopenStalledPlayer(_ request: ReopenRequest) {
+        guard let fresh = try? AVAudioPlayer(contentsOf: request.url) else { return }
+        fresh.numberOfLoops = -1
+        fresh.currentTime = request.resumeTime
+        fresh.volume = 0
+        fresh.prepareToPlay()
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard activePlayer === request.stalled else { return }
+        _ = fresh.play()
+        activePlayer = fresh
+        fresh.setVolume(request.gain, fadeDuration: request.fadeSec)
     }
 
     private func reapFinishedFadesLocked() {

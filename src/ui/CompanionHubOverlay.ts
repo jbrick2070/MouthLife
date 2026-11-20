@@ -52,6 +52,8 @@ import {
 } from './hudHelpers';
 import { TutorialOverlay } from './TutorialOverlay';
 import { askGrownUp } from './parentGate';
+import { privacyNoticeButtonHtml } from './privacyNotice';
+import { hasSeenTouch } from './touchSeen';
 import { FINALE_WORLD_IDS, goldenMolarIconSvg } from './CityFinaleOverlay';
 import { molarFinishForGrade, type MolarFinish } from '../config/cityFinale';
 
@@ -212,6 +214,7 @@ export class CompanionHubOverlay implements OverlayView {
     this.tutorial = new TutorialOverlay({
       scheme: pickTutorialInputScheme({
         coarsePointer,
+        touchSeen: hasSeenTouch(),
         gamepadConnected: Boolean(this.actions.isGamepadConnected?.()),
       }),
       onClose: () => {
@@ -1241,6 +1244,8 @@ export class CompanionHubOverlay implements OverlayView {
           <div class="row-wrap" style="margin:8px 0 12px 0;">
             <button type="button" id="btn-copy-sync" class="btn btn-primary btn-sm">📋 Copy ML2 Code</button>
             <button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>
+            <button type="button" id="btn-open-backup" class="btn btn-sm">📂 Open Backup File</button>
+            <input type="file" id="file-open-backup" accept=".json,application/json" hidden />
           </div>
           <label for="txt-sync-import" style="font-size:0.78rem;color:var(--text-muted);display:block;margin-bottom:4px;">Import ML2 Sync Code</label>
           <textarea
@@ -1252,7 +1257,7 @@ export class CompanionHubOverlay implements OverlayView {
           <div id="sync-import-status" role="alert" style="min-height:1.1em;margin-top:6px;font-size:0.76rem;color:#fca5a5;"></div>
           <div class="row-between" style="margin-top:10px;flex-wrap:wrap;gap:8px;border-top:1px solid rgba(94,234,212,0.16);padding-top:10px;">
             <div class="row-wrap" style="gap:6px;">
-              <a href="./privacy.html" target="_blank" rel="noopener noreferrer" class="btn btn-sm">🔒 Privacy & Notice ↗</a>
+              ${privacyNoticeButtonHtml()}
               <button type="button" id="btn-reset-save" class="btn btn-sm" style="${this.confirmResetPending ? 'border-color:#fb7185;color:#fecdd3;' : ''}">
                 ${this.confirmResetPending ? '⚠️ Tap Again to Erase' : '🔄 Erase Save'}
               </button>
@@ -1946,6 +1951,38 @@ export class CompanionHubOverlay implements OverlayView {
       a.download = 'backup.mouthlife.json';
       a.click();
       URL.revokeObjectURL(url);
+    });
+
+    // The downloaded backup goes back in through the same checks and merge as a Sync Code (H08).
+    const backupInput = this.container.querySelector<HTMLInputElement>('#file-open-backup');
+    this.container.querySelector('#btn-open-backup')?.addEventListener('click', () => {
+      if (backupInput) {
+        backupInput.value = '';
+        backupInput.click();
+      }
+    });
+    backupInput?.addEventListener('change', () => {
+      const file = backupInput.files?.[0];
+      if (!file) return;
+      const fail = (err: unknown) => {
+        showSyncInlineFeedback(
+          (err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.') +
+            ' Your current progress was not changed.',
+          false
+        );
+      };
+      if (file.size > 262144) {
+        fail(new Error('This code is damaged and can’t be read.'));
+        return;
+      }
+      file
+        .text()
+        .then((text) => {
+          this.saveSys.importSyncCode(text);
+          this.statusBanner = 'Code imported! Your save is updated.';
+          this.closeActiveModal();
+        })
+        .catch(fail);
     });
 
     this.container.querySelector('#btn-reset-save')?.addEventListener('click', () => {

@@ -200,9 +200,9 @@ export class TelemetryHudOverlay implements OverlayView {
       compactViewport: this.isCompactScreen(),
       coarsePointer: touch,
     });
+    // On a wide screen the stick joins the desktop button bar whenever it is shown (see main.css):
+    // a touch laptop, or Steer OFF with a mouse, as the toast after the Steer button promises.
     this.thumbDeckEl.classList.toggle('pad-hidden', !showPad);
-    // On a wide touch laptop the stick joins the desktop button bar (see main.css).
-    this.thumbDeckEl.classList.toggle('touch-capable', touch);
   }
 
   constructor(

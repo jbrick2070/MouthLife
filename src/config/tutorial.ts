@@ -261,10 +261,19 @@ export function tutorialControlsFor(page: TutorialPage, scheme: TutorialInputSch
   return page.controls[scheme] ?? page.controls.touch ?? [];
 }
 
-/** A controller in use wins; otherwise fingers on a touch screen, keys on a desktop. */
-export function pickTutorialInputScheme(env: { coarsePointer: boolean; gamepadConnected: boolean }): TutorialInputScheme {
+/**
+ * A controller in use wins; otherwise fingers on a touch screen, keys on a desktop. A screen counts
+ * as touch when it reports a coarse pointer or has been touched (a touch laptop reports its trackpad),
+ * the same test the game HUD uses for its thumbstick and tips.
+ */
+export function pickTutorialInputScheme(env: {
+  coarsePointer: boolean;
+  /** The screen has been touched since the page opened. */
+  touchSeen?: boolean;
+  gamepadConnected: boolean;
+}): TutorialInputScheme {
   if (env.gamepadConnected) return 'pad';
-  return env.coarsePointer ? 'touch' : 'keys';
+  return env.coarsePointer || env.touchSeen ? 'touch' : 'keys';
 }
 
 // ---------------------------------------------------------------- when to offer it

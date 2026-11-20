@@ -137,6 +137,9 @@ export class VoiceCoach {
     utterance.onerror = finish;
 
     synth.cancel();
+    // A cue is spoken only while the ritual runs: if speech was left paused (Pause, then Home or a
+    // jump to the next stage), resume it, or this and every later cue would wait silently (M07).
+    synth.resume();
     this.speakingCount += 1;
     this.onSpeakingChanged?.(true);
     synth.speak(utterance);
@@ -151,7 +154,10 @@ export class VoiceCoach {
   }
 
   stop(): void {
-    this.synth()?.cancel();
+    const synth = this.synth();
+    synth?.cancel();
+    // Leaving a paused ritual must not leave speech paused for the next one (M07).
+    synth?.resume();
     if (this.speakingCount !== 0) {
       this.speakingCount = 0;
       this.onSpeakingChanged?.(false);

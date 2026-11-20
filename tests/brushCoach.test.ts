@@ -141,7 +141,8 @@ describe('ClockController pacer stages', () => {
     expect(clock.getPacerStage()).toBe('brushing');
 
     clock.enterFlossBonus();
-    expect(clock.getPacerElapsedSec()).toBe(120);
+    // the 5 s past the end of brushing carry into floss (H04)
+    expect(clock.getPacerElapsedSec()).toBeCloseTo(125, 6);
     advance(50);
     expect(clock.getPacerElapsedSec()).toBe(165);
 
@@ -151,15 +152,15 @@ describe('ClockController pacer stages', () => {
     expect(ticks.at(-1)).toEqual({ elapsedSec: 225, stage: 'mouthwashBonus' });
   });
 
-  it('follows real time through a slow frame but never jumps more than half a second', () => {
+  it('follows real time through a slow frame and a stall (H04: the clock on the wall)', () => {
     const bus = new EventBus();
     const clock = new ClockController(bus);
     clock.tickFrame(0);
     clock.startPacer();
     clock.tickFrame(300); // one 0.3s frame counts in full (the sim step would clamp it to 0.1s)
     expect(clock.getPacerElapsedSec()).toBeCloseTo(0.3, 6);
-    clock.tickFrame(10_300); // a 10s stall counts as 0.5s
-    expect(clock.getPacerElapsedSec()).toBeCloseTo(0.8, 6);
+    clock.tickFrame(10_300); // a 10s stall counts in full too
+    expect(clock.getPacerElapsedSec()).toBeCloseTo(10.3, 6);
   });
 
   it('keeps the same fraction done when the rinse length is switched mid-rinse', () => {

@@ -56,6 +56,17 @@ interface FoamSample {
   s: number;
 }
 
+/** The system's Reduce Motion media query, or null where there is none (tests, old browsers). */
+function systemReducedMotionQuery(): MediaQueryList | null {
+  try {
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export class SceneManager {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
@@ -156,7 +167,23 @@ export class SceneManager {
     );
     this.initRenderer();
     this.syncReducedMotionClass();
+    this.followSystemReducedMotion();
     this.bindJuiceEvents();
+  }
+
+  /**
+   * Follows the system's Reduce Motion while the game runs, as the native app does
+   * (RootContentView): switching it on (or off) applies at once, to the skyline, the finale and
+   * everything else that reads `isReducedMotion()`. The in-app switch can still change it after.
+   */
+  private followSystemReducedMotion(): void {
+    const mq = systemReducedMotionQuery();
+    if (!mq) return;
+    const onChange = (e: { matches: boolean }): void => {
+      if (e.matches !== this.reducedMotion) this.setReducedMotion(e.matches);
+    };
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
+    else mq.addListener?.(onChange);
   }
 
   private syncReducedMotionClass(): void {
@@ -165,19 +192,20 @@ export class SceneManager {
     }
   }
 
-  private static readInitialReducedMotion(): boolean {
+  /**
+   * On at launch when the system asks for Reduce Motion (even if the in-app switch was left off
+   * last time, as native's RootContentView does), otherwise the in-app switch's saved choice.
+   */
+  static readInitialReducedMotion(): boolean {
+    if (systemReducedMotionQuery()?.matches) return true;
     try {
       const saved =
         typeof localStorage !== 'undefined' ? localStorage.getItem('mouthlife.reduceMotion') : null;
-      if (saved === '1') return true;
-      if (saved === '0') return false;
+      return saved === '1';
     } catch {
       // ignore storage errors
+      return false;
     }
-    return Boolean(
-      typeof window !== 'undefined' &&
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    );
   }
 
   isReducedMotion(): boolean {

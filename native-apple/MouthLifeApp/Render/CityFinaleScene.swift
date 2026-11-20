@@ -2059,7 +2059,7 @@ final class FinaleScene3D: NSObject, SCNSceneRendererDelegate, @unchecked Sendab
             placeShowProps(nil, showT: -1)
         }
 
-        let place = CityFinale.endingMolarPlace(t)
+        let place = CityFinale.endingMolarPlace(t, reducedMotion: reducedMotion)
         let snapped = t >= E.snap
         let isGold = snapped && allGold
         var sweepPos = -3.0
@@ -2434,7 +2434,7 @@ extension FinalePainter {
         // every city the child cleaned, in a little bubble over its own piece: all five inside one tooth
         let homes = CityFinale.endingCityBubbles(t)
         if homes > 0.01 {
-            let place = CityFinale.endingMolarPlace(t)
+            let place = CityFinale.endingMolarPlace(t, reducedMotion: rm)
             let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: rm)
             var bubbles: [(index: Int, x: Double, y: Double, r: Double)] = []
             for i in 0..<CityFinale.campaignPieces {
@@ -2460,10 +2460,10 @@ extension FinalePainter {
                     paintBurst3D(&glow, lens: lens, burst: burst, index: b, showT: local, show: .fireworks, center: center, scale: CityFinale.endingBurstScale * Finale3D.stageUnit * 0.5, size: (0.06, 0.045), dim: 1)
                 }
             }
-            // the happy tooth: its face (for everyone who finishes), then "a hug for you"
-            let face = CityFinale.endingFace(t)
+            // the happy tooth: its face (for everyone who finishes; the wink only for all gold), then "a hug for you"
+            let face = CityFinale.endingFace(t, allGold: allGold)
             if face.alpha > 0 {
-                let place = CityFinale.endingMolarPlace(t)
+                let place = CityFinale.endingMolarPlace(t, reducedMotion: rm)
                 let pose = FinaleLook.molarPose(cx: place.x, cy: place.y, scale: place.scale, t: t, faceTilt: FinaleLook.faceTilt(t, allGold: true), turn: true, reducedMotion: rm)
                 let anchor = pose.faceAnchor()
                 if let a = lens.project(anchor.center), let b = lens.project(anchor.side) {

@@ -195,12 +195,16 @@ private struct MouthwashGyroLevelBar: View {
     let gyro: GyroSloshSnapshot
     let elapsedSec: Double
     let language: CoachLanguage
+    /// The game's Reduce Motion: the bubble rests in the middle instead of swishing (M11).
+    var reducedMotion: Bool = false
 
     var body: some View {
         let sides = BrushCoachCopy.mirrorSideLabels(for: language)
-        let displaySlosh: Double = gyro.isHandheld
-            ? Double(max(-1.0, min(1.0, gyro.sloshPosition)))
-            : sin(elapsedSec * 3.2) * 0.68
+        let displaySlosh: Double = reducedMotion
+            ? 0
+            : gyro.isHandheld
+                ? Double(max(-1.0, min(1.0, gyro.sloshPosition)))
+                : sin(elapsedSec * 3.2) * 0.68
         let leftCharge = Double(gyro.leftCheekCharge01)
         let rightCharge = Double(gyro.rightCheekCharge01)
         let leftLit = displaySlosh < -0.22
@@ -331,6 +335,10 @@ public struct BrushAlongView: View {
     public let includeRinse: Bool
     /// Whether brushing ran its full 2 minutes; the Ion amounts on Done / Skip are only shown then.
     public let fullBrush: Bool
+    /// Whether today still has a full reward left; after the daily two the amounts are left off (L01).
+    public let fullRewardLeftToday: Bool
+    /// The game's Reduce Motion: the rinse gauge then rests in the middle (M11).
+    public let reducedMotion: Bool
     public let flossToolStyle: FlossToolStyle
     public let mouthwashDurationStyle: MouthwashDurationStyle
     public let mouthwashGyro: GyroSloshSnapshot
@@ -358,6 +366,8 @@ public struct BrushAlongView: View {
         didCompleteFloss: Bool = false,
         includeRinse: Bool = true,
         fullBrush: Bool = true,
+        fullRewardLeftToday: Bool = true,
+        reducedMotion: Bool = false,
         flossToolStyle: FlossToolStyle = .flossPick,
         mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s,
         mouthwashGyro: GyroSloshSnapshot = .idle,
@@ -382,6 +392,8 @@ public struct BrushAlongView: View {
         self.didCompleteFloss = didCompleteFloss
         self.includeRinse = includeRinse
         self.fullBrush = fullBrush
+        self.fullRewardLeftToday = fullRewardLeftToday
+        self.reducedMotion = reducedMotion
         self.flossToolStyle = flossToolStyle
         self.mouthwashDurationStyle = mouthwashDurationStyle
         self.mouthwashGyro = mouthwashGyro
@@ -416,7 +428,9 @@ public struct BrushAlongView: View {
             mouthwashDurationSec: mwDur
         )
         // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
-        let amount: (String) -> String = { [fullBrush] label in fullBrush ? label : BrushCoachCopy.withoutIonAmount(label) }
+        // ...and once today's two full rewards are collected, they are left off too (L01).
+        let showAmounts = fullBrush && fullRewardLeftToday
+        let amount: (String) -> String = { label in showAmounts ? label : BrushCoachCopy.withoutIonAmount(label) }
         let floss = BrushCoachCopy.actionButtonLabels(for: coachLanguage, rinseStepOff: !includeRinse)
         let buttons = (doneFloss: amount(floss.doneFloss), skipFloss: amount(floss.skipFloss))
         let rinse = BrushCoachCopy.mouthwashButtonLabels(didFloss: didCompleteFloss, lang: coachLanguage)
@@ -602,7 +616,7 @@ public struct BrushAlongView: View {
                     }
 
                     if duoPose != .stacked {
-                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
+                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage, reducedMotion: reducedMotion)
                     }
 
                     HStack(spacing: 10) {
@@ -640,7 +654,7 @@ public struct BrushAlongView: View {
                     }
 
                     if duoPose != .stacked {
-                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
+                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage, reducedMotion: reducedMotion)
                     }
 
                     HStack(spacing: 8) {
@@ -679,7 +693,7 @@ public struct BrushAlongView: View {
                     }
 
                 case .brushing:
-                    BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
+                    BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage, reducedMotion: reducedMotion)
                 }
             }
             .mlGlassCard(cornerRadius: 22)
@@ -757,6 +771,8 @@ struct BrushCueRows: View {
     let language: CoachLanguage
     /// The floss and rinse titles (on the flat page; in the banner they share a row with the pickers).
     var showsTitle: Bool = false
+    /// The game's Reduce Motion: the rinse gauge rests in the middle (M11).
+    var reducedMotion: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -793,7 +809,8 @@ struct BrushCueRows: View {
                 MouthwashGyroLevelBar(
                     gyro: gyro,
                     elapsedSec: elapsedSec,
-                    language: language
+                    language: language,
+                    reducedMotion: reducedMotion
                 )
                 // the child's left is always screen-left, whatever the layout direction
                 .environment(\.layoutDirection, .leftToRight)

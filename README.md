@@ -110,7 +110,6 @@ If you enjoyed playing **MouthLife**, please consider supporting [**SmileOnU**](
   - **Message from the Founder:** [https://smileonu.org/message-from-the-founder/](https://smileonu.org/message-from-the-founder/)
   - **Board of Directors:** [https://smileonu.org/board-of-directors/](https://smileonu.org/board-of-directors/)
   - **Upcoming Clinics & CEUs for Charity:** [https://smileonu.org/upcoming-events/](https://smileonu.org/upcoming-events/)
-  - **Contact:** `info@smileonu.org`
 
 ### More free dental care charities
 

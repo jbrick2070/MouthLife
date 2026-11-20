@@ -43,7 +43,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     // Bound Simulation & Touch State
     public weak var activeSession: WorldSession?
+    /// Rubbed from the main thread (UIKit / AppKit input, the coordinator) and stepped and read by
+    /// SceneKit's render thread; `CompanionTouchSystem` locks every call, so both sides may use it.
     public let touchSystem = CompanionTouchSystem()
+    // Reused every frame for the tooth ripples and sugar splats (no per-frame heap allocation).
+    private var rippleScratch: [ActiveTouchRipple] = []
+    private var splatScratch: [RenderSplat] = []
+    private var rippleUpload = ShadowSafeFrameBuffer<CrownTouchRipple>(capacity: CompanionTouchSystem.maxRipples)
+    private var splatUpload = ShadowSafeFrameBuffer<SugarPlaqueSplat>(capacity: CompanionTouchSystem.maxSplats)
 
     // Camera & Mode State
     public private(set) var appMode: AppMode = .hub
@@ -99,6 +106,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private var pendingDiscloseFire: Bool = false
     private var lastTapTimeSec: Double?
     private var lastTapPt: CGPoint = .zero
+    /// Bumped by `resetStageInput` (mode changes, pause, finales, a new stage, a Duo fold). A finger or
+    /// mouse button that went down before the bump no longer steers, scrubs or rubs; the viewport
+    /// waits for a fresh touch (main thread only).
+    public private(set) var pointerEpoch: Int = 0
 
     // 60Hz Fixed-Step Accumulator + 120Hz Sub-Frame Interpolation State
     private let fixedDt: Double = 1.0 / 60.0
@@ -181,6 +192,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
         super.init()
 
+        rippleScratch.reserveCapacity(CompanionTouchSystem.maxRipples)
+        splatScratch.reserveCapacity(CompanionTouchSystem.maxSplats)
         setupSceneAndLighting()
     }
 
@@ -429,6 +442,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         pendingRinseFire = false
         pendingDiscloseFire = false
         lastTapTimeSec = nil
+        pointerEpoch &+= 1
+        touchSystem.endTouch()
     }
 
     /// The Mac's right-click: floss toward the point under the pointer, as on the web (a click with
@@ -762,24 +777,45 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             )
         )
 
-        let rawRipples = touchSystem.activeRipples(nowSec: Double(sceneNowSec))
-        let ripples: [CrownTouchRipple] = rawRipples.isEmpty ? [] : rawRipples.map { r in
-            CrownTouchRipple(
-                position: SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z)),
-                startTime: sceneNowSec - Float(r.ageSec)
-            )
-        }
-        companionEnamelController.setTouchRipples(ripples)
+        // Ripples and splats: copied out of the touch system under its lock into reused buffers, then
+        // into the shader slots, without a heap allocation per frame.
+        let rippleNowSec = Double(sceneNowSec)
+        touchSystem.fillActiveRipples(nowSec: rippleNowSec, into: &rippleScratch)
+        rippleUpload.refill(
+            with: { out in
+                for r in self.rippleScratch {
+                    out.append(
+                        CrownTouchRipple(
+                            position: SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z)),
+                            // The ripple's own start (now - age): steady from frame to frame, so the
+                            // shader's shadow check does not re-upload an unchanged ripple.
+                            startTime: Float(rippleNowSec - r.ageSec)
+                        )
+                    )
+                }
+            },
+            deliver: { ripples in
+                self.companionEnamelController.setTouchRipples(ripples)
+            }
+        )
 
-        let rawSplats = touchSystem.getRenderSplats()
-        let splats: [SugarPlaqueSplat] = rawSplats.isEmpty ? [] : rawSplats.map { s in
-            SugarPlaqueSplat(
-                position: SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z)),
-                amount: Float(s.amount)
-            )
-        }
-        companionEnamelController.setSugarSplats(splats)
-        companionNodes.updateSugarSplats(splats)
+        touchSystem.fillRenderSplats(into: &splatScratch)
+        splatUpload.refill(
+            with: { out in
+                for s in self.splatScratch {
+                    out.append(
+                        SugarPlaqueSplat(
+                            position: SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z)),
+                            amount: Float(s.amount)
+                        )
+                    )
+                }
+            },
+            deliver: { splats in
+                self.companionEnamelController.setSugarSplats(splats)
+                self.companionNodes.updateSugarSplats(splats)
+            }
+        )
         EnamelShaders.updateGingivaMaterial(
             companionNodes.gingivaMaterial,
             motionTimeSec: motionTime,
@@ -1033,7 +1069,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 node = existing
             } else {
                 let created = ProceduralMeshBuilder.buildMutansNode()
-                scene.rootNode.addChildNode(created)
+                // A child of the stage (whose root sits at the world origin, so world placement is
+                // unchanged): hidden with it on Home and torn down with it on the next mount.
+                stage.rootNode.addChildNode(created)
                 mutansPool[m.id] = created
                 node = created
             }
@@ -1069,7 +1107,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                     radius: Float(p.radius),
                     tintHex: stage.landmarkColors.acidPoolHex
                 )
-                scene.rootNode.addChildNode(created)
+                stage.rootNode.addChildNode(created)
                 acidPoolNodes[p.id] = created
                 node = created
             }
@@ -1235,5 +1273,42 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         while diff > .pi { diff -= .pi * 2 }
         while diff < -.pi { diff += .pi * 2 }
         return a + diff * t
+    }
+}
+
+/// Hands a shader setter this frame's values in a reused array without copying it.
+///
+/// `EnamelMaterialController.setTouchRipples` and `setSugarSplats` keep the last array they accepted
+/// (their shadow copy, compared to skip unchanged uploads). Refilling that same array next frame
+/// would copy it first (copy-on-write): a heap allocation at 120 Hz. So two buffers take turns: the
+/// one the setter holds is never written, and the other is emptied and refilled in place.
+private struct ShadowSafeFrameBuffer<Element: Equatable> {
+    private var bufferA: [Element] = []
+    private var bufferB: [Element] = []
+    /// The buffer the setter holds: true = A, false = B, nil = neither yet (it holds nil or nothing).
+    private var setterHoldsA: Bool?
+
+    init(capacity: Int) {
+        bufferA.reserveCapacity(capacity)
+        bufferB.reserveCapacity(capacity)
+    }
+
+    /// Empties the buffer the setter does not hold, lets `fill` append this frame's values, then
+    /// passes it to `deliver`, which must hand it to a setter that keeps it only when it differs from
+    /// the array it kept last time (as the enamel setters do).
+    mutating func refill(with fill: (inout [Element]) -> Void, deliver: ([Element]) -> Void) {
+        if setterHoldsA == true {
+            bufferB.removeAll(keepingCapacity: true)
+            fill(&bufferB)
+            let changed = bufferB != bufferA
+            deliver(bufferB)
+            if changed { setterHoldsA = false }
+        } else {
+            bufferA.removeAll(keepingCapacity: true)
+            fill(&bufferA)
+            let changed = setterHoldsA == nil || bufferA != bufferB
+            deliver(bufferA)
+            if changed { setterHoldsA = true }
+        }
     }
 }

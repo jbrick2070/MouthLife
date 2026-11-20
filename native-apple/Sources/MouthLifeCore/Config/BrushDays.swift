@@ -62,7 +62,15 @@ public enum BrushDays {
 
     /// The reminders to schedule from `now`: each morning and evening for the next days, leaving out
     /// today's when the time has passed or that brush is already done.
+    /// The grown-up's two times in order. Settings lets them be set either way round; the earlier
+    /// one is the morning brush and the later one the evening brush, for the reminders and the
+    /// Today widget alike (M19).
+    public static func orderedTimes(morning: Int, evening: Int) -> (morning: Int, evening: Int) {
+        (min(morning, evening), max(morning, evening))
+    }
+
     public static func plan(now: Date, morning: Int, evening: Int, fullToday: Int, days: Int = daysAhead, calendar: Calendar = .current) -> [(at: Date, slot: Slot)] {
+        let (morning, evening) = orderedTimes(morning: morning, evening: evening)
         let start = calendar.startOfDay(for: now)
         var out: [(at: Date, slot: Slot)] = []
         for day in 0..<days {

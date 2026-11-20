@@ -1,14 +1,66 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MORE_CHARITIES_NOTE, MORE_DENTAL_CHARITIES, NOT_ENDORSED_NOTE, SMILE_ON_U_CHARITY } from '../src/config/charityInfo';
 
+const ROOT = join(__dirname, '..');
+const WEB_SOURCE = readFileSync(join(ROOT, 'src/config/charityInfo.ts'), 'utf8');
+const SWIFT_SOURCE = readFileSync(join(ROOT, 'native-apple/Sources/MouthLifeCore/Config/CharityInfo.swift'), 'utf8');
+
+/** The only sites a grown-up can be sent to from the Charity view: each charity's own site and SmileOnU's social pages. */
+const ALLOWED_HOSTS = new Set([
+  'smileonu.org',
+  'www.facebook.com',
+  'www.youtube.com',
+  'twitter.com',
+  'www.ramusa.org',
+  'adcf.net',
+]);
+
+function webDestinations(): string[] {
+  return [
+    SMILE_ON_U_CHARITY.websiteUrl,
+    SMILE_ON_U_CHARITY.donateUrl,
+    ...SMILE_ON_U_CHARITY.programs.map((p) => p.url),
+    ...SMILE_ON_U_CHARITY.involvementLinks.map((l) => l.url),
+    ...SMILE_ON_U_CHARITY.socialLinks.map((s) => s.url),
+    ...MORE_DENTAL_CHARITIES.flatMap((m) => [m.websiteUrl, m.donateUrl, ...m.links.map((l) => l.url)]),
+  ];
+}
+
+const swiftDestinations = (): string[] => [...SWIFT_SOURCE.matchAll(/URL\(string: "([^"]+)"\)/g)].map((m) => m[1]);
+
 describe('SmileOnU humanitarian dental charity config', () => {
-  it('exposes verified HTTPS donate, website, and mailto contact endpoints', () => {
+  it('exposes verified HTTPS website and donate pages', () => {
     expect(SMILE_ON_U_CHARITY.name).toBe('SmileOnU');
     expect(SMILE_ON_U_CHARITY.legalStatus).toContain('501(c)(3)');
     expect(SMILE_ON_U_CHARITY.websiteUrl).toBe('https://smileonu.org/');
     expect(SMILE_ON_U_CHARITY.donateUrl).toBe('https://smileonu.org/donate/');
-    expect(SMILE_ON_U_CHARITY.contactEmail).toBe('info@smileonu.org');
-    expect(SMILE_ON_U_CHARITY.contactMailto).toBe('mailto:info@smileonu.org');
+  });
+
+  it('sends a grown-up only to approved https charity pages, the same in both editions (L11)', () => {
+    const web = webDestinations();
+    const swift = swiftDestinations();
+    expect(web.length).toBeGreaterThan(10);
+    for (const url of [...web, ...swift]) {
+      const parsed = new URL(url);
+      expect(parsed.protocol, url).toBe('https:');
+      expect(ALLOWED_HOSTS.has(parsed.host), url).toBe(true);
+    }
+    expect([...swift].sort()).toEqual([...web].sort());
+  });
+
+  it('keeps no email address or mailto link in either edition’s charity config (L11)', () => {
+    const email = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i;
+    for (const [name, source] of [
+      ['charityInfo.ts', WEB_SOURCE],
+      ['CharityInfo.swift', SWIFT_SOURCE],
+      ['web config values', JSON.stringify({ SMILE_ON_U_CHARITY, MORE_DENTAL_CHARITIES })],
+    ]) {
+      expect(source, name).not.toMatch(/mailto:/i);
+      expect(source, name).not.toMatch(email);
+      expect(source, name).not.toMatch(/contactEmail|contactMailto/);
+    }
   });
 
   it('lists all three core SmileOnU programs with unique https://smileonu.org/ URLs', () => {

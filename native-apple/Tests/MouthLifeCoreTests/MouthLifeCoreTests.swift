@@ -1170,6 +1170,39 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: false, reducedMotion: false), CitySkylineArt.expectedEnding["mixed"] ?? -1, accuracy: 0.01)
         XCTAssertEqual(CityFinale.endingChecksum(plans, allGold: false, reducedMotion: true), CitySkylineArt.expectedEnding["mixed-reduced"] ?? -1, accuracy: 0.01)
 
+        // M11: with Reduce Motion the ending's molar never glides or grows; it fades at each cut.
+        typealias E = CityFinale.Ending
+        let big = CityFinale.endingMolarPlace(5, reducedMotion: true)
+        let small = CityFinale.endingMolarPlace(30, reducedMotion: true)
+        var frame = 0.0
+        while frame <= E.end {
+            let p = CityFinale.endingMolarPlace(frame, reducedMotion: true)
+            let atRest = (p.y == big.y && p.scale == big.scale) || (p.y == small.y && p.scale == small.scale)
+            XCTAssertTrue(atRest, "molar moved at \(frame)")
+            frame += 1.0 / 60
+        }
+        for cut in [E.creditsStart, E.finaleStart] {
+            XCTAssertEqual(CityFinale.endingMolarPlace(cut, reducedMotion: true).alpha, 0)
+            XCTAssertEqual(CityFinale.endingMolarPlace(cut - 0.3, reducedMotion: true).alpha, 0.5, accuracy: 1e-6)
+            XCTAssertEqual(CityFinale.endingMolarPlace(cut + 0.3, reducedMotion: true).alpha, 0.5, accuracy: 1e-6)
+        }
+        // L02: a smile for every finisher, the wink only for all gold; the hug for everyone.
+        XCTAssertTrue(CityFinale.endingFace(E.wink + 0.1, allGold: true).wink)
+        XCTAssertFalse(CityFinale.endingFace(E.wink + 0.1, allGold: false).wink)
+        XCTAssertEqual(CityFinale.endingFace(E.wink + 0.1, allGold: false).alpha, 1)
+        // L03: the hug's beats, as the web asserts them.
+        XCTAssertEqual(CityFinale.endingHug(E.face + 0.4, reducedMotion: false).arms, 0.5, accuracy: 1e-6)
+        XCTAssertEqual(CityFinale.endingHug(E.wink + 0.35, reducedMotion: false).fold, 0.5, accuracy: 1e-6)
+        XCTAssertEqual(CityFinale.endingHug(E.wink + 1.725, reducedMotion: false).squeeze, 1, accuracy: 1e-6)
+        XCTAssertTrue(CityFinale.endingHug(E.wink + 0.8, reducedMotion: false).happyEyes)
+        XCTAssertFalse(CityFinale.endingHug(E.wink + 2.4, reducedMotion: false).happyEyes)
+        XCTAssertEqual(CityFinale.endingHug(E.wink + 1.7, reducedMotion: false).hearts, 0.5, accuracy: 1e-6)
+        let stillHug = CityFinale.endingHug(E.wink + 0.9, reducedMotion: true)
+        XCTAssertEqual(stillHug.arms, 0.5, accuracy: 1e-6)
+        XCTAssertEqual(stillHug.fold, 1)
+        XCTAssertEqual(stillHug.squeeze, 0)
+        XCTAssertEqual(CityFinale.endingHug(E.wink + 1.9, reducedMotion: true).hearts, 0.5, accuracy: 1e-6)
+
         // The campaign's cities line up with the worlds, and each grade has its finish.
         for (i, host) in CityFinale.hostIds.enumerated() {
             XCTAssertEqual(WorldRegistry.cartridgeOrDefault(forId: CityFinale.worldIds[i]).hostId, host)

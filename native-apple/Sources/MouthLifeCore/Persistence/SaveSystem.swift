@@ -381,9 +381,9 @@ public final class SaveSystem {
 
         // Daily slots (V1 stored numbers; V2 stores { fullRewards, tips })
         if let rawDaily = obj["dailySlotsByDate"] as? [String: Any] {
-            let sortedKeys = rawDaily.keys.sorted().suffix(45)
+            // The 45 most recent valid days: a malformed key must not take the place of a real one.
+            let sortedKeys = rawDaily.keys.filter { isValidDateKey($0) }.sorted().suffix(45)
             for dateKey in sortedKeys {
-                guard isValidDateKey(dateKey) else { continue }
                 let val = rawDaily[dateKey]
                 if jsonDouble(val) != nil {
                     base.dailySlotsByDate[dateKey] = DailySlotLog(
@@ -682,25 +682,139 @@ public final class SaveSystem {
         return migrateSave(jsonObject: dict, nowEpochMs: nowEpochMs)
     }
 
+    /// What the import box and the backup-file button accept: an `ML2:` Sync Code, or the text of
+    /// a `backup.mouthlife.json` file from the web edition's Download button (H08). Both pass the
+    /// same checks and migration. Web twin: `decodeSaveFromText` in SaveSystem.ts.
+    public static func decodeSaveFromText(
+        _ text: String,
+        nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
+    ) throws -> MouthLifeSaveV2 {
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\u{FEFF}") {
+            trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard trimmed.hasPrefix("{") else {
+            return try decodeSaveFromSyncCode(trimmed, nowEpochMs: nowEpochMs)
+        }
+        guard trimmed.utf8.count <= 262_144,
+              let data = trimmed.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data, options: []),
+              let dict = parsed as? [String: Any]
+        else {
+            throw SyncCodeError.invalidJson
+        }
+        guard dict["schemaVersion"] != nil else {
+            throw SyncCodeError.missingSchemaVersion
+        }
+        guard let vDouble = jsonDouble(dict["schemaVersion"]) else {
+            throw SyncCodeError.unsupportedSchemaVersion(-1)
+        }
+        guard vDouble == 1 || vDouble == 2 else {
+            throw SyncCodeError.unsupportedSchemaVersion(vDouble.isFinite && abs(vDouble) < 1e9 ? Int(vDouble) : -1)
+        }
+        return migrateSave(jsonObject: dict, nowEpochMs: nowEpochMs)
+    }
+
+    /// A save as read back from storage: readable, damaged, or written by a newer version (H02).
+    public enum StoredSaveRead: Sendable {
+        case ok(MouthLifeSaveV2, schemaVersion: Int)
+        case unreadable
+        case newerVersion(Int)
+    }
+
+    public static func readStoredSave(
+        _ rawText: String,
+        nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
+    ) -> StoredSaveRead {
+        guard let data = rawText.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data, options: []),
+              let obj = parsed as? [String: Any],
+              let version = jsonDouble(obj["schemaVersion"])
+        else {
+            return .unreadable
+        }
+        if version == 1 || version == 2 {
+            return .ok(migrateSave(jsonObject: obj, nowEpochMs: nowEpochMs), schemaVersion: Int(version))
+        }
+        if version.isFinite && version > 2 {
+            return .newerVersion(version < 1e9 ? Int(version) : Int.max)
+        }
+        return .unreadable
+    }
+
+    /// How `load` found the stored save.
+    public enum LoadOutcome: String, Sendable {
+        case new
+        case loaded
+        case unreadable
+        case newerVersion
+    }
+
+    /// The bytes of a stored save this build could not read, kept before anything replaces them.
+    public static let unreadableCopyKey = "mouthlife_save_v2_unreadable"
+    /// A copy of a version-1 save, kept before its first rewrite in the version-2 shape.
+    public static let v1CopyKey = "mouthlife_save_v1_copy"
+
     // MARK: - Instance Persistence Operations
 
+    /// How the last `load` found the stored save.
+    public private(set) var loadOutcome: LoadOutcome = .new
+    /// True while nothing is written because the stored save came from a newer version (H02).
+    public private(set) var isPersistenceSuspended = false
+
+    /// Keeps the first copy only, so a later problem never overwrites the bytes worth recovering.
+    private func keepCopy(_ rawText: String, forKey key: String) {
+        if storage.readString(forKey: key) == nil {
+            storage.writeString(rawText, forKey: key)
+        }
+    }
+
     @discardableResult
-    public func load(nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()) -> MouthLifeSaveV2 {
+    public func load(
+        nowEpochMs: Int64 = CompanionArchSim.currentEpochMs(),
+        calendar: Calendar = .current
+    ) -> MouthLifeSaveV2 {
+        isPersistenceSuspended = false
         let rawText = storage.readString(forKey: Self.storageKey) ?? memoryBackup.readString(forKey: Self.storageKey)
-        guard let rawText, let data = rawText.data(using: .utf8) else {
+        guard let rawText, !rawText.isEmpty else {
+            // Only a missing save starts a new one in storage (H02).
+            loadOutcome = .new
             currentSave = Self.createDefaultSave(nowEpochMs: nowEpochMs)
             persistInternal(nowEpochMs: nowEpochMs)
             return currentSave
         }
 
-        guard let parsed = try? JSONSerialization.jsonObject(with: data, options: []),
-              parsed is [String: Any]
-        else {
+        switch Self.readStoredSave(rawText, nowEpochMs: nowEpochMs) {
+        case .ok(let loaded, let schemaVersion):
+            if schemaVersion == 1 {
+                keepCopy(rawText, forKey: Self.v1CopyKey)
+            }
+            loadOutcome = .loaded
+            currentSave = loaded
+            // Day keys written on a device set to another calendar become Gregorian (M02).
+            HabitBank.migrateLegacyCalendarKeys(
+                &currentSave,
+                calendar: calendar,
+                now: Date(timeIntervalSince1970: Double(nowEpochMs) / 1000.0)
+            )
+        case .newerVersion:
+            // A newer version wrote this save (an older build is running): play goes on with a fresh
+            // save in memory, and the stored one stays exactly as it is until the player imports a
+            // code or erases on purpose.
+            keepCopy(rawText, forKey: Self.unreadableCopyKey)
+            loadOutcome = .newerVersion
+            isPersistenceSuspended = true
             currentSave = Self.createDefaultSave(nowEpochMs: nowEpochMs)
             return currentSave
+        case .unreadable:
+            // Damaged past reading by any version: keep its bytes, then start fresh so progress is
+            // saved again from now on.
+            keepCopy(rawText, forKey: Self.unreadableCopyKey)
+            loadOutcome = .unreadable
+            currentSave = Self.createDefaultSave(nowEpochMs: nowEpochMs)
+            persistInternal(nowEpochMs: nowEpochMs)
+            return currentSave
         }
-
-        currentSave = Self.migrateSave(jsonObject: parsed, nowEpochMs: nowEpochMs)
 
         // If iCloud KVS holds a strictly newer revision, merge monotonically
         if let cloudStore = storage as? UserDefaultsSaveStorage,
@@ -739,7 +853,11 @@ public final class SaveSystem {
     public func resetToFreshSave(
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) -> MouthLifeSaveV2 {
+        let revisionBefore = currentSave.saveRevision
+        // Erasing on purpose replaces even a save from a newer version (its bytes are kept).
+        isPersistenceSuspended = false
         currentSave = Self.createDefaultSave(nowEpochMs: nowEpochMs)
+        currentSave.saveRevision = revisionBefore + 1
         persistInternal(nowEpochMs: nowEpochMs)
         bus.emit(.saveUpdated(save: currentSave))
         return currentSave
@@ -747,6 +865,8 @@ public final class SaveSystem {
 
     private func persistInternal(nowEpochMs: Int64) {
         currentSave.lastSavedEpochMs = nowEpochMs
+        // A save from a newer version stays untouched until the player imports or erases (H02).
+        guard !isPersistenceSuspended else { return }
         let encoder = JSONEncoder()
         guard let data = try? encoder.encode(currentSave),
               let serialized = String(data: data, encoding: .utf8)
@@ -770,13 +890,26 @@ public final class SaveSystem {
             return false
         }
 
-        var incoming = Self.migrateSave(jsonObject: parsed, nowEpochMs: nowEpochMs)
-        guard incoming.saveRevision > currentSave.saveRevision else {
+        guard let dict = parsed as? [String: Any],
+              let version = Self.jsonDouble(dict["schemaVersion"]),
+              version == 1 || version == 2
+        else {
+            // Keep the local save when the cloud copy is unreadable or from a newer version.
             return false
         }
-
-        incoming.totalBrushStamps = max(incoming.totalBrushStamps, currentSave.totalBrushStamps)
-        currentSave = incoming
+        let incoming = Self.migrateSave(jsonObject: dict, nowEpochMs: nowEpochMs)
+        // Another device's save is merged, never swapped in whole, even at an equal or higher
+        // revision: a city clear made here must survive a profile edit made there (M04).
+        var merged = Self.mergeSaves(current: currentSave, imported: incoming)
+        merged.saveRevision = max(currentSave.saveRevision, incoming.saveRevision)
+        // The name and look come from whichever side changed them last (an import takes the code's).
+        merged.playerProfile = incoming.lastSavedEpochMs >= currentSave.lastSavedEpochMs
+            ? incoming.playerProfile
+            : currentSave.playerProfile
+        guard merged != currentSave else {
+            return false
+        }
+        currentSave = merged
         _ = checkThresholdAutoUnlocks()
         bus.emit(.saveUpdated(save: currentSave))
         return true
@@ -1059,6 +1192,46 @@ public final class SaveSystem {
     /// `preferImported`: this device's save is brand new (the Prologue's "Have a Sync Code?"), so the
     /// code's tooth, settings and choices win even though the fresh save was written more recently.
     /// Counts and unlocks still merge the same way.
+    /// True when `older` holds nothing that `newer` lacks: an earlier save time and revision, no
+    /// more stamps, and every city record, brushing day, treat, unlock and history note matched or
+    /// beaten. Replaying such a code must not refill what `newer` has spent since (M03). Days and
+    /// treats `newer` has already let go of are not counted against it. Web twin: `isSupersededBy`.
+    public static func isSuperseded(_ older: MouthLifeSaveV2, by newer: MouthLifeSaveV2) -> Bool {
+        if older.saveRevision >= newer.saveRevision || older.lastSavedEpochMs > newer.lastSavedEpochMs {
+            return false
+        }
+        if older.totalBrushStamps > newer.totalBrushStamps { return false }
+        let newerTreats = newer.companion.recentTreatTimestampsMs
+        let oldestTreatKept: Int64 = newerTreats.count >= 12 ? (newerTreats.min() ?? Int64.min) : Int64.min
+        for ts in older.companion.recentTreatTimestampsMs where ts >= oldestTreatKept && !newerTreats.contains(ts) {
+            return false
+        }
+        for (id, a) in older.worlds {
+            guard let b = newer.worlds[id] else {
+                if a.completed || a.timesCleared > 0 || a.bestScore > 0 { return false }
+                continue
+            }
+            if (a.completed && !b.completed) || (a.unlocked && !b.unlocked) ||
+                a.timesCleared > b.timesCleared || a.bestScore > b.bestScore ||
+                a.bestGrade.rank > b.bestGrade.rank ||
+                a.bestCleanlinessPct > b.bestCleanlinessPct ||
+                a.sitesRestoredMax > b.sitesRestoredMax {
+                return false
+            }
+        }
+        let newerDays = newer.dailySlotsByDate.keys.sorted()
+        let oldestKept = newerDays.count >= 45 ? (newerDays.first ?? "") : ""
+        for (day, a) in older.dailySlotsByDate where day >= oldestKept {
+            let b = newer.dailySlotsByDate[day]
+            if a.fullRewards > (b?.fullRewards ?? 0) || a.tips > (b?.tips ?? 0) { return false }
+        }
+        let upgrades = Set(newer.unlockedUpgrades)
+        if older.unlockedUpgrades.contains(where: { !upgrades.contains($0) }) { return false }
+        let notes = Set(newer.unlockedHistoryNotes)
+        if older.unlockedHistoryNotes.contains(where: { !notes.contains($0) }) { return false }
+        return true
+    }
+
     public static func mergeSaves(current: MouthLifeSaveV2, imported: MouthLifeSaveV2, preferImported: Bool = false) -> MouthLifeSaveV2 {
         let newer = preferImported || imported.lastSavedEpochMs >= current.lastSavedEpochMs ? imported : current
         func union(_ a: [String], _ b: [String]) -> [String] {
@@ -1093,15 +1266,19 @@ public final class SaveSystem {
             guard let want, unlocked.contains(want) else { return nil }
             return want
         }
+        // A code that brings nothing new is an older copy of this save (M03): spent ions, beacons
+        // and Overdrive charges stay spent instead of coming back with it.
+        let keepWallet = !preferImported && isSuperseded(imported, by: current)
+        func wallet(_ a: Int, _ b: Int) -> Int { keepWallet ? a : max(a, b) }
         var out = newer
         out.hasSeenCosmicIntro = current.hasSeenCosmicIntro || imported.hasSeenCosmicIntro
         out.playerProfile = imported.playerProfile
         out.companion = newer.companion
         out.totalBrushStamps = max(current.totalBrushStamps, imported.totalBrushStamps)
-        out.fluorideIons = max(current.fluorideIons, imported.fluorideIons)
+        out.fluorideIons = wallet(current.fluorideIons, imported.fluorideIons)
         out.dailySlotsByDate = daily
-        out.pendingSupplyBeacons = max(current.pendingSupplyBeacons, imported.pendingSupplyBeacons)
-        out.remineralizedOverdriveRuns = max(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns)
+        out.pendingSupplyBeacons = wallet(current.pendingSupplyBeacons, imported.pendingSupplyBeacons)
+        out.remineralizedOverdriveRuns = wallet(current.remineralizedOverdriveRuns, imported.remineralizedOverdriveRuns)
         out.unlockedUpgrades = unlocked
         out.equippedUpgrades = EquippedUpgrades(brush: pick(\.brush), floss: pick(\.floss), rinse: pick(\.rinse))
         out.unlockedHistoryNotes = union(current.unlockedHistoryNotes, imported.unlockedHistoryNotes)
@@ -1121,12 +1298,15 @@ public final class SaveSystem {
         preferImported: Bool = false,
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) throws -> MouthLifeSaveV2 {
-        let imported = try Self.decodeSaveFromSyncCode(code, nowEpochMs: nowEpochMs)
+        // An ML2: code, or the text of a web backup.mouthlife.json file (H08).
+        let imported = try Self.decodeSaveFromText(code, nowEpochMs: nowEpochMs)
         // "Import & Merge" merges: nothing either device earned is lost (see mergeSaves).
         var merged = Self.mergeSaves(current: currentSave, imported: imported, preferImported: preferImported)
         _ = CompanionArchSim.reconcileOfflineElapsed(&merged.companion, nowEpochMs: nowEpochMs)
         merged.saveRevision = max(currentSave.saveRevision, imported.saveRevision) + 1
         currentSave = merged
+        // Importing on purpose is the player's choice to replace a save this version can't read.
+        isPersistenceSuspended = false
         _ = checkThresholdAutoUnlocks()
         persistInternal(nowEpochMs: nowEpochMs)
         bus.emit(.saveUpdated(save: currentSave))

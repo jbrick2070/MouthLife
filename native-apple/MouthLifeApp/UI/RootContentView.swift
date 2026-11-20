@@ -99,7 +99,8 @@ public struct RootContentView: View {
                     gyro: coordinator.mouthwashGyro,
                     elapsedSec: coordinator.pacerElapsedSec,
                     language: coordinator.coachLanguage,
-                    showsTitle: true
+                    showsTitle: true,
+                    reducedMotion: coordinator.reducedMotion
                 )
                 .mlGlassCard(cornerRadius: 22)
                 .frame(maxWidth: .infinity)
@@ -213,6 +214,8 @@ public struct RootContentView: View {
                     didCompleteFloss: coordinator.pacerCompletedFlossStage,
                     includeRinse: coordinator.includeRinse,
                     fullBrush: coordinator.pacerBrushedFullTime,
+                    fullRewardLeftToday: (coordinator.save.dailySlotsByDate[HabitBank.localDateKey()]?.fullRewards ?? 0) < GameConfig.dailyFullRewardCap,
+                    reducedMotion: coordinator.reducedMotion,
                     flossToolStyle: coordinator.flossToolStyle,
                     mouthwashDurationStyle: coordinator.mouthwashDurationStyle,
                     mouthwashGyro: coordinator.mouthwashGyro,

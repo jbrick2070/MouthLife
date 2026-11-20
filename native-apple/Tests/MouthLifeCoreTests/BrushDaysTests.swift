@@ -40,4 +40,22 @@ final class BrushDaysTests: XCTestCase {
         let done = BrushDays.plan(now: at(2026, 11, 19, 6), morning: m, evening: e, fullToday: 2)
         XCTAssertEqual(done.first?.at, at(2026, 11, 20, 7, 30))
     }
+
+    // M19: times set the wrong way round (Morning 20:00, Evening 08:00) mean the same to the
+    // reminders and to the Today widget: the 08:00 brush is the morning one.
+    func testReversedTimesMeanTheSameToRemindersAndTheWidget() {
+        let morning = 20 * 60, evening = 8 * 60
+        let plan = BrushDays.plan(now: at(2026, 11, 19, 6), morning: morning, evening: evening, fullToday: 0)
+        XCTAssertEqual(plan[0].at, at(2026, 11, 19, 8))
+        XCTAssertEqual(plan[0].slot, .morning)
+        XCTAssertEqual(plan[1].at, at(2026, 11, 19, 20))
+        XCTAssertEqual(plan[1].slot, .evening)
+        let widget = WidgetSnapshot(days: [:], language: "en", morning: morning, evening: evening)
+        XCTAssertEqual(widget.morning, 8 * 60)
+        XCTAssertEqual(widget.evening, 20 * 60)
+        // one brush done before 08:00: the morning reminder is dropped in both
+        let afterOne = BrushDays.plan(now: at(2026, 11, 19, 6), morning: morning, evening: evening, fullToday: 1)
+        XCTAssertEqual(afterOne[0].slot, .evening)
+        XCTAssertEqual(afterOne[0].at, at(2026, 11, 19, 20))
+    }
 }

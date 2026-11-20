@@ -22,11 +22,17 @@ import {
   BRUSH_ALONG_FLOSS_BONUS_SEC,
   BRUSH_ALONG_FULL_BRUSH_GRACE_SEC,
   BRUSH_ALONG_TOTAL_SEC,
+  DAILY_FULL_REWARD_CAP,
 } from '../config/gameConfig';
 import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import { HabitBank, brushAlongMultiplier, brushAlongRinseCredit } from '../engine/persistence/HabitBank';
+import {
+  HabitBank,
+  brushAlongMultiplier,
+  brushAlongRinseCredit,
+  formatLocalDateKey,
+} from '../engine/persistence/HabitBank';
 import { readIncludeRinse } from '../engine/persistence/pacerPrefs';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
@@ -189,8 +195,16 @@ export class BrushAlongOverlay implements OverlayView {
     return this.voice.getLanguage();
   }
 
+  /** The game's Reduce Motion (the in-app switch, which follows the system's), as SceneManager sets it (M11). */
   private prefersReducedMotion(): boolean {
+    if (document.documentElement.classList.contains('reduced-motion')) return true;
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /** Whether today still has a full reward left, so Done / Skip may show their Ion amounts (L01). */
+  private fullRewardLeftToday(): boolean {
+    const slot = this.saveSys.getSave().dailySlotsByDate[formatLocalDateKey()];
+    return (slot?.fullRewards ?? 0) < DAILY_FULL_REWARD_CAP;
   }
 
   private $<T extends Element = HTMLElement>(sel: string): T | null {
@@ -270,7 +284,8 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private bindMotion(): void {
-    if (this.motionBound || typeof window.DeviceMotionEvent === 'undefined') return;
+    // Tilt is an extra, and stays off under Reduce Motion, as on native (M11).
+    if (this.motionBound || typeof window.DeviceMotionEvent === 'undefined' || this.prefersReducedMotion()) return;
     this.motionBound = true;
     this.lastMotionMs = 0;
     window.addEventListener('devicemotion', this.motionHandler);
@@ -337,6 +352,8 @@ export class BrushAlongOverlay implements OverlayView {
       this.callbacks.onActiveQuadrantChanged(phase.quadrant);
       if (elapsedSec >= flossEnd - 0.05) {
         // Roll hands-free into the fluoride rinse stage, or finish when a grown-up left it out.
+        // Asked again now: a grown-up may have turned rinse off in another tab meanwhile (M06).
+        this.includeRinse = readIncludeRinse();
         if (this.includeRinse) this.enterMouthwashBonus(true);
         else this.completeSession(true, false);
         return;
@@ -368,8 +385,11 @@ export class BrushAlongOverlay implements OverlayView {
     this.lastPipKey = '';
     this.clock.enterFlossBonus();
     this.callbacks.onPauseChanged?.(false);
-    this.callbacks.onPlayCue('quadrant');
-    this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
+    // Back from a locked phone past the end of floss too: pass through quietly (H04).
+    if (this.clock.getPacerOverflowSec() <= 0) {
+      this.callbacks.onPlayCue('quadrant');
+      this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
+    }
     this.render();
   }
 
@@ -383,8 +403,10 @@ export class BrushAlongOverlay implements OverlayView {
     this.clock.enterMouthwashBonus();
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
-    this.callbacks.onPlayCue('quadrant');
-    this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
+    if (this.clock.getPacerOverflowSec() <= 0) {
+      this.callbacks.onPlayCue('quadrant');
+      this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
+    }
     this.bindMotion();
     this.render();
   }
@@ -572,12 +594,14 @@ export class BrushAlongOverlay implements OverlayView {
   private updateLevelBar(elapsedSec: number): void {
     const bubble = this.$('#pacer-level-bubble');
     if (!bubble) return;
-    const handheld = this.gyro.isHandheld;
-    // Resting on the counter: gentle automatic swish. In the hand: follow the real tilt.
-    const display = handheld
-      ? Math.max(-1, Math.min(1, this.gyro.sloshPosition))
-      : this.prefersReducedMotion()
-        ? 0
+    // Resting on the counter: gentle automatic swish. In the hand: follow the real tilt. Under the
+    // game's Reduce Motion (the in-app switch too, not just the system's) it rests in the middle (M11).
+    const reduced = this.prefersReducedMotion();
+    const handheld = this.gyro.isHandheld && !reduced;
+    const display = reduced
+      ? 0
+      : handheld
+        ? Math.max(-1, Math.min(1, this.gyro.sloshPosition))
         : Math.sin(elapsedSec * 3.2) * 0.68;
     bubble.style.setProperty('--slosh', display.toFixed(3));
     const bar = this.$('#pacer-level');
@@ -675,8 +699,10 @@ export class BrushAlongOverlay implements OverlayView {
 
   private bannerHtml(stage: PacerStage): string {
     const buttons = BrushCoachCopy.actionButtonLabels(this.lang, !this.includeRinse);
-    // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap they are left off.
-    const amount = (label: string): string => (this.fullBrush ? label : BrushCoachCopy.withoutIonAmount(label));
+    // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap, or once
+    // today's two full rewards are collected, they are left off (L01).
+    const showAmounts = this.fullBrush && this.fullRewardLeftToday();
+    const amount = (label: string): string => (showAmounts ? label : BrushCoachCopy.withoutIonAmount(label));
     if (stage === 'mouthwashBonus') {
       const mw = BrushCoachCopy.mouthwashButtonLabels(this.completedFloss, this.lang);
       return `
@@ -890,8 +916,8 @@ export class BrushAlongOverlay implements OverlayView {
           ${r?.slotType === 'full' ? '<span class="pill-badge">📡 +1 Supply Beacon</span><span class="pill-badge">⚡ +1 Overdrive Run</span>' : ''}
           ${r?.slotType === 'capped' && !goodTry ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}
         </div>
-        <button type="button" id="btn-done-pacer" class="btn btn-primary" style="width:100%;">
-          Bask in Smooth Teeth (Return to Hub) ✦
+        <button type="button" id="btn-done-pacer" class="btn btn-home" style="width:100%;justify-content:center;" aria-label="Exit to Hub">
+          ${HOME_ICON_SVG}<span>Bask in Smooth Teeth (Return to Hub) ✦</span>
         </button>
 
         <div id="pacer-charity-cta" class="charity-cta-strip" style="text-align:left;">

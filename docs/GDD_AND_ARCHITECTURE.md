@@ -51,7 +51,7 @@
 
 ### §2.2 Loop B — 2-Minute "Brush-Along" Sink Ritual
 1. **Arch Overwatch & WakeLock:** Smoothly elevates the shared 3D camera over the dental arch and calls `navigator.wakeLock?.request('screen').catch(() => {})`.
-2. **Unskippable `4 x 30s` Quadrant Pacer (`120s`):** Highlights *Upper Right -> Upper Left -> Lower Left -> Lower Right* (*Buccal -> Occlusal -> Lingual* every `10s`) with sparkling foam visuals and harmonic synth chimes. Both `simClock` and `pacerClock` pause when `document.visibilityState === 'hidden'`.
+2. **Unskippable `4 x 30s` Quadrant Pacer (`120s`):** Highlights *Upper Right -> Upper Left -> Lower Left -> Lower Right* (*Buccal -> Occlusal -> Lingual* every `10s`) with sparkling foam visuals and harmonic synth chimes. The game's `simClock` pauses when `document.visibilityState === 'hidden'`, but the pacer's session clock keeps real time through a hidden tab or a locked phone (decided November 2026, review H04): on return the ritual passes through any stages that ended meanwhile and speaks only the current cue. Only the player's Pause stops it.
 3. **Optional `20s` Interdental Floss Pacer:** Animated C-contour filament guide awarding `+25` bonus Fluoride Ions.
 4. **Daily Rewards & Healthy Caps:**
    - **First 2 Completions per Local Calendar Day (`YYYY-MM-DD`):** Restore `smoothnessIndex = 100` and all Companion shields to `100`, award `+50` **Fluoride Ions**, `+1` monotonic **Habit Stamp**, `4` **Ion Relay Beacons** (`pendingSupplyBeacons = Math.min(4, prev + 4)`), and **Fluorapatite Overdrive** (`remineralizedOverdriveRuns = Math.min(4, prev + 2)`).

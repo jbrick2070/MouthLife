@@ -6,7 +6,9 @@ import { CompanionTouchSystem } from './engine/companion/CompanionTouchSystem';
 import { EventBus } from './engine/EventBus';
 import { type CanvasPointerPhase, InputManager } from './engine/InputManager';
 import { sampleTerrainHeight } from './engine/physics/CollisionSystem';
-import { SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
+import { SAVE_GENERATION_KEY, SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
+import { readIncludeRinse } from './engine/persistence/pacerPrefs';
+import { requestMotionPermissionIfNeeded } from './engine/motionPermission';
 import { SceneManager } from './engine/render/SceneManager';
 import { WorldSession } from './engine/sim/WorldSession';
 import { SoundEngine } from './engine/audio/SoundEngine';
@@ -73,9 +75,10 @@ function bootstrapMouthLife(): void {
   CompanionArchSim.reconcileOfflineElapsed(initialSave.companion, Date.now());
   saveSys.save(initialSave, Date.now());
 
+  // Another tab saved or erased: merge its save in (never just the newer revision number, H01).
   window.addEventListener('storage', (ev) => {
-    if (ev.key === SAVE_STORAGE_KEY) {
-      saveSys.reconcileExternalStorageEvent(ev.newValue, Date.now());
+    if (ev.key === SAVE_STORAGE_KEY || ev.key === SAVE_GENERATION_KEY || ev.key === null) {
+      saveSys.refreshFromStorage(Date.now());
     }
   });
 
@@ -156,6 +159,8 @@ function bootstrapMouthLife(): void {
   /** The finale covers the whole screen, so the 3D scene need not draw. */
   let sceneHidden = false;
   let finaleOverlay: CityFinaleOverlay | null = null;
+  // A Reduce Motion change (the system setting or the in-app switch) reaches a finale already playing.
+  bus.on('motion:changed', ({ reduced }) => finaleOverlay?.setReducedMotion(reduced));
 
   /** Each campaign city's piece of the Golden Molar, from the save. */
   function molarFinishes(): MolarFinish[] {
@@ -210,6 +215,24 @@ function bootstrapMouthLife(): void {
     });
     finaleOverlay = overlay;
     overlay.mount(kind === 'ending' ? document.body : uiRoot!);
+  }
+
+  /** Watch the Ending from Home waits at most this long for its recording, then the synth plays it. */
+  const ENDING_REPLAY_WAIT_MS = 1500;
+  let endingReplayPending = false;
+  /**
+   * Watch the Ending from Home, even straight after a reload: the bundled recording is got ready
+   * first (a short, bounded wait), so the replay plays it; if it is slow or fails, the synth does.
+   */
+  function replayEnding(): void {
+    if (endingReplayPending || finaleOverlay) return;
+    endingReplayPending = true;
+    void sound.prepareFinaleTrack(-1, ENDING_REPLAY_WAIT_MS).then(() => {
+      endingReplayPending = false;
+      // left Home meanwhile (or something else took the screen): no ending over it
+      if (currentMode !== 'HUB' || finaleOverlay) return;
+      playFinale('ending', 0, molarFinishes(), () => {});
+    });
   }
 
   // Direct touch-the-teeth Smooth Bask toy (HUB companion & REPORT) + 3D globe city picking
@@ -318,6 +341,8 @@ function bootstrapMouthLife(): void {
 
   input.setHooks({
     onUserGesture: () => sound.unlockOnGesture(),
+    // Action presses on the Pause card never fire after Resume (M12).
+    isGameplayPaused: () => Boolean(activeTelemetryHud?.isPaused()),
     onOrbitDrag: (dYaw, dPitch) => {
       if (currentMode === 'COSMIC_INTRO') {
         // the native app turns 0.005 rad per point; the drag arrives at 0.007 per pixel
@@ -737,6 +762,8 @@ function bootstrapMouthLife(): void {
             },
       });
     } else if (next === 'HUB') {
+      // a finished Golden Molar can be replayed from here: have the ending's recording on the way
+      if (molarFinishes().every((f) => f !== 'empty')) sound.preloadFinaleTrack(-1);
       sound.setHubFocus('companion');
       sound.setPulpReadiness(saveSys.getSave().companion.pulpIntegrity);
       activeHub = new CompanionHubOverlay(bus, saveSys, {
@@ -752,6 +779,8 @@ function bootstrapMouthLife(): void {
         onLaunchPulpRescue: () => launchPlayableStage('pulp_rescue', 'PULP_RESCUE'),
         onLaunchBrushAlong: () => {
           sound.playUiTap();
+          // The rinse's tilt gauge needs Safari's permission, asked from this tap (M21).
+          if (readIncludeRinse() && !sceneMgr.isReducedMotion()) requestMotionPermissionIfNeeded();
           switchMode('BRUSH_ALONG');
         },
         onReplayCosmicIntro: () => {
@@ -779,7 +808,7 @@ function bootstrapMouthLife(): void {
         tutorialGate,
         isGamepadConnected: () => input.isGamepadConnected(),
         onPlayTutorialDemo: (pageId) => playTutorialDemoSound(pageId),
-        onWatchEnding: () => playFinale('ending', 0, molarFinishes(), () => {}),
+        onWatchEnding: () => replayEnding(),
       });
       activeOverlay = activeHub;
     } else if (next === 'ARCADE' || next === 'PULP_RESCUE') {
@@ -943,14 +972,17 @@ function bootstrapMouthLife(): void {
   switchMode(currentMode);
   clock.start();
 
-  // Flush save state on iOS/mobile backgrounding or page hide
+  // Flush save state on iOS/mobile backgrounding or page hide. Only changes this tab holds are
+  // written, after merging what other tabs stored, so an old tab never undoes an erase (H01).
   const flushSaveOnLifecycleExit = () => {
-    saveSys.save(saveSys.getSave(), Date.now());
+    saveSys.flushIfChanged(Date.now());
   };
   window.addEventListener('pagehide', flushSaveOnLifecycleExit);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       flushSaveOnLifecycleExit();
+    } else {
+      saveSys.refreshFromStorage(Date.now());
     }
   });
 

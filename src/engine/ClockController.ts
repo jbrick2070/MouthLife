@@ -13,8 +13,6 @@ import type { EventBus } from './EventBus';
 export const FIXED_DT = 1 / 60;
 const MAX_FRAME_DELTA_SEC = 0.1;
 const MAX_HIT_STOP_SEC = 0.09;
-/** The brushing pacer follows real time (a slow frame must not stretch 2:00), but never jumps more than this. */
-const MAX_PACER_DELTA_SEC = 0.5;
 
 export class ClockController {
   private rafId: number | null = null;
@@ -25,12 +23,17 @@ export class ClockController {
 
   private pacerActive = false;
   private pacerPausedManual = false;
-  /** Paused because the tab was hidden, not by the user: resumes by itself when the tab returns. */
-  private pacerSuspendedBySystem = false;
   private pacerStage: PacerStage = 'brushing';
   private pacerMouthwashDurationSec = BRUSH_ALONG_MOUTHWASH_BONUS_SEC;
-  /** Cumulative session clock: 0..120 brushing, 120..165 floss, 165.. rinse. */
-  private pacerElapsedSec = 0;
+  /**
+   * Cumulative session clock on real time: 0..120 brushing, 120..165 floss, 165.. rinse. It keeps
+   * running while the tab is hidden or the phone is locked (H04); only the player's Pause stops it.
+   * It may run past the current stage's end until the ritual moves on; that overflow carries into
+   * the next stage, so 20 s locked at 1:50 of brushing comes back 10 s into floss.
+   */
+  private pacerRawSec = 0;
+  /** Wall-clock time the tab was hidden, to count the time away when it comes back. */
+  private hiddenAtWallMs: number | null = null;
   private lastEmittedDecisecond = -1;
 
   private onSimFixedStep: ((dt: number) => void) | null = null;
@@ -53,17 +56,9 @@ export class ClockController {
       this.visibilityListenerBound = true;
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-          this.accumulatorSec = 0;
-          if (this.pacerActive && !this.pacerPausedManual) {
-            this.setPacerPausedInternal(true);
-            this.pacerSuspendedBySystem = true;
-          }
+          this.noteHidden(Date.now());
         } else {
-          this.lastNowMs = performance.now();
-          if (this.pacerActive && this.pacerSuspendedBySystem) {
-            this.pacerSuspendedBySystem = false;
-            this.setPacerPausedInternal(false);
-          }
+          this.noteVisible(Date.now(), performance.now());
         }
       });
     }
@@ -90,12 +85,33 @@ export class ClockController {
     }
   }
 
+  /** The tab was hidden or the phone locked: the session clock keeps going (H04). */
+  noteHidden(wallNowMs: number): void {
+    this.accumulatorSec = 0;
+    this.hiddenAtWallMs = wallNowMs;
+  }
+
+  /**
+   * Back in view: the time away counts on the session clock (never backwards, if the device clock
+   * was changed meanwhile), and the screen is kept awake again. The ritual then passes through any
+   * stages that ended while away and speaks only where it is now.
+   */
+  noteVisible(wallNowMs: number, perfNowMs: number): void {
+    this.lastNowMs = perfNowMs;
+    const hiddenAt = this.hiddenAtWallMs;
+    this.hiddenAtWallMs = null;
+    if (hiddenAt !== null && this.pacerActive && !this.pacerPausedManual) {
+      this.pacerRawSec += Math.max(0, wallNowMs - hiddenAt) / 1000;
+      this.lastEmittedDecisecond = -1;
+      this.requestScreenWakeLock();
+    }
+  }
+
   startPacer(): void {
     this.pacerActive = true;
     this.pacerPausedManual = false;
-    this.pacerSuspendedBySystem = false;
     this.pacerStage = 'brushing';
-    this.pacerElapsedSec = 0;
+    this.pacerRawSec = 0;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
   }
@@ -111,11 +127,12 @@ export class ClockController {
   }
 
   private enterPacerStage(stage: PacerStage, startSec: number): void {
+    // Time already past the stage that just ended (the phone was locked) carries over.
+    const carry = this.pacerActive ? this.getPacerOverflowSec() : 0;
     this.pacerActive = true;
     this.pacerPausedManual = false;
-    this.pacerSuspendedBySystem = false;
     this.pacerStage = stage;
-    this.pacerElapsedSec = startSec;
+    this.pacerRawSec = startSec + carry;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
   }
@@ -126,8 +143,8 @@ export class ClockController {
     const oldDur = Math.max(6, this.pacerMouthwashDurationSec);
     if (this.pacerStage === 'mouthwashBonus' && newDur !== oldDur) {
       const mwStart = BRUSH_ALONG_TOTAL_SEC + BRUSH_ALONG_FLOSS_BONUS_SEC;
-      const frac = Math.min(0.98, Math.max(0, (this.pacerElapsedSec - mwStart) / oldDur));
-      this.pacerElapsedSec = mwStart + frac * newDur;
+      const frac = Math.min(0.98, Math.max(0, (this.getPacerElapsedSec() - mwStart) / oldDur));
+      this.pacerRawSec = mwStart + frac * newDur;
       this.lastEmittedDecisecond = -1;
     }
     this.pacerMouthwashDurationSec = newDur;
@@ -141,13 +158,11 @@ export class ClockController {
     this.releaseScreenWakeLock();
     this.pacerActive = false;
     this.pacerPausedManual = false;
-    this.pacerSuspendedBySystem = false;
     this.pacerStage = 'brushing';
   }
 
-  /** User-driven pause/resume. */
+  /** User-driven pause/resume: the only thing that stops the session clock. */
   setPacerPaused(paused: boolean): void {
-    this.pacerSuspendedBySystem = false;
     this.setPacerPausedInternal(paused);
   }
 
@@ -180,8 +195,14 @@ export class ClockController {
     return this.pacerStage === 'flossBonus';
   }
 
+  /** The session clock, held at the current stage's end until the ritual moves on. */
   getPacerElapsedSec(): number {
-    return this.pacerElapsedSec;
+    return Math.min(this.getPacerStageEndSec(), this.pacerRawSec);
+  }
+
+  /** How far the session clock has run past the current stage's end (time spent locked or hidden). */
+  getPacerOverflowSec(): number {
+    return Math.max(0, this.pacerRawSec - this.getPacerStageEndSec());
   }
 
   /** Cumulative session-clock second at which the current stage ends. */
@@ -245,21 +266,21 @@ export class ClockController {
       }
     }
 
-    // Real-time Brush-Along pacer (brush, floss, rinse on one cumulative clock)
+    // Real-time Brush-Along pacer (brush, floss, rinse on one cumulative clock). A slow frame or a
+    // stall counts in full: the ritual follows the clock on the wall, not the frame rate.
     if (this.pacerActive && !this.pacerPausedManual) {
-      const cap = this.getPacerStageEndSec();
-      const pacerDt = Math.min(rawDeltaSec, MAX_PACER_DELTA_SEC);
-      this.pacerElapsedSec = Math.min(cap, this.pacerElapsedSec + pacerDt);
-      const decisecond = Math.floor(this.pacerElapsedSec * 10);
+      this.pacerRawSec += rawDeltaSec;
+      const elapsedSec = this.getPacerElapsedSec();
+      const decisecond = Math.floor(elapsedSec * 10);
       if (decisecond !== this.lastEmittedDecisecond) {
         this.lastEmittedDecisecond = decisecond;
         const phase = evaluateBrushPhase(
-          this.pacerElapsedSec,
+          elapsedSec,
           this.pacerStage,
           this.pacerMouthwashDurationSec
         );
         this.bus.emit('pacer:tick', {
-          elapsedSec: this.pacerElapsedSec,
+          elapsedSec,
           stage: this.pacerStage,
           quadrantIdx: phase.quadrant,
           surfaceIdx: phase.surface,

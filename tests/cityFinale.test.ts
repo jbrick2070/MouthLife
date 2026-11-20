@@ -16,7 +16,12 @@ import {
   finaleLedge,
   resolveFinaleTrack,
   type MolarFinish,
+  ENDING_MOLAR_SWAP,
+  endingChecksum,
   endingCredit,
+  endingFace,
+  endingHug,
+  endingMolarPlace,
   endingNotes,
   endingPiece,
   finaleBurstSparks,
@@ -197,6 +202,81 @@ describe('the ending', () => {
     for (let t = ENDING_TIMES.creditsStart; t < ENDING_TIMES.finaleStart; t += 0.25) seen.add(endingCredit(t).index);
     expect([...seen].sort()).toEqual([0, 1, 2, 3, 4]);
     expect(endingCredit(ENDING_TIMES.finaleStart + 1).index).toBe(-1);
+  });
+
+  it('M11: with Reduce Motion the molar never glides or grows, it fades out and back in at each cut', () => {
+    const E = ENDING_TIMES;
+    const big = endingMolarPlace(5, true);
+    const small = endingMolarPlace(30, true);
+    expect(small.y).toBeGreaterThan(big.y);
+    expect(small.scale).toBeLessThan(big.scale);
+    // every frame is exactly one of the two resting poses
+    for (let t = 0; t <= E.end; t += 1 / 60) {
+      const p = endingMolarPlace(t, true);
+      const atRest = (q: typeof big) => p.x === q.x && p.y === q.y && p.scale === q.scale;
+      expect(atRest(big) || atRest(small), `t=${t.toFixed(3)}`).toBe(true);
+    }
+    // gone at each cut, back to full after it
+    for (const cut of [E.creditsStart, E.finaleStart]) {
+      expect(endingMolarPlace(cut - ENDING_MOLAR_SWAP - 0.01, true).alpha).toBe(1);
+      expect(endingMolarPlace(cut - 0.3, true).alpha).toBeCloseTo(0.5, 5);
+      expect(endingMolarPlace(cut - 1e-9, true).alpha).toBeLessThan(1e-6);
+      expect(endingMolarPlace(cut, true).alpha).toBe(0);
+      expect(endingMolarPlace(cut + 0.3, true).alpha).toBeCloseTo(0.5, 5);
+      expect(endingMolarPlace(cut + ENDING_MOLAR_SWAP, true).alpha).toBe(1);
+    }
+    expect(endingMolarPlace(E.creditsStart - 0.1, true).y).toBe(big.y);
+    expect(endingMolarPlace(E.creditsStart + 0.1, true).y).toBe(small.y);
+    expect(endingMolarPlace(E.finaleStart - 0.1, true).y).toBe(small.y);
+    expect(endingMolarPlace(E.finaleStart + 0.1, true).y).toBe(big.y);
+    // without Reduce Motion it still glides between the two
+    const mid = endingMolarPlace(E.creditsStart - 0.1, false);
+    expect(mid.y).toBeGreaterThan(big.y);
+    expect(mid.y).toBeLessThan(small.y);
+    expect(mid.alpha).toBe(1);
+    // the pieces sit in the molar's sockets wherever it rests
+    expect(endingPiece(0, E.creditsStart + 0.1, true).y).toBeGreaterThan(endingPiece(0, E.creditsStart - 0.1, true).y);
+  });
+
+  it('L02: the molar smiles at every finisher, but only all gold earns the wink', () => {
+    const at = ENDING_TIMES.wink + 0.1;
+    expect(endingFace(at, true)).toEqual({ alpha: 1, wink: true });
+    expect(endingFace(at, false)).toEqual({ alpha: 1, wink: false });
+    expect(endingFace(ENDING_TIMES.wink + 0.5, true).wink).toBe(false);
+    expect(endingFace(ENDING_TIMES.face - 0.1, true).alpha).toBe(0);
+    // four gold and one pearl: still the hug, no wink
+    expect(endingHug(at + 0.6, false).fold).toBe(1);
+  });
+
+  it('L03: the hug runs its beats (open, fold on the wink, squeeze, happy eyes, hearts), and still with Reduce Motion', () => {
+    const E = ENDING_TIMES;
+    expect(endingHug(E.face, false).arms).toBe(0);
+    expect(endingHug(E.face + 0.4, false).arms).toBeCloseTo(0.5, 5);
+    expect(endingHug(E.face + 0.7, false).arms).toBe(1);
+    expect(endingHug(E.face + 1.0, false).open).toBe(1);
+    expect(endingHug(E.wink, false).fold).toBe(0);
+    expect(endingHug(E.wink + 0.35, false).fold).toBeCloseTo(0.5, 5);
+    expect(endingHug(E.wink + 0.8, false).fold).toBe(1);
+    expect(endingHug(E.wink + 1.5, false).squeeze).toBe(0);
+    expect(endingHug(E.wink + 1.5 + 0.225, false).squeeze).toBeCloseTo(1, 5);
+    expect(endingHug(E.wink + 0.79, false).happyEyes).toBe(false);
+    expect(endingHug(E.wink + 0.8, false).happyEyes).toBe(true);
+    expect(endingHug(E.wink + 2.4, false).happyEyes).toBe(false);
+    expect(endingHug(E.wink + 1.5, false).hearts).toBe(0);
+    expect(endingHug(E.wink + 1.7, false).hearts).toBeCloseTo(0.5, 5);
+    expect(endingHug(E.wink + 2.0, false).hearts).toBe(1);
+    const rm = endingHug(E.wink + 0.9, true);
+    expect(rm.arms).toBeCloseTo(0.5, 5);
+    expect([rm.open, rm.fold, rm.squeeze, rm.happyEyes]).toEqual([1, 1, 0, false]);
+    for (let t = E.face; t <= E.end; t += 0.05) expect(endingHug(t, true).squeeze).toBe(0);
+    expect(endingHug(E.wink + 1.9, true).hearts).toBeCloseTo(0.5, 5);
+  });
+
+  it('L03: the ending checksum tells gold from mixed and Reduce Motion from full motion', () => {
+    const gold = endingChecksum(plans, true, false);
+    expect(endingChecksum(plans, false, false)).not.toBe(gold);
+    expect(endingChecksum(plans, true, true)).not.toBe(gold);
+    expect(endingChecksum(plans, false, true)).not.toBe(endingChecksum(plans, true, true));
   });
 });
 

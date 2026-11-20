@@ -1,5 +1,6 @@
 import SwiftUI
 import MouthLifeCore
+import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -15,6 +16,7 @@ public struct SyncSaveSheet: View {
     @State private var importInput: String = ""
     @State private var statusMessage: String?
     @State private var statusIsError: Bool = false
+    @State private var showBackupPicker: Bool = false
 
     public init(
         exportedCode: String,
@@ -79,15 +81,7 @@ public struct SyncSaveSheet: View {
                             .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
 
                             Button {
-                                switch onImportCode(importInput) {
-                                case .success:
-                                    statusIsError = false
-                                    statusMessage = "Save imported! Habit Stamps and records are updated."
-                                    importInput = ""
-                                case .failure(let err):
-                                    statusIsError = true
-                                    statusMessage = err.localizedDescription
-                                }
+                                applyImport(importInput)
                             } label: {
                                 Label(L10n.t("Apply Sync Code"), systemImage: "arrow.down.doc.fill")
                                     .frame(maxWidth: .infinity)
@@ -95,6 +89,13 @@ public struct SyncSaveSheet: View {
                             .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.mintClean, darkText: true))
                             .disabled(importInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
+
+                        // A backup.mouthlife.json saved by the web game goes in through the same
+                        // checks and merge as a code (H08).
+                        Button(L10n.t("📂 Open Backup File")) {
+                            showBackupPicker = true
+                        }
+                        .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
 
                         if let statusMessage {
                             Text(L10n.t(statusMessage))
@@ -119,6 +120,40 @@ public struct SyncSaveSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .fileImporter(
+            isPresented: $showBackupPicker,
+            allowedContentTypes: [.json, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            importBackupFile(result)
+        }
+    }
+
+    private func applyImport(_ text: String) {
+        switch onImportCode(text) {
+        case .success:
+            statusIsError = false
+            statusMessage = "Save imported! Habit Stamps and records are updated."
+            importInput = ""
+        case .failure(let err):
+            statusIsError = true
+            statusMessage = err.localizedDescription
+        }
+    }
+
+    private func importBackupFile(_ result: Result<[URL], Error>) {
+        // Cancelled or refused: nothing changes.
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url), data.count <= 262_144,
+              let text = String(data: data, encoding: .utf8)
+        else {
+            statusIsError = true
+            statusMessage = SyncCodeError.invalidJson.localizedDescription
+            return
+        }
+        applyImport(text)
     }
 
     private func copyToClipboard(_ value: String) {

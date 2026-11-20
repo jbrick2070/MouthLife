@@ -77,6 +77,20 @@ export function isModalDialogOpen(
 
 const STEER_PREF_KEY = 'mouthlife.pointerSteer';
 
+/**
+ * The browser's controllers, or none. A page whose Permissions Policy disallows gamepads gets an
+ * exception from `getGamepads()` every call; without this guard that stopped every frame, the
+ * game and the brushing timer with it (H07).
+ */
+export function readGamepads(): ReadonlyArray<Gamepad | null> {
+  if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return [];
+  try {
+    return navigator.getGamepads() ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export class InputManager {
   private keysDown = new Set<string>();
   private mouseLeftHeld = false;
@@ -118,6 +132,8 @@ export class InputManager {
     | ((phase: CanvasPointerPhase, clientX: number, clientY: number, ndcX: number, ndcY: number) => boolean)
     | null = null;
   private currentModeGetter: () => AppMode = () => 'HUB';
+  /** True while a stage sits on its Pause card: action presses then count for nothing (M12). */
+  private gameplayPausedGetter: () => boolean = () => false;
 
   // Direct touch-the-teeth pointer (HUB / REPORT) — consumes the gesture instead of orbiting
   private touchPointerId: number | null = null;
@@ -146,6 +162,7 @@ export class InputManager {
     onUserGesture: () => void;
     onOrbitDrag: (dYaw: number, dPitch: number) => void;
     getMode: () => AppMode;
+    isGameplayPaused?: () => boolean;
     onCanvasPointer?: (
       phase: CanvasPointerPhase,
       clientX: number,
@@ -157,6 +174,7 @@ export class InputManager {
     this.onUserGesture = params.onUserGesture;
     this.onOrbitDrag = params.onOrbitDrag;
     this.currentModeGetter = params.getMode;
+    this.gameplayPausedGetter = params.isGameplayPaused ?? (() => false);
     this.onCanvasPointer = params.onCanvasPointer ?? null;
   }
 
@@ -447,21 +465,26 @@ export class InputManager {
    * Read the game controller. Call once per rendered frame (also while paused, so Start can unpause).
    */
   pollGamepad(): void {
-    const pads =
-      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
-        ? navigator.getGamepads()
-        : [];
-    this.applyGamepadSnapshot(this.gamepad.poll(pads));
+    this.applyGamepadSnapshot(this.gamepad.poll(readGamepads()));
   }
 
   /** Split out so tests can feed a snapshot without a real controller. */
   applyGamepadSnapshot(snap: GamepadSnapshot): void {
     this.padState = snap;
+    // On the Pause card only Start counts: presses made there (pad or keyboard) are dropped
+    // instead of firing on the first frame after Resume (M12). The pad still tracks its buttons, so
+    // a button held across Resume needs a fresh press.
+    const paused = this.gameplayPausedGetter();
+    if (paused) {
+      this.pendingFloss = false;
+      this.pendingRinse = false;
+      this.pendingDisclose = false;
+    }
     if (!snap.connected) return;
     if (snap.anyInput) this.onUserGesture?.();
     if (snap.pausePressed) this.onPauseRequested?.();
     const mode = this.currentModeGetter();
-    if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
+    if ((mode === 'ARCADE' || mode === 'PULP_RESCUE') && !paused) {
       if (snap.flossPressed) this.pendingFloss = true;
       if (snap.rinsePressed) this.pendingRinse = true;
       if (snap.scanPressed) this.pendingDisclose = true;

@@ -217,19 +217,65 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertEqual(allowed.apply(rec, to: fresh(), now: t0).ionsAwarded, 75)
         var notAllowed = WatchImportLedger()
         XCTAssertEqual(notAllowed.apply(rec, to: fresh(), now: t0, rinseAllowed: false).ionsAwarded, 50)
-        // the ledger is saved with the brush reserved before the reward is paid, and again after
+        // the ledger is saved with the payment pending before the reward is paid, and again after
         var saved: [WatchImportLedger] = []
         var ledger = WatchImportLedger()
-        let ack = ledger.apply(rec, to: fresh(), now: t0) { saved.append($0) }
+        let paidSys = fresh()
+        let ack = ledger.apply(rec, to: paidSys, now: t0) { saved.append($0) }
         XCTAssertEqual(saved.count, 2)
-        XCTAssertEqual(saved.first?.ack(for: "a")?.ionsAwarded, 0)
+        XCTAssertNil(saved.first?.ack(for: "a"))
+        XCTAssertEqual(saved.first?.pending?["a"]?.ack, ack)
         XCTAssertEqual(saved.last?.ack(for: "a"), ack)
-        // a crash right after the reservation: sent again, it is never paid twice
-        var restored = saved[0]
-        let sys = fresh()
-        let before = sys.getSave().fluorideIons
-        _ = restored.apply(rec, to: sys, now: t0)
-        XCTAssertEqual(sys.getSave().fluorideIons, before)
+        XCTAssertNil(saved.last?.pending)
+
+        // H03: the app stopped after marking the payment pending but before paying. Sent again, the
+        // brush is paid once, with the same answer the watch would have got.
+        var stoppedBeforePaying = saved[0]
+        let unpaid = fresh()
+        let before = unpaid.getSave().fluorideIons
+        let resent = stoppedBeforePaying.apply(rec, to: unpaid, now: t0)
+        XCTAssertEqual(resent, ack)
+        XCTAssertEqual(unpaid.getSave().fluorideIons, before + 75)
+        XCTAssertEqual(stoppedBeforePaying.apply(rec, to: unpaid, now: t0), ack)
+        XCTAssertEqual(unpaid.getSave().fluorideIons, before + 75)
+
+        // The app stopped after paying but before storing the answer: the reward is not paid again,
+        // and the watch gets the real answer, not a zero.
+        var stoppedAfterPaying = saved[0]
+        let paidOnce = paidSys.getSave().fluorideIons
+        XCTAssertEqual(stoppedAfterPaying.apply(rec, to: paidSys, now: t0), ack)
+        XCTAssertEqual(paidSys.getSave().fluorideIons, paidOnce)
+
+        // A legitimately capped brush answers zero once and stays zero.
+        let capped = fresh()
+        for i in 0..<5 {
+            var l = WatchImportLedger()
+            _ = l.apply(WatchBrushRecord(sessionId: "c\(i)", brushedSec: 120, floss: .skipped, rinse: .skipped, rinseOffered: false, completedAt: t0), to: capped, now: t0)
+        }
+        var cappedLedger = WatchImportLedger()
+        let zero = cappedLedger.apply(WatchBrushRecord(sessionId: "z", brushedSec: 120, floss: .skipped, rinse: .skipped, rinseOffered: false, completedAt: t0), to: capped, now: t0)
+        XCTAssertEqual(zero.ionsAwarded, 0)
+        XCTAssertEqual(cappedLedger.apply(WatchBrushRecord(sessionId: "z", brushedSec: 120, floss: .skipped, rinse: .skipped, rinseOffered: false, completedAt: t0), to: capped, now: t0), zero)
+
+        // A ledger saved by an earlier build (no pending payments) still reads.
+        let legacy = Data(#"{"acks":{"old":{"sessionId":"old","ionsAwarded":0,"stampAwarded":false,"fullReward":false}},"order":["old"]}"#.utf8)
+        let decoded = try? JSONDecoder().decode(WatchImportLedger.self, from: legacy)
+        XCTAssertEqual(decoded?.ack(for: "old")?.ionsAwarded, 0)
+    }
+
+    // M05: rinse on with the phone clock ahead, the clock corrected, rinse off: the watch takes the off.
+    func testSettingsRevisionKeepsRisingWhenTheClockGoesBack() {
+        let ahead = Date(timeIntervalSince1970: 1_900_000_000)
+        let corrected = Date(timeIntervalSince1970: 1_800_000_000)
+        let rinseOn = WatchPhoneSettings.nextRevision(after: 0, now: ahead)
+        let rinseOff = WatchPhoneSettings.nextRevision(after: rinseOn, now: corrected)
+        XCTAssertGreaterThan(rinseOff, rinseOn)
+        // the watch's rule: take settings whose revision is not older than the ones it has
+        XCTAssertTrue(rinseOff >= rinseOn)
+        // above revisions earlier builds sent as plain timestamps
+        let legacy = Date().timeIntervalSince1970
+        XCTAssertGreaterThan(WatchPhoneSettings.nextRevision(after: 0), legacy - 1)
+        XCTAssertGreaterThan(WatchPhoneSettings.nextRevision(after: .nan, now: corrected), 0)
     }
 
     func testEveryWatchWordExistsInEveryLanguage() {

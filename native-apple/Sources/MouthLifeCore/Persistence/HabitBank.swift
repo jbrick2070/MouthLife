@@ -41,9 +41,18 @@ public func formatLocalDateKey(_ date: Date = Date(), calendar: Calendar = .curr
 public enum HabitBank {
     private static let logRetentionDays: Int = 35
 
-    /// Formats local calendar date as `"YYYY-MM-DD"`.
+    /// A Gregorian calendar in `calendar`'s time zone. Day keys are always Gregorian, whatever
+    /// calendar the device shows, so they match the web edition's keys (M02): a Buddhist-calendar
+    /// iPhone writes 2026-11-19, not 2569-11-19, and the daily cap cannot be paid twice.
+    public static func keyCalendar(matching calendar: Calendar = .current) -> Calendar {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = calendar.timeZone
+        return gregorian
+    }
+
+    /// Formats the local date (in `calendar`'s time zone) as a Gregorian `"YYYY-MM-DD"`.
     public static func localDateKey(for date: Date = Date(), calendar: Calendar = .current) -> String {
-        let comps = calendar.dateComponents([.year, .month, .day], from: date)
+        let comps = keyCalendar(matching: calendar).dateComponents([.year, .month, .day], from: date)
         let y = comps.year ?? 1970
         let m = comps.month ?? 1
         let d = comps.day ?? 1
@@ -166,6 +175,7 @@ public enum HabitBank {
         calendar: Calendar = .current
     ) {
         let cutoffMs = referenceDate.timeIntervalSince1970 - Double(logRetentionDays) * 86_400.0
+        let keyCal = keyCalendar(matching: calendar)
         for key in Array(save.dailySlotsByDate.keys) {
             let parts = key.split(separator: "-")
             guard parts.count == 3,
@@ -175,7 +185,7 @@ public enum HabitBank {
                   let y = Int(parts[0]),
                   let m = Int(parts[1]),
                   let d = Int(parts[2]),
-                  let entryDate = calendar.date(from: DateComponents(year: y, month: m, day: d))
+                  let entryDate = keyCal.date(from: DateComponents(year: y, month: m, day: d))
             else {
                 save.dailySlotsByDate.removeValue(forKey: key)
                 continue
@@ -184,6 +194,45 @@ public enum HabitBank {
             if entryDate.timeIntervalSince1970 < cutoffMs {
                 save.dailySlotsByDate.removeValue(forKey: key)
             }
+        }
+    }
+
+    /// Earlier builds wrote day keys in the device's own calendar (a Buddhist-calendar iPhone wrote
+    /// 2569-11-19 for 19 November 2026). On such a device, a key that is not a recent Gregorian day
+    /// but is a recent day in that calendar is moved to its Gregorian key, merged with any slots
+    /// already there. Real Gregorian keys are never reinterpreted, and nothing changes on a
+    /// Gregorian device (M02).
+    public static func migrateLegacyCalendarKeys(
+        _ save: inout MouthLifeSaveV2,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) {
+        guard calendar.identifier != .gregorian else { return }
+        let gregorian = keyCalendar(matching: calendar)
+        let window: TimeInterval = 60 * 86_400
+        func isRecent(_ date: Date) -> Bool {
+            date.timeIntervalSince(now) <= 2 * 86_400 && now.timeIntervalSince(date) <= window
+        }
+        let era = calendar.component(.era, from: now)
+        for key in Array(save.dailySlotsByDate.keys) {
+            let parts = key.split(separator: "-")
+            guard parts.count == 3,
+                  let y = Int(parts[0]), let m = Int(parts[1]), let d = Int(parts[2])
+            else { continue }
+            if let asGregorian = gregorian.date(from: DateComponents(year: y, month: m, day: d)),
+               isRecent(asGregorian) {
+                continue
+            }
+            var legacy = DateComponents(era: era, year: y, month: m, day: d)
+            legacy.hour = 12
+            guard let date = calendar.date(from: legacy), isRecent(date) else { continue }
+            let newKey = localDateKey(for: date, calendar: calendar)
+            guard newKey != key, let slot = save.dailySlotsByDate.removeValue(forKey: key) else { continue }
+            let existing = save.dailySlotsByDate[newKey] ?? DailySlotLog()
+            save.dailySlotsByDate[newKey] = DailySlotLog(
+                fullRewards: max(existing.fullRewards, slot.fullRewards),
+                tips: max(existing.tips, slot.tips)
+            )
         }
     }
 }

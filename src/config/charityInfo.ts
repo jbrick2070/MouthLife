@@ -49,8 +49,6 @@ export interface SmileOnUCharityInfo {
   missionSummary: string;
   websiteUrl: string;
   donateUrl: string;
-  contactEmail: string;
-  contactMailto: string;
   needHighlights: readonly CharityNeedStat[];
   programs: readonly CharityProgramInfo[];
   involvementLinks: readonly CharityLinkItem[];
@@ -66,8 +64,6 @@ export const SMILE_ON_U_CHARITY: SmileOnUCharityInfo = {
     'SmileOnU gives free dental care to children, adults and communities who cannot get it. They work in the United States and around the world, one smile at a time.',
   websiteUrl: 'https://smileonu.org/',
   donateUrl: 'https://smileonu.org/donate/',
-  contactEmail: 'info@smileonu.org',
-  contactMailto: 'mailto:info@smileonu.org',
   needHighlights: [
     {
       stat: '#1 Worldwide',
