@@ -281,6 +281,13 @@ export function pickTutorialInputScheme(env: {
 /** The Home screen offers the guide on this many launches, then leaves it to the ? button. */
 export const TUTORIAL_MAX_OFFERS = 3;
 
+/**
+ * Raise this to offer the guide again to everyone, players who already saw or opened it included.
+ * 2 (November 2026): the owner wanted the guide back in front of players. Native twin:
+ * `TutorialGuide.edition`.
+ */
+export const TUTORIAL_EDITION = 2;
+
 export interface TutorialProgress {
   /** Launches on which the offer has been shown. */
   offers: number;
@@ -319,6 +326,9 @@ export function loadTutorialProgress(storage?: MiniStorage | null): TutorialProg
     const raw = JSON.parse((storage ?? defaultStorage())?.getItem(TUTORIAL_STORAGE_KEY) ?? 'null') as unknown;
     if (!raw || typeof raw !== 'object') return { ...TUTORIAL_PROGRESS_START };
     const rec = raw as Record<string, unknown>;
+    // Progress from an earlier edition of the guide starts over, so the new one is offered again.
+    const edition = typeof rec.edition === 'number' && Number.isFinite(rec.edition) ? rec.edition : 1;
+    if (edition < TUTORIAL_EDITION) return { ...TUTORIAL_PROGRESS_START };
     const offers = typeof rec.offers === 'number' && Number.isFinite(rec.offers) ? rec.offers : 0;
     return {
       offers: Math.max(0, Math.min(TUTORIAL_MAX_OFFERS, Math.floor(offers))),
@@ -331,7 +341,10 @@ export function loadTutorialProgress(storage?: MiniStorage | null): TutorialProg
 
 export function saveTutorialProgress(p: TutorialProgress, storage?: MiniStorage | null): void {
   try {
-    (storage ?? defaultStorage())?.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(p));
+    (storage ?? defaultStorage())?.setItem(
+      TUTORIAL_STORAGE_KEY,
+      JSON.stringify({ offers: p.offers, opened: p.opened, edition: TUTORIAL_EDITION })
+    );
   } catch {
     /* storage unavailable: the offer simply shows again next time */
   }

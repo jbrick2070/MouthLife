@@ -121,6 +121,18 @@ public enum TutorialGuide {
     /// The Home screen offers the guide on this many launches, then leaves it to the ? button.
     public static let maxOffers = 3
 
+    /// Raise this to offer the guide again to everyone, players who already saw or opened it
+    /// included. 2 (November 2026): the owner wanted the guide back in front of players. Web twin:
+    /// `TUTORIAL_EDITION`.
+    public static let edition = 2
+
+    /// Progress saved under an earlier edition starts over, so the new one is offered again.
+    public static func progress(offers: Int, opened: Bool, savedEdition: Int) -> TutorialProgress {
+        // an edition never written means the first one
+        let saved = savedEdition > 0 ? savedEdition : 1
+        return saved < edition ? TutorialProgress() : TutorialProgress(offers: offers, opened: opened)
+    }
+
     /// Words on the guide's own buttons and on the Home screen offer.
     public enum Copy {
         public static let buttonLabel = "How to Play"

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   TUTORIAL_BUTTON_KEYS,
   TUTORIAL_COPY,
+  TUTORIAL_EDITION,
   TUTORIAL_MAX_OFFERS,
   TUTORIAL_PAGES,
   TUTORIAL_STORAGE_KEY,
@@ -224,6 +225,20 @@ describe('How to Play guide: when the Home screen offers it', () => {
     expect(loadTutorialProgress(storage)).toEqual({ offers: TUTORIAL_MAX_OFFERS, opened: false });
   });
 
+  it('offers the guide again to players who saw or opened an earlier edition', () => {
+    for (const old of ['{"offers":3,"opened":false}', '{"offers":1,"opened":true}', '{"offers":3,"opened":true,"edition":1}']) {
+      const storage = memoryStorage({ [TUTORIAL_STORAGE_KEY]: old });
+      const gate = new TutorialGate(storage);
+      gate.enterHome();
+      expect(gate.isOfferVisible()).toBe(true);
+      // and then counts as usual: opened once, never offered again
+      gate.markOpened();
+      const next = new TutorialGate(storage);
+      next.enterHome();
+      expect(next.isOfferVisible()).toBe(false);
+    }
+  });
+
   it('counts one offer per launch, however often the Home screen comes back', () => {
     const storage = memoryStorage();
     const gate = new TutorialGate(storage);
@@ -267,7 +282,9 @@ describe('How to Play guide: when the Home screen offers it', () => {
   it('starts fresh when the saved note is missing or damaged, and works with no storage at all', () => {
     expect(loadTutorialProgress(memoryStorage())).toEqual({ offers: 0, opened: false });
     expect(loadTutorialProgress(memoryStorage({ [TUTORIAL_STORAGE_KEY]: 'not json' }))).toEqual({ offers: 0, opened: false });
-    expect(loadTutorialProgress(memoryStorage({ [TUTORIAL_STORAGE_KEY]: '{"offers":99,"opened":"yes"}' }))).toEqual({
+    expect(
+      loadTutorialProgress(memoryStorage({ [TUTORIAL_STORAGE_KEY]: `{"offers":99,"opened":"yes","edition":${TUTORIAL_EDITION}}` }))
+    ).toEqual({
       offers: TUTORIAL_MAX_OFFERS,
       opened: false,
     });
@@ -329,6 +346,10 @@ describe('How to Play guide: same words and pictures in the native app', () => {
 
   it('offers the guide on the same number of launches', () => {
     expect(swift).toContain(`static let maxOffers = ${TUTORIAL_MAX_OFFERS}`);
+  });
+
+  it('brings the guide back for everyone at the same edition', () => {
+    expect(swift).toContain(`static let edition = ${TUTORIAL_EDITION}`);
   });
 
   it('bundles the same picture folder into the app', () => {

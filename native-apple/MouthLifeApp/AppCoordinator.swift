@@ -122,6 +122,7 @@ public final class AppCoordinator {
     // How to Play guide: offered on the first few launches, then kept behind the Home screen's ? button.
     private static let tutorialOffersDefaultsKey = "mouthlife.tutorial.offers"
     private static let tutorialOpenedDefaultsKey = "mouthlife.tutorial.opened"
+    private static let tutorialEditionDefaultsKey = "mouthlife.tutorial.edition"
     public var isTutorialVisible: Bool = false
     /// The card the guide opens on. Always the first, except for `--tutorial=<card>` screenshots.
     public var tutorialStartPage: TutorialPageId = .home
@@ -193,9 +194,10 @@ public final class AppCoordinator {
         self.reminderMorning = Self.storedMinutes(Self.reminderMorningDefaultsKey) ?? BrushDays.defaultMorning
         self.reminderEvening = Self.storedMinutes(Self.reminderEveningDefaultsKey) ?? BrushDays.defaultEvening
         self.tutorialGate = TutorialGate(
-            progress: TutorialProgress(
+            progress: TutorialGuide.progress(
                 offers: UserDefaults.standard.integer(forKey: Self.tutorialOffersDefaultsKey),
-                opened: UserDefaults.standard.bool(forKey: Self.tutorialOpenedDefaultsKey)
+                opened: UserDefaults.standard.bool(forKey: Self.tutorialOpenedDefaultsKey),
+                savedEdition: UserDefaults.standard.integer(forKey: Self.tutorialEditionDefaultsKey)
             )
         )
         self.voiceCoachEnabled = NativeSoundEngine.shared.isVoiceCoachEnabled
@@ -869,6 +871,7 @@ public final class AppCoordinator {
     private func saveTutorialProgress() {
         UserDefaults.standard.set(tutorialGate.progress.offers, forKey: Self.tutorialOffersDefaultsKey)
         UserDefaults.standard.set(tutorialGate.progress.opened, forKey: Self.tutorialOpenedDefaultsKey)
+        UserDefaults.standard.set(TutorialGuide.edition, forKey: Self.tutorialEditionDefaultsKey)
     }
 
     private func enterHomeForTutorial() {
