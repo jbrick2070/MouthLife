@@ -660,9 +660,11 @@ struct StageMapView: View {
         Canvas { c, size in
             let w = area.maxX - area.minX, d = area.maxZ - area.minZ
             guard w > 0, d > 0 else { return }
-            // explicit Double: Swift 6.1 finds CGFloat/Double division ambiguous here
-            let scale: Double = min(Double(size.width) / w, Double(size.height) / d)
-            let ox = (size.width - w * scale) / 2 - area.minX * scale, oy = (size.height - d * scale) / 2 - area.minZ * scale
+            // all in Double: Swift 6.1 finds mixed CGFloat/Double arithmetic here ambiguous
+            let width = Double(size.width), height = Double(size.height)
+            let scale: Double = min(width / w, height / d)
+            let ox: Double = (width - w * scale) / 2 - area.minX * scale
+            let oy: Double = (height - d * scale) / 2 - area.minZ * scale
             func pt(_ x: Double, _ z: Double) -> CGPoint { CGPoint(x: ox + x * scale, y: oy + z * scale) }
             func rect(_ b: AABB2D) -> CGRect {
                 CGRect(x: ox + b.minX * scale, y: oy + b.minZ * scale, width: (b.maxX - b.minX) * scale, height: (b.maxZ - b.minZ) * scale)
