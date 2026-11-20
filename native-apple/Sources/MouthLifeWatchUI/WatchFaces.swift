@@ -694,7 +694,7 @@ public struct MouthPacer: View, Animatable {
             guard let position else { return }
             ctx.concatenate(MouthMap.camera(focus, zoom: zoom, size: size))
             let u = min(size.width, size.height * 1.15)
-            let teeth = MouthMap.teeth(quadrant, in: size, unit: u)
+            let teeth = PacerGeometryCache.shared.teeth(quadrant, in: size, unit: u)
             guard teeth.count == MouthMap.teethPerQuarter else { return }
             // where the brush is: between two teeth while it glides
             let p = min(Double(teeth.count - 1), max(0, position))
@@ -812,8 +812,12 @@ public struct FlossPacer: View, Animatable {
         self.dimmed = dimmed
     }
 
-    /// The arch's 13 gaps in floss order.
+    /// The arch's 13 gaps in floss order (kept between frames: the pacer redraws while it glides).
     static func gapsInOrder(upper: Bool, size: CGSize, unit u: Double) -> [MouthMap.Gap] {
+        PacerGeometryCache.shared.gaps(upper: upper, size: size, unit: u) { buildGapsInOrder(upper: upper, size: size, unit: u) }
+    }
+
+    private static func buildGapsInOrder(upper: Bool, size: CGSize, unit u: Double) -> [MouthMap.Gap] {
         let over = max(1.5, u * 0.014)
         var byContact: [Int: MouthMap.Gap] = [:]
         for q in BrushQuadrant.allCases where q.isUpper == upper {
@@ -1441,3 +1445,37 @@ public struct WatchDoneFace: View {
         }
     }
 }
+
+/// The pacers' tooth and gap layouts for the last size drawn. A pacer redraws on every frame while it
+/// glides (the watch, the iPad and Duo overview), and its layout only changes with the size, so the
+/// arrays are built once instead of every frame. Locked, because a Canvas may draw off the main thread.
+final class PacerGeometryCache: @unchecked Sendable {
+    static let shared = PacerGeometryCache()
+    private let lock = NSLock()
+    private var teethBy: [BrushQuadrant: (size: CGSize, unit: Double, teeth: [MouthMap.Tooth])] = [:]
+    private var gapsBy: [Bool: (size: CGSize, unit: Double, gaps: [MouthMap.Gap])] = [:]
+
+    func teeth(_ q: BrushQuadrant, in size: CGSize, unit u: Double) -> [MouthMap.Tooth] {
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = teethBy[q], hit.size == size, hit.unit == u { return hit.teeth }
+        let teeth = MouthMap.teeth(q, in: size, unit: u)
+        teethBy[q] = (size, u, teeth)
+        return teeth
+    }
+
+    func gaps(upper: Bool, size: CGSize, unit u: Double, build: () -> [MouthMap.Gap]) -> [MouthMap.Gap] {
+        lock.lock()
+        if let hit = gapsBy[upper], hit.size == size, hit.unit == u {
+            lock.unlock()
+            return hit.gaps
+        }
+        lock.unlock()
+        let gaps = build()
+        lock.lock()
+        gapsBy[upper] = (size, u, gaps)
+        lock.unlock()
+        return gaps
+    }
+}
+

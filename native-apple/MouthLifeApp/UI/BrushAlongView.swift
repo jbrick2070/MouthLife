@@ -346,6 +346,10 @@ public struct BrushAlongView: View {
     public let onEnterMouthwashBonusNow: (Bool) -> Void
     public let onCompleteSession: (Bool, Bool) -> Void
     public let onCancelToHub: () -> Void
+    /// On the iPhone Duo's inner screen: how it is held. The whole mouth is on the other page, so
+    /// the compass is left out; in Tabletop the words that are only read (not tapped) move to the flat
+    /// page too (`BrushCueRows`), leaving the upright page for the 3D tooth, the timer and the buttons.
+    public let duoPose: DuoSplit.Axis?
 
     public init(
         elapsedSec: Double,
@@ -368,8 +372,10 @@ public struct BrushAlongView: View {
         onSelectMouthwashDuration: @escaping (MouthwashDurationStyle) -> Void = { _ in },
         onEnterMouthwashBonusNow: @escaping (Bool) -> Void = { _ in },
         onCompleteSession: @escaping (Bool, Bool) -> Void,
-        onCancelToHub: @escaping () -> Void
+        onCancelToHub: @escaping () -> Void,
+        duoPose: DuoSplit.Axis? = nil
     ) {
+        self.duoPose = duoPose
         self.elapsedSec = elapsedSec
         self.isPaused = isPaused
         self.pacerStage = pacerStage
@@ -504,7 +510,11 @@ public struct BrushAlongView: View {
 
             // Permanent Body-Locked Mirror Arch Compass + 3-Foot Countdown & 3-2-1 Musical Anticipation
             HStack(spacing: 10) {
-                MirrorArchCompassView(phase: phase, language: coachLanguage, gyro: mouthwashGyro)
+                if duoPose == nil {
+                    MirrorArchCompassView(phase: phase, language: coachLanguage, gyro: mouthwashGyro)
+                        // the child's left is always screen-left, whatever the layout direction
+                        .environment(\.layoutDirection, .leftToRight)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.t(formatClock(ceil(remaining), pad: true)))
@@ -591,31 +601,9 @@ public struct BrushAlongView: View {
                         mouthwashDurationPicker
                     }
 
-                    HStack(spacing: 7) {
-                        Image(systemName: phase.mouthwashStepIndex == 2 ? "shield.lefthalf.filled.badge.checkmark" : "drop.fill")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(totalCarePurple)
-                        Text(L10n.t(mwHl.actionBadge))
-                            .font(.system(size: 15, weight: .heavy, design: .rounded))
-                            .foregroundStyle(MLTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-
-                        Spacer(minLength: 4)
-
-                        Text(L10n.t(mwHl.ruleTag))
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color.black)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3.5)
-                            .background(Capsule().fill(phase.mouthwashStepIndex == 2 ? MLTheme.fluorapatiteGold : totalCareLavender))
+                    if duoPose != .stacked {
+                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
                     }
-
-                    MouthwashGyroLevelBar(
-                        gyro: mouthwashGyro,
-                        elapsedSec: elapsedSec,
-                        language: coachLanguage
-                    )
 
                     HStack(spacing: 10) {
                         Button {
@@ -651,15 +639,8 @@ public struct BrushAlongView: View {
                         flossToolPicker
                     }
 
-                    HStack(spacing: 7) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(MLTheme.mintClean)
-                        Text(L10n.t(hl.actionBadge))
-                            .font(.system(size: 15, weight: .heavy, design: .rounded))
-                            .foregroundStyle(MLTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                    if duoPose != .stacked {
+                        BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
                     }
 
                     HStack(spacing: 8) {
@@ -698,67 +679,15 @@ public struct BrushAlongView: View {
                     }
 
                 case .brushing:
-                    let qHeadline = BrushCoachCopy.quadrantLabel(phase.quadrant, lang: coachLanguage)
-                    let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: coachLanguage)
-
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        // Step number: the one word the voice says for this quadrant.
-                        Text("\(phase.quadrant.rawValue + 1)")
-                            .font(.system(size: 23, weight: .heavy, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(MLTheme.fluorapatiteGold)
-                            .accessibilityHidden(true)
-
-                        Text(L10n.t(qHeadline))
-                            .font(.system(size: 23, weight: .heavy, design: .rounded))
-                            .foregroundStyle(MLTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-
-                        Spacer(minLength: 4)
-
-                        Text(L10n.t(badge.angleTag))
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Color.black)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(MLTheme.fluorapatiteGold))
-                    }
-
-                    HStack(spacing: 8) {
-                        Image(systemName: surfaceIconName(phase.surface))
-                            .font(.system(size: 14, weight: .heavy))
-                            .foregroundStyle(surfaceAccentColor(phase.surface))
-                        Text(L10n.t(badge.headline))
-                            .font(.system(size: 16, weight: .heavy, design: .rounded))
-                            .foregroundStyle(surfaceAccentColor(phase.surface))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-
-                        // No tapping ahead: floss waits for the whole 2 minutes (the clock rolls into it).
-                        Spacer(minLength: 4)
-                    }
+                    BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage)
                 }
             }
             .mlGlassCard(cornerRadius: 22)
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
-        }
-    }
-
-    private func surfaceIconName(_ surface: BrushSurface) -> String {
-        switch surface {
-        case .outerCheek: return "wave.3.right"
-        case .chewingGrooves: return "circle.grid.2x2.fill"
-        case .innerTongue: return "arrow.up.and.down.circle.fill"
-        }
-    }
-
-    private func surfaceAccentColor(_ surface: BrushSurface) -> Color {
-        switch surface {
-        case .outerCheek: return MLTheme.cyanAccent
-        case .chewingGrooves: return MLTheme.fluorapatiteGold
-        case .innerTongue: return MLTheme.mintClean
+            // Tabletop while brushing: nothing to tap here, and the words are on the flat page
+            .opacity(duoPose == .stacked && pacerStage == .brushing ? 0 : 1)
+            .accessibilityHidden(duoPose == .stacked && pacerStage == .brushing)
         }
     }
 
@@ -812,5 +741,146 @@ public struct BrushAlongView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The words of each step that are only read, never tapped: the quarter and side while brushing, what
+/// to do while flossing and rinsing (with the rinse's left-right level). Inside the brush banner on
+/// every screen; on the iPhone Duo in Tabletop they sit on the flat page beside the whole mouth, so
+/// the upright page keeps only the 3D tooth, the timer and the buttons.
+struct BrushCueRows: View {
+    let phase: BrushPhaseState
+    let stage: PacerStage
+    let flossToolStyle: FlossToolStyle
+    let gyro: GyroSloshSnapshot
+    let elapsedSec: Double
+    let language: CoachLanguage
+    /// The floss and rinse titles (on the flat page; in the banner they share a row with the pickers).
+    var showsTitle: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            switch stage {
+            case .mouthwashBonus:
+                let mwHl = BrushCoachCopy.mouthwashHeadline(stepIndex: phase.mouthwashStepIndex, lang: language)
+                if showsTitle {
+                    Text(L10n.t(mwHl.archTitle))
+                        .font(.system(size: 19, weight: .heavy, design: .rounded))
+                        .foregroundStyle(totalCareLavender)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.70)
+                }
+                HStack(spacing: 7) {
+                    Image(systemName: phase.mouthwashStepIndex == 2 ? "shield.lefthalf.filled.badge.checkmark" : "drop.fill")
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(totalCarePurple)
+                    Text(L10n.t(mwHl.actionBadge))
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .foregroundStyle(MLTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+
+                    Spacer(minLength: 4)
+
+                    Text(L10n.t(mwHl.ruleTag))
+                        .font(.system(size: 10, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(Capsule().fill(phase.mouthwashStepIndex == 2 ? MLTheme.fluorapatiteGold : totalCareLavender))
+                }
+
+                MouthwashGyroLevelBar(
+                    gyro: gyro,
+                    elapsedSec: elapsedSec,
+                    language: language
+                )
+                // the child's left is always screen-left, whatever the layout direction
+                .environment(\.layoutDirection, .leftToRight)
+
+            case .flossBonus:
+                let hl = BrushCoachCopy.flossHeadline(
+                    isUpper: phase.flossIsUpper,
+                    style: flossToolStyle,
+                    stepIndex: phase.flossStepIndex,
+                    lang: language
+                )
+                if showsTitle {
+                    Text(L10n.t(hl.archTitle))
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
+                        .foregroundStyle(MLTheme.fluorapatiteGold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+                HStack(spacing: 7) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(MLTheme.mintClean)
+                    Text(L10n.t(hl.actionBadge))
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .foregroundStyle(MLTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+
+            case .brushing:
+                let qHeadline = BrushCoachCopy.quadrantLabel(phase.quadrant, lang: language)
+                let badge = BrushCoachCopy.surfaceActionBadge(phase.surface, lang: language)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    // Step number: the one word the voice says for this quadrant.
+                    Text("\(phase.quadrant.rawValue + 1)")
+                        .font(.system(size: 23, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(MLTheme.fluorapatiteGold)
+                        .accessibilityHidden(true)
+
+                    Text(L10n.t(qHeadline))
+                        .font(.system(size: 23, weight: .heavy, design: .rounded))
+                        .foregroundStyle(MLTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Spacer(minLength: 4)
+
+                    Text(L10n.t(badge.angleTag))
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(MLTheme.fluorapatiteGold))
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: Self.surfaceIconName(phase.surface))
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundStyle(Self.surfaceAccentColor(phase.surface))
+                    Text(L10n.t(badge.headline))
+                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Self.surfaceAccentColor(phase.surface))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    // No tapping ahead: floss waits for the whole 2 minutes (the clock rolls into it).
+                    Spacer(minLength: 4)
+                }
+            }
+        }
+    }
+
+    static func surfaceIconName(_ surface: BrushSurface) -> String {
+        switch surface {
+        case .outerCheek: return "wave.3.right"
+        case .chewingGrooves: return "circle.grid.2x2.fill"
+        case .innerTongue: return "arrow.up.and.down.circle.fill"
+        }
+    }
+
+    static func surfaceAccentColor(_ surface: BrushSurface) -> Color {
+        switch surface {
+        case .outerCheek: return MLTheme.cyanAccent
+        case .chewingGrooves: return MLTheme.fluorapatiteGold
+        case .innerTongue: return MLTheme.mintClean
+        }
     }
 }

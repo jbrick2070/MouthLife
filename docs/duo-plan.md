@@ -58,6 +58,49 @@ Reviewed read-only by agy and Codex (2026-11-19); their corrections are folded i
 
 ## 2. What to build first
 
+### Built: two screens, not a big iPad (2026-11-19)
+
+The owner picked the two-screen idea below; it is built for the inner screen (open flat and
+Tabletop, iOS 27.1). The design was confirmed by Codex and agy before coding (both "approve with
+changes"; every change taken) and checked by Sonnet QA after. The cover, other iPhones, iPad, Mac,
+the watch and the web edition are unchanged.
+
+| | Open flat (book) | Tabletop |
+|---|---|---|
+| Home | ![](duo-captures/two-book-home.jpg) | ![](duo-captures/two-table-home.jpg) |
+| 2-Min Brush | ![](duo-captures/two-book-brush.jpg) | ![](duo-captures/two-table-brush.jpg) |
+| A city stage | ![](duo-captures/two-book-stage.jpg) | ![](duo-captures/two-table-stage.jpg) |
+
+- **Fold:** `DuoSplit` (`MouthLifeCore/Config/DuoSplit.swift`, tested) turns the fold that
+  `reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed)`
+  reports into two pages with a 24-point clear band each side (none unless both pages are at least
+  300 points). The 3D page is the left page, or the upright one in Tabletop.
+- **One 3D view:** `MouthLife3DViewport` keeps its place in `RootContentView`; only its padding
+  changes, so folding, turning or a language change never rebuilds it (the language `.id` now sits
+  on the overlays only).
+- **Stage:**
+  - Book: the 3D city with the stick, the house and pause on the left page. The right page has the
+    city map, a stage panel (how clean the city is, a card per district with its name, share and
+    gold seal, the timer, the multiplier and the city's own readout), and Scan, Surge and Floss.
+  - Tabletop: the city upright, the map lying flat with the stick and buttons under it.
+  - The map (`StageMapView`) is read-only. It is fitted to the ground the scrubber can reach, with
+    districts from dim to mint as they get clean, a gold check once sealed, the scrubber with its
+    heading, and Scan's ring.
+  - The pause card sits on the 3D page (How to Play too, on Home); folding lets go of the stick and
+    any held input.
+- **2-Minute Brush:** the "how" page has the 3D close-up, the timer and every button; the "where"
+  page has the whole mouth (no Hide), touch-inert. The compass is left out on the Duo, since the
+  map replaces it. In Tabletop the words of the step also move to the flat page (`BrushCueRows`).
+- **Home:**
+  - First page: the companion and the sky.
+  - Second page: the readouts and Menu, the tapped crown's card, the journey so far (the five
+    cities with their check and grade, their number, or a lock; a tap picks one), How to Play and
+    the deck. In Tabletop the deck page scrolls and leaves the journey out.
+- **Also:** the left/right labels of the compass and the rinse level are pinned left-to-right, and
+  the watch-style pacers keep their tooth layout between frames (`PacerGeometryCache`).
+- **Still to check on hardware:** steady 120 Hz in Tabletop during Scan and scrubbing, touch on the
+  narrower page, and whether a five-year-old finds the next district on the map.
+
 ### The idea: two screens, not a big iPad (proposal, 2026-11-19)
 
 The owner's problem statement: a Duo owner should get a game that uses two screens, not the iPad
@@ -234,10 +277,8 @@ for the cover, which runs the full app. The web files named in the notes are out
    audible purpose for App Review, costs battery, and leaves a brush running that nobody sees.
 3. **A Live Activity for a running brush?** Both reviewers: **defer**; see the widget plan.
 4. **Release 1 = items 1-4** (3D rule, fold helper, brush, Home and the first screens), then 5-8?
-5. **Two screens, not a big iPad** (above): build the city map and the paired pages, starting with
-   the stage prototype? If yes, is the map read-only (suggested) or can a finger steer on it? And
-   does the map come to iPad and the web edition too (the house rule is that both editions match),
-   or stay a Duo presentation?
+5. **Two screens, not a big iPad:** built (above), with a read-only map, as a Duo presentation.
+   Open question: should the city map also come to iPad and the web edition?
 6. (Asked in chat) **Apple TV**: not planned; MouthLife lives by the bathroom sink, and widgets are
    the cheaper way onto Apple's home screens.
 

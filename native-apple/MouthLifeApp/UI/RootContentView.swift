@@ -15,10 +15,21 @@ public struct RootContentView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            let wide = coordinator.mode == .brushAlong && geo.size.width >= 900 && geo.size.width > geo.size.height * 1.15
+            // The iPhone Duo's inner screen: two pages, each doing its own job (nil everywhere else).
+            let split = Self.duoSplit(geo, mode: coordinator.mode)
+            let wide = split == nil && coordinator.mode == .brushAlong && geo.size.width >= 900 && geo.size.width > geo.size.height * 1.15
             let panel: CGFloat = wide && showBrushOverview ? min(460, geo.size.width * 0.36) : 0
+            let viewport = split.map { EdgeInsets(top: 0, leading: 0, bottom: $0.viewportBottom, trailing: $0.viewportTrailing) }
+                ?? EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: panel)
             ZStack(alignment: .trailing) {
-                modes(trailingInset: panel)
+                modes(viewport: viewport, split: split)
+                if let split, coordinator.mode == .brushAlong {
+                    // "where": the whole mouth on the second page, beside (or below) the 3D "how". It
+                    // takes no touches (in Tabletop it lies flat by the sink, where splashes land).
+                    duoBrushPage(split)
+                        .placed(in: split.secondRect)
+                        .allowsHitTesting(false)
+                }
                 if wide {
                     if showBrushOverview {
                         BrushOverviewPanel(
@@ -62,17 +73,90 @@ public struct RootContentView: View {
         #endif
     }
 
-    /// The 3D scene with the overlay for the current mode. `trailingInset` leaves room on the right
-    /// for the brush overview on a wide screen (the scene and its controls move over; nothing else
-    /// changes, so the 3D view is never rebuilt).
+    /// The 2-Minute Brush's second page on the Duo: the whole mouth; in Tabletop also the words of the
+    /// step (which leave the upright page there).
     @ViewBuilder
-    private func modes(trailingInset: CGFloat) -> some View {
+    private func duoBrushPage(_ split: DuoSplit) -> some View {
+        let panel = BrushOverviewPanel(
+            elapsedSec: coordinator.pacerElapsedSec,
+            pacerStage: coordinator.pacerStage,
+            mouthwashDurationSec: coordinator.mouthwashDurationStyle.durationSec,
+            isPaused: coordinator.pacerIsPaused,
+            language: coordinator.coachLanguage,
+            onHide: nil
+        )
+        if split.axis == .stacked {
+            HStack(alignment: .center, spacing: 14) {
+                panel
+                BrushCueRows(
+                    phase: BrushPhaseState.evaluate(
+                        elapsedSec: coordinator.pacerElapsedSec,
+                        stage: coordinator.pacerStage,
+                        mouthwashDurationSec: coordinator.mouthwashDurationStyle.durationSec
+                    ),
+                    stage: coordinator.pacerStage,
+                    flossToolStyle: coordinator.flossToolStyle,
+                    gyro: coordinator.mouthwashGyro,
+                    elapsedSec: coordinator.pacerElapsedSec,
+                    language: coordinator.coachLanguage,
+                    showsTitle: true
+                )
+                .mlGlassCard(cornerRadius: 22)
+                .frame(maxWidth: .infinity)
+            }
+            .padding(12)
+        } else {
+            panel.padding(12)
+        }
+    }
+
+    /// The Duo's two pages for the modes that use them (Home, the 2-Minute Brush, a city stage); the
+    /// Prologue, the score, the finale and the sheets keep the whole screen in this version.
+    private static func duoSplit(_ geo: GeometryProxy, mode: AppMode) -> DuoSplit? {
+        switch mode {
+        case .hub, .brushAlong, .arcade, .pulpRescue: break
+        default: return nil
+        }
+        #if os(iOS)
+        if #available(iOS 27.1, *) {
+            let folds = geo.reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed).map(\.frame)
+            return DuoSplit.make(folds: folds, size: geo.size, safeTrailing: geo.safeAreaInsets.trailing, safeBottom: geo.safeAreaInsets.bottom)
+        }
+        #endif
+        return nil
+    }
+
+    /// The 3D scene with the overlay for the current mode. `viewport` pads the scene down to its part
+    /// of the screen (left of the brush overview on a wide screen; the first page on the Duo). Only its
+    /// frame changes, so the 3D view is never rebuilt.
+    @ViewBuilder
+    private func modes(viewport: EdgeInsets, split: DuoSplit?) -> some View {
         ZStack {
             // Full-screen 120Hz Native Metal SceneKit 3D Viewport
             MouthLife3DViewport(controller: coordinator.sceneController, paused: coordinator.finale != nil)
-                .padding(.trailing, trailingInset)
+                .padding(viewport)
                 .ignoresSafeArea()
 
+            overlays(trailingInset: viewport.trailing, split: split)
+                // Rebuild every screen when the language changes, so all text is translated again
+                // (the overlays only: the 3D view stays as it is).
+                .id(coordinator.coachLanguage)
+        }
+        .preferredColorScheme(.dark)
+        .sheet(item: $coordinator.activeSheet) { sheet in
+            sheetContent(sheet)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        // Follow the system's Reduce Motion: on at launch if it is on, and live when it changes.
+        .onAppear { if systemReduceMotion { coordinator.reducedMotion = true } }
+        .onChange(of: systemReduceMotion) { _, reduce in coordinator.reducedMotion = reduce }
+    }
+
+    /// The overlay for the current mode, the finale and How to Play.
+    @ViewBuilder
+    private func overlays(trailingInset: CGFloat, split: DuoSplit?) -> some View {
+        ZStack {
             // Streamlined Liquid-Glass Mode Overlays
             switch coordinator.mode {
             case .cosmicIntro:
@@ -113,7 +197,8 @@ public struct RootContentView: View {
                     onOpenTutorial: { coordinator.openTutorial() },
                     onDismissTutorialOffer: { coordinator.dismissTutorialOffer() },
                     molarFinishes: coordinator.molarFinishes,
-                    onTapGoldenMolar: { coordinator.tapGoldenMolar() }
+                    onTapGoldenMolar: { coordinator.tapGoldenMolar() },
+                    split: split
                 )
                 .transition(.opacity)
 
@@ -144,9 +229,10 @@ public struct RootContentView: View {
                             withMouthwashBonus: withRinse
                         )
                     },
-                    onCancelToHub: { coordinator.returnToHub() }
+                    onCancelToHub: { coordinator.returnToHub() },
+                    duoPose: split?.axis
                 )
-                .padding(.trailing, trailingInset)
+                .modifier(PagePlacement(rect: split?.firstRect, trailingInset: trailingInset))
                 .transition(.opacity)
 
             case .arcade, .pulpRescue:
@@ -165,7 +251,9 @@ public struct RootContentView: View {
                             coordinator.sceneController.setVirtualStick(moveX: mx, moveZ: mz, held: held)
                         },
                         onExitToHub: { coordinator.returnToHub() },
-                        onPauseChanged: { paused in coordinator.setArcadePaused(paused) }
+                        onPauseChanged: { paused in coordinator.setArcadePaused(paused) },
+                        split: split,
+                        onLayoutChanged: { coordinator.sceneController.resetStageInput() }
                     )
                     .transition(.opacity)
                 }
@@ -211,17 +299,17 @@ public struct RootContentView: View {
                     reduceMotion: coordinator.reducedMotion,
                     onDemoSound: { pageId in coordinator.playTutorialDemoSound(pageId) },
                     onPageTurn: { NativeSoundEngine.shared.playUiTap() },
-                    onClose: { coordinator.closeTutorial() }
+                    onClose: { coordinator.closeTutorial() },
+                    cardRect: split?.firstRect
                 )
                 .transition(.opacity)
                 .zIndex(10)
             }
         }
-        // Rebuild every screen when the language changes, so all text is translated again.
-        .id(coordinator.coachLanguage)
-        .preferredColorScheme(.dark)
-        .sheet(item: $coordinator.activeSheet) { sheet in
-            Group {
+    }
+
+    @ViewBuilder
+    private func sheetContent(_ sheet: HubSheetKind) -> some View {
                 switch sheet {
                 case .dentalChart:
                     DentalChartSheet(
@@ -289,12 +377,38 @@ public struct RootContentView: View {
                         onReplayCosmicIntro: { coordinator.replayCosmicIntro() }
                     )
                 }
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+    }
+}
+
+/// Puts a full-screen overlay on its page: the Duo's first page, or left of the brush overview.
+private struct PagePlacement: ViewModifier {
+    let rect: CGRect?
+    let trailingInset: CGFloat
+
+    func body(content: Content) -> some View {
+        if let rect {
+            content.placed(in: rect)
+        } else {
+            content.padding(.trailing, trailingInset)
         }
-        // Follow the system's Reduce Motion: on at launch if it is on, and live when it changes.
-        .onAppear { if systemReduceMotion { coordinator.reducedMotion = true } }
-        .onChange(of: systemReduceMotion) { _, reduce in coordinator.reducedMotion = reduce }
+    }
+}
+
+extension View {
+    /// Places this view in `rect` of the root view's space (one half of a two-page layout on the
+    /// Duo); touches follow it.
+    func placed(in rect: CGRect) -> some View {
+        frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
+    }
+
+    /// `placed(in:)` on the Duo, unchanged elsewhere.
+    @ViewBuilder
+    func placed(inOptional rect: CGRect?) -> some View {
+        if let rect {
+            placed(in: rect)
+        } else {
+            self
+        }
     }
 }

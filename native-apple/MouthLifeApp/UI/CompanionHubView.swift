@@ -41,6 +41,9 @@ public struct CompanionHubView: View {
     /// Each campaign city's piece of the Golden Molar.
     public let molarFinishes: [MolarFinish]
     public let onTapGoldenMolar: () -> Void
+    /// The iPhone Duo's two pages (nil on every other screen): the companion and the sky on the first,
+    /// the control deck on the second, so a city or a treat picked on one page shows on the other.
+    public let split: DuoSplit?
 
     @State private var showHint = true
 
@@ -67,8 +70,10 @@ public struct CompanionHubView: View {
         onOpenTutorial: @escaping () -> Void = {},
         onDismissTutorialOffer: @escaping () -> Void = {},
         molarFinishes: [MolarFinish] = [],
-        onTapGoldenMolar: @escaping () -> Void = {}
+        onTapGoldenMolar: @escaping () -> Void = {},
+        split: DuoSplit? = nil
     ) {
+        self.split = split
         self.molarFinishes = molarFinishes
         self.onTapGoldenMolar = onTapGoldenMolar
         self.save = save
@@ -99,50 +104,108 @@ public struct CompanionHubView: View {
         let isBasking = comp.smoothnessIndex >= GameConfig.smoothBaskThreshold
         let needsPulpRescue = comp.pulpIntegrity <= 0.01
 
-        VStack(spacing: 8) {
-            // Top strip: ONE row. Wide screens show every shortcut; phones fold them into a menu
-            // so the mouth and the sky get the room instead.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 7) {
-                    statChips(isBasking: isBasking)
-                    if comp.unclaimedIdleIons > 0 {
-                        Button {
-                            onClaimIdleIons()
-                        } label: {
-                            Label(L10n.t("Claim +\(comp.unclaimedIdleIons) F⁻ Bask"), systemImage: "sparkles")
-                        }
-                        .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
-                    }
-                    Spacer(minLength: 8)
-                    ForEach(HubShortcut.allCases) { shortcut in
-                        Button {
-                            open(shortcut)
-                        } label: {
-                            Label(L10n.t(shortcut.title), systemImage: shortcut.icon)
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .buttonStyle(MLGlassPillButtonStyle(tint: shortcut.tint))
-                    }
+        ZStack {
+            if let split {
+                duoLayout(split, comp: comp, isBasking: isBasking, needsPulpRescue: needsPulpRescue)
+            } else {
+                VStack(spacing: 8) {
+                    topRow(isBasking: isBasking)
+                    hubBelowTopRow(comp: comp, isBasking: isBasking, needsPulpRescue: needsPulpRescue)
                 }
-
-                // Phones: the same row, dropping a chip at a time until it fits, so the row never
-                // grows wider than the screen (which would push the whole Home screen off its edges).
-                compactTopRow(isBasking: isBasking, keep: 3, iconOnlyMenu: false)
-                compactTopRow(isBasking: isBasking, keep: 2, iconOnlyMenu: false)
-                compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: false)
-                compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: true)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 6)
-            .frame(maxWidth: .infinity)
-
-            hubBelowTopRow(comp: comp, isBasking: isBasking, needsPulpRescue: needsPulpRescue)
         }
         .task {
             // The how-to line is a first-glance hint, not a fixture: let it go so the sky is clear.
             try? await Task.sleep(nanoseconds: 7_000_000_000)
             withAnimation(.easeOut(duration: 0.6)) { showHint = false }
+        }
+    }
+
+    /// The top strip: one row. Wide screens show every shortcut; phones fold them into a menu.
+    private func topRow(isBasking: Bool) -> some View {
+        let comp = save.companion
+        return Group {
+                // Top strip: ONE row. Wide screens show every shortcut; phones fold them into a menu
+                // so the mouth and the sky get the room instead.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 7) {
+                        statChips(isBasking: isBasking)
+                        if comp.unclaimedIdleIons > 0 {
+                            Button {
+                                onClaimIdleIons()
+                            } label: {
+                                Label(L10n.t("Claim +\(comp.unclaimedIdleIons) F⁻ Bask"), systemImage: "sparkles")
+                            }
+                            .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
+                        }
+                        Spacer(minLength: 8)
+                        ForEach(HubShortcut.allCases) { shortcut in
+                            Button {
+                                open(shortcut)
+                            } label: {
+                                Label(L10n.t(shortcut.title), systemImage: shortcut.icon)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .buttonStyle(MLGlassPillButtonStyle(tint: shortcut.tint))
+                        }
+                    }
+
+                    // Phones: the same row, dropping a chip at a time until it fits, so the row never
+                    // grows wider than the screen (which would push the whole Home screen off its edges).
+                    compactTopRow(isBasking: isBasking, keep: 3, iconOnlyMenu: false)
+                    compactTopRow(isBasking: isBasking, keep: 2, iconOnlyMenu: false)
+                    compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: false)
+                    compactTopRow(isBasking: isBasking, keep: 1, iconOnlyMenu: true)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 6)
+                .frame(maxWidth: .infinity)
+
+        }
+    }
+
+    /// The Duo: the companion arch and the sky (with the hint or a toast) fill the first page; the
+    /// second page is the control deck: the readouts and Menu at the top, the tapped crown's card
+    /// (which opens the Dental Chart), How to Play, and the deck. In Tabletop the deck page lies flat
+    /// and scrolls if it has to (large text, Pulp Rescue).
+    @ViewBuilder
+    private func duoLayout(_ split: DuoSplit, comp: CompanionState, isBasking: Bool, needsPulpRescue: Bool) -> some View {
+        VStack(spacing: 8) {
+            callout(crownHere: false)
+                .padding(.top, 10)
+            Spacer(minLength: 0)
+        }
+        .placed(in: split.firstRect)
+        switch split.axis {
+        case .sideBySide:
+            VStack(spacing: 10) {
+                topRow(isBasking: isBasking)
+                if statusToast == nil, let crown = tappedCrownSummary {
+                    crownButton(crown)
+                }
+                Spacer(minLength: 0)
+                campaignPanel
+                    .padding(.horizontal, 12)
+                Spacer(minLength: 0)
+                tutorialRow
+                thumbDeck(comp: comp, needsPulpRescue: needsPulpRescue)
+            }
+            .placed(in: split.secondRect)
+        case .stacked:
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    topRow(isBasking: isBasking)
+                    if statusToast == nil, let crown = tappedCrownSummary {
+                        crownButton(crown)
+                    }
+                    tutorialRow
+                    thumbDeck(comp: comp, needsPulpRescue: needsPulpRescue)
+                }
+                .padding(.top, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .placed(in: split.secondRect)
         }
     }
 
@@ -203,7 +266,63 @@ public struct CompanionHubView: View {
 
     @ViewBuilder
     private func hubBelowTopRow(comp: CompanionState, isBasking: Bool, needsPulpRescue: Bool) -> some View {
+        callout(crownHere: true)
 
+        // Wide-open interactive 3D Arch & Orbital Earth space!
+        Spacer(minLength: 0)
+
+        tutorialRow
+        thumbDeck(comp: comp, needsPulpRescue: needsPulpRescue)
+    }
+
+    /// The Duo deck page's journey so far: the five cities of the campaign, each with its check and
+    /// best grade, its place in the campaign, or a lock. A tap picks the city, as in the city row.
+    private var campaignPanel: some View {
+        let campaign = HostsAndHistory.hostCities.filter { campaignStageNumber(worldId: $0.worldId) != nil }
+        return HStack(spacing: 6) {
+            ForEach(campaign) { host in
+                let unlocked = isWorldUnlocked(host)
+                let rec = save.worlds[host.worldId]
+                let done = rec?.completed == true
+                let selected = selectedWorldId == host.worldId
+                Button {
+                    onSelectCity(host.worldId)
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: !unlocked ? "lock.fill" : (done ? "checkmark.seal.fill" : "globe.americas.fill"))
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(!unlocked ? MLTheme.textMuted : (done ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent))
+                        Text(L10n.t(shortCityName(host.city)))
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(unlocked ? MLTheme.textPrimary : MLTheme.textMuted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.65)
+                        if let grade = rec?.bestGrade, grade != .none {
+                            Text(L10n.t(grade == .fluorapatiteGold ? "★" : grade.rawValue))
+                                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                .foregroundStyle(MLTheme.fluorapatiteGold)
+                        } else if let stage = campaignStageNumber(worldId: host.worldId) {
+                            Text("\(stage)/5")
+                                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(MLTheme.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(selected ? MLTheme.cyanAccent.opacity(0.18) : Color.white.opacity(0.05)))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(selected ? MLTheme.cyanAccent : Color.clear, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    /// The toast, the tapped crown's card (`crownHere`: on the Duo it moves to the deck page) or the
+    /// first-glance hint.
+    @ViewBuilder
+    private func callout(crownHere: Bool) -> some View {
             // Tapped Crown / Toast Floating Callout (Non-blocking!)
             if let statusToast {
                 Text(L10n.t(statusToast))
@@ -214,23 +333,8 @@ public struct CompanionHubView: View {
                     .background(Capsule().fill(MLTheme.cardElevated))
                     .overlay(Capsule().strokeBorder(MLTheme.mintClean.opacity(0.55), lineWidth: 1))
                     .transition(.opacity.combined(with: .scale))
-            } else if let crown = tappedCrownSummary {
-                Button {
-                    onOpenSheet(.dentalChart)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkle.magnifyingglass")
-                            .foregroundStyle(MLTheme.cyanAccent)
-                        Text(L10n.t("\(crown.toothTypeLabel) • Upper #\(crown.upperTooth.universal) (FDI \(crown.upperTooth.fdi))"))
-                            .font(.system(.caption2, design: .rounded, weight: .bold))
-                            .foregroundStyle(MLTheme.textPrimary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(MLTheme.cardBg))
-                    .overlay(Capsule().strokeBorder(MLTheme.cyanAccent.opacity(0.40), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
+            } else if crownHere, let crown = tappedCrownSummary {
+                crownButton(crown)
             } else if showHint {
                 Text(L10n.t("Rub teeth to play notes & polish • Drag sky to turn"))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -241,10 +345,31 @@ public struct CompanionHubView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
+    }
 
-            // Wide-open interactive 3D Arch & Orbital Earth space!
-            Spacer(minLength: 0)
+    /// The tapped crown: its name and numbers; a tap opens the Dental Chart.
+    private func crownButton(_ crown: CompanionCrownSummary) -> some View {
+            Button {
+                onOpenSheet(.dentalChart)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkle.magnifyingglass")
+                        .foregroundStyle(MLTheme.cyanAccent)
+                    Text(L10n.t("\(crown.toothTypeLabel) • Upper #\(crown.upperTooth.universal) (FDI \(crown.upperTooth.fdi))"))
+                        .font(.system(.caption2, design: .rounded, weight: .bold))
+                        .foregroundStyle(MLTheme.textPrimary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(MLTheme.cardBg))
+                .overlay(Capsule().strokeBorder(MLTheme.cyanAccent.opacity(0.40), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+    }
 
+    /// How to Play: an offer on the first few launches, then a ? that always sits here.
+    @ViewBuilder
+    private var tutorialRow: some View {
             // How to Play: an offer on the first few launches, then a ? that always sits here.
             if showTutorialOffer {
                 TutorialOfferCard(onAccept: onOpenTutorial, onDecline: onDismissTutorialOffer)
@@ -257,7 +382,11 @@ public struct CompanionHubView: View {
                 }
                 .padding(.horizontal, 14)
             }
+    }
 
+    /// The bottom thumb deck: shields, Pulp Rescue, the radio and city row, the city card with Treat,
+    /// the 2-minute Brush and Dive.
+    private func thumbDeck(comp: CompanionState, needsPulpRescue: Bool) -> some View {
             // Bottom Thumb Deck: Shield Health + Campaign Selector + Dive / Brush-Along CTAs
             VStack(alignment: .leading, spacing: 8) {
                 // Compact 3-Layer Shield Bar Row

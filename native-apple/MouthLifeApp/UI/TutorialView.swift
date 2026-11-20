@@ -34,8 +34,10 @@ public struct TutorialView: View {
         reduceMotion: Bool,
         onDemoSound: @escaping (TutorialPageId) -> Void,
         onPageTurn: @escaping () -> Void,
-        onClose: @escaping () -> Void
+        onClose: @escaping () -> Void,
+        cardRect: CGRect? = nil
     ) {
+        self.cardRect = cardRect
         _pageIndex = State(initialValue: TutorialGuide.pageIndex(of: startPage))
         self.scheme = scheme
         self.reduceMotion = reduceMotion
@@ -52,6 +54,10 @@ public struct TutorialView: View {
         return .touch
         #endif
     }
+
+    /// On the iPhone Duo: the page the card sits on (never across the fold); the dimming still covers
+    /// both pages.
+    let cardRect: CGRect?
 
     private var pages: [TutorialPage] { TutorialGuide.pages }
     private var page: TutorialPage { pages[min(max(pageIndex, 0), pages.count - 1)] }
@@ -73,6 +79,7 @@ public struct TutorialView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            .placed(inOptional: cardRect)
         }
         .accessibilityAddTraits(.isModal)
     }

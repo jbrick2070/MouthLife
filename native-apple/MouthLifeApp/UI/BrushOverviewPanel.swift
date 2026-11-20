@@ -7,14 +7,14 @@ import SwiftUI
 /// is the child's right). The toothbrush steps along the quarter being brushed and reaches every
 /// tooth; finished quarters are outlined in gold, and the next one is outlined just before it starts.
 /// Floss shows the pick stepping gap by gap, the rinse shows the water. One tap folds it away for a
-/// full-screen close-up.
+/// full-screen close-up (not on the iPhone Duo, where it has a page of its own: `onHide` is nil).
 struct BrushOverviewPanel: View {
     let elapsedSec: Double
     let pacerStage: PacerStage
     let mouthwashDurationSec: Double
     let isPaused: Bool
     let language: CoachLanguage
-    let onHide: () -> Void
+    let onHide: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -26,15 +26,17 @@ struct BrushOverviewPanel: View {
                     .font(.system(size: 28, weight: .heavy, design: .rounded))
                     .foregroundStyle(MLTheme.fluorapatiteGold)
                 Spacer()
-                Button(action: onHide) {
-                    Image(systemName: "arrow.right.to.line")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(MLTheme.textSecondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                if let onHide {
+                    Button(action: onHide) {
+                        Image(systemName: "arrow.right.to.line")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(MLTheme.textSecondary)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("Full screen"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t("Full screen"))
             }
             Spacer(minLength: 0)
             MouthMap(mode: mode(phase), focus: .whole, zoom: 0)
