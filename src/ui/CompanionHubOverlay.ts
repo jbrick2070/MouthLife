@@ -199,7 +199,7 @@ export class CompanionHubOverlay implements OverlayView {
 
   /** Wide screens show a labelled button in the header; phones show a round ? above the deck. */
   private focusTutorialButton(): void {
-    const buttons = this.container?.querySelectorAll<HTMLElement>('#btn-open-tutorial, #btn-open-tutorial-compact');
+    const buttons = this.container?.querySelectorAll<HTMLElement>('#btn-open-tutorial, #btn-open-tutorial-compact, #btn-open-tutorial-menu');
     const shown = Array.from(buttons ?? []).find((b) => b.getClientRects().length > 0);
     shown?.focus({ preventScroll: true });
   }
@@ -702,6 +702,7 @@ export class CompanionHubOverlay implements OverlayView {
             <button type="button" id="btn-open-chart" class="btn btn-sm" title="Tooth Number Chart (all 32 teeth)">🦷 Chart</button>
             <button type="button" id="btn-open-sync" class="btn btn-sm">☁️ Sync</button>
             <button type="button" id="btn-replay-cosmic" class="btn btn-sm" title="Replay the Star Story Intro">✦ Cosmic</button>
+            <button type="button" id="btn-open-tutorial-menu" class="btn btn-sm">❓ ${TUTORIAL_COPY.buttonLabel}</button>
             <button type="button" id="btn-open-charity" class="btn btn-sm btn-charity-pill" title="Liked MouthLife? Help SmileOnU give free dental care">💛 SmileOnU</button>
           </div>
         </div>
@@ -1534,7 +1535,7 @@ export class CompanionHubOverlay implements OverlayView {
     });
     this.container.querySelector('#btn-tutorial-accept')?.addEventListener('click', () => this.openTutorial());
     this.container
-      .querySelectorAll('#btn-open-tutorial, #btn-open-tutorial-compact')
+      .querySelectorAll('#btn-open-tutorial, #btn-open-tutorial-compact, #btn-open-tutorial-menu')
       .forEach((btn) => btn.addEventListener('click', () => this.openTutorial()));
 
     this.container.querySelector('#tab-companion')?.addEventListener('click', () => {

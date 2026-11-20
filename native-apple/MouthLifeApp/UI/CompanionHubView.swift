@@ -671,7 +671,9 @@ public struct CompanionHubView: View {
     }
 
     private func open(_ shortcut: HubShortcut) {
-        if let sheet = shortcut.sheet {
+        if shortcut == .howToPlay {
+            onOpenTutorial()
+        } else if let sheet = shortcut.sheet {
             onOpenSheet(sheet)
         } else {
             onReplayIntro()
@@ -680,8 +682,9 @@ public struct CompanionHubView: View {
 }
 
 /// The hub's secondary destinations. One list feeds both the wide pill row and the phone menu.
+/// How to Play always sits here too, for anyone who missed it or wants it again.
 enum HubShortcut: String, CaseIterable, Identifiable {
-    case atlas, upgrades, almanac, sync, intro, charity, settings
+    case atlas, upgrades, almanac, sync, intro, howToPlay, charity, settings
 
     var id: String { rawValue }
 
@@ -692,6 +695,7 @@ enum HubShortcut: String, CaseIterable, Identifiable {
         case .almanac: return "Almanac"
         case .sync: return "ML2: Sync"
         case .intro: return "Cosmic Intro"
+        case .howToPlay: return TutorialGuide.Copy.buttonLabel
         case .charity: return "SmileOnU"
         case .settings: return "Settings"
         }
@@ -704,6 +708,7 @@ enum HubShortcut: String, CaseIterable, Identifiable {
         case .almanac: return "book.closed.fill"
         case .sync: return "arrow.triangle.2.circlepath"
         case .intro: return "sparkles"
+        case .howToPlay: return "questionmark.circle.fill"
         case .charity: return "heart.fill"
         case .settings: return "slider.horizontal.3"
         }
@@ -712,21 +717,21 @@ enum HubShortcut: String, CaseIterable, Identifiable {
     var tint: Color {
         switch self {
         case .atlas, .sync: return MLTheme.cyanAccent
-        case .upgrades: return MLTheme.mintClean
+        case .upgrades, .howToPlay: return MLTheme.mintClean
         case .almanac, .intro: return MLTheme.fluorapatiteGold
         case .charity: return MLTheme.coralGum
         case .settings: return MLTheme.textSecondary
         }
     }
 
-    /// nil = replay the Cosmic Intro instead of opening a sheet.
+    /// nil = replay the Cosmic Intro, or open How to Play, instead of opening a sheet.
     var sheet: HubSheetKind? {
         switch self {
         case .atlas: return .dentalChart
         case .upgrades: return .upgradeLab
         case .almanac: return .historyAlmanac
         case .sync: return .syncSave
-        case .intro: return nil
+        case .intro, .howToPlay: return nil
         case .charity: return .charity
         case .settings: return .settings
         }

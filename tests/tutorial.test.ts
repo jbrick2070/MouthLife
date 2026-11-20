@@ -348,6 +348,15 @@ describe('How to Play guide: same words and pictures in the native app', () => {
     expect(swift).toContain(`static let maxOffers = ${TUTORIAL_MAX_OFFERS}`);
   });
 
+  it('keeps How to Play in the Home menu for a second look, in both editions', () => {
+    const hub = readFileSync(join(ROOT, 'src/ui/CompanionHubOverlay.ts'), 'utf8');
+    expect(hub).toContain('id="btn-open-tutorial-menu"');
+    expect(hub).toContain('#btn-open-tutorial-menu');
+    const nativeHub = readFileSync(join(ROOT, 'native-apple/MouthLifeApp/UI/CompanionHubView.swift'), 'utf8');
+    expect(nativeHub).toMatch(/case atlas, upgrades, almanac, sync, intro, howToPlay, charity, settings/);
+    expect(nativeHub).toContain('if shortcut == .howToPlay');
+  });
+
   it('brings the guide back for everyone at the same edition', () => {
     expect(swift).toContain(`static let edition = ${TUTORIAL_EDITION}`);
   });
