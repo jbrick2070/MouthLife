@@ -24,6 +24,11 @@ two-screen layouts built for the iPhone Duo) and `docs/widget-plan.md` first. Re
 
 ## 2. What the owner does (accounts and forms)
 
+**Status (2026-11-19):** the owner's personal Play Console account is created. It is waiting for
+the one-time check with a real Android phone (Play Console app, signed in as the account owner;
+an emulator does not count). The owner is getting a phone, which also serves as the real test
+device below. Phase 1 can be built meanwhile.
+
 1. **A Google Play developer account** (Play Console, personal account): a one-time fee, ID and
    phone checks. The Chrome Web Store developer account is separate and does not cover Play.
 2. **A closed test:** new personal accounts need at least 12 testers opted in for 14 days in a
