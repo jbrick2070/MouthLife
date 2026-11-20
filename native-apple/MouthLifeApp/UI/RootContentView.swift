@@ -121,7 +121,9 @@ public struct RootContentView: View {
         case .hub, .brushAlong, .arcade, .pulpRescue: break
         default: return nil
         }
-        #if os(iOS)
+        // `reservedRegions` is in the iOS 27.1 SDK (Xcode 27, Swift 6.4). Older Xcodes, such as
+        // GitHub's Mac runner, build without the Duo split so the rest of the app is still checked.
+        #if os(iOS) && compiler(>=6.4)
         if #available(iOS 27.1, *) {
             let folds = geo.reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed).map(\.frame)
             return DuoSplit.make(folds: folds, size: geo.size, safeTrailing: geo.safeAreaInsets.trailing, safeBottom: geo.safeAreaInsets.bottom)
