@@ -70,6 +70,7 @@ the watch and the web edition are unchanged.
 | Home | ![](duo-captures/two-book-home.jpg) | ![](duo-captures/two-table-home.jpg) |
 | 2-Min Brush | ![](duo-captures/two-book-brush.jpg) | ![](duo-captures/two-table-brush.jpg) |
 | A city stage | ![](duo-captures/two-book-stage.jpg) | ![](duo-captures/two-table-stage.jpg) |
+| Finale, ending (one big screen) | ![](duo-captures/two-book-finale.jpg) | ![](duo-captures/two-book-ending.jpg) |
 
 - **Fold:** `DuoSplit` (`MouthLifeCore/Config/DuoSplit.swift`, tested) turns the fold that
   `reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed)`
@@ -96,6 +97,9 @@ the watch and the web edition are unchanged.
   - Second page: the readouts and Menu, the tapped crown's card, the journey so far (the five
     cities with their check and grade, their number, or a lock; a tap picks one), How to Play and
     the deck. In Tabletop the deck page scrolls and leaves the journey out.
+- **Finales: one big screen.** A city's finale and the ending (the Golden Molar and the credits) play
+  across both pages, the owner's call: the split is off while they run, and the pages come back
+  after them.
 - **Also:** the left/right labels of the compass and the rinse level are pinned left-to-right, and
   the watch-style pacers keep their tooth layout between frames (`PacerGeometryCache`).
 - **Still to check on hardware:** steady 120 Hz in Tabletop during Scan and scrubbing, touch on the

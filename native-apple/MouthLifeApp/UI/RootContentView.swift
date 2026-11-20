@@ -16,7 +16,7 @@ public struct RootContentView: View {
     public var body: some View {
         GeometryReader { geo in
             // The iPhone Duo's inner screen: two pages, each doing its own job (nil everywhere else).
-            let split = Self.duoSplit(geo, mode: coordinator.mode)
+            let split = Self.duoSplit(geo, mode: coordinator.mode, finale: coordinator.finale != nil)
             let wide = split == nil && coordinator.mode == .brushAlong && geo.size.width >= 900 && geo.size.width > geo.size.height * 1.15
             let panel: CGFloat = wide && showBrushOverview ? min(460, geo.size.width * 0.36) : 0
             let viewport = split.map { EdgeInsets(top: 0, leading: 0, bottom: $0.viewportBottom, trailing: $0.viewportTrailing) }
@@ -110,9 +110,12 @@ public struct RootContentView: View {
         }
     }
 
-    /// The Duo's two pages for the modes that use them (Home, the 2-Minute Brush, a city stage); the
-    /// Prologue, the score, the finale and the sheets keep the whole screen in this version.
-    private static func duoSplit(_ geo: GeometryProxy, mode: AppMode) -> DuoSplit? {
+    /// The Duo's two pages for the modes that use them (Home, the 2-Minute Brush, a city stage). A
+    /// city's finale and the ending play on one big screen across both pages (the split is off while
+    /// they run, so the scene behind them is whole too); the Prologue, the score and the sheets keep
+    /// the whole screen as well.
+    private static func duoSplit(_ geo: GeometryProxy, mode: AppMode, finale: Bool) -> DuoSplit? {
+        if finale { return nil }
         switch mode {
         case .hub, .brushAlong, .arcade, .pulpRescue: break
         default: return nil
