@@ -324,8 +324,9 @@ agreement (agy confirmed each; Codex confirmed the design before the build):
 9. **Rendering:** removable purple background; bigger marks and thicker strokes without background;
    only finished marks accented; `.widgetAccentedRenderingMode` guarded for iOS 18; round shapes
    only, calm under the red night tint.
-10. **Android:** not now. The web edition stays an installable PWA without widgets: a Play Store app
-    needs a public developer contact email, which the house rules do not allow.
+10. **Android:** not in this round. Planned since in `docs/android-plan.md`: the web edition packaged
+    for Google Play (the owner will enter their own contact email in Play Console), with widgets as
+    an optional third phase.
 
 ## v1 as built (2026-11-19)
 
