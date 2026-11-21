@@ -33,6 +33,7 @@ import {
 import { EnamelBiophysicsMaterial } from './EnamelBiophysicsMaterial';
 import { EntityBatchRenderer } from './EntityBatchRenderer';
 import { GlowPass } from './GlowPass';
+import { ContextLossWatchdog } from './contextLossWatchdog';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
 import { brushCameraAim } from './brushCamera';
 import { CitySkylineBackdrop } from './CitySkylineBackdrop';
@@ -67,11 +68,26 @@ function systemReducedMotionQuery(): MediaQueryList | null {
   }
 }
 
+export type GraphicsState = 'ready' | 'unavailable' | 'failed';
+export type GraphicsFailureReason = 'compile' | 'context-timeout';
+/** How long a lost WebGL context may take to come back before the 3D is given up. */
+export const CONTEXT_RESTORE_TIMEOUT_MS = 10_000;
+
 export class SceneManager {
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   renderer!: THREE.WebGLRenderer;
   webglAvailable = false;
+  /**
+   * Whether the 3D picture can be drawn. `unavailable`: no WebGL 2 renderer could be made.
+   * `failed` is terminal for this page load: a shader would not compile or link (three reports it
+   * on a program's first draw, never on `compile()`), or the context was lost for good. Once
+   * failed, nothing is drawn again until reload, and `webgl:failed` has been emitted once.
+   */
+  graphicsState: GraphicsState = 'unavailable';
+  private readonly lostWatchdog = new ContextLossWatchdog(CONTEXT_RESTORE_TIMEOUT_MS, () =>
+    this.markGraphicsFailed('context-timeout')
+  );
 
   readonly enamelMat = new EnamelBiophysicsMaterial();
   readonly earthBackdrop = new OrbitalEarthBackdrop();
@@ -280,6 +296,17 @@ export class SceneManager {
         return;
       }
     }
+    this.graphicsState = 'ready';
+    // One latch for the whole session: any shader that fails on its first draw ends the 3D.
+    this.renderer.debug.onShaderError = (gl, program, vertexShader, fragmentShader) => {
+      console.error(
+        '[graphics] shader failed',
+        gl.getProgramInfoLog(program),
+        gl.getShaderInfoLog(vertexShader),
+        gl.getShaderInfoLog(fragmentShader)
+      );
+      this.markGraphicsFailed('compile');
+    };
 
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = false; // Strict modest-GPU discipline: zero shadow map passes!
@@ -291,16 +318,28 @@ export class SceneManager {
     this.scene.add(this.pacerRig.group);
     this.scene.add(this.entityBatch.arcadeEntitiesGroup);
     this.scene.add(this.entityBatch.sharedFxGroup);
+    if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('graphicsTest') === 'shaderError') {
+      // Development only (removed from production builds): a shader that cannot compile, to
+      // exercise the failure card.
+      const broken = new THREE.ShaderMaterial({ fragmentShader: 'void main() { this is not glsl; }' });
+      this.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), broken));
+    }
 
-    // WebGL context loss & restoration resilience
+    // WebGL context loss & restoration resilience. A context that does not come back within
+    // 10 s ends the 3D for this page load; a restore is only announced once a real draw passes.
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
+      if (this.graphicsState === 'failed') return;
+      this.lostWatchdog.lose();
       this.bus.emit('webgl:lost', {});
     });
     this.canvas.addEventListener('webglcontextrestored', () => {
+      // Too late once failed: the card stays up until reload.
+      if (this.graphicsState === 'failed' || !this.lostWatchdog.restore()) return;
       this.enamelMat.markTextureNeedsUpdate();
       this.entityBatch.markTexturesNeedsUpdate();
       this.prewarmShaders();
+      if (this.graphicsState !== 'ready') return;
       this.bus.emit('webgl:restored', {});
     });
 
@@ -311,27 +350,61 @@ export class SceneManager {
     this.prewarmShaders();
   }
 
+  /**
+   * Builds every shader the scene can show and draws each once, off screen, so a phone whose GPU
+   * cannot run them fails here, before any screen appears, instead of drawing black. three
+   * checks a program only on its first draw, so a compile alone would never notice.
+   */
   prewarmShaders(): void {
-    if (!this.webglAvailable) return;
+    if (!this.webglAvailable || this.graphicsState === 'failed') return;
     const prevCosmic = this.earthBackdrop.cosmicShowcaseGroup.visible;
     const prevComp = this.companionArch.group.visible;
     const prevStage = this.cartridgeStage?.group.visible ?? false;
     const prevBackdrop = this.earthBackdrop.rootGroup.visible;
+    const prevPacer = this.pacerRig.group.visible;
     const prevMohs = this.earthBackdrop.cosmicShowcaseGroup.children.map((c) => c.visible);
+    const culled: THREE.Object3D[] = [];
+    const prevTarget = this.renderer.getRenderTarget();
+    const prevStrength = this.glow.strength;
 
-    this.earthBackdrop.rootGroup.visible = true;
-    this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c) => (c.visible = true));
-    this.earthBackdrop.cosmicShowcaseGroup.visible = true;
-    this.companionArch.group.visible = true;
-    if (this.cartridgeStage) this.cartridgeStage.group.visible = true;
+    try {
+      this.earthBackdrop.rootGroup.visible = true;
+      this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c) => (c.visible = true));
+      this.earthBackdrop.cosmicShowcaseGroup.visible = true;
+      this.companionArch.group.visible = true;
+      this.pacerRig.group.visible = true;
+      if (this.cartridgeStage) this.cartridgeStage.group.visible = true;
+      // The camera may not face everything yet; draw it all regardless.
+      this.scene.traverse((o) => {
+        if (o.frustumCulled) {
+          o.frustumCulled = false;
+          culled.push(o);
+        }
+      });
 
-    this.renderer.compile(this.scene, this.camera);
+      this.renderer.compile(this.scene, this.camera);
+      // GlowPass draws the scene and its own passes into its off-screen targets.
+      this.glow.strength = Math.max(prevStrength, 0.42);
+      this.glow.prepare(this.renderer, this.scene, this.camera);
+      this.glow.discardPrepared(this.renderer);
+    } finally {
+      for (const o of culled) o.frustumCulled = true;
+      this.glow.strength = prevStrength;
+      this.renderer.setRenderTarget(prevTarget);
+      this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c, i) => (c.visible = prevMohs[i]));
+      this.earthBackdrop.rootGroup.visible = prevBackdrop;
+      this.earthBackdrop.cosmicShowcaseGroup.visible = prevCosmic;
+      this.companionArch.group.visible = prevComp;
+      this.pacerRig.group.visible = prevPacer;
+      if (this.cartridgeStage) this.cartridgeStage.group.visible = prevStage;
+    }
+  }
 
-    this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c, i) => (c.visible = prevMohs[i]));
-    this.earthBackdrop.rootGroup.visible = prevBackdrop;
-    this.earthBackdrop.cosmicShowcaseGroup.visible = prevCosmic;
-    this.companionArch.group.visible = prevComp;
-    if (this.cartridgeStage) this.cartridgeStage.group.visible = prevStage;
+  private markGraphicsFailed(reason: GraphicsFailureReason): void {
+    if (this.graphicsState === 'failed') return;
+    this.graphicsState = 'failed';
+    this.lostWatchdog.fail();
+    this.bus.emit('webgl:failed', { reason });
   }
 
   handleResize(): void {
@@ -528,7 +601,8 @@ export class SceneManager {
     /** Live Brush-Along timeline state, or null when no session is running. */
     pacer?: PacerVisualState | null;
   }): void {
-    if (!this.webglAvailable) return;
+    // Nothing to draw while the context is lost, and nothing ever again once the 3D has failed.
+    if (!this.webglAvailable || this.lostWatchdog.lost || this.graphicsState !== 'ready') return;
     const { frameDt, nowSec, session, companion } = params;
 
     this.stepQualityGovernor(frameDt);

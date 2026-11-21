@@ -469,6 +469,8 @@ export interface AppEventMap {
   'motion:changed': { reduced: boolean };
   'webgl:lost': Record<string, never>;
   'webgl:restored': Record<string, never>;
+  /** Terminal for this page load: a shader failed, or the context never came back. Sent once. */
+  'webgl:failed': { reason: 'compile' | 'context-timeout' };
   'save:updated': {
     save: MouthLifeSaveV2;
   };

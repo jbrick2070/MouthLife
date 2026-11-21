@@ -464,6 +464,13 @@ export class CityFinaleOverlay implements OverlayView {
     this.raf = requestAnimationFrame(frame);
   }
 
+  private drop3DStage(): void {
+    this.stage3d?.dispose();
+    this.stage3d = null;
+    this.canvas3d?.remove();
+    this.canvas3d = null;
+  }
+
   dispose(): void {
     this.soundtrack.stop();
     cancelAnimationFrame(this.raf);
@@ -555,6 +562,8 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.globalAlpha = 1;
     if (this.canvas) this.canvas.style.opacity = cover.toFixed(3);
     if (this.canvas3d) this.canvas3d.style.opacity = cover.toFixed(3);
+    // A shader that failed on its first draw: carry on with the 2D show from this moment.
+    if (this.stage3d && !this.stage3d.ok) this.drop3DStage();
     const stage = this.stage3d;
     if (stage) {
       if (this.city && t < this.cityLength) {

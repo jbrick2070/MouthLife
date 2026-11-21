@@ -1208,9 +1208,16 @@ function buildCoin(emblem: THREE.BufferGeometry, finish: MolarFinish, env: THREE
 export class FinaleStage3D {
   private renderer: THREE.WebGLRenderer | null = null;
 
-  /** Whether WebGL started: if not, the caller draws the 2D show instead. */
+  /** Set when a shader fails on its first draw (three reports it then, not on compile). */
+  private shaderFailed = false;
+
+  /**
+   * Whether the 3D show can be drawn. The caller checks it every frame and switches to the 2D
+   * show at the same moment if it turns false: a shader can fail on any first draw, including a
+   * credit city built late in the ending.
+   */
   get ok(): boolean {
-    return this.renderer !== null;
+    return this.renderer !== null && !this.shaderFailed;
   }
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 900);
@@ -1313,6 +1320,10 @@ export class FinaleStage3D {
     // whether the show can be drawn this way.
     const r = this.renderer;
     if (r) {
+      r.debug.onShaderError = (gl, program) => {
+        console.error('[finale] shader failed, drawing the 2D show', gl.getProgramInfoLog(program));
+        this.shaderFailed = true;
+      };
       r.setClearColor(0x01030c, 1);
       r.outputColorSpace = THREE.SRGBColorSpace;
       r.toneMapping = THREE.ACESFilmicToneMapping;

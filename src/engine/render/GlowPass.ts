@@ -153,6 +153,19 @@ export class GlowPass {
     this.prepared = true;
   }
 
+  /**
+   * Startup check only: runs the composite shader once into an off-screen buffer (so every glow
+   * shader has drawn once), then forgets the prepared frame. Nothing reaches the screen.
+   */
+  discardPrepared(renderer: THREE.WebGLRenderer): void {
+    if (this.prepared && this.blurA && this.blurB) {
+      this.compositeMat.uniforms.uStrength.value = this.strength;
+      this.pass(renderer, this.compositeMat, this.blurA.texture, this.blurB);
+      renderer.setRenderTarget(null);
+    }
+    this.prepared = false;
+  }
+
   /** Call after the main render: adds the glow on top of the finished frame. */
   composite(renderer: THREE.WebGLRenderer): void {
     if (!this.prepared || !this.blurA) return;

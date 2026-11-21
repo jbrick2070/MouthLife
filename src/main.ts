@@ -32,6 +32,7 @@ import {
 } from './ui/MissionReportOverlay';
 import { TelemetryHudOverlay } from './ui/TelemetryHudOverlay';
 import { CityFinaleOverlay } from './ui/CityFinaleOverlay';
+import { graphicsCardHtml, mountGraphicsFailureCard } from './ui/graphicsFailureCard';
 import { molarFinishForGrade, type MolarFinish } from './config/cityFinale';
 import { shouldHandleGlobalMuteKey } from './ui/hudHelpers';
 import { getCartridgeById } from './worlds/worldRegistry';
@@ -109,19 +110,16 @@ function bootstrapMouthLife(): void {
 
   // Step 3: Modest-GPU 3D SceneManager & InputManager
   const sceneMgr = new SceneManager(canvas, bus);
-  if (!sceneMgr.webglAvailable) {
-    uiRoot.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal-sheet" style="text-align:center;">
-          <h2>3D Graphics Are Turned Off</h2>
-          <p style="color:#cbd5e1;font-size:0.88rem;">
-            MouthLife needs 3D graphics. Turn on hardware acceleration in your browser settings, then reload.
-          </p>
-        </div>
-      </div>
-    `;
+  // The warm-up inside SceneManager has already drawn every startup shader once off screen, so a
+  // GPU that cannot run them is caught here instead of showing a black screen.
+  if (sceneMgr.graphicsState !== 'ready') {
+    canvas.style.visibility = 'hidden';
+    uiRoot.innerHTML = graphicsCardHtml(sceneMgr.graphicsState === 'unavailable' ? 'unavailable' : 'failed');
+    uiRoot.querySelector('.graphics-card-reload')?.addEventListener('click', () => window.location.reload());
     return;
   }
+  // Later failures (a shader on its first draw, or a context that never came back) are terminal.
+  bus.on('webgl:failed', () => mountGraphicsFailureCard());
   // Graphics quality is automatic: the game watches its own frame rate and adjusts. The manual
   // picker was removed, so a fixed choice saved earlier goes back to automatic.
   if (saveSys.getSave().qualityPreference !== 'auto') saveSys.setQualityPreference('auto');
