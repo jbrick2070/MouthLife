@@ -810,7 +810,7 @@ enum L10nCatalogs {
 "Privacy Policy":"Datenschutzerklärung",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"PROZEDURALER AVAUDIOENGINE-SYNTH",
 "Profile & Settings":"Profil & Einstellungen",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"Fortschritt, Putz-Stempel und Einstellungen werden nur auf diesem Gerät gespeichert. Ein Sync-Code oder eine Sicherungsdatei wird auf dem Gerät erstellt, und nur du kannst ihn auf deine anderen Geräte übertragen. Du kannst alle gespeicherten Daten jederzeit in den Einstellungen löschen.",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"Fortschritt, Putz-Stempel und Einstellungen werden nur auf diesem Gerät gespeichert. Ein Sync-Code oder eine Sicherungsdatei wird auf dem Gerät erstellt, und nur du kannst ihn auf deine anderen Geräte übertragen. Du kannst alle gespeicherten Daten jederzeit in den Einstellungen löschen. Auf dem iPhone kann ein Erwachsener festlegen, dass jedes Zähneputzen in Apple Health gespeichert wird; MouthLife liest nie Gesundheitsdaten.",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"PROLOG 1 / 4 • STELLARE NUKLEOSYNTHESE",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"PROLOG 2 / 4 • ATOMARE KRISTALLOGRAFIE",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"PROLOG 3 / 4 • DAS BIOPHYSIKALISCHE PARADOXON",
@@ -1114,7 +1114,11 @@ enum L10nCatalogs {
 "Whole mouth":"Ganzer Mund",
 "Dive {0} of 5":"Abtauchen {0} von 5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Klick auf einen Zahn und zieh, um zu steuern und zu schrubben. Rechtsklick für Zahnseide, oder zieh den Zahnseide-Ring zum Zielen.",
-"🧵 Right-click to Zip!":"🧵 Rechtsklick zum Flitzen!"
+"🧵 Right-click to Zip!":"🧵 Rechtsklick zum Flitzen!",
+"For grown-ups: each brush is saved to Health.":"Für Erwachsene: Jedes Zähneputzen wird in Health gespeichert.",
+"Health access is off. A grown-up can allow it in the Health app.":"Der Zugriff auf Health ist aus. Ein Erwachsener kann ihn in der Health-App erlauben.",
+"Saves each brush to Apple Health. Set by a grown-up.":"Speichert jedes Zähneputzen in Apple Health. Wird von einem Erwachsenen eingestellt.",
+"❤️ Apple Health":"❤️ Apple Health"
 }
 """###
 
@@ -1910,7 +1914,7 @@ enum L10nCatalogs {
 "Privacy Policy":"Política de privacidad",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"SINTETIZADOR PROCEDURAL AVAUDIOENGINE",
 "Profile & Settings":"Perfil y ajustes",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"El progreso, los sellos de cepillado y los ajustes se guardan solo en este dispositivo. El código de sincronización o el archivo de copia se crean en el dispositivo, y solo tú puedes copiarlos a tus otros dispositivos. Puedes borrar todos los datos guardados en cualquier momento en Ajustes.",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"El progreso, los sellos de cepillado y los ajustes se guardan solo en este dispositivo. El código de sincronización o el archivo de copia se crean en el dispositivo, y solo tú puedes copiarlos a tus otros dispositivos. Puedes borrar todos los datos guardados en cualquier momento en Ajustes. En el iPhone, un adulto puede elegir guardar cada cepillado en Apple Salud; MouthLife nunca lee datos de salud.",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"PRÓLOGO 1 / 4 • NUCLEOSÍNTESIS ESTELAR",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"PRÓLOGO 2 / 4 • CRISTALOGRAFÍA ATÓMICA",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"PRÓLOGO 3 / 4 • LA PARADOJA BIOFÍSICA",
@@ -2214,7 +2218,11 @@ enum L10nCatalogs {
 "Whole mouth":"Toda la boca",
 "Dive {0} of 5":"Inmersión {0} de 5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Haz clic en un diente y arrastra para moverte y cepillar. Clic derecho para usar el hilo dental, o arrastra el aro del hilo dental para apuntar.",
-"🧵 Right-click to Zip!":"🧵 ¡Clic derecho para lanzar!"
+"🧵 Right-click to Zip!":"🧵 ¡Clic derecho para lanzar!",
+"For grown-ups: each brush is saved to Health.":"Para adultos: cada cepillado se guarda en Salud.",
+"Health access is off. A grown-up can allow it in the Health app.":"El acceso a Salud está desactivado. Un adulto puede permitirlo en la app Salud.",
+"Saves each brush to Apple Health. Set by a grown-up.":"Guarda cada cepillado en Apple Salud. Lo configura un adulto.",
+"❤️ Apple Health":"❤️ Apple Salud"
 }
 """###
 
@@ -3010,7 +3018,7 @@ enum L10nCatalogs {
 "Privacy Policy":"Politique de confidentialité",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"SYNTHÉ AVAUDIOENGINE PROCÉDURAL",
 "Profile & Settings":"Profil et réglages",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"La progression, les tampons de brossage et les réglages sont enregistrés uniquement sur cet appareil. Le code de synchronisation ou le fichier de sauvegarde est créé sur l'appareil, et toi seul peux le copier sur tes autres appareils. Tu peux effacer toutes les données enregistrées à tout moment dans les Réglages.",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"La progression, les tampons de brossage et les réglages sont enregistrés uniquement sur cet appareil. Le code de synchronisation ou le fichier de sauvegarde est créé sur l'appareil, et toi seul peux le copier sur tes autres appareils. Tu peux effacer toutes les données enregistrées à tout moment dans les Réglages. Sur iPhone, un adulte peut choisir d’enregistrer chaque brossage dans Apple Santé ; MouthLife ne lit jamais les données de santé.",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"PROLOGUE 1 / 4 • NUCLÉOSYNTHÈSE STELLAIRE",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"PROLOGUE 2 / 4 • CRISTALLOGRAPHIE ATOMIQUE",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"PROLOGUE 3 / 4 • LE PARADOXE BIOPHYSIQUE",
@@ -3314,7 +3322,11 @@ enum L10nCatalogs {
 "Whole mouth":"Toute la bouche",
 "Dive {0} of 5":"Plonger {0} sur 5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Clique sur une dent et fais glisser pour diriger et frotter. Clic droit pour le fil dentaire, ou fais glisser l'anneau du fil dentaire pour viser.",
-"🧵 Right-click to Zip!":"🧵 Clic droit : Glisse-fil !"
+"🧵 Right-click to Zip!":"🧵 Clic droit : Glisse-fil !",
+"For grown-ups: each brush is saved to Health.":"Pour les adultes : chaque brossage est enregistré dans Santé.",
+"Health access is off. A grown-up can allow it in the Health app.":"L’accès à Santé est désactivé. Un adulte peut l’autoriser dans l’app Santé.",
+"Saves each brush to Apple Health. Set by a grown-up.":"Enregistre chaque brossage dans Apple Santé. Réglé par un adulte.",
+"❤️ Apple Health":"❤️ Apple Santé"
 }
 """###
 
@@ -4110,7 +4122,7 @@ enum L10nCatalogs {
 "Privacy Policy":"プライバシーポリシー",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"自動 AVAUDIOENGINE シンセ",
 "Profile & Settings":"プロフィールとせってい",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。シンクコードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。シンクコードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。iPhoneでは、大人の方が歯みがきの記録をAppleヘルスケアに保存するよう選べます。MouthLifeが健康データを読むことはありません。",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"プロローグ 1 / 4 • 星が生みだしたつぶ",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"プロローグ 2 / 4 • つぶのけっしょう",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"プロローグ 3 / 4 • 生きもののふしぎなルール",
@@ -4414,7 +4426,11 @@ enum L10nCatalogs {
 "Whole mouth":"口全体",
 "Dive {0} of 5":"ダイブ {0}/5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"歯をクリックしてドラッグすると、そこへ動いてみがけます。右クリックでフロス、またはフロスリングをドラッグしてねらいましょう。",
-"🧵 Right-click to Zip!":"🧵 右クリックでジップ！"
+"🧵 Right-click to Zip!":"🧵 右クリックでジップ！",
+"For grown-ups: each brush is saved to Health.":"大人の方へ：歯みがきのたびにヘルスケアに保存されます。",
+"Health access is off. A grown-up can allow it in the Health app.":"ヘルスケアへのアクセスはオフです。大人の方がヘルスケアアプリで許可できます。",
+"Saves each brush to Apple Health. Set by a grown-up.":"歯みがきのたびにAppleヘルスケアに保存します。大人の方が設定します。",
+"❤️ Apple Health":"❤️ Appleヘルスケア"
 }
 """###
 
@@ -5210,7 +5226,7 @@ enum L10nCatalogs {
 "Privacy Policy":"개인정보 처리방침",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"절차적 AVAUDIOENGINE 신스",
 "Profile & Settings":"프로필 & 설정",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"진행 상황, 양치 스탬프, 설정은 이 기기에만 저장됩니다. 동기화 코드나 백업 파일은 기기 안에서 만들어지고, 다른 내 기기로 옮길 수 있는 사람은 나뿐입니다. 저장된 데이터는 설정에서 언제든지 지울 수 있어요.",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"진행 상황, 양치 스탬프, 설정은 이 기기에만 저장됩니다. 동기화 코드나 백업 파일은 기기 안에서 만들어지고, 다른 내 기기로 옮길 수 있는 사람은 나뿐입니다. 저장된 데이터는 설정에서 언제든지 지울 수 있어요. iPhone에서는 보호자가 양치 기록을 Apple 건강 앱에 저장하도록 선택할 수 있어요. MouthLife는 건강 데이터를 절대 읽지 않아요.",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"프롤로그 1 / 4 • 별의 원소 합성",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"프롤로그 2 / 4 • 원자 결정 구조",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"프롤로그 3 / 4 • 생물물리학의 역설",
@@ -5514,7 +5530,11 @@ enum L10nCatalogs {
 "Whole mouth":"입 전체",
 "Dive {0} of 5":"다이브 {0}/5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"치아를 클릭하고 끌어 조종하고 닦아요. 오른쪽 클릭으로 치실을 쓰거나, 치실 링을 끌어 조준해요.",
-"🧵 Right-click to Zip!":"🧵 오른쪽 클릭으로 집라인!"
+"🧵 Right-click to Zip!":"🧵 오른쪽 클릭으로 집라인!",
+"For grown-ups: each brush is saved to Health.":"보호자용: 양치할 때마다 건강 앱에 저장돼요.",
+"Health access is off. A grown-up can allow it in the Health app.":"건강 앱 접근이 꺼져 있어요. 보호자가 건강 앱에서 허용할 수 있어요.",
+"Saves each brush to Apple Health. Set by a grown-up.":"양치할 때마다 Apple 건강 앱에 저장해요. 보호자가 설정해요.",
+"❤️ Apple Health":"❤️ Apple 건강"
 }
 """###
 
@@ -6310,7 +6330,7 @@ enum L10nCatalogs {
 "Privacy Policy":"Política de privacidade",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"SINTETIZADOR PROCEDURAL AVAUDIOENGINE",
 "Profile & Settings":"Perfil e Ajustes",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"O progresso, os selos de escovação e as configurações ficam salvos só neste aparelho. O código de sincronização ou o arquivo de backup é criado no aparelho, e só você pode copiá-lo para seus outros aparelhos. Você pode apagar todos os dados salvos a qualquer momento em Configurações.",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"O progresso, os selos de escovação e as configurações ficam salvos só neste aparelho. O código de sincronização ou o arquivo de backup é criado no aparelho, e só você pode copiá-lo para seus outros aparelhos. Você pode apagar todos os dados salvos a qualquer momento em Configurações. No iPhone, um adulto pode escolher salvar cada escovação no app Saúde da Apple; o MouthLife nunca lê dados de saúde.",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"PRÓLOGO 1 / 4 • NUCLEOSSÍNTESE ESTELAR",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"PRÓLOGO 2 / 4 • CRISTALOGRAFIA ATÔMICA",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"PRÓLOGO 3 / 4 • O PARADOXO BIOFÍSICO",
@@ -6614,7 +6634,11 @@ enum L10nCatalogs {
 "Whole mouth":"Boca inteira",
 "Dive {0} of 5":"Mergulhar {0} de 5",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"Clique em um dente e arraste para guiar e esfregar. Clique com o botão direito para usar o Fio Dental, ou arraste o anel do Fio Dental para mirar.",
-"🧵 Right-click to Zip!":"🧵 Clique com o botão direito para a Tirolesa!"
+"🧵 Right-click to Zip!":"🧵 Clique com o botão direito para a Tirolesa!",
+"For grown-ups: each brush is saved to Health.":"Para adultos: cada escovação é salva no Saúde.",
+"Health access is off. A grown-up can allow it in the Health app.":"O acesso ao Saúde está desativado. Um adulto pode permiti-lo no app Saúde.",
+"Saves each brush to Apple Health. Set by a grown-up.":"Salva cada escovação no app Saúde da Apple. Configurado por um adulto.",
+"❤️ Apple Health":"❤️ Saúde da Apple"
 }
 """###
 
@@ -7410,7 +7434,7 @@ enum L10nCatalogs {
 "Privacy Policy":"隐私政策",
 "PROCEDURAL AVAUDIOENGINE SYNTH":"程序化 AVAUDIOENGINE 合成器",
 "Profile & Settings":"档案与设置",
-"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.":"进度、刷牙印章和设置只保存在这台设备上。同步码或备份文件在设备上生成，只有你能把它复制到你的其他设备。你可以随时在设置中清除所有已保存的数据。",
+"Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.":"进度、刷牙印章和设置只保存在这台设备上。同步码或备份文件在设备上生成，只有你能把它复制到你的其他设备。你可以随时在设置中清除所有已保存的数据。在 iPhone 上，家长可以选择将每次刷牙保存到 Apple“健康”；MouthLife 从不读取健康数据。",
 "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS":"序章 1 / 4 • 恒星造元素",
 "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY":"序章 2 / 4 • 原子晶体结构",
 "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX":"序章 3 / 4 • 生命物理之谜",
@@ -7714,7 +7738,11 @@ enum L10nCatalogs {
 "Whole mouth":"整个口腔",
 "Dive {0} of 5":"潜入 第{0}站/共5站",
 "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.":"点击牙齿并拖动即可转向和刷洗。点击鼠标右键使用牙线，或拖动牙线环来瞄准。",
-"🧵 Right-click to Zip!":"🧵 点击鼠标右键滑索！"
+"🧵 Right-click to Zip!":"🧵 点击鼠标右键滑索！",
+"For grown-ups: each brush is saved to Health.":"家长设置：每次刷牙都会保存到“健康”。",
+"Health access is off. A grown-up can allow it in the Health app.":"“健康”访问已关闭。家长可以在“健康”App 中允许。",
+"Saves each brush to Apple Health. Set by a grown-up.":"将每次刷牙保存到 Apple“健康”。由家长设置。",
+"❤️ Apple Health":"❤️ Apple 健康"
 }
 """###
 }

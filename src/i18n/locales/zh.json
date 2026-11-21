@@ -789,7 +789,7 @@
  "Privacy Policy": "隐私政策",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "程序化 AVAUDIOENGINE 合成器",
  "Profile & Settings": "档案与设置",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "进度、刷牙印章和设置只保存在这台设备上。同步码或备份文件在设备上生成，只有你能把它复制到你的其他设备。你可以随时在设置中清除所有已保存的数据。",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "进度、刷牙印章和设置只保存在这台设备上。同步码或备份文件在设备上生成，只有你能把它复制到你的其他设备。你可以随时在设置中清除所有已保存的数据。在 iPhone 上，家长可以选择将每次刷牙保存到 Apple“健康”；MouthLife 从不读取健康数据。",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "序章 1 / 4 • 恒星造元素",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "序章 2 / 4 • 原子晶体结构",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "序章 3 / 4 • 生命物理之谜",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "整个口腔",
  "Dive {0} of 5": "潜入 第{0}站/共5站",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "点击牙齿并拖动即可转向和刷洗。点击鼠标右键使用牙线，或拖动牙线环来瞄准。",
- "🧵 Right-click to Zip!": "🧵 点击鼠标右键滑索！"
+ "🧵 Right-click to Zip!": "🧵 点击鼠标右键滑索！",
+ "For grown-ups: each brush is saved to Health.": "家长设置：每次刷牙都会保存到“健康”。",
+ "Health access is off. A grown-up can allow it in the Health app.": "“健康”访问已关闭。家长可以在“健康”App 中允许。",
+ "Saves each brush to Apple Health. Set by a grown-up.": "将每次刷牙保存到 Apple“健康”。由家长设置。",
+ "❤️ Apple Health": "❤️ Apple 健康"
 }

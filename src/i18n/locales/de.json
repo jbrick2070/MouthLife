@@ -789,7 +789,7 @@
  "Privacy Policy": "Datenschutzerklärung",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "PROZEDURALER AVAUDIOENGINE-SYNTH",
  "Profile & Settings": "Profil & Einstellungen",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "Fortschritt, Putz-Stempel und Einstellungen werden nur auf diesem Gerät gespeichert. Ein Sync-Code oder eine Sicherungsdatei wird auf dem Gerät erstellt, und nur du kannst ihn auf deine anderen Geräte übertragen. Du kannst alle gespeicherten Daten jederzeit in den Einstellungen löschen.",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "Fortschritt, Putz-Stempel und Einstellungen werden nur auf diesem Gerät gespeichert. Ein Sync-Code oder eine Sicherungsdatei wird auf dem Gerät erstellt, und nur du kannst ihn auf deine anderen Geräte übertragen. Du kannst alle gespeicherten Daten jederzeit in den Einstellungen löschen. Auf dem iPhone kann ein Erwachsener festlegen, dass jedes Zähneputzen in Apple Health gespeichert wird; MouthLife liest nie Gesundheitsdaten.",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "PROLOG 1 / 4 • STELLARE NUKLEOSYNTHESE",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "PROLOG 2 / 4 • ATOMARE KRISTALLOGRAFIE",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "PROLOG 3 / 4 • DAS BIOPHYSIKALISCHE PARADOXON",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "Ganzer Mund",
  "Dive {0} of 5": "Abtauchen {0} von 5",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "Klick auf einen Zahn und zieh, um zu steuern und zu schrubben. Rechtsklick für Zahnseide, oder zieh den Zahnseide-Ring zum Zielen.",
- "🧵 Right-click to Zip!": "🧵 Rechtsklick zum Flitzen!"
+ "🧵 Right-click to Zip!": "🧵 Rechtsklick zum Flitzen!",
+ "For grown-ups: each brush is saved to Health.": "Für Erwachsene: Jedes Zähneputzen wird in Health gespeichert.",
+ "Health access is off. A grown-up can allow it in the Health app.": "Der Zugriff auf Health ist aus. Ein Erwachsener kann ihn in der Health-App erlauben.",
+ "Saves each brush to Apple Health. Set by a grown-up.": "Speichert jedes Zähneputzen in Apple Health. Wird von einem Erwachsenen eingestellt.",
+ "❤️ Apple Health": "❤️ Apple Health"
 }

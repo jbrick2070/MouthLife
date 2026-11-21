@@ -23,6 +23,10 @@ public struct ProfileAndSettingsSheet: View {
     @State private var showPrivacyPolicy = false
     @State private var showRinseGate = false
     @State private var showReminderGate = false
+    @State private var healthLogOn: Bool
+    @State private var healthBlocked = false
+    @State private var showHealthGate = false
+    private let healthAvailable: Bool
     private let brushWeek: [BrushDays.Day]
 
     public let onSaveProfile: (String, Int, String) -> Void
@@ -34,6 +38,7 @@ public struct ProfileAndSettingsSheet: View {
     public let onChangeIncludeRinse: (Bool) -> Void
     public let onSetReminders: (Bool, @escaping (Bool) -> Void) -> Void
     public let onSetReminderTimes: (Int, Int) -> Void
+    public let onSetHealthLog: (Bool, @escaping (Bool) -> Void) -> Void
     public let onToggleProMotionTelemetry: (Bool) -> Void
     public let onReplayCosmicIntro: () -> Void
 
@@ -51,6 +56,8 @@ public struct ProfileAndSettingsSheet: View {
         remindersOn: Bool = false,
         reminderMorning: Int = BrushDays.defaultMorning,
         reminderEvening: Int = BrushDays.defaultEvening,
+        healthAvailable: Bool = false,
+        healthLogOn: Bool = false,
         showProMotionTelemetry: Bool,
         onSaveProfile: @escaping (String, Int, String) -> Void,
         onChangeQuality: @escaping (QualityPreference) -> Void,
@@ -61,6 +68,7 @@ public struct ProfileAndSettingsSheet: View {
         onChangeIncludeRinse: @escaping (Bool) -> Void = { _ in },
         onSetReminders: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, done in done(false) },
         onSetReminderTimes: @escaping (Int, Int) -> Void = { _, _ in },
+        onSetHealthLog: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, done in done(false) },
         onToggleProMotionTelemetry: @escaping (Bool) -> Void,
         onReplayCosmicIntro: @escaping () -> Void
     ) {
@@ -79,6 +87,8 @@ public struct ProfileAndSettingsSheet: View {
         _reminderMorning = State(initialValue: reminderMorning)
         _reminderEvening = State(initialValue: reminderEvening)
         self.brushWeek = brushWeek
+        self.healthAvailable = healthAvailable
+        _healthLogOn = State(initialValue: healthLogOn)
         _showProMotionTelemetry = State(initialValue: showProMotionTelemetry)
         self.onSaveProfile = onSaveProfile
         self.onChangeQuality = onChangeQuality
@@ -89,6 +99,7 @@ public struct ProfileAndSettingsSheet: View {
         self.onChangeIncludeRinse = onChangeIncludeRinse
         self.onSetReminders = onSetReminders
         self.onSetReminderTimes = onSetReminderTimes
+        self.onSetHealthLog = onSetHealthLog
         self.onToggleProMotionTelemetry = onToggleProMotionTelemetry
         self.onReplayCosmicIntro = onReplayCosmicIntro
     }
@@ -254,6 +265,40 @@ public struct ProfileAndSettingsSheet: View {
                             : L10n.t("For grown-ups: a gentle nudge at these times."))
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
+
+                        // Apple Health: a grown-up turns it on; Apple's Health sheet asks once
+                        if healthAvailable {
+                            Toggle(L10n.t("❤️ Apple Health"), isOn: Binding(
+                                get: { healthLogOn },
+                                set: { on in
+                                    if on {
+                                        showHealthGate = true
+                                    } else {
+                                        healthLogOn = false
+                                        healthBlocked = false
+                                        onSetHealthLog(false) { _ in }
+                                    }
+                                }
+                            ))
+                                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                                .tint(MLTheme.mintClean)
+                                .padding(.top, 6)
+                                .sheet(isPresented: $showHealthGate) {
+                                    ParentGateView(note: L10n.t("Saves each brush to Apple Health. Set by a grown-up.")) {
+                                        onSetHealthLog(true) { allowed in
+                                            healthLogOn = allowed
+                                            healthBlocked = !allowed
+                                        }
+                                    }
+                                    .presentationDetents([.medium])
+                                }
+
+                            Text(healthBlocked
+                                ? L10n.t("Health access is off. A grown-up can allow it in the Health app.")
+                                : L10n.t("For grown-ups: each brush is saved to Health."))
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(MLTheme.textSecondary)
+                        }
                     }
                     .mlGlassCard()
                     .sheet(isPresented: $showRinseGate) {
@@ -460,7 +505,7 @@ struct PrivacyPolicyView: View {
 
     private let sections: [(String, String)] = [
         ("No personal data", "MouthLife does not collect, send, rent or sell any personal data, analytics, device identifiers, location or usage data. There are no accounts, no tracking and no advertising."),
-        ("Everything stays on this device", "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings."),
+        ("Everything stays on this device", "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data."),
         ("Not medical advice", "MouthLife is an educational game and a 2-minute brushing timer. It is not a substitute for advice, diagnosis or treatment from a dentist. Ask a dentist or dental hygienist about your oral health."),
         ("Charity links", "The charity pages are optional and open only after a grown-up answers a question. MouthLife is not affiliated with these charities, takes no fee and never handles donations; each website has its own policies."),
     ]

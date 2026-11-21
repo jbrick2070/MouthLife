@@ -321,6 +321,9 @@ agreement (agy confirmed each; Codex confirmed the design before the build):
    build setting `MOUTHLIFE_DEVICE_ENTITLEMENTS` points at the entitlements file (after joining the
    Apple Developer Program). Until then the phone build keeps working and its widgets show the tooth
    and "Open MouthLife".
+   The app itself has its own entitlements file (`MouthLifeApp/MouthLifeApp.entitlements`: the App
+   Group plus HealthKit, which a free team cannot use either), switched on for devices by
+   `MOUTHLIFE_APP_DEVICE_ENTITLEMENTS`. Until then the Apple Health switch turns itself back off.
 9. **Rendering:** removable purple background; bigger marks and thicker strokes without background;
    only finished marks accented; `.widgetAccentedRenderingMode` guarded for iOS 18; round shapes
    only, calm under the red night tint.

@@ -88,8 +88,13 @@ public final class AppCoordinator {
     public private(set) var remindersOn = false
     public private(set) var reminderMorning = BrushDays.defaultMorning
     public private(set) var reminderEvening = BrushDays.defaultEvening
+    // Apple Health (a grown-up's choice): each brush saved as a Toothbrushing entry.
+    private static let healthLogDefaultsKey = "mouthlife.health.brushLog"
+    public private(set) var healthLogOn = false
     /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
     public private(set) var pacerBrushedFullTime: Bool = false
+    /// How long this session brushed and when brushing (not floss or rinse) ended, for Health.
+    @ObservationIgnored private var pacerBrushing: (sec: Double, endedAt: Date)?
     public var pacerElapsedSec: Double = 0.0
     public var pacerIsPaused: Bool = false
     public var pacerInFlossBonus: Bool = false
@@ -193,6 +198,8 @@ public final class AppCoordinator {
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
         self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? false
         self.remindersOn = UserDefaults.standard.bool(forKey: Self.remindersOnDefaultsKey)
+        // Off if Health access was taken away in the Health app since it was turned on.
+        self.healthLogOn = UserDefaults.standard.bool(forKey: Self.healthLogDefaultsKey) && HealthBrushLog.isAllowed
         self.reminderMorning = Self.storedMinutes(Self.reminderMorningDefaultsKey) ?? BrushDays.defaultMorning
         self.reminderEvening = Self.storedMinutes(Self.reminderEveningDefaultsKey) ?? BrushDays.defaultEvening
         self.tutorialGate = TutorialGate(
@@ -316,6 +323,24 @@ public final class AppCoordinator {
         }
     }
 
+    /// Turns saving brushes to Apple Health on (after a grown-up's question; Apple's Health sheet
+    /// shows the first time) or off. `done` gets whether it is on.
+    public func setHealthLog(_ on: Bool, done: @escaping (Bool) -> Void) {
+        NativeSoundEngine.shared.playUiTap()
+        guard on else {
+            healthLogOn = false
+            UserDefaults.standard.set(false, forKey: Self.healthLogDefaultsKey)
+            done(false)
+            return
+        }
+        Task { @MainActor in
+            let allowed = await HealthBrushLog.requestPermission()
+            self.healthLogOn = allowed
+            UserDefaults.standard.set(allowed, forKey: Self.healthLogDefaultsKey)
+            done(allowed)
+        }
+    }
+
     public func setReminderTimes(morning: Int, evening: Int) {
         reminderMorning = max(0, min(1439, morning))
         reminderEvening = max(0, min(1439, evening))
@@ -385,6 +410,9 @@ public final class AppCoordinator {
             }
         }
         noteBrushEnded(at: record.completedAt, full: record.rewardInputs.fullBrush)
+        if healthLogOn {
+            HealthBrushLog.save(brushedSec: record.brushedSec, endedAt: record.completedAt, sessionId: record.sessionId)
+        }
         save = saveSystem.getSave()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
         refreshReminders()
@@ -992,6 +1020,7 @@ public final class AppCoordinator {
         pacerStage = .brushing
         pacerCompletedFlossStage = false
         pacerBrushedFullTime = false
+        pacerBrushing = nil
         announcedFlossLowerHalf = false
         lastAnnouncedMouthwashStep = 0
         brushRadioStation = .livingClock
@@ -1100,7 +1129,17 @@ public final class AppCoordinator {
         eventBus.emit(.pacerPaused(paused: pacerIsPaused))
     }
 
+    /// Notes how long brushing lasted, once, as the session leaves the brushing stage.
+    private func noteBrushingStageEnded() {
+        guard pacerStage == .brushing, pacerBrushing == nil else { return }
+        // A phone locked as the 2 minutes ran out moves on only once it wakes: brushing ended
+        // that overrun ago, not now.
+        let overrun = max(0, pacerElapsedSec - GameConfig.brushAlongTotalSec)
+        pacerBrushing = (min(pacerElapsedSec, GameConfig.brushAlongTotalSec), Date().addingTimeInterval(-overrun))
+    }
+
     public func enterFlossBonusNow() {
+        noteBrushingStageEnded()
         if pacerStage == .brushing {
             pacerBrushedFullTime = pacerElapsedSec >= GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec
         }
@@ -1134,6 +1173,7 @@ public final class AppCoordinator {
     }
 
     public func enterMouthwashBonusNow(completedFloss: Bool = true) {
+        noteBrushingStageEnded()
         pacerCompletedFlossStage = completedFloss
         let mwDur = mouthwashDurationStyle.durationSec
         pacerClock.enter(.mouthwashBonus, from: pacerStage, mouthwashDurationSec: mwDur)
@@ -1165,6 +1205,7 @@ public final class AppCoordinator {
     }
 
     public func completeBrushAlongSession(withFlossBonus: Bool, withMouthwashBonus: Bool = false) {
+        noteBrushingStageEnded()
         stopPacerTimer()
         pacerIsPaused = false
         pacerPausedByUser = false
@@ -1178,6 +1219,9 @@ public final class AppCoordinator {
             rinseStepOff: !includeRinse
         )
         noteBrushEnded(at: Date(), full: fullBrush)
+        if healthLogOn, let brushing = pacerBrushing {
+            HealthBrushLog.save(brushedSec: brushing.sec, endedAt: brushing.endedAt, sessionId: UUID().uuidString)
+        }
         save = saveSystem.getSave()
         refreshReminders()
         sceneController.touchSystem.clearAll()

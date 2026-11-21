@@ -33,6 +33,8 @@
 	<string>1</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>MouthLife saves each brushing session to Health as Toothbrushing. It never reads your health data.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>

@@ -789,7 +789,7 @@
  "Privacy Policy": "Política de privacidade",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "SINTETIZADOR PROCEDURAL AVAUDIOENGINE",
  "Profile & Settings": "Perfil e Ajustes",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "O progresso, os selos de escovação e as configurações ficam salvos só neste aparelho. O código de sincronização ou o arquivo de backup é criado no aparelho, e só você pode copiá-lo para seus outros aparelhos. Você pode apagar todos os dados salvos a qualquer momento em Configurações.",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "O progresso, os selos de escovação e as configurações ficam salvos só neste aparelho. O código de sincronização ou o arquivo de backup é criado no aparelho, e só você pode copiá-lo para seus outros aparelhos. Você pode apagar todos os dados salvos a qualquer momento em Configurações. No iPhone, um adulto pode escolher salvar cada escovação no app Saúde da Apple; o MouthLife nunca lê dados de saúde.",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "PRÓLOGO 1 / 4 • NUCLEOSSÍNTESE ESTELAR",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "PRÓLOGO 2 / 4 • CRISTALOGRAFIA ATÔMICA",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "PRÓLOGO 3 / 4 • O PARADOXO BIOFÍSICO",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "Boca inteira",
  "Dive {0} of 5": "Mergulhar {0} de 5",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "Clique em um dente e arraste para guiar e esfregar. Clique com o botão direito para usar o Fio Dental, ou arraste o anel do Fio Dental para mirar.",
- "🧵 Right-click to Zip!": "🧵 Clique com o botão direito para a Tirolesa!"
+ "🧵 Right-click to Zip!": "🧵 Clique com o botão direito para a Tirolesa!",
+ "For grown-ups: each brush is saved to Health.": "Para adultos: cada escovação é salva no Saúde.",
+ "Health access is off. A grown-up can allow it in the Health app.": "O acesso ao Saúde está desativado. Um adulto pode permiti-lo no app Saúde.",
+ "Saves each brush to Apple Health. Set by a grown-up.": "Salva cada escovação no app Saúde da Apple. Configurado por um adulto.",
+ "❤️ Apple Health": "❤️ Saúde da Apple"
 }

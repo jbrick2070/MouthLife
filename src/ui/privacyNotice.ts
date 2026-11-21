@@ -25,7 +25,7 @@ export const PRIVACY_NOTICE_SECTIONS: readonly (readonly [heading: string, body:
   ],
   [
     'Everything stays on this device',
-    'Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.',
+    'Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.',
   ],
   [
     'Not medical advice',

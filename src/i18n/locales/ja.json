@@ -789,7 +789,7 @@
  "Privacy Policy": "プライバシーポリシー",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "自動 AVAUDIOENGINE シンセ",
  "Profile & Settings": "プロフィールとせってい",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。シンクコードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "進み具合、歯みがきスタンプ、設定はこの端末の中だけに保存されます。シンクコードやバックアップファイルは端末の中で作られ、ほかの自分の端末へコピーできるのはあなただけです。保存したデータは設定からいつでも消せます。iPhoneでは、大人の方が歯みがきの記録をAppleヘルスケアに保存するよう選べます。MouthLifeが健康データを読むことはありません。",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "プロローグ 1 / 4 • 星が生みだしたつぶ",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "プロローグ 2 / 4 • つぶのけっしょう",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "プロローグ 3 / 4 • 生きもののふしぎなルール",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "口全体",
  "Dive {0} of 5": "ダイブ {0}/5",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "歯をクリックしてドラッグすると、そこへ動いてみがけます。右クリックでフロス、またはフロスリングをドラッグしてねらいましょう。",
- "🧵 Right-click to Zip!": "🧵 右クリックでジップ！"
+ "🧵 Right-click to Zip!": "🧵 右クリックでジップ！",
+ "For grown-ups: each brush is saved to Health.": "大人の方へ：歯みがきのたびにヘルスケアに保存されます。",
+ "Health access is off. A grown-up can allow it in the Health app.": "ヘルスケアへのアクセスはオフです。大人の方がヘルスケアアプリで許可できます。",
+ "Saves each brush to Apple Health. Set by a grown-up.": "歯みがきのたびにAppleヘルスケアに保存します。大人の方が設定します。",
+ "❤️ Apple Health": "❤️ Appleヘルスケア"
 }

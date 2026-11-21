@@ -789,7 +789,7 @@
  "Privacy Policy": "Politique de confidentialité",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "SYNTHÉ AVAUDIOENGINE PROCÉDURAL",
  "Profile & Settings": "Profil et réglages",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "La progression, les tampons de brossage et les réglages sont enregistrés uniquement sur cet appareil. Le code de synchronisation ou le fichier de sauvegarde est créé sur l'appareil, et toi seul peux le copier sur tes autres appareils. Tu peux effacer toutes les données enregistrées à tout moment dans les Réglages.",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "La progression, les tampons de brossage et les réglages sont enregistrés uniquement sur cet appareil. Le code de synchronisation ou le fichier de sauvegarde est créé sur l'appareil, et toi seul peux le copier sur tes autres appareils. Tu peux effacer toutes les données enregistrées à tout moment dans les Réglages. Sur iPhone, un adulte peut choisir d’enregistrer chaque brossage dans Apple Santé ; MouthLife ne lit jamais les données de santé.",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "PROLOGUE 1 / 4 • NUCLÉOSYNTHÈSE STELLAIRE",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "PROLOGUE 2 / 4 • CRISTALLOGRAPHIE ATOMIQUE",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "PROLOGUE 3 / 4 • LE PARADOXE BIOPHYSIQUE",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "Toute la bouche",
  "Dive {0} of 5": "Plonger {0} sur 5",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "Clique sur une dent et fais glisser pour diriger et frotter. Clic droit pour le fil dentaire, ou fais glisser l'anneau du fil dentaire pour viser.",
- "🧵 Right-click to Zip!": "🧵 Clic droit : Glisse-fil !"
+ "🧵 Right-click to Zip!": "🧵 Clic droit : Glisse-fil !",
+ "For grown-ups: each brush is saved to Health.": "Pour les adultes : chaque brossage est enregistré dans Santé.",
+ "Health access is off. A grown-up can allow it in the Health app.": "L’accès à Santé est désactivé. Un adulte peut l’autoriser dans l’app Santé.",
+ "Saves each brush to Apple Health. Set by a grown-up.": "Enregistre chaque brossage dans Apple Santé. Réglé par un adulte.",
+ "❤️ Apple Health": "❤️ Apple Santé"
 }

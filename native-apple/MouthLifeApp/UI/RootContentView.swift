@@ -367,6 +367,8 @@ public struct RootContentView: View {
                         remindersOn: coordinator.remindersOn,
                         reminderMorning: coordinator.reminderMorning,
                         reminderEvening: coordinator.reminderEvening,
+                        healthAvailable: HealthBrushLog.isAvailable,
+                        healthLogOn: coordinator.healthLogOn,
                         showProMotionTelemetry: coordinator.showProMotionBadge,
                         onSaveProfile: { name, tone, city in
                             coordinator.updateProfile(name: name, skinTone: tone, homeCity: city)
@@ -381,6 +383,7 @@ public struct RootContentView: View {
                         onChangeIncludeRinse: { on in coordinator.setIncludeRinse(on) },
                         onSetReminders: { on, done in coordinator.setReminders(on, done: done) },
                         onSetReminderTimes: { morning, evening in coordinator.setReminderTimes(morning: morning, evening: evening) },
+                        onSetHealthLog: { on, done in coordinator.setHealthLog(on, done: done) },
                         onToggleProMotionTelemetry: { show in coordinator.showProMotionBadge = show },
                         onReplayCosmicIntro: { coordinator.replayCosmicIntro() }
                     )

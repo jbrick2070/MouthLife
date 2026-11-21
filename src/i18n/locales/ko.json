@@ -789,7 +789,7 @@
  "Privacy Policy": "개인정보 처리방침",
  "PROCEDURAL AVAUDIOENGINE SYNTH": "절차적 AVAUDIOENGINE 신스",
  "Profile & Settings": "프로필 & 설정",
- "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings.": "진행 상황, 양치 스탬프, 설정은 이 기기에만 저장됩니다. 동기화 코드나 백업 파일은 기기 안에서 만들어지고, 다른 내 기기로 옮길 수 있는 사람은 나뿐입니다. 저장된 데이터는 설정에서 언제든지 지울 수 있어요.",
+ "Progress, Habit Stamps and settings are saved only on this device. A Sync Code or backup file is made on the device, and only you can copy it to your other devices. You can erase all saved data at any time in Settings. On iPhone, a grown-up can choose to save each brush to Apple Health; MouthLife never reads health data.": "진행 상황, 양치 스탬프, 설정은 이 기기에만 저장됩니다. 동기화 코드나 백업 파일은 기기 안에서 만들어지고, 다른 내 기기로 옮길 수 있는 사람은 나뿐입니다. 저장된 데이터는 설정에서 언제든지 지울 수 있어요. iPhone에서는 보호자가 양치 기록을 Apple 건강 앱에 저장하도록 선택할 수 있어요. MouthLife는 건강 데이터를 절대 읽지 않아요.",
  "PROLOGUE 1 / 4 • STELLAR NUCLEOSYNTHESIS": "프롤로그 1 / 4 • 별의 원소 합성",
  "PROLOGUE 2 / 4 • ATOMIC CRYSTALLOGRAPHY": "프롤로그 2 / 4 • 원자 결정 구조",
  "PROLOGUE 3 / 4 • THE BIOPHYSICAL PARADOX": "프롤로그 3 / 4 • 생물물리학의 역설",
@@ -1093,5 +1093,9 @@
  "Whole mouth": "입 전체",
  "Dive {0} of 5": "다이브 {0}/5",
  "Click a tooth and drag to steer and scrub. Right-click to Floss, or drag the Floss ring to aim.": "치아를 클릭하고 끌어 조종하고 닦아요. 오른쪽 클릭으로 치실을 쓰거나, 치실 링을 끌어 조준해요.",
- "🧵 Right-click to Zip!": "🧵 오른쪽 클릭으로 집라인!"
+ "🧵 Right-click to Zip!": "🧵 오른쪽 클릭으로 집라인!",
+ "For grown-ups: each brush is saved to Health.": "보호자용: 양치할 때마다 건강 앱에 저장돼요.",
+ "Health access is off. A grown-up can allow it in the Health app.": "건강 앱 접근이 꺼져 있어요. 보호자가 건강 앱에서 허용할 수 있어요.",
+ "Saves each brush to Apple Health. Set by a grown-up.": "양치할 때마다 Apple 건강 앱에 저장해요. 보호자가 설정해요.",
+ "❤️ Apple Health": "❤️ Apple 건강"
 }
