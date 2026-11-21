@@ -149,6 +149,7 @@ final class QAFixTests: XCTestCase {
     func testMohsSpecimensMatchTheWeb() {
         XCTAssertEqual(MohsSpecimens.all.map(\.name), ["Pure Gold", "Iron / Mild Steel", "Tooth Enamel", "Crystalline Quartz", "Diamond"])
         XCTAssertEqual(MohsSpecimens.all.map(\.hardness), ["2.5", "4.0", "5.0", "7.0", "10.0"])
+        XCTAssertEqual(MohsSpecimens.all.map(\.shortName), ["Gold", "Iron", "Enamel", "Quartz", "Diamond"])
         XCTAssertTrue(MohsSpecimens.all[MohsSpecimens.enamelIndex].isEnamel)
         XCTAssertEqual(MohsSpecimens.all.filter(\.isEnamel).count, 1)
     }

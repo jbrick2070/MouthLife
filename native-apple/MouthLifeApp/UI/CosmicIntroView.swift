@@ -192,7 +192,7 @@ public struct CosmicIntroView: View {
                     .font(.system(size: 12, weight: .heavy, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(selected ? MLTheme.deepOcean : (specimen.isEnamel ? MLTheme.mintClean : MLTheme.cyanAccent))
-                Text(L10n.t(specimen.name))
+                Text(L10n.t(specimen.shortName))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)

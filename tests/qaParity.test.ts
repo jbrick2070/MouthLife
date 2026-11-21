@@ -35,13 +35,23 @@ describe('QA parity with the native app', () => {
     expect(merged.fluorideIons).toBe(300);
   });
 
+  it('ends the Prologue with the same real-brush line as the native Prologue', () => {
+    const web = readFileSync(join(root, 'src/ui/CosmicIntroOverlay.ts'), 'utf8');
+    const swift = readFileSync(join(root, 'native-apple/MouthLifeApp/UI/CosmicIntroView.swift'), 'utf8');
+    const webBodies = [...web.matchAll(/body: '([^']+)'/g)].map((m) => m[1]);
+    const swiftBodies = [...swift.matchAll(/body: "([^"]+)"/g)].map((m) => m[1]);
+    const lastWeb = webBodies[webBodies.length - 1];
+    expect(lastWeb).toContain('Then time your real 2-minute brush at the sink.');
+    expect(swiftBodies).toContain(lastWeb);
+  });
+
   it('shows the same five hardness specimens as the native Prologue', () => {
     const web = readFileSync(join(root, 'src/ui/CosmicIntroOverlay.ts'), 'utf8');
     const swift = readFileSync(join(root, 'native-apple/Sources/MouthLifeCore/Config/MohsSpecimens.swift'), 'utf8');
     const block = web.slice(web.indexOf('const MOHS_SPECIMENS'), web.indexOf('];', web.indexOf('const MOHS_SPECIMENS')));
     const pick = (src: string, key: string, quote: string) =>
-      [...src.matchAll(new RegExp(`${key}: ${quote}([^${quote}]+)${quote}`, 'g'))].map((m) => m[1]);
-    for (const key of ['hardness', 'name', 'formula', 'note']) {
+      [...src.matchAll(new RegExp(`\\b${key}: ${quote}([^${quote}]+)${quote}`, 'g'))].map((m) => m[1]);
+    for (const key of ['hardness', 'name', 'shortName', 'formula', 'note']) {
       expect(pick(swift, key, '"'), key).toEqual(pick(block, key, "'"));
     }
   });

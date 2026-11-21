@@ -496,9 +496,25 @@ textarea:focus-visible {
 
 .mohs-bar {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* minmax(0, 1fr): a long word must not widen its column into its neighbours. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
   margin: 8px 0;
+}
+
+.mohs-chip-name {
+  font-size: 0.66rem;
+  font-weight: 600;
+  margin-top: 2px;
+  line-height: 1.15;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 340px) {
+  .mohs-chip-name {
+    font-size: 0.58rem;
+  }
 }
 
 .mohs-item {

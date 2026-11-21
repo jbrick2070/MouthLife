@@ -4,6 +4,8 @@ import type { OverlayView } from '../engine/types';
 interface MohsEntry {
   hardness: string;
   name: string;
+  /** The chip's label: one short word, so five chips fit a 320 px phone in every language. */
+  shortName: string;
   formula: string;
   note: string;
   isEnamel?: boolean;
@@ -13,18 +15,21 @@ const MOHS_SPECIMENS: readonly MohsEntry[] = [
   {
     hardness: '2.5',
     name: 'Pure Gold',
+    shortName: 'Gold',
     formula: 'Au',
     note: 'Gold is a soft metal. Your tooth enamel can scratch it easily!',
   },
   {
     hardness: '4.0',
     name: 'Iron / Mild Steel',
+    shortName: 'Iron',
     formula: 'Fe',
     note: 'Iron and nails are softer than tooth enamel. Yes, your teeth are harder than iron!',
   },
   {
     hardness: '5.0',
     name: 'Tooth Enamel',
+    shortName: 'Enamel',
     formula: 'Ca₁₀(PO₄)₆(OH)₂',
     note: 'Enamel is almost all crystal. It is the hardest thing in your whole body!',
     isEnamel: true,
@@ -32,12 +37,14 @@ const MOHS_SPECIMENS: readonly MohsEntry[] = [
   {
     hardness: '7.0',
     name: 'Crystalline Quartz',
+    shortName: 'Quartz',
     formula: 'SiO₂',
     note: 'Quartz is harder than enamel. That is why toothpaste grit must be very fine and round.',
   },
   {
     hardness: '10.0',
     name: 'Diamond',
+    shortName: 'Diamond',
     formula: 'C (sp³)',
     note: 'Diamond is the hardest crystal of all. Enamel sits about halfway up the scale!',
   },
@@ -76,7 +83,7 @@ const COSMIC_BEATS: readonly BeatSpec[] = [
   {
     tag: 'PROLOGUE 4 / 4 • EARTHRISE TO MICRO-UNIVERSE',
     title: 'Welcome to MouthLife: The Plaque Dimension',
-    body: 'Zoom from space into real cities and tooth history. Enjoy smooth, clean teeth every day by brushing, flossing and using fluoride!',
+    body: 'Sweep the brush at 45°, zip floss through tight gaps, and fire Fluoride Surges. Then time your real 2-minute brush at the sink.',
   },
 ];
 
@@ -201,7 +208,7 @@ export class CosmicIntroOverlay implements OverlayView {
             aria-label="Mohs ${m.hardness} ${m.name}"
           >
             <div style="font-size:0.86rem;font-weight:800;color:${m.isEnamel ? '#5eead4' : '#e0f2fe'}">${m.hardness}</div>
-            <div style="font-size:0.66rem;font-weight:600;margin-top:2px;">${m.name}</div>
+            <div class="mohs-chip-name">${m.shortName}</div>
           </button>
         `
         ).join('')}
