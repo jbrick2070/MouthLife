@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compactObjectiveBreadcrumb,
   computeObjectiveBreadcrumb,
   findWayfinderLabelY,
   placeWorldCallout,
@@ -26,6 +27,19 @@ const base: ObjectiveInput = {
   domesRemaining: false,
   surgeReady: false,
 };
+
+describe('compactObjectiveBreadcrumb (the phone HUD line)', () => {
+  it('keeps just the goal for the colony lines, which were cut off mid-word on phones', () => {
+    expect(compactObjectiveBreadcrumb(base)).toBe('Restore 3 colonies');
+    expect(compactObjectiveBreadcrumb({ ...base, sitesLeftOpen: 1 })).toBe('1 colony left — follow ➤');
+  });
+  it('leaves every other goal exactly as the full line', () => {
+    const domes = { ...base, domesRemaining: true };
+    expect(compactObjectiveBreadcrumb(domes)).toBe(computeObjectiveBreadcrumb(domes));
+    const done = { ...base, sealed: [true, true] };
+    expect(compactObjectiveBreadcrumb(done)).toBe(computeObjectiveBreadcrumb(done));
+  });
+});
 
 describe('computeObjectiveBreadcrumb', () => {
   it('names the single remaining colony', () => {

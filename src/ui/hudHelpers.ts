@@ -303,6 +303,19 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
     : 'Scrub enamel → bring back colonies → Surge [Q]!';
 }
 
+/**
+ * The goal line for a phone's one-line HUD, where the full sentence was cut off mid-word
+ * ("Restore 10 colonie…"): just the goal. The how-to half stays on wider screens and in the
+ * pause card, which always shows the full line.
+ */
+export function compactObjectiveBreadcrumb(inp: ObjectiveInput): string {
+  const full = computeObjectiveBreadcrumb(inp);
+  const n = inp.sitesLeftOpen;
+  if (full === `Restore ${n} colonies — scrub glowing rings!`) return `Restore ${n} colonies`;
+  if (full === '1 helper colony left — follow ➤ Colony!') return '1 colony left — follow ➤';
+  return full;
+}
+
 /** A cast that cracks armor or fires while the alley Zip prompt is already visible needs no extra miss callout. */
 export function shouldHintFlossMiss(
   zipped: boolean,

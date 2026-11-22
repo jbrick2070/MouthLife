@@ -17,6 +17,8 @@ import {
   isCompactViewport,
   isEditableEventTarget,
   computeObjectiveBreadcrumb,
+  compactObjectiveBreadcrumb,
+  type ObjectiveInput,
   placeWorldCallout,
   shouldHintFlossMiss,
   shouldShowVirtualThumbPad,
@@ -176,6 +178,9 @@ export class TelemetryHudOverlay implements OverlayView {
     this.syncThumbPadVisibility();
   };
 
+  /** The full goal line (with its how-to); a phone's HUD may show a short one, the pause card never. */
+  private fullObjectiveText = '';
+
   private isCompactScreen(): boolean {
     if (typeof window === 'undefined') return false;
     return isCompactViewport(window.innerWidth, window.innerHeight);
@@ -243,7 +248,8 @@ export class TelemetryHudOverlay implements OverlayView {
       this.syncMuteLabels();
       this.syncMotionLabels();
       this.refreshStats();
-      const objective = this.container?.querySelector('#hud-objective')?.textContent;
+      // The pause card always shows the full goal, even when the phone HUD shows the short one.
+      const objective = this.fullObjectiveText || this.container?.querySelector('#hud-objective')?.textContent;
       const pauseObjective = this.pauseSheetEl?.querySelector('#pause-objective');
       if (pauseObjective) pauseObjective.textContent = objective ?? '';
       this.pauseSheetEl?.querySelector<HTMLElement>('#btn-pause-resume')?.focus();
@@ -1231,7 +1237,7 @@ export class TelemetryHudOverlay implements OverlayView {
     const objEl = this.container?.querySelector<HTMLElement>('#hud-objective');
     if (objEl) {
       const sealedArr = this.session.sealedDistricts;
-      const msg = computeObjectiveBreadcrumb({
+      const objectiveInput: ObjectiveInput = {
         mode: this.mode === 'PULP_RESCUE' ? 'PULP_RESCUE' : 'ARCADE',
         worldCleanRatio: this.session.grid.getWorldCleanRatio(),
         districtClean: this.session.cartridge.districts.map((_d, i) => this.session.grid.getDistrictCleanRatio(i)),
@@ -1241,9 +1247,13 @@ export class TelemetryHudOverlay implements OverlayView {
         surgeReady,
         acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
         rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
-      });
-      const full = compactToastText(`🎯 ${uiTranslator.t(msg)}`, this.isCompactScreen());
-      if (objEl.textContent !== full) objEl.textContent = full;
+      };
+      const compact = this.isCompactScreen();
+      this.fullObjectiveText = `🎯 ${uiTranslator.t(computeObjectiveBreadcrumb(objectiveInput))}`;
+      const shown = compact
+        ? compactToastText(`🎯 ${uiTranslator.t(compactObjectiveBreadcrumb(objectiveInput))}`, true)
+        : this.fullObjectiveText;
+      if (objEl.textContent !== shown) objEl.textContent = shown;
     }
     const scanSec = Math.ceil(Math.max(0, this.session.discloseActiveRemaining));
     const scanOn = scanSec > 0;
