@@ -48,7 +48,7 @@ open MouthLife.xcodeproj
 - **`Config/FirstCityCoach.swift`** — a new player's city 1 teaches while it is played: one thing to try at a time on the stage's goal line, ticked off by the game's events (web twin `src/config/firstCityCoach.ts`, shared test cases).
 - **`Sim/HudHelpers.swift`** — the stage HUD's pure parts, shared with the web: the goal line (`computeObjectiveBreadcrumb`, from the HUD's snapshot, with `keys: false` for the lines without keyboard hints), the zone bar (`zoneIndexAt`, `zoneBarModel`) and the direction arrow (`computeWayfinder(snapshot:cartridge:)`).
 - **`Companion/CompanionArchSim.swift` & `CompanionTouchSystem.swift`** — `12h` Smooth Bask (`72 F⁻` reservoir), `90-day` Saliva Stasis (`>= 45%`), 14-crown pentatonic glass-harp rubbing, and zero-permadeath `50%` Ca(OH)₂ Pulp Rescue stabilization.
-- **`Persistence/SaveSystem.swift` & `HabitBank.swift`** — `UserDefaults` + optional iCloud `NSUbiquitousKeyValueStore`, V1→V2 migration, daily `2 full + 3 courtesy tip` Brush-Along cap (full rewards only when brushing ran the whole 2 minutes; an early tap-through earns a "good try" tip), and cross-platform `ML2:` Base64URL Sync Codes.
+- **`Persistence/SaveSystem.swift` & `HabitBank.swift`** — `UserDefaults`, V1→V2 migration, daily `2 full + 3 courtesy tip` Brush-Along cap (full rewards only when brushing ran the whole 2 minutes; an early tap-through earns a "good try" tip), and cross-platform `ML2:` Base64URL Sync Codes.
 
 ### `MouthLifeApp/Render/` (120Hz ProMotion Metal & SceneKit Pipeline)
 - **`EnamelShaders.swift`** — Custom Metal `.geometry`, `.surface`, and `.fragment` shader modifiers + `< 0.02 ms` unified-memory `MTLTexture.replace` dirty-subrect uploader + shadow-state uniform guards.

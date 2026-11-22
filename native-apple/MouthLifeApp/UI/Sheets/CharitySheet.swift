@@ -226,16 +226,29 @@ private struct GateTarget: Identifiable {
     let url: URL
 }
 
-/// A times-table question with four answers, which a young child cannot answer yet. The web does the
-/// same in src/ui/parentGate.ts.
+/// The grown-up question: a sum with four answers, which a young child cannot work out yet. A wrong
+/// answer closes it and locks it for half a minute wherever it is asked next, so it cannot be guessed
+/// by tapping again and again. The rules (the sum, the answers, how long the lock lasts) are
+/// `ParentGate` in MouthLifeCore. The web does the same in src/ui/parentGate.ts.
 struct ParentGateView: View {
     /// An optional line under the title saying what the grown-up is agreeing to.
     var note: String? = nil
     let onPass: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var a = Int.random(in: 3...9)
-    @State private var b = Int.random(in: 3...9)
-    @State private var choices: [Int] = []
+    @State private var question = ParentGate.question()
+    /// Whole seconds of lock left. Above 0 the card counts down where the sum would be.
+    @State private var secondsLeft = ParentGateView.lockSecondsLeft()
+    /// Set by the first answer: the card takes one answer and then closes.
+    @State private var answered = false
+
+    /// When the lock set by the last wrong answer ends. One lock for every use of the question, kept
+    /// in memory only. It is a time on the clock that counts the seconds since the device started,
+    /// which changing the date in Settings cannot set back.
+    @MainActor private static var lockEndUptime: TimeInterval?
+
+    @MainActor private static func lockSecondsLeft() -> Int {
+        ParentGate.secondsLeft(lockEnd: lockEndUptime, at: ProcessInfo.processInfo.systemUptime)
+    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -248,14 +261,32 @@ struct ParentGateView: View {
                     .foregroundStyle(MLTheme.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            Text(verbatim: "\(a) × \(b) = ?")
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
-                .foregroundStyle(MLTheme.textPrimary)
-                .accessibilityLabel(Text(verbatim: "\(a) × \(b)"))
+            if secondsLeft > 0 {
+                // Locked after a wrong answer: an hourglass and the seconds left, so there are no
+                // words to translate. VoiceOver reads the seconds as a plain number, never a sum.
+                Text(verbatim: "⏳ \(secondsLeft)")
+                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(MLTheme.textPrimary)
+                    .accessibilityLabel(Text(verbatim: "\(secondsLeft)"))
+                    .accessibilityAddTraits(.updatesFrequently)
+            } else {
+                Text(verbatim: "\(question.a) × \(question.b) = ?")
+                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .foregroundStyle(MLTheme.textPrimary)
+                    .accessibilityLabel(Text(verbatim: "\(question.a) × \(question.b)"))
+            }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ForEach(choices, id: \.self) { n in
+                ForEach(question.choices, id: \.self) { n in
                     Button {
-                        let right = n == a * b
+                        // One answer per card, and none while locked: a second tap while the card
+                        // is still closing after a wrong answer must not count.
+                        guard !answered, Self.lockSecondsLeft() == 0 else { return }
+                        answered = true
+                        let right = n == question.answer
+                        if !right {
+                            Self.lockEndUptime = ParentGate.lockEnd(wrongAnswerAt: ProcessInfo.processInfo.systemUptime)
+                        }
                         dismiss()
                         if right { onPass() }
                     } label: {
@@ -268,6 +299,11 @@ struct ParentGateView: View {
                     .buttonStyle(.plain)
                 }
             }
+            // While locked the answers keep their place, so the card does not jump when they come
+            // back, but they are not shown, cannot be tapped and are not read out.
+            .opacity(secondsLeft > 0 ? 0 : 1)
+            .disabled(secondsLeft > 0)
+            .accessibilityHidden(secondsLeft > 0)
             Button(L10n.t("Not now")) { dismiss() }
                 .foregroundStyle(MLTheme.cyanAccent)
         }
@@ -275,16 +311,16 @@ struct ParentGateView: View {
         .frame(maxWidth: 360)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(MLTheme.deepOcean.ignoresSafeArea())
-        .onAppear {
-            guard choices.isEmpty else { return }
-            let answer = a * b
-            var set: Set<Int> = [answer]
-            while set.count < 4 {
-                let step = Bool.random() ? 1 : a
-                let near = answer + (Int.random(in: -4...4)) * step
-                if near > 0 && near != answer { set.insert(near) }
+        .task {
+            // Count the lock down. The clock is read four times a second, so the number shown is
+            // never more than a moment behind and none is skipped. At 0 a new sum is drawn and can
+            // be answered.
+            while secondsLeft > 0 {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+                let left = Self.lockSecondsLeft()
+                if left == 0 { question = ParentGate.question() }
+                if left != secondsLeft { secondsLeft = left }
             }
-            choices = set.shuffled()
         }
     }
 }

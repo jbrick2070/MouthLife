@@ -214,7 +214,7 @@ public struct DentalChartSheet: View {
                     .foregroundStyle(MLTheme.textPrimary)
 
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "hand.sparkles.fill")
+                    Image(systemName: "hands.sparkles.fill")
                         .foregroundStyle(MLTheme.mintClean)
                     Text(L10n.t(tooth.careTip))
                         .font(.system(.caption, design: .rounded, weight: .medium))

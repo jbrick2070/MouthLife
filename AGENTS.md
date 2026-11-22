@@ -41,7 +41,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
 8. **Apple Watch: Every Frame Shows Its Own Moment (lesson learned on the wrist, 2026-11-19):**
    - With the wrist down (Always On), watchOS renders the coming `TimelineView` frames ahead of time and plays them back once a second. A face built from live state, rather than from `context.date`, shows the same frame over and over and looks frozen, even though the app is still running. The brush, clock and countdown stopped exactly like that until the face drew `WatchController.ritual(at: context.date)` (`WatchRitual.projected(by:)`).
    - Keep every time-based watch view a function of the frame's date. Keep Always On guiding: the brush and the floss pick step once a second as outlines, with no glides or pops.
-   - Find watch runtime problems with the on-watch diary (`MouthLifeWatch/WatchLog.swift`; copy it to the Mac with `xcrun devicectl device copy from ... --domain-type appDataContainer`), not by guessing. `xcrun devicectl device capture screenshot` shows the watch's screen.
+   - Find watch runtime problems with the on-watch diary (`MouthLifeWatch/WatchLog.swift`, written by Debug builds only, so run the watch app from Xcode; copy it to the Mac with `xcrun devicectl device copy from ... --domain-type appDataContainer`), not by guessing. `xcrun devicectl device capture screenshot` shows the watch's screen.
    - The plan and decisions for the watch faces are in [`docs/watch-face-plan.md`](docs/watch-face-plan.md).
 
 9. **A City Is Written Once, for Both Editions:**

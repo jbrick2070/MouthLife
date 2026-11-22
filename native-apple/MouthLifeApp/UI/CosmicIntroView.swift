@@ -112,11 +112,13 @@ public struct CosmicIntroView: View {
                 }
 
                 // Only a brand-new save is offered this: a returning player already has their progress.
+                // The picture is a document with an arrow, not a cloud: Apple keeps its cloud symbols
+                // for iCloud, and the app does not use iCloud.
                 if idx == 0, !hasSeenBefore, let onRestoreCode {
                     Button {
                         onRestoreCode()
                     } label: {
-                        Label(L10n.t("Have a Sync Code?"), systemImage: "icloud.and.arrow.down")
+                        Label(L10n.t("Have a Sync Code?"), systemImage: "arrow.down.doc")
                             .font(.system(.footnote, design: .rounded, weight: .semibold))
                             .underline()
                     }
