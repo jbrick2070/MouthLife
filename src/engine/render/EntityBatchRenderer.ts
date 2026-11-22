@@ -23,6 +23,7 @@ import { findNearestZipMouth, sampleTerrainHeight } from '../physics/CollisionSy
 import type { WorldSession } from '../sim/WorldSession';
 import type { AppMode, QualityTier, WorldCartridge } from '../types';
 import { mergeBufferGeometriesSimple } from './CartridgeMeshBuilder';
+import { SUN_DEPTH_MATERIAL, SUN_DEPTH_MATERIAL_OPTIONS } from './SunShadowPass';
 
 interface ParticleSlot {
   active: boolean;
@@ -492,6 +493,7 @@ export class EntityBatchRenderer {
   // HYDRA-1 articulated micro-dental craft
   private probeGroup = new THREE.Group();
   private probeHullMat: THREE.ShaderMaterial;
+  private probeHullShadowMat: THREE.ShaderMaterial;
   private bristleTuftInst: THREE.InstancedMesh;
   private cockpitDome: THREE.Mesh;
   private ringSpin = 0;
@@ -576,7 +578,20 @@ export class EntityBatchRenderer {
     uniforms.uCoreScale = { value: 1 };
     uniforms.uCoreColor = { value: new THREE.Color(0x5eead4) };
     this.probeHullMat.defines.HYDRA_PARTS = 1;
-    this.probeGroup.add(new THREE.Mesh(hull, this.probeHullMat));
+    const hullMesh = new THREE.Mesh(hull, this.probeHullMat);
+    // The rings spin and the core swells in the vertex shader. The ship's shadow is drawn with the
+    // same vertex shader and the same live values, so it shows the rings where they really are.
+    this.probeHullShadowMat = new THREE.ShaderMaterial({
+      ...SUN_DEPTH_MATERIAL_OPTIONS,
+      defines: { HYDRA_PARTS: 1 },
+      uniforms,
+      vertexColors: true,
+      vertexShader: LIT_PROP_VERT,
+      fragmentShader: 'void main() { gl_FragColor = vec4(1.0); }',
+    });
+    this.probeHullShadowMat.defaultAttributeValues.aProbePart = [0];
+    hullMesh.userData[SUN_DEPTH_MATERIAL] = this.probeHullShadowMat;
+    this.probeGroup.add(hullMesh);
 
     // Translucent cockpit dome renders after the opaque core.
     const domeGeo = new THREE.SphereGeometry(0.36, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -1344,6 +1359,7 @@ export class EntityBatchRenderer {
   }
 
   dispose(): void {
+    this.probeHullShadowMat.dispose();
     this.shadowTex.dispose();
   }
 }

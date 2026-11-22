@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ORAL_LIGHTING_GLSL } from './OralLighting';
+import { ORAL_LIGHTING_GLSL, createSunUniforms } from './OralLighting';
 import { buildAlleyWalls, sampleTerrainHeight } from '../physics/CollisionSystem';
 import { distancePointToSegmentSq2D } from '../surface/OralSurfaceGrid';
 import { computeToothSeamsX } from './toothSeams';
@@ -67,8 +67,8 @@ const GINGIVA_FRAG = /* glsl */ `
     vec3 N = safeUnit(vNormal + (vec3(s1, s2, s3) - 0.5) * (0.26 * attached + 0.06));
 
     vec3 V = safeUnit(cameraPosition - vWorldPos);
-    vec3 L = normalize(vec3(0.35, 0.88, 0.35));
-    vec3 L2 = normalize(vec3(-0.5, 0.55, -0.6));
+    vec3 L = keyLightDir(normalize(vec3(0.35, 0.88, 0.35)));
+    vec3 L2 = fillLightDir(normalize(vec3(-0.5, 0.55, -0.6)));
     vec3 H = safeUnit(L + V);
     float wrap = max(0.0, (dot(N, L) + 0.55) / 1.55);
     float fill = max(0.0, (dot(N, L2) + 0.4) / 1.4) * 0.3;
@@ -97,7 +97,9 @@ const GINGIVA_FRAG = /* glsl */ `
 
     float sulcus = smoothstep(0.30, 0.72, marginal) * (1.0 - smoothstep(0.64, 0.96, marginal));
     col *= (1.0 - 0.32 * sulcus) * (1.0 + headlamp(vWorldPos, N));
-    gl_FragColor = vec4(attenuateOralLight(col, vWorldPos), 1.0);
+    // Real shadows from the teeth, the ship and the gum's own collar (dives only; off elsewhere).
+    col *= sunShade(sunVisibility(vWorldPos, safeUnit(vNormal)));
+    gl_FragColor = vec4(filmTone(attenuateOralLight(col, vWorldPos)), 1.0);
   }
 `;
 
@@ -110,6 +112,7 @@ export function createGingivaMaterial(hexColor = 0xe66c7e): THREE.ShaderMaterial
       uHeadlamp: { value: new THREE.Vector4() },
       uDepthCue: { value: new THREE.Vector2(18, 0.085) },
       uDetail: { value: 1 },
+      ...createSunUniforms(),
     },
     vertexShader: GINGIVA_VERT,
     fragmentShader: GINGIVA_FRAG,
@@ -400,6 +403,8 @@ export function buildCartridgeStageGroup(
       y -= t * t * 2.1;
       edgeAo = 1.0 - 0.32 * t;
     }
+    // The crease where the crown tucks under the gum collar gathers shade: a soft band along the rim.
+    edgeAo *= 1.0 - 0.3 * (1 - smoothstep(0.5, 1.8, marginDist));
 
     // Cavity AO near interproximal enamel walls
     let wallAo = 1.0;
@@ -451,7 +456,8 @@ export function buildCartridgeStageGroup(
     const outerFalloff = marginDist < -2.0 ? Math.max(-2.6, (marginDist + 2.0) * 0.28) : 0;
     const insideDip = marginDist > 0.6 ? -1.4 : 0;
     gPos.setY(i, -0.15 + collarWave + outerFalloff + insideDip);
-    gCols[i * 3] = marginDist > -0.2 ? 0.68 : 0.96;
+    // Shade deepens down the collar's inner slope, darkest in the crease where it meets the crown.
+    gCols[i * 3] = 0.96 - 0.44 * smoothstep(-0.45, 0.6, marginDist);
     gCols[i * 3 + 1] = Math.min(1, collar * (0.6 + 0.4 * papilla));
     gCols[i * 3 + 2] = 0;
   }

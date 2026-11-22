@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ORAL_LIGHTING_GLSL } from './OralLighting';
+import { ORAL_LIGHTING_GLSL, createSunUniforms } from './OralLighting';
 import { pickAcidWashTint, pickEpsDomeTint, pickSulcusTint } from './landmarkContrast';
 import type { BChannelMode, WorldVisualPalette } from '../types';
 
@@ -167,8 +167,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       N = safeUnit(N - vec3(plaqueGrad.x, 0.0, plaqueGrad.y) * 1.7);
     }
 
-    vec3 L1 = normalize(vec3(0.36, 0.86, 0.35));
-    vec3 L2 = normalize(vec3(-0.48, 0.62, -0.62));
+    vec3 L1 = keyLightDir(normalize(vec3(0.36, 0.86, 0.35)));
+    vec3 L2 = fillLightDir(normalize(vec3(-0.48, 0.62, -0.62)));
     vec3 H1 = safeUnit(L1 + V);
     vec3 H2 = safeUnit(L2 + V);
 
@@ -178,9 +178,15 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Subsurface hydroxyapatite wrap illumination
     float wrapDiff = max(0.0, (dot(N, L1) + 0.45) / 1.45);
     float fillDiff = max(0.0, (dot(N, L2) + 0.35) / 1.35) * 0.42;
+    // A dive's sun is behind the teeth, so the fill carries the faces it cannot reach: the less sun
+    // a face gets, the more fill, which keeps the teeth's near sides pearly instead of grey.
+    if (uDiveLook > 0.5) fillDiff *= 1.0 + 0.9 * (1.0 - wrapDiff);
 
     // Clean pearlescent enamel base vs matte organic pellicle/biofilm
     vec3 cleanEnamel = uEnamelBase * (0.34 + 0.6 * wrapDiff + fillDiff * 0.9);
+    // In a dive, clean enamel sits a little under full white, leaving room for its sheen, the
+    // ship's lamp and the glow to read as brighter still instead of all clipping to one white.
+    if (uDiveLook > 0.5) cleanEnamel *= 0.84;
     float fresnel = pow(1.0 - NdotV, 3.0);
 
     // Dentin glowing warm through thin cervical enamel -> opalescent bluish-pearl incisal/cusp tips
@@ -225,7 +231,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Plaque & mature biofilm albedo: clearer local contrast between thin pellicle and thick fissure/margin biofilm
     vec3 slimeAlbedo = mix(uPellicleColor, uBiofilmColor * 0.84, matureBiofilm);
     slimeAlbedo *= (0.78 + 0.34 * microTex);
-    vec3 plaqueLit = slimeAlbedo * (0.34 + 0.62 * NdotL1 + 0.20 * fillDiff);
+    // The lower dive sun lights flat ground a little less, and slopes that face the player hardly at
+    // all: a little ambient and extra fill on those slopes keep the plaque as bright as it was.
+    vec3 plaqueLit = slimeAlbedo * (0.34 + 0.62 * NdotL1 + 0.20 * fillDiff
+      + uDiveLook * (0.07 + 0.3 * fillDiff * (1.0 - wrapDiff)));
 
     if (uDetail > 0) {
       vec3 sheen = mix(vec3(0.12, 0.24, 0.28), vec3(0.33, 0.16, 0.26), n2);
@@ -238,7 +247,8 @@ const FRAGMENT_SHADER = /* glsl */ `
       for (int i = 0; i < 16; i++) {
         vec4 cs = uContactShadows[i];
         if (cs.z <= 0.0) continue;
-        float d = distance(vWorldPos.xz, cs.xy - vec2(0.22, 0.2));
+        // The soft patch sits toward the side the light leaves: a dive's sun is on the far side.
+        float d = distance(vWorldPos.xz, cs.xy + (uDiveLook > 0.5 ? vec2(0.1, 0.24) : vec2(-0.22, -0.2)));
         contactShade = max(contactShade, cs.w * (1.0 - smoothstep(cs.z * 0.25, cs.z, d)));
       }
       baseColor *= 1.0 - contactShade;
@@ -368,7 +378,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     float recess = 1.0 - smoothstep(0.08, 0.55, hFrac);
     float side = 1.0 - smoothstep(0.05, 0.78, N.y);
     float ao = clamp(vVertColor.r, 0.33, 1.0) * (1.0 - 0.24 * recess * side);
-    baseColor = attenuateOralLight(baseColor * ao, vWorldPos);
+    // Real shadows from the ship, the germs, the teeth and the gum (dives only; off elsewhere).
+    vec3 sunLit = sunShade(sunVisibility(vWorldPos, safeUnit(vWorldNormal)));
+    baseColor = attenuateOralLight(baseColor * ao * sunLit, vWorldPos);
 
     // Two-Tone Clinical Erythrosine Disclosing Bio-Scan (Pink thin pellicle / Violet thick biofilm)
     if (uDiscloseStrength > 0.001) {
@@ -447,7 +459,7 @@ const FRAGMENT_SHADER = /* glsl */ `
       baseColor = mix(baseColor, selected, uHighlightPulse * (0.59 + 0.36 * rim));
     }
 
-    gl_FragColor = vec4(baseColor, 1.0);
+    gl_FragColor = vec4(filmTone(baseColor), 1.0);
   }
 `;
 
@@ -479,6 +491,7 @@ export class EnamelBiophysicsMaterial {
         uHeadlamp: { value: new THREE.Vector4() },
         uDepthCue: { value: new THREE.Vector2(18, 0.085) },
         uDetail: { value: 1 },
+        ...createSunUniforms(),
         uEnamelBase: { value: new THREE.Color(0xf4fbff) },
         uPellicleColor: { value: new THREE.Color(0xd9e35b) },
         uBiofilmColor: { value: new THREE.Color(0x9fb82c) },

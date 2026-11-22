@@ -734,8 +734,13 @@ public enum EnamelShaders {
     }
     _surface.normal = enamelSafeUnit((scn_frame.viewTransform * float4(N, 0.0)).xyz);
 
-    float3 L1 = normalize(float3(0.36, 0.86, 0.35));
-    float3 L2 = normalize(float3(-0.48, 0.62, -0.62));
+    // A dive's sun sits low on the far side of the tooth, where the stage's dusk sky glows, so the
+    // shadows it casts (MouthLifeSceneController.diveSun) fall toward the player; a soft fill comes
+    // from the camera's side. Stage enamel is the material whose smoothness override is below zero.
+    // Web twin: DIVE_KEY_DIRECTION / DIVE_FILL_DIRECTION in OralLighting.ts.
+    bool diveLook = globalSmoothnessOverride < 0.0;
+    float3 L1 = diveLook ? normalize(float3(-0.25, 0.70, -0.67)) : normalize(float3(0.36, 0.86, 0.35));
+    float3 L2 = diveLook ? normalize(float3(0.40, 0.80, 0.45)) : normalize(float3(-0.48, 0.62, -0.62));
     float3 H1 = enamelSafeUnit(L1 + V);
     float3 H2 = enamelSafeUnit(L2 + V);
 
@@ -743,6 +748,9 @@ public enum EnamelShaders {
     float NdotV = clamp(dot(N, V), 0.0, 1.0);
     float wrapDiff = max(0.0, (dot(N, L1) + 0.45) / 1.45);
     float fillDiff = max(0.0, (dot(N, L2) + 0.35) / 1.35) * 0.42;
+    // The dive's sun is behind the teeth, so the fill carries the faces it cannot reach: the less sun
+    // a face gets, the more fill, which keeps the near sides of the teeth pearly instead of grey.
+    if (diveLook) { fillDiff *= 1.0 + 0.9 * (1.0 - wrapDiff); }
     float fresnel = pow(max(1.0 - NdotV, 0.0), 3.0);
 
     // Translucent warm ivory-pearl enamel + rich cervical dentin subsurface warmth
@@ -788,7 +796,10 @@ public enum EnamelShaders {
     // Chalky matte pellicle & mature biofilm albedo
     float3 slimeAlbedo = mix(pellicleBaseColor, biofilmBaseColor * 0.84, matureBiofilm);
     slimeAlbedo *= (0.78 + 0.34 * microTex);
-    float3 plaqueLit = slimeAlbedo * (0.36 + 0.60 * NdotL1 + 0.20 * fillDiff);
+    // The lower dive sun lights flat ground a little less, and slopes facing the player hardly at all:
+    // a little ambient and extra fill on those slopes keep the plaque as bright as it was.
+    float plaqueDiveLift = diveLook ? (0.07 + 0.3 * fillDiff * (1.0 - wrapDiff)) : 0.0;
+    float3 plaqueLit = slimeAlbedo * (0.36 + 0.60 * NdotL1 + 0.20 * fillDiff + plaqueDiveLift);
     if (detailTier > 0) {
         float3 bioSheen = mix(float3(0.12, 0.24, 0.28), float3(0.33, 0.16, 0.26), n2);
         plaqueLit += bioSheen * (0.16 + 0.72 * fresnel) * matureBiofilm;
@@ -1166,8 +1177,11 @@ public enum EnamelShaders {
     _surface.normal = gingivaSafeUnit((scn_frame.viewTransform * float4(N, 0.0)).xyz);
 
     float3 V = gingivaSafeUnit(camPos - worldPos);
-    float3 L = normalize(float3(0.35, 0.88, 0.35));
-    float3 L2 = normalize(float3(-0.50, 0.55, -0.60));
+    // Stage gum (depthCueVec.z = 1, set when a stage is mounted) takes the dive's far-side sun and
+    // camera-side fill, as the stage enamel does. Web twin: keyLightDir / fillLightDir in OralLighting.ts.
+    bool diveLook = depthCueVec.z > 0.5;
+    float3 L = diveLook ? normalize(float3(-0.25, 0.70, -0.67)) : normalize(float3(0.35, 0.88, 0.35));
+    float3 L2 = diveLook ? normalize(float3(0.40, 0.80, 0.45)) : normalize(float3(-0.50, 0.55, -0.60));
     float3 H = gingivaSafeUnit(L + V);
 
     float wrap = max(0.0, (dot(N, L) + 0.55) / 1.55);

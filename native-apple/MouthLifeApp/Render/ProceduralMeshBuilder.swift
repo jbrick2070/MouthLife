@@ -3004,6 +3004,9 @@ public enum ProceduralMeshBuilder {
                     y -= t * t * 2.1
                     edgeAo = 1.0 - 0.32 * t
                 }
+                // The crease where the crown tucks under the gum collar gathers shade: a soft band
+                // along the rim. Web twin: buildCartridgeStageGroup in CartridgeMeshBuilder.ts.
+                edgeAo *= 1.0 - 0.3 * (1.0 - simd_smoothstep(0.5, 1.8, marginDist))
 
                 var wallAo = 1.0
                 for w in allWalls {
@@ -3188,7 +3191,9 @@ public enum ProceduralMeshBuilder {
                 uvs[idx * 2] = Float(u)
                 uvs[idx * 2 + 1] = Float(v)
 
-                let ao: Float = marginDist > -0.2 ? 0.68 : 0.96
+                // Shade deepens down the collar's inner slope, darkest in the crease where it meets
+                // the crown (web twin: CartridgeMeshBuilder.ts).
+                let ao = Float(0.96 - 0.44 * simd_smoothstep(-0.45, 0.6, marginDist))
                 let marginal = Float(min(1.0, collar * (0.60 + 0.40 * papilla)))
                 colors[idx * 4] = ao
                 colors[idx * 4 + 1] = marginal

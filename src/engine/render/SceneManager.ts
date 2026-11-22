@@ -33,6 +33,7 @@ import {
 import { EnamelBiophysicsMaterial } from './EnamelBiophysicsMaterial';
 import { EntityBatchRenderer } from './EntityBatchRenderer';
 import { GlowPass } from './GlowPass';
+import { NO_SUN_SHADOW, SunShadowPass } from './SunShadowPass';
 import { ContextLossWatchdog } from './contextLossWatchdog';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
 import { brushCameraAim } from './brushCamera';
@@ -43,6 +44,11 @@ export type HubCameraFocus = 'companion' | 'globe';
 
 /** Brush-Along shows both arches (an open mouth), so the camera sits this much further back. */
 const PACER_MOUTH_DOLLY = 1.8;
+
+/** Half the width of the square of ground, centred ahead of the ship, that gets real shadows. */
+const SUN_SHADOW_HALF_EXTENT = 26;
+/** Shadow map width in texels, by quality tier (the low tier draws no shadow map). */
+const SUN_SHADOW_MAP_SIZE = { medium: 1024, ultra: 2048 } as const;
 
 export interface CompanionRayHit {
   point: THREE.Vector3;
@@ -97,6 +103,8 @@ export class SceneManager {
 
   private companionArch!: CompanionArchBuild;
   private readonly glow = new GlowPass();
+  private readonly sunShadow = new SunShadowPass();
+  private readonly sunFocus = new THREE.Vector3();
   private readonly pacerRig = new PacerPropRig();
   private rinseWash01 = 0;
   private readonly mirrorRight = new THREE.Vector3();
@@ -318,6 +326,8 @@ export class SceneManager {
     this.scene.add(this.pacerRig.group);
     this.scene.add(this.entityBatch.arcadeEntitiesGroup);
     this.scene.add(this.entityBatch.sharedFxGroup);
+    // Drifting motes and sparks are light, not solid things: they cast no shadow.
+    this.entityBatch.sharedFxGroup.userData[NO_SUN_SHADOW] = true;
     if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('graphicsTest') === 'shaderError') {
       // Development only (removed from production builds): a shader that cannot compile, to
       // exercise the failure card.
@@ -380,6 +390,9 @@ export class SceneManager {
       this.renderer.compile(this.scene, this.camera);
       // GlowPass draws the scene and its own passes into its off-screen targets.
       this.glow.strength = Math.max(prevStrength, 0.42);
+      // The shadow map draws every solid object with its own depth-only shader: check that too.
+      this.sunShadow.render(this.renderer, this.scene, this.currentLookAt, SUN_SHADOW_HALF_EXTENT, SUN_SHADOW_MAP_SIZE.medium, 1, 1.25);
+      this.applySunUniforms(true);
       this.glow.prepare(this.renderer, this.scene, this.camera);
       this.glow.discardPrepared(this.renderer);
       // Known limit: these draws go to off-screen targets, whose program variants can differ from
@@ -471,6 +484,8 @@ export class SceneManager {
     this.foamCursor = 0;
     this.cartridgeStage = buildCartridgeStageGroup(cartridge, this.enamelMat.material);
     this.citySkyline = new CitySkylineBackdrop(cartridge);
+    // The skyline is a far-off painted backdrop; it must not throw shadows across the gum.
+    this.citySkyline.group.userData[NO_SUN_SHADOW] = true;
     this.cartridgeStage.group.add(this.citySkyline.group);
     this.cartridgeStage.group.visible =
       this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
@@ -749,6 +764,7 @@ export class SceneManager {
     const washTarget = pacer?.stage === 'mouthwashBonus' ? 1 : 0;
     this.rinseWash01 += (washTarget - this.rinseWash01) * (1 - Math.exp(-4 * frameDt));
     this.enamelMat.setRinseWash(this.rinseWash01, pacer?.mouthwashProgress01 ?? 0);
+    this.updateSunShadow(isArcade);
     // Glow is skipped on the low tier, where every draw counts.
     this.glow.strength = this.activeTier === 'low' ? 0 : this.activeTier === 'medium' ? 0.42 : 0.55;
     this.glow.prepare(this.renderer, this.scene, this.camera);
@@ -852,6 +868,43 @@ export class SceneManager {
     if (this.hubViewShiftPx === 0 && this.hubViewShiftXPx === 0) this.camera.clearViewOffset();
     else this.camera.setViewOffset(w, h, -this.hubViewShiftXPx, -this.hubViewShiftPx, w, h);
     this.viewOffsetApplied = signature;
+  }
+
+  /**
+   * A dive's look: the far-side sun and film-style colour on every tier, and real shadows on the
+   * medium and ultra tiers. Everywhere else (home, Brush-Along, the report) nothing changes.
+   */
+  private updateSunShadow(arcade: boolean): void {
+    const tier = this.activeTier;
+    if (arcade && tier !== 'low' && this.cartridgeStage?.group.visible) {
+      // The camera sees further ahead of the ship (up the screen) than behind it.
+      this.sunFocus.set(this.currentLookAt.x, 0, this.currentLookAt.z - 4);
+      this.sunShadow.render(
+        this.renderer,
+        this.scene,
+        this.sunFocus,
+        SUN_SHADOW_HALF_EXTENT,
+        SUN_SHADOW_MAP_SIZE[tier],
+        1,
+        tier === 'ultra' ? 1.8 : 1.6
+      );
+    } else {
+      this.sunShadow.disable();
+    }
+    this.applySunUniforms(arcade);
+  }
+
+  private applySunUniforms(arcade: boolean): void {
+    const apply = (material: THREE.ShaderMaterial) => {
+      const u = material.uniforms;
+      u.uSunShadowMap.value = this.sunShadow.texture;
+      (u.uSunShadowMatrix.value as THREE.Matrix4).copy(this.sunShadow.matrix);
+      (u.uSunShadow.value as THREE.Vector4).copy(this.sunShadow.params);
+      u.uDiveLook.value = arcade ? 1 : 0;
+    };
+    apply(this.enamelMat.material);
+    apply(this.companionArch.gingivaMaterial);
+    for (const material of this.cartridgeStage?.gingivaMaterials ?? []) apply(material);
   }
 
   private updateOralLighting(nowSec: number, arcade: boolean, session: WorldSession): void {

@@ -68,8 +68,15 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         didSet {
             companionEnamelController.setQualityTier(qualityTier)
             arcadeEnamelController.setQualityTier(qualityTier)
+            applyDiveSunQuality()
         }
     }
+
+    /// A dive's sun: see `setupDiveSun`. Points from the ground toward the sun.
+    /// Web twin: DIVE_KEY_DIRECTION in OralLighting.ts (the enamel and gum shaders use it too).
+    static let diveKeyDirection = simd_normalize(SIMD3<Float>(-0.25, 0.70, -0.67))
+    private let diveSunNode = SCNNode()
+    private let diveSun = SCNLight()
 
     // Companion Sync State
     public var companionSmoothness: Double = 92.0
@@ -192,6 +199,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
         super.init()
 
+        // Stage enamel takes the dive's shadows (the companion arch keeps `.constant`).
+        Self.useShadowReceivingLighting(arcadeEnamelController.material)
         rippleScratch.reserveCapacity(CompanionTouchSystem.maxRipples)
         splatScratch.reserveCapacity(CompanionTouchSystem.maxSplats)
         setupSceneAndLighting()
@@ -251,12 +260,15 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         fillLight.color = RenderBridge.color(hex: 0x7EB8DC)
         fillLightNode.light = fillLight
         scene.rootNode.addChildNode(fillLightNode)
+        setupDiveSun()
 
         // Mount Cosmic Backdrop, Companion Arch, and HYDRA-1 Probe
         scene.rootNode.addChildNode(cosmicNodes.rootNode)
         scene.rootNode.addChildNode(companionNodes.rootNode)
         scene.rootNode.addChildNode(probeRig.rootNode)
         scene.rootNode.addChildNode(probeRig.flossBeamNode)
+        Self.configureShadowCasting(probeRig.rootNode)
+        probeRig.flossBeamNode.enumerateHierarchy { node, _ in node.castsShadow = false }
         probeRig.rootNode.isHidden = true
         probeRig.flossBeamNode.isHidden = true
 
@@ -281,12 +293,82 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         syncMotionMonitorPolicy()
     }
 
+    /// A dive's sun sits low on the far side of the tooth, where the stage's dusk sky glows, so the
+    /// shadows it casts fall toward the player instead of hiding behind what cast them. It lights
+    /// nothing: the enamel and gum shaders do their own lighting with the same direction, and the
+    /// props keep their studio lights. It only casts shadows, drawn by SceneKit in deferred mode as a
+    /// darkening pass over the finished frame. That pass skips constant-lit materials, so the stage
+    /// enamel and gum are switched to lambert with a black diffuse (see `useShadowReceivingLighting`):
+    /// SceneKit's lights then add nothing and the shaders' emission still sets every colour.
+    /// Web twin: SunShadowPass.ts. Off on the low tier and outside stages.
+    private func setupDiveSun() {
+        diveSun.type = .directional
+        // SceneKit skips a light at zero intensity, shadows and all; 1 lumen is invisible next to
+        // the 540-lumen studio key light on the props.
+        diveSun.intensity = 1
+        diveSun.castsShadow = true
+        diveSun.shadowMode = .deferred
+        // Measured off screen: 0.72 darkens shade to about the web's (its shade multiplies by
+        // 0.5-0.74); the touch of blue keeps it cool, as shade under an open sky is.
+        diveSun.shadowColor = RenderBridge.color(hex: 0x050F29, alpha: 0.72)
+        diveSun.shadowRadius = 3
+        diveSun.shadowCascadeCount = 1
+        diveSun.automaticallyAdjustsShadowProjection = true
+        diveSun.maximumShadowDistance = 48
+        diveSunNode.name = "DiveSun"
+        diveSunNode.light = diveSun
+        // A directional light shines along its node's -Z, so it looks from the sun toward the ground.
+        diveSunNode.simdLook(at: -Self.diveKeyDirection, up: SIMD3<Float>(0, 1, 0), localFront: SIMD3<Float>(0, 0, -1))
+        diveSunNode.isHidden = true
+        scene.rootNode.addChildNode(diveSunNode)
+        applyDiveSunQuality()
+    }
+
+    private func applyDiveSunQuality() {
+        let ultra = qualityTier == .ultra
+        diveSun.shadowMapSize = ultra ? CGSize(width: 2048, height: 2048) : CGSize(width: 1024, height: 1024)
+        diveSun.shadowSampleCount = ultra ? 12 : 6
+        syncDiveSunVisibility()
+    }
+
+    private func syncDiveSunVisibility() {
+        let inStage = appMode == .arcade || appMode == .pulpRescue || appMode == .report
+        diveSunNode.isHidden = !inStage || qualityTier == .low
+    }
+
+    /// Makes a self-lit shader material (black diffuse, colour written as emission) take the dive's
+    /// deferred shadows. Measured off screen: unshadowed, it draws exactly as with `.constant`.
+    static func useShadowReceivingLighting(_ material: SCNMaterial?) {
+        guard let material else { return }
+        material.lightingModel = .lambert
+        material.diffuse.contents = PlatformColor.black
+        material.ambient.contents = PlatformColor.black
+        material.specular.contents = PlatformColor.black
+    }
+
+    /// Solid things cast the dive's shadows; glows, rings of light and see-through or additive parts
+    /// do not (they are light, not objects). Shader-driven materials (the enamel and gum) are solid;
+    /// plain constant materials without a shader are the glows.
+    static func configureShadowCasting(_ root: SCNNode) {
+        root.enumerateHierarchy { node, _ in
+            guard let geometry = node.geometry else { return }
+            let isLight = geometry.materials.contains { material in
+                material.transparency < 0.999
+                    || material.blendMode == .add
+                    || !material.writesToDepthBuffer
+                    || (material.lightingModel == .constant && material.shaderModifiers == nil)
+            }
+            if isLight { node.castsShadow = false }
+        }
+    }
+
     // MARK: - Mode & Stage Management
 
     public func setMode(_ mode: AppMode, selectedCityId: String = "toronto") {
         let prevMode = appMode
         appMode = mode
         syncMotionMonitorPolicy()
+        syncDiveSunVisibility()
         let inStage = (mode == .arcade || mode == .pulpRescue || mode == .report)
         let inCompanion = (mode == .hub || mode == .brushAlong)
 
@@ -367,6 +449,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         let stage = ProceduralMeshBuilder.buildCartridgeStageNodes(
             cartridge: cart,
             enamelMaterial: arcadeEnamelController.material
+        )
+        Self.useShadowReceivingLighting(stage.gingivaBedNode.geometry?.firstMaterial)
+        Self.configureShadowCasting(stage.rootNode)
+        // Tells the stage gum's shader to take the dive's far-side sun (see gingivaSurfaceModifierMSL).
+        stage.gingivaBedNode.geometry?.firstMaterial?.setValue(
+            NSValue(scnVector4: RenderBridge.scnVec4(18.0, 0.085, 1.0, 0)),
+            forKey: "depthCueVec"
         )
         scene.rootNode.addChildNode(stage.rootNode)
         self.activeStageNodes = stage
@@ -1076,6 +1165,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 node = existing
             } else {
                 let created = ProceduralMeshBuilder.buildMutansNode()
+                Self.configureShadowCasting(created)
                 // A child of the stage (whose root sits at the world origin, so world placement is
                 // unchanged): hidden with it on Home and torn down with it on the next mount.
                 stage.rootNode.addChildNode(created)
@@ -1114,6 +1204,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                     radius: Float(p.radius),
                     tintHex: stage.landmarkColors.acidPoolHex
                 )
+                Self.configureShadowCasting(created)
                 stage.rootNode.addChildNode(created)
                 acidPoolNodes[p.id] = created
                 node = created
