@@ -56,12 +56,36 @@ export function showBrushIntroCard(opts: BrushIntroCardOptions): void {
   host.style.inset = '0';
   host.style.zIndex = '9000';
   host.innerHTML = brushIntroCardHtml(opts.includeRinse);
+  // A real modal: everything behind the card is inert (no tabbing or tapping into Home) until it
+  // closes, Escape works as Back, and focus goes back where it was.
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const madeInert: HTMLElement[] = [];
+  for (const el of Array.from(document.body.children)) {
+    if (el instanceof HTMLElement && !el.inert) {
+      el.inert = true;
+      madeInert.push(el);
+    }
+  }
   document.body.appendChild(host);
   open = host;
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    back();
+  };
   const close = () => {
+    window.removeEventListener('keydown', onKey, true);
+    for (const el of madeInert) el.inert = false;
     host.remove();
     if (open === host) open = null;
   };
+  const back = () => {
+    close();
+    if (returnFocus?.isConnected) returnFocus.focus();
+    opts.onBack?.();
+  };
+  window.addEventListener('keydown', onKey, true);
   const start = host.querySelector<HTMLButtonElement>('.brush-intro-start');
   start?.addEventListener('click', () => {
     if (start.disabled) return;
@@ -69,10 +93,7 @@ export function showBrushIntroCard(opts: BrushIntroCardOptions): void {
     close();
     opts.onStart();
   });
-  host.querySelector('.brush-intro-back')?.addEventListener('click', () => {
-    close();
-    opts.onBack?.();
-  });
+  host.querySelector('.brush-intro-back')?.addEventListener('click', back);
   start?.focus();
 }
 

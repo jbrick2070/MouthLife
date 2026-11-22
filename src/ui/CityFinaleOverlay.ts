@@ -562,18 +562,19 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.globalAlpha = 1;
     if (this.canvas) this.canvas.style.opacity = cover.toFixed(3);
     if (this.canvas3d) this.canvas3d.style.opacity = cover.toFixed(3);
-    // A shader that failed on its first draw: carry on with the 2D show from this moment.
-    if (this.stage3d && !this.stage3d.ok) this.drop3DStage();
     const stage = this.stage3d;
+    const inCity = this.city && t < this.cityLength;
     if (stage) {
-      if (this.city && t < this.cityLength) {
-        stage.renderCity(t, this.w, this.h);
-        this.drawCityOver3D(ctx, stage, t);
-      } else {
-        stage.renderEnding(t - this.cityLength, this.w, this.h, this.allGold);
-        this.drawEndingOver3D(ctx, stage, t - this.cityLength);
-      }
-    } else if (this.city && t < this.cityLength) this.drawCityFinale(ctx, t);
+      if (inCity) stage.renderCity(t, this.w, this.h);
+      else stage.renderEnding(t - this.cityLength, this.w, this.h, this.allGold);
+    }
+    // A shader that failed on this very draw (three reports it on first use): carry on with the
+    // 2D show from this same moment, so no black 3D frame is ever shown.
+    if (this.stage3d && !this.stage3d.ok) this.drop3DStage();
+    if (this.stage3d) {
+      if (inCity) this.drawCityOver3D(ctx, this.stage3d, t);
+      else this.drawEndingOver3D(ctx, this.stage3d, t - this.cityLength);
+    } else if (inCity) this.drawCityFinale(ctx, t);
     else this.drawEnding(ctx, t - this.cityLength);
     this.updateText(t);
   }

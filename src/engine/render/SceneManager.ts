@@ -357,25 +357,20 @@ export class SceneManager {
    */
   prewarmShaders(): void {
     if (!this.webglAvailable || this.graphicsState === 'failed') return;
-    const prevCosmic = this.earthBackdrop.cosmicShowcaseGroup.visible;
-    const prevComp = this.companionArch.group.visible;
-    const prevStage = this.cartridgeStage?.group.visible ?? false;
-    const prevBackdrop = this.earthBackdrop.rootGroup.visible;
-    const prevPacer = this.pacerRig.group.visible;
-    const prevMohs = this.earthBackdrop.cosmicShowcaseGroup.children.map((c) => c.visible);
+    const hidden: THREE.Object3D[] = [];
     const culled: THREE.Object3D[] = [];
     const prevTarget = this.renderer.getRenderTarget();
     const prevStrength = this.glow.strength;
 
     try {
-      this.earthBackdrop.rootGroup.visible = true;
-      this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c) => (c.visible = true));
-      this.earthBackdrop.cosmicShowcaseGroup.visible = true;
-      this.companionArch.group.visible = true;
-      this.pacerRig.group.visible = true;
-      if (this.cartridgeStage) this.cartridgeStage.group.visible = true;
-      // The camera may not face everything yet; draw it all regardless.
+      // Everything the scene can ever show, hidden or not (the floss line, the zip reticle, the
+      // pacer, a stage's upper arch...), and wherever the camera points: draw it all once.
+      // A cartridge's stage is added later; mountCartridgeMesh runs this again.
       this.scene.traverse((o) => {
+        if (!o.visible) {
+          o.visible = true;
+          hidden.push(o);
+        }
         if (o.frustumCulled) {
           o.frustumCulled = false;
           culled.push(o);
@@ -387,16 +382,15 @@ export class SceneManager {
       this.glow.strength = Math.max(prevStrength, 0.42);
       this.glow.prepare(this.renderer, this.scene, this.camera);
       this.glow.discardPrepared(this.renderer);
+      // Known limit: these draws go to off-screen targets, whose program variants can differ from
+      // the screen's (output colour space, tone mapping). A driver that rejects only a screen
+      // variant is still caught by the session-long latch on the first real frame (the card,
+      // not a black screen). A real on-screen draw here could flash a frame at mission start.
     } finally {
       for (const o of culled) o.frustumCulled = true;
+      for (const o of hidden) o.visible = false;
       this.glow.strength = prevStrength;
       this.renderer.setRenderTarget(prevTarget);
-      this.earthBackdrop.cosmicShowcaseGroup.children.forEach((c, i) => (c.visible = prevMohs[i]));
-      this.earthBackdrop.rootGroup.visible = prevBackdrop;
-      this.earthBackdrop.cosmicShowcaseGroup.visible = prevCosmic;
-      this.companionArch.group.visible = prevComp;
-      this.pacerRig.group.visible = prevPacer;
-      if (this.cartridgeStage) this.cartridgeStage.group.visible = prevStage;
     }
   }
 
