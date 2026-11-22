@@ -31,7 +31,7 @@ See **[`native-apple/README.md`](native-apple/README.md)** and **[`AGENTS.md`](A
 
 ```bash
 npm install
-npm test          # Run all 208 Vitest unit tests
+npm test          # Run all the Vitest unit tests
 npm run dev       # Start local Vite dev server (http://localhost:5173)
 npm run build     # Type-check & build production PWA bundle into dist/
 ```
@@ -78,7 +78,7 @@ MouthLife/
 │   ├── MouthLife.xcodeproj/              # Xcode project + shared MouthLife scheme (bundle ID: org.mouthlife.plaque)
 │   ├── Package.swift                     # Pure SwiftPM package for MouthLifeCore + MouthLifeCoreTests
 │   ├── Sources/MouthLifeCore/            # Deterministic Swift biophysics, 3-stage coach, GyroSloshSim & ML2: saves
-│   ├── Tests/MouthLifeCoreTests/         # 15 XCTest suites (biophysics, subrect RGBA, 3-stage coach, gyro slosh)
+│   ├── Tests/MouthLifeCoreTests/         # XCTest suites (biophysics, subrect RGBA, 3-stage coach, gyro slosh)
 │   └── MouthLifeApp/                     # AppCoordinator, Metal shaders, SceneKit 120Hz loop, Audio/Gyro & SwiftUI
 │       ├── Audio/                        # NativeSoundEngine (Suno deck + 48-voice DSP + TTS), Haptics, MotionTiltMonitor
 │       ├── Music/                        # 10 mastered hardware-AAC (.m4a) Suno tracks + prompt/alias guide
@@ -89,7 +89,7 @@ MouthLife/
 │   └── MAC_AND_IOS_PORTING_SPEC.md       # Native Swift + Capacitor porting blueprint
 ├── public/                               # Web PWA manifest, icons, privacy.html & offline sw.js
 ├── src/                                  # 🌐 TypeScript + Three.js Web/PWA edition
-└── tests/                                # 26 Vitest suites (208 deterministic web tests)
+└── tests/                                # Vitest suites (deterministic web tests)
 ```
 
 ---

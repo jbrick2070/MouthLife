@@ -26,7 +26,7 @@
 4. **IP Cleanliness:** Commercial games such as *Brush Up* (*Budd*, by *GamesThatWork*) are proprietary despite NIH grant funding; zero copyrighted names, designs, or assets from third-party titles are permitted.
 
 ### §1.2 Build Status (v1.0 Golden Master — Complete)
-- **Core Engine (`src/engine/` + `23` Vitest Suites / `170` Tests):** `OralSurfaceGrid`, `OralChemistrySim`, `CompanionArchSim`, `CompanionTouchSystem`, `CollisionSystem` + `CapillaryTetherZip`, `ScoringEngine`, synchronous `SaveSystem` (`localStorage` + `ML2:` Sync Code + `.mouthlife.json` export/import), `EnamelBiophysicsMaterial` + `OrbitalEarthBackdrop` + 3-tier `QualityGovernor`, procedural `SoundEngine` + `musicTheory`, `hostsAndHistory`, `dentalChart` (all 32 adult teeth in Universal/FDI/Palmer + Spot Quiz + 4-layer cross-section), `charityInfo` (`SmileOnU` 501(c)(3)), and `upgrades`.
+- **Core Engine (`src/engine/` + its Vitest suites):** `OralSurfaceGrid`, `OralChemistrySim`, `CompanionArchSim`, `CompanionTouchSystem`, `CollisionSystem` + `CapillaryTetherZip`, `ScoringEngine`, synchronous `SaveSystem` (`localStorage` + `ML2:` Sync Code + `.mouthlife.json` export/import), `EnamelBiophysicsMaterial` + `OrbitalEarthBackdrop` + 3-tier `QualityGovernor`, procedural `SoundEngine` + `musicTheory`, `hostsAndHistory`, `dentalChart` (all 32 adult teeth in Universal/FDI/Palmer + Spot Quiz + 4-layer cross-section), `charityInfo` (`SmileOnU` 501(c)(3)), and `upgrades`.
 - **All 5 Earth-to-Orbit Campaign Worlds + 90s Pulp Rescue + 2-Min Sink Brush-Along + Cosmic Intro:** Fully playable across mobile portrait, mobile landscape, tablet, and desktop widescreen with offline PWA Service Worker (`public/sw.js`) and complete Mac/iOS porting handoff (`docs/MAC_AND_IOS_PORTING_SPEC.md`).
 
 ---
