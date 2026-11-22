@@ -27,10 +27,12 @@ final class BrushDaysTests: XCTestCase {
         XCTAssertEqual(newYear.last?.dateKey, "2027-01-02")
     }
 
-    func testRemindersCoverAWeekAndStayQuietOnceBrushed() {
+    func testRemindersCoverThirtyDaysAndStayQuietOnceBrushed() {
         let m = BrushDays.defaultMorning, e = BrushDays.defaultEvening
         let plan = BrushDays.plan(now: at(2026, 11, 19, 8), morning: m, evening: e, fullToday: 0)
-        XCTAssertEqual(plan.count, 13)
+        // 30 days of two, less this morning's (07:30 has passed)
+        XCTAssertEqual(plan.count, 59)
+        XCTAssertEqual(plan.last?.at, at(2026, 12, 18, 19, 30))
         XCTAssertEqual(plan[0].at, at(2026, 11, 19, 19, 30))
         XCTAssertEqual(plan[0].slot, .evening)
         XCTAssertEqual(plan[1].at, at(2026, 11, 20, 7, 30))
@@ -39,6 +41,21 @@ final class BrushDaysTests: XCTestCase {
         // brushed twice already: nothing more today
         let done = BrushDays.plan(now: at(2026, 11, 19, 6), morning: m, evening: e, fullToday: 2)
         XCTAssertEqual(done.first?.at, at(2026, 11, 20, 7, 30))
+    }
+
+    // A family that stops opening the app is still reminded for 30 days, and the plan never asks
+    // for more notifications than the system keeps waiting for one app (64).
+    func testThePlanIsThirtyDaysLongAndStaysUnderTheSystemLimit() {
+        let m = BrushDays.defaultMorning, e = BrushDays.defaultEvening
+        XCTAssertEqual(BrushDays.daysAhead, 30)
+        // the fullest plan: early morning, nothing brushed yet
+        let fullest = BrushDays.plan(now: at(2026, 11, 19, 0, 0), morning: m, evening: e, fullToday: 0)
+        XCTAssertEqual(fullest.count, BrushDays.daysAhead * BrushDays.Slot.allCases.count)
+        XCTAssertEqual(fullest.count, 60)
+        XCTAssertLessThanOrEqual(fullest.count, 64)
+        // nearest first, each one later than the one before (the scheduler adds them in this order)
+        XCTAssertEqual(fullest.map(\.at), fullest.map(\.at).sorted())
+        XCTAssertEqual(Set(fullest.map(\.at)).count, fullest.count)
     }
 
     // M19: times set the wrong way round (Morning 20:00, Evening 08:00) mean the same to the

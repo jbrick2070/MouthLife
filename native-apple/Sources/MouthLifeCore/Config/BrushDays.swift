@@ -6,8 +6,10 @@ import Foundation
 public enum BrushDays {
     /// Full 2-minute brushes a day that count toward the goal (morning and evening).
     public static let goalPerDay = 2
-    /// How many days ahead reminders are scheduled (refreshed whenever the app opens).
-    public static let daysAhead = 7
+    /// How many days ahead reminders are scheduled (refreshed whenever the app opens). A family
+    /// that stops opening the app is still reminded for this long. Two a day makes at most 60
+    /// waiting notifications; the system keeps only 64 for an app, so this can never be more than 32.
+    public static let daysAhead = 30
     /// 07:30 and 19:30, in minutes after midnight.
     public static let defaultMorning = 7 * 60 + 30
     public static let defaultEvening = 19 * 60 + 30

@@ -2,9 +2,9 @@ import Foundation
 import MouthLifeCore
 import UserNotifications
 
-/// Brush reminders a grown-up set: local notifications for the next week of mornings and evenings,
-/// refreshed whenever the app opens or a brush is saved, and quiet today once that brush is done.
-/// They are made on this device; nothing is sent anywhere.
+/// Brush reminders a grown-up set: local notifications for the next 30 days of mornings and
+/// evenings (`BrushDays.daysAhead`), refreshed whenever the app opens or a brush is saved, and quiet
+/// today once that brush is done. They are made on this device; nothing is sent anywhere.
 @MainActor
 enum BrushReminderScheduler {
     static let idPrefix = "mouthlife.brush."

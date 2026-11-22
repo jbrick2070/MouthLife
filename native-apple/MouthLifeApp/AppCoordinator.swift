@@ -155,6 +155,9 @@ public final class AppCoordinator {
     public var liveFps: Int = 120
     /// The frame-rate pill is a developer readout; it is off and no longer offered in Settings.
     public var showProMotionBadge: Bool = false
+    /// Settings' "Less Camera Motion", kept under the web's name (`mouthlife.reduceMotion`). Only
+    /// the switch's own choice is ever stored (`setReducedMotion`), never the system's setting.
+    private static let reduceMotionDefaultsKey = "mouthlife.reduceMotion"
     public var reducedMotion: Bool = false {
         didSet {
             sceneController.reducedMotion = reducedMotion
@@ -207,6 +210,12 @@ public final class AppCoordinator {
         self.mouthwashDurationStyle = persistedMouthwashStyle
         self.sceneController.pacerMouthwashDurationSec = persistedMouthwashStyle.durationSec
         self.includeRinse = UserDefaults.standard.object(forKey: Self.includeRinseDefaultsKey) as? Bool ?? false
+        // "Less Camera Motion" as it was left in Settings; the system's Reduce Motion is added on
+        // top once the screen appears (RootContentView).
+        if UserDefaults.standard.bool(forKey: Self.reduceMotionDefaultsKey) {
+            self.reducedMotion = true
+            self.sceneController.reducedMotion = true
+        }
         self.remindersOn = UserDefaults.standard.bool(forKey: Self.remindersOnDefaultsKey)
         // Off if Health access was taken away in the Health app since it was turned on.
         self.healthLogOn = UserDefaults.standard.bool(forKey: Self.healthLogDefaultsKey) && HealthBrushLog.isAllowed
@@ -360,8 +369,9 @@ public final class AppCoordinator {
         publishWidgetSnapshot()
     }
 
-    /// The next week of reminders, quiet today once that brush is done (called on launch, on return
-    /// to the app, after each brush and when a setting or the language changes).
+    /// The next 30 days of reminders (`BrushDays.daysAhead`), quiet today once that brush is done
+    /// (called on launch, on return to the app, after each brush and when a setting or the language
+    /// changes).
     private func refreshReminders() {
         let fullToday = save.dailySlotsByDate[HabitBank.localDateKey()]?.fullRewards ?? 0
         BrushReminderScheduler.refresh(on: remindersOn, morning: reminderMorning, evening: reminderEvening, fullToday: fullToday) { slot in
@@ -861,6 +871,8 @@ public final class AppCoordinator {
         withAnimation(.easeOut(duration: 0.2)) {
             finale = CityFinaleRequest(kind: kind, worldIndex: worldIndex, finishes: finishes ?? molarFinishes, reducedMotion: reducedMotion)
         }
+        // A show lasts 30 to 90 s and needs no touch: the screen must not dim and lock over it.
+        updateIdleTimerPolicy()
     }
 
     /// The main menu's Golden Molar: once complete, it plays the ending again.
@@ -877,6 +889,9 @@ public final class AppCoordinator {
             finale = nil
             if report { transition(to: .report) }
         }
+        // The show is over: the screen may sleep again (no transition follows an ending replayed
+        // from Home, so it is said here).
+        updateIdleTimerPolicy()
     }
 
     public func tapGoldenMolar() {
@@ -1270,9 +1285,10 @@ public final class AppCoordinator {
     private func noteBrushingStageEnded() {
         guard pacerStage == .brushing, pacerBrushing == nil else { return }
         // A phone locked as the 2 minutes ran out moves on only once it wakes: brushing ended
-        // that overrun ago, not now.
-        let overrun = max(0, pacerElapsedSec - GameConfig.brushAlongTotalSec)
-        pacerBrushing = (min(pacerElapsedSec, GameConfig.brushAlongTotalSec), Date().addingTimeInterval(-overrun))
+        // that overrun ago, not now. The overrun is read from the session clock: the clock shown
+        // (`pacerElapsedSec`) is held at 2:00 and would always say none.
+        let overrun = pacerClock.overflowSec(in: .brushing, mouthwashDurationSec: mouthwashDurationStyle.durationSec)
+        pacerBrushing = (min(pacerElapsedSec, GameConfig.brushAlongTotalSec), BrushEndTime.endedAt(now: Date(), overflowSec: overrun))
     }
 
     public func enterFlossBonusNow() {
@@ -1310,6 +1326,8 @@ public final class AppCoordinator {
     }
 
     public func enterMouthwashBonusNow(completedFloss: Bool = true) {
+        // A button of the brush screen let go while that screen fades out must not act on Home.
+        guard mode == .brushAlong else { return }
         noteBrushingStageEnded()
         pacerCompletedFlossStage = completedFloss
         let mwDur = mouthwashDurationStyle.durationSec
@@ -1342,7 +1360,17 @@ public final class AppCoordinator {
     }
 
     public func completeBrushAlongSession(withFlossBonus: Bool, withMouthwashBonus: Bool = false) {
+        // Done or Skip held down while the timer ends the session, and let go during the fade to
+        // Home, must not complete it a second time (two rewards, two Health entries).
+        guard mode == .brushAlong else { return }
         noteBrushingStageEnded()
+        // The timer may have run out while the app was away (H04): the brush ended then, not now.
+        // It is paid for the day it ended, by the rule for a late Apple Watch brush.
+        let now = Date()
+        let endedAt = BrushEndTime.endedAt(
+            now: now,
+            overflowSec: pacerClock.overflowSec(in: pacerStage, mouthwashDurationSec: mouthwashDurationStyle.durationSec)
+        )
         stopPacerTimer()
         pacerIsPaused = false
         pacerPausedByUser = false
@@ -1353,9 +1381,11 @@ public final class AppCoordinator {
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
             fullBrush: fullBrush,
-            rinseStepOff: !includeRinse
+            rinseStepOff: !includeRinse,
+            date: now,
+            rewardDay: BrushEndTime.rewardDay(endedAt: endedAt, now: now)
         )
-        noteBrushEnded(at: Date(), full: fullBrush)
+        noteBrushEnded(at: endedAt, full: fullBrush)
         if healthLogOn, let brushing = pacerBrushing {
             HealthBrushLog.save(brushedSec: brushing.sec, endedAt: brushing.endedAt, sessionId: UUID().uuidString)
         }
@@ -1532,7 +1562,9 @@ public final class AppCoordinator {
     }
 
     private func updateIdleTimerPolicy() {
-        let keepAwake = (mode == .brushAlong && !pacerIsPaused)
+        // Awake for the hands-free brush, and for a city finale or the ending: neither needs a
+        // touch, so the screen would dim and lock. (The web edition's wake lock is in `ClockController`.)
+        let keepAwake = (mode == .brushAlong && !pacerIsPaused) || finale != nil
         setIdleTimerDisabled(keepAwake)
     }
 
@@ -1581,6 +1613,87 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setMuted(muted)
         NativeSoundEngine.shared.setMusicVolume(music)
         NativeSoundEngine.shared.setSfxVolume(sfx)
+    }
+
+    /// Settings' "Less Camera Motion": applies the choice and remembers it for the next launch
+    /// (web twin: `SceneManager.setReducedMotion`).
+    public func setReducedMotion(_ on: Bool) {
+        reducedMotion = on
+        UserDefaults.standard.set(on, forKey: Self.reduceMotionDefaultsKey)
+    }
+
+    /// The system's Reduce Motion setting changed: the game follows it at once. It is never
+    /// stored, and switching it off does not undo "Less Camera Motion" chosen in Settings here.
+    public func systemReduceMotionChanged(_ reduce: Bool) {
+        reducedMotion = reduce || UserDefaults.standard.bool(forKey: Self.reduceMotionDefaultsKey)
+    }
+
+    /// What Erase Save removes from this device besides the save itself: the widget's last-brush
+    /// times, every "seen" flag (the brush intro card, How to Play, the one-time hints with the
+    /// first-city coach) and the grown-up choices (the rinse step and its length, the floss tool,
+    /// reminders and their times, Apple Health).
+    private static let erasedDefaultsKeys: [String] = [
+        lastBrushDefaultsKey, lastFullBrushDefaultsKey,
+        brushIntroSeenDefaultsKey,
+        tutorialOffersDefaultsKey, tutorialOpenedDefaultsKey, tutorialEditionDefaultsKey,
+        hintsStorageKey,
+        includeRinseDefaultsKey, mouthwashDurationDefaultsKey, flossToolDefaultsKey,
+        remindersOnDefaultsKey, reminderMorningDefaultsKey, reminderEveningDefaultsKey,
+        healthLogDefaultsKey,
+    ]
+
+    /// Settings' "Erase Save", after a grown-up's question and a second tap: the app is as it was
+    /// on first launch. The privacy notice promises it ("You can erase all saved data at any time
+    /// in Settings"). Web twin: `#btn-reset-save` in CompanionHubOverlay.ts.
+    ///
+    /// Kept are only the comfort settings (sound, language and voice, Less Camera Motion, the
+    /// whole-mouth panel) and the Apple Watch's pay-once ledger with its settings counter, so a
+    /// watch brush already paid is not paid again into the fresh save and the watch still obeys
+    /// "rinse off". Brushes already written to Apple Health stay there: the app cannot read them.
+    public func eraseSave() {
+        NativeSoundEngine.shared.playUiTap()
+        // The sheet goes first: its fields still hold the old name.
+        activeSheet = nil
+
+        // What the device remembers outside the save, in storage and in memory alike.
+        for key in Self.erasedDefaultsKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        seenHints = []
+        coach = nil
+        tutorialGate = TutorialGate()
+        pendingDiveAfterTutorial = nil
+        includeRinse = false
+        flossToolStyle = .flossPick
+        sceneController.pacerFlossToolStyle = flossToolStyle
+        mouthwashDurationStyle = .totalCare60s
+        sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
+        remindersOn = false
+        reminderMorning = BrushDays.defaultMorning
+        reminderEvening = BrushDays.defaultEvening
+        healthLogOn = false
+
+        // The save and every copy of it. Taking the fresh save rewrites the widgets' snapshot from
+        // it (the last-brush times are already gone); forgetting the last one written makes sure
+        // it is written even if it reads the same.
+        lastWidgetSnapshot = nil
+        save = saveSystem.eraseAllSavedData()
+        sceneController.companionSmoothness = save.companion.smoothnessIndex
+        sceneController.companionAcidStress = save.companion.pulpIntegrity < 50 ? 0.5 : 0.0
+        sceneController.touchSystem.clearAll()
+        selectedWorldId = "world_1"
+
+        // No reminder is left waiting, and the watch hears that the rinse step is off again.
+        refreshReminders()
+        pushWatchSettings()
+
+        // Home greets a new player: How to Play is offered again, as on a first launch.
+        if mode == .hub {
+            enterHomeForTutorial()
+        } else {
+            showTutorialOffer = false
+        }
+        showHubToast("Save erased. You are starting fresh!")
     }
 
     public func importSyncCode(_ code: String) -> Result<Void, Error> {

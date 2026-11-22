@@ -155,8 +155,10 @@ public struct RootContentView: View {
                 .presentationDragIndicator(.visible)
         }
         // Follow the system's Reduce Motion: on at launch if it is on, and live when it changes.
+        // Neither is stored, and the system switching off leaves a "Less Camera Motion" chosen in
+        // Settings on (the coordinator keeps that choice apart).
         .onAppear { if systemReduceMotion { coordinator.reducedMotion = true } }
-        .onChange(of: systemReduceMotion) { _, reduce in coordinator.reducedMotion = reduce }
+        .onChange(of: systemReduceMotion) { _, reduce in coordinator.systemReduceMotionChanged(reduce) }
     }
 
     /// The overlay for the current mode, the finale and How to Play.
@@ -397,13 +399,14 @@ public struct RootContentView: View {
                         },
                         onChangeVoiceCoach: { enabled in coordinator.setVoiceCoachEnabled(enabled) },
                         onChangeLanguage: { lang in coordinator.setCoachLanguage(lang) },
-                        onChangeReducedMotion: { red in coordinator.reducedMotion = red },
+                        onChangeReducedMotion: { red in coordinator.setReducedMotion(red) },
                         onChangeIncludeRinse: { on in coordinator.setIncludeRinse(on) },
                         onSetReminders: { on, done in coordinator.setReminders(on, done: done) },
                         onSetReminderTimes: { morning, evening in coordinator.setReminderTimes(morning: morning, evening: evening) },
                         onSetHealthLog: { on, done in coordinator.setHealthLog(on, done: done) },
                         onToggleProMotionTelemetry: { show in coordinator.showProMotionBadge = show },
-                        onReplayCosmicIntro: { coordinator.replayCosmicIntro() }
+                        onReplayCosmicIntro: { coordinator.replayCosmicIntro() },
+                        onEraseSave: { coordinator.eraseSave() }
                     )
                 }
     }

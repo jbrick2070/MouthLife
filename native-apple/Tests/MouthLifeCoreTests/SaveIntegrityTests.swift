@@ -28,6 +28,78 @@ final class SaveIntegrityTests: XCTestCase {
         XCTAssertEqual(mem.readString(forKey: SaveSystem.unreadableCopyKey), raw)
     }
 
+    // Settings' Erase Save: the privacy notice promises all saved data can be erased, so the copies
+    // the save system keeps go too, and nothing old comes back at the next launch.
+    func testEraseAllSavedDataLeavesNoCopyBehind() {
+        let rawV1 = #"{"schemaVersion":1,"totalBrushStamps":12,"fluorideCrystals":300}"#
+        let damaged = #"{"schemaVersion":2,"totalBrushStamps":73,"fluori"#
+        let mem = InMemorySaveStorage(initialValues: [SaveSystem.storageKey: rawV1, SaveSystem.unreadableCopyKey: damaged])
+        let sys = SaveSystem(bus: EventBus(), storage: mem)
+        var played = sys.load(nowEpochMs: t0)
+        played.playerProfile.displayName = "Old Name"
+        played.hasSeenCosmicIntro = true
+        played.dailySlotsByDate["2026-11-19"] = DailySlotLog(fullRewards: 2, tips: 1)
+        played.worlds["world_1"]?.completed = true
+        _ = sys.save(played, nowEpochMs: t0 + 1)
+        XCTAssertEqual(mem.readString(forKey: SaveSystem.v1CopyKey), rawV1)
+        XCTAssertEqual(mem.readString(forKey: SaveSystem.unreadableCopyKey), damaged)
+
+        let fresh = sys.eraseAllSavedData(nowEpochMs: t0 + 2)
+        // exactly a brand-new save (only the revision counter keeps rising)
+        var expected = SaveSystem.createDefaultSave(nowEpochMs: t0 + 2)
+        expected.saveRevision = fresh.saveRevision
+        XCTAssertEqual(fresh, expected)
+        XCTAssertEqual(sys.getSave(), fresh)
+        // the fresh save is all that is stored
+        XCTAssertEqual(Set(mem.snapshot().keys), [SaveSystem.storageKey])
+        XCTAssertFalse(mem.readString(forKey: SaveSystem.storageKey)?.contains("Old Name") ?? true)
+
+        // the next launch finds the fresh save and nothing else
+        let relaunched = SaveSystem(bus: EventBus(), storage: mem)
+        let loaded = relaunched.load(nowEpochMs: t0 + 3)
+        XCTAssertEqual(relaunched.loadOutcome, .loaded)
+        XCTAssertEqual(loaded.totalBrushStamps, 0)
+        XCTAssertEqual(loaded.fluorideIons, 0)
+        XCTAssertEqual(loaded.playerProfile.displayName, "Explorer")
+        XCTAssertFalse(loaded.hasSeenCosmicIntro)
+        XCTAssertTrue(loaded.dailySlotsByDate.isEmpty)
+        XCTAssertEqual(loaded.worlds["world_1"]?.completed, false)
+        XCTAssertEqual(Set(mem.snapshot().keys), [SaveSystem.storageKey])
+    }
+
+    // Erase Save also replaces a save written by a newer version, and its kept bytes go as well.
+    func testEraseAllSavedDataReplacesANewerVersionSaveAndItsCopy() {
+        let raw = #"{"schemaVersion":3,"totalBrushStamps":73,"fluorideIons":421,"somethingNew":{"a":1}}"#
+        let mem = InMemorySaveStorage(initialValues: [SaveSystem.storageKey: raw])
+        let sys = SaveSystem(bus: EventBus(), storage: mem)
+        _ = sys.load(nowEpochMs: t0)
+        XCTAssertTrue(sys.isPersistenceSuspended)
+        XCTAssertEqual(mem.readString(forKey: SaveSystem.unreadableCopyKey), raw)
+
+        _ = sys.eraseAllSavedData(nowEpochMs: t0 + 1)
+        XCTAssertFalse(sys.isPersistenceSuspended)
+        XCTAssertEqual(Set(mem.snapshot().keys), [SaveSystem.storageKey])
+        XCTAssertFalse(mem.readString(forKey: SaveSystem.storageKey)?.contains("somethingNew") ?? true)
+        // saving works again from here on
+        var next = sys.getSave()
+        next.fluorideIons = 5
+        _ = sys.save(next, nowEpochMs: t0 + 2)
+        let relaunched = SaveSystem(bus: EventBus(), storage: mem)
+        XCTAssertEqual(relaunched.load(nowEpochMs: t0 + 3).fluorideIons, 5)
+    }
+
+    // The words of Settings' Erase Save (the button, its second tap and the Home toast) are the
+    // web's, so every language already has them: nothing new to translate.
+    func testEraseSaveWordsAreAlreadyInEveryLanguage() {
+        defer { L10n.setLanguage("en") }
+        for code in L10nCatalogs.languageCodes {
+            L10n.setLanguage(code)
+            for text in ["🔄 Erase Save", "⚠️ Tap Again to Erase", "Save erased. You are starting fresh!"] {
+                XCTAssertNotEqual(L10n.t(text), text, "\(code): \(text)")
+            }
+        }
+    }
+
     func testDamagedSaveBytesAreKeptBeforeStartingFresh() {
         let raw = #"{"schemaVersion":2,"totalBrushStamps":73,"fluori"#
         let mem = InMemorySaveStorage(initialValues: [SaveSystem.storageKey: raw])

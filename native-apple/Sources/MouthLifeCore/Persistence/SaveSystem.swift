@@ -863,6 +863,20 @@ public final class SaveSystem {
         return currentSave
     }
 
+    /// Settings' "Erase Save": erases everything the save system keeps, then starts a brand-new
+    /// Day-1 save. That is the save itself and both kept copies (the bytes of a save this build
+    /// could not read, and the version-1 copy). The privacy notice promises that all saved data can
+    /// be erased, and an erase that leaves copies behind is not an erase. `resetToFreshSave` alone
+    /// keeps the copies.
+    @discardableResult
+    public func eraseAllSavedData(
+        nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
+    ) -> MouthLifeSaveV2 {
+        storage.removeValue(forKey: Self.unreadableCopyKey)
+        storage.removeValue(forKey: Self.v1CopyKey)
+        return resetToFreshSave(nowEpochMs: nowEpochMs)
+    }
+
     private func persistInternal(nowEpochMs: Int64) {
         currentSave.lastSavedEpochMs = nowEpochMs
         // A save from a newer version stays untouched until the player imports or erases (H02).

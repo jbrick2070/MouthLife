@@ -26,6 +26,14 @@ public struct ProfileAndSettingsSheet: View {
     @State private var healthLogOn: Bool
     @State private var healthBlocked = false
     @State private var showHealthGate = false
+    @State private var showEraseGate = false
+    /// Erase Save: a grown-up answered the question, and the button now waits for its second tap.
+    @State private var eraseArmed = false
+    /// Erase Save was done from this sheet, which is now closing. Its fields still hold the old
+    /// name, so nothing they do from here on is saved.
+    @State private var erased = false
+    /// How long the button waits for that second tap before it goes back, in seconds.
+    private static let eraseArmedSec: Double = 6
     private let healthAvailable: Bool
     private let brushWeek: [BrushDays.Day]
 
@@ -41,6 +49,7 @@ public struct ProfileAndSettingsSheet: View {
     public let onSetHealthLog: (Bool, @escaping (Bool) -> Void) -> Void
     public let onToggleProMotionTelemetry: (Bool) -> Void
     public let onReplayCosmicIntro: () -> Void
+    public let onEraseSave: () -> Void
 
     public init(
         profile: PlayerHostProfile,
@@ -70,7 +79,8 @@ public struct ProfileAndSettingsSheet: View {
         onSetReminderTimes: @escaping (Int, Int) -> Void = { _, _ in },
         onSetHealthLog: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, done in done(false) },
         onToggleProMotionTelemetry: @escaping (Bool) -> Void,
-        onReplayCosmicIntro: @escaping () -> Void
+        onReplayCosmicIntro: @escaping () -> Void,
+        onEraseSave: @escaping () -> Void = {}
     ) {
         _displayName = State(initialValue: profile.displayName)
         _skinToneIndex = State(initialValue: profile.skinToneIndex)
@@ -102,6 +112,7 @@ public struct ProfileAndSettingsSheet: View {
         self.onSetHealthLog = onSetHealthLog
         self.onToggleProMotionTelemetry = onToggleProMotionTelemetry
         self.onReplayCosmicIntro = onReplayCosmicIntro
+        self.onEraseSave = onEraseSave
     }
 
     public var body: some View {
@@ -121,7 +132,7 @@ public struct ProfileAndSettingsSheet: View {
                             .padding(11)
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.07)))
                             .onChange(of: displayName) { _, newValue in
-                                onSaveProfile(newValue, skinToneIndex, homeCityId)
+                                saveProfile(newValue, skinToneIndex, homeCityId)
                             }
 
                         Text(L10n.t("Skin Tone Swatch"))
@@ -133,7 +144,7 @@ public struct ProfileAndSettingsSheet: View {
                                 let selected = skinToneIndex == swatch.index
                                 Button {
                                     skinToneIndex = swatch.index
-                                    onSaveProfile(displayName, swatch.index, homeCityId)
+                                    saveProfile(displayName, swatch.index, homeCityId)
                                 } label: {
                                     Circle()
                                         .fill(MLTheme.color(hexString: swatch.hex))
@@ -157,7 +168,7 @@ public struct ProfileAndSettingsSheet: View {
                                     let active = homeCityId == city.id
                                     Button {
                                         homeCityId = city.id
-                                        onSaveProfile(displayName, skinToneIndex, city.id)
+                                        saveProfile(displayName, skinToneIndex, city.id)
                                     } label: {
                                         Text(L10n.t("\(city.signatureTreat.emoji) \(city.city)"))
                                             .font(.system(.caption, design: .rounded, weight: .bold))
@@ -429,6 +440,9 @@ public struct ProfileAndSettingsSheet: View {
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
                         .sheet(isPresented: $showPrivacyPolicy) { PrivacyPolicyView() }
 
+                        // The erase the privacy policy promises ("at any time in Settings")
+                        eraseSaveButton
+
                         Text(L10n.t(CharityInfo.clinicalDisclaimer))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(MLTheme.textMuted)
@@ -468,6 +482,48 @@ extension ProfileAndSettingsSheet {
                 onSetReminderTimes(reminderMorning, reminderEvening)
             }
         )
+    }
+
+    /// Saves the name, swatch and home city. Not after Erase Save: the sheet is closing then and
+    /// its fields still hold the old name, which must not come back into the fresh save.
+    fileprivate func saveProfile(_ name: String, _ skinTone: Int, _ homeCity: String) {
+        guard !erased else { return }
+        onSaveProfile(name, skinTone, homeCity)
+    }
+
+    /// Erase Save, for grown-ups. The first tap asks the grown-up question; after the right answer
+    /// the button asks for a second tap, and that one erases. Leaving the sheet or waiting a few
+    /// seconds puts the button back. The two labels are the web's (`#btn-reset-save` in
+    /// CompanionHubOverlay.ts), so both editions share one translation.
+    fileprivate var eraseSaveButton: some View {
+        Button {
+            guard !erased else { return }
+            guard eraseArmed else {
+                showEraseGate = true
+                return
+            }
+            eraseArmed = false
+            erased = true
+            dismiss()
+            onEraseSave()
+        } label: {
+            Text(L10n.t(eraseArmed ? "⚠️ Tap Again to Erase" : "🔄 Erase Save"))
+                .foregroundStyle(eraseArmed ? MLTheme.coralGum : MLTheme.textPrimary)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(MLGlassPillButtonStyle(tint: eraseArmed ? MLTheme.coralGum : MLTheme.textSecondary))
+        .sheet(isPresented: $showEraseGate) {
+            ParentGateView(note: L10n.t("🔄 Erase Save")) {
+                eraseArmed = true
+            }
+            .presentationDetents([.medium])
+        }
+        .task(id: eraseArmed) {
+            // Armed for a few seconds only, counted in real time (also while the phone is locked).
+            guard eraseArmed else { return }
+            try? await Task.sleep(for: .seconds(Self.eraseArmedSec), clock: .continuous)
+            if !Task.isCancelled { eraseArmed = false }
+        }
     }
 }
 
