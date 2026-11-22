@@ -25,8 +25,16 @@ function writePref(key: string, value: string): void {
 }
 
 /**
- * Pick the installed voice that best fits a BCP-47 tag: exact locale first, then the same
- * language, preferring a local (offline) voice at each step. Null lets the browser decide.
+ * If the browser never says a cue has ended, the music comes back up this long after the cue began
+ * (a cue is one word). The native app uses the same 5.5 seconds.
+ */
+export const VOICE_DUCK_RELEASE_MS = 5500;
+
+/**
+ * Pick the voice that best fits a BCP-47 tag: exact locale first, then the same language. Only a
+ * voice the browser marks as local is ever picked. Any other voice is spoken by a server, which
+ * would be sent the coach's words, and the game promises that everything stays on this device.
+ * Returns -1 when no local voice fits: the coach then says nothing.
  */
 export function pickVoice(
   voices: readonly Pick<SpeechSynthesisVoice, 'lang' | 'localService'>[],
@@ -37,11 +45,12 @@ export function pickVoice(
   let best = -1;
   let bestScore = 0;
   voices.forEach((v, i) => {
+    // Not marked local (false, or not marked at all): never used, however well it fits.
+    if (v.localService !== true) return;
     const lang = (v.lang || '').toLowerCase().replace('_', '-');
     let score = 0;
-    if (lang === want) score = 4;
-    else if (lang.split('-')[0] === wantLang) score = 2;
-    if (score > 0 && v.localService) score += 1;
+    if (lang === want) score = 2;
+    else if (lang.split('-')[0] === wantLang) score = 1;
     if (score > bestScore) {
       bestScore = score;
       best = i;
@@ -52,13 +61,20 @@ export function pickVoice(
 
 /**
  * Hands-free spoken brushing coach built on the browser's Web Speech API.
- * Silent no-op where speech synthesis is missing. Preferences live outside the save
- * (same choice as the native app, which keeps them in UserDefaults).
+ * Silent where speech synthesis is missing, and where no voice on the device speaks the chosen
+ * language. Preferences live outside the save (same choice as the native app, which keeps them in
+ * UserDefaults).
  */
 export class VoiceCoach {
   private enabled: boolean;
   private language: CoachLanguage;
-  private speakingCount = 0;
+  /**
+   * The cue being spoken, held here until it ends. A browser can drop a cue that nothing holds on
+   * to before it has finished, and then never says that it ended.
+   */
+  private current: SpeechSynthesisUtterance | null = null;
+  /** Brings the music back up if the end of the cue is never reported. */
+  private releaseTimer: ReturnType<typeof setTimeout> | null = null;
   /** Called with true while a cue is being spoken, so music can duck under it. */
   onSpeakingChanged: ((speaking: boolean) => void) | null = null;
   /** Called after the language changes. The whole game uses this one language setting. */
@@ -104,7 +120,7 @@ export class VoiceCoach {
     this.onLanguageChanged?.(language);
   }
 
-  /** True when a voice for the current language is installed (false = the browser falls back). */
+  /** True when a voice on this device speaks the current language (false = the coach stays silent). */
   hasVoiceForLanguage(): boolean {
     const synth = this.synth();
     if (!synth) return false;
@@ -117,22 +133,20 @@ export class VoiceCoach {
     const level = this.soundLevel ? this.soundLevel() : 1;
     if (!synth || !this.enabled || !text || level <= 0.001) return;
     const bcp47 = COACH_LANGUAGE_INFO[this.language].bcp47VoiceCode;
+    const voices = synth.getVoices();
+    const idx = pickVoice(voices, bcp47);
+    // No voice on this device for the language: say nothing (the pacer's sounds still play). A cue
+    // sent with only a language would let the browser choose the voice, and it may choose one that
+    // is not on the device.
+    if (idx < 0) return;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.volume = Math.min(1, Math.max(0, level));
     utterance.lang = bcp47;
-    const voices = synth.getVoices();
-    const idx = pickVoice(voices, bcp47);
-    if (idx >= 0) utterance.voice = voices[idx];
+    utterance.voice = voices[idx];
     utterance.rate = 1.0;
     utterance.pitch = 1.03;
 
-    let settled = false;
-    const finish = (): void => {
-      if (settled) return;
-      settled = true;
-      this.speakingCount = Math.max(0, this.speakingCount - 1);
-      if (this.speakingCount === 0) this.onSpeakingChanged?.(false);
-    };
+    const finish = (): void => this.settle(utterance);
     utterance.onend = finish;
     utterance.onerror = finish;
 
@@ -140,9 +154,28 @@ export class VoiceCoach {
     // A cue is spoken only while the ritual runs: if speech was left paused (Pause, then Home or a
     // jump to the next stage), resume it, or this and every later cue would wait silently (M07).
     synth.resume();
-    this.speakingCount += 1;
+    this.clearReleaseTimer();
+    this.current = utterance;
+    // The end of a cue is not always reported (the system can cut speech off without a word). The
+    // music must never stay lowered for that, so it comes back up by itself after a while.
+    this.releaseTimer = setTimeout(finish, VOICE_DUCK_RELEASE_MS);
     this.onSpeakingChanged?.(true);
     synth.speak(utterance);
+  }
+
+  /** A cue ended, failed, or ran out of time: let go of it and bring the music back up. */
+  private settle(utterance: SpeechSynthesisUtterance): void {
+    // An earlier cue that a newer one replaced: the newer cue still keeps the music down.
+    if (this.current !== utterance) return;
+    this.current = null;
+    this.clearReleaseTimer();
+    this.onSpeakingChanged?.(false);
+  }
+
+  private clearReleaseTimer(): void {
+    if (this.releaseTimer === null) return;
+    clearTimeout(this.releaseTimer);
+    this.releaseTimer = null;
   }
 
   pause(): void {
@@ -158,8 +191,9 @@ export class VoiceCoach {
     synth?.cancel();
     // Leaving a paused ritual must not leave speech paused for the next one (M07).
     synth?.resume();
-    if (this.speakingCount !== 0) {
-      this.speakingCount = 0;
+    this.clearReleaseTimer();
+    if (this.current) {
+      this.current = null;
       this.onSpeakingChanged?.(false);
     }
   }

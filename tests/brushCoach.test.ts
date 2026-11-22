@@ -312,14 +312,42 @@ describe('8-language coach copy', () => {
   it('prefers an exact-locale voice, then the same language, and reports none when missing', () => {
     const voices = [
       { lang: 'en-GB', localService: true },
-      { lang: 'es-ES', localService: false },
-      { lang: 'es-MX', localService: false },
+      { lang: 'es-ES', localService: true },
+      { lang: 'es-MX', localService: true },
       { lang: 'pt_PT', localService: true },
     ];
     expect(pickVoice(voices, 'es-MX')).toBe(2);
+    expect(pickVoice(voices, 'es-AR')).toBe(1);
     expect(pickVoice(voices, 'en-US')).toBe(0);
     expect(pickVoice(voices, 'pt-BR')).toBe(3);
     expect(pickVoice(voices, 'ja-JP')).toBe(-1);
+  });
+
+  it('never picks a voice that is not on the device, however well it fits', () => {
+    // Desktop Chrome lists Google's voices beside the computer's own. Google's are spoken by a
+    // server (localService false), which would be sent the coach's words.
+    const google = ['de-DE', 'en-US', 'en-GB', 'es-ES', 'es-US', 'fr-FR', 'ja-JP', 'ko-KR', 'pt-BR', 'zh-CN'].map(
+      (lang) => ({ lang, localService: false })
+    );
+
+    // An English computer: its only voice for the other seven languages is Google's, so none is picked.
+    const englishPc = [{ lang: 'en-US', localService: true }, ...google];
+    for (const want of ['ja-JP', 'ko-KR', 'zh-CN', 'de-DE', 'pt-BR', 'es-MX', 'fr-CA']) {
+      expect(pickVoice(englishPc, want), want).toBe(-1);
+    }
+    expect(pickVoice(englishPc, 'en-US')).toBe(0);
+
+    // The computer's own voice in another region beats Google's voice for the exact region.
+    expect(pickVoice([...google, { lang: 'en-GB', localService: true }], 'en-US')).toBe(google.length);
+    expect(pickVoice([...google, { lang: 'pt-PT', localService: true }], 'pt-BR')).toBe(google.length);
+
+    // Only Google's voices, or no list yet (Chromium fills it a moment after start-up): none.
+    expect(pickVoice(google, 'en-US')).toBe(-1);
+    expect(pickVoice([], 'en-US')).toBe(-1);
+
+    // A voice the browser does not mark either way is not taken on trust.
+    const unmarked = [{ lang: 'en-US' } as { lang: string; localService: boolean }];
+    expect(pickVoice(unmarked, 'en-US')).toBe(-1);
   });
 });
 

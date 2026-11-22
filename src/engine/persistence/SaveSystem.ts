@@ -8,6 +8,7 @@ import {
 import { UPGRADE_CATALOG, UPGRADE_IDS } from '../../config/upgrades';
 import { CompanionArchSim, createInitialCompanionState } from '../companion/CompanionArchSim';
 import type { EventBus } from '../EventBus';
+import { formatLocalDateKey } from './HabitBank';
 import type {
   MasteryGrade,
   MouthLifeSaveV2,
@@ -120,6 +121,9 @@ export function createDefaultSave(nowEpochMs = Date.now()): MouthLifeSaveV2 {
   };
 }
 
+/** How many brushing days a save keeps: the newest ones (see the day rule in `migrateSave`). */
+export const DAILY_LOG_MAX_DAYS = 45;
+
 /**
  * Pure migration & validation pipeline.
  * Supports both schemaVersion: 2 and synthetic legacy schemaVersion: 1 fixtures,
@@ -161,12 +165,20 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
   // Daily slots (V1 stored numbers; V2 stores { fullRewards, tips })
   if (obj.dailySlotsByDate && typeof obj.dailySlotsByDate === 'object') {
     // Keep the 45 most recent days by date, not by the order the keys happen to be stored in:
-    // a merged Sync Code can list an old day after a new one (M01). Same as the Swift twin.
-    const entries = Object.entries(obj.dailySlotsByDate as Record<string, unknown>)
+    // a merged Sync Code can list an old day after a new one (M01).
+    const dated = Object.entries(obj.dailySlotsByDate as Record<string, unknown>)
       .filter(([dateKey]) => /^\d{4}-\d{2}-\d{2}$/.test(dateKey))
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .slice(-45);
-    for (const [dateKey, val] of entries) {
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    // Days that can have happened come first: everything up to tomorrow (tomorrow, because a code
+    // may come from a device a time zone ahead). Days dated later only fill the room that is left.
+    // A crafted code full of days in the year 9999 can then never push the real days out, and a
+    // device whose own clock is set too early still keeps its newest days. The Swift twin has to
+    // follow the same rule, or the two editions keep different days from one code.
+    const tomorrow = formatLocalDateKey(new Date(nowEpochMs + 86_400_000));
+    const happened = dated.filter(([dateKey]) => dateKey <= tomorrow).slice(-DAILY_LOG_MAX_DAYS);
+    const room = DAILY_LOG_MAX_DAYS - happened.length;
+    const later = room > 0 ? dated.filter(([dateKey]) => dateKey > tomorrow).slice(-room) : [];
+    for (const [dateKey, val] of [...happened, ...later]) {
       if (typeof val === 'number') {
         base.dailySlotsByDate[dateKey] = {
           fullRewards: clampInt(val, 0, 2, 0),
@@ -187,7 +199,8 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
     const p = obj.playerProfile as Record<string, unknown>;
     const rawName = typeof p.displayName === 'string' ? p.displayName.trim() : '';
     base.playerProfile = {
-      displayName: rawName.length > 0 ? truncateDisplayName(rawName) : 'Explorer',
+      // Nothing left after the cut (no name, or one "letter" too long to keep): the usual name.
+      displayName: truncateDisplayName(rawName) || 'Explorer',
       skinToneIndex: clampInt(p.skinToneIndex, 0, REALISTIC_SKIN_TONES.length - 1, 3),
       homeCityId:
         typeof p.homeCityId === 'string' && HOST_CITY_IDS.has(p.homeCityId)
@@ -299,8 +312,12 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
         const w = entry as Record<string, unknown>;
         const completed = Boolean(w.completed);
         const bestGradeRaw = w.bestGrade;
+        // Only the six grade names themselves count. A plain `in` test also says yes to names
+        // every object inherits ("constructor", "toString"), and a crafted code could use one to
+        // replace a real grade with a word that no later win can beat. (Not Object.hasOwn: older
+        // Safari lacks it.)
         const bestGrade: MasteryGrade =
-          typeof bestGradeRaw === 'string' && bestGradeRaw in GRADE_ORDER
+          typeof bestGradeRaw === 'string' && Object.prototype.hasOwnProperty.call(GRADE_ORDER, bestGradeRaw)
             ? (bestGradeRaw as MasteryGrade)
             : completed
               ? 'B'
@@ -340,20 +357,44 @@ export function encodeSaveToSyncCode(save: MouthLifeSaveV2): string {
 /**
  * First 24 visible characters of a name. Cutting by UTF-16 units can split an emoji in half and
  * leave a broken character that the native app then refuses to import, so cut by whole characters.
+ *
+ * One visible character can carry any number of stacked marks, so 24 of them can still be very
+ * long: a crafted name made a save's own Sync Code too long to be read back. So the name also stops
+ * before it passes 256 UTF-16 units, still at a whole character. A first character that is too long
+ * by itself leaves nothing, and the caller then uses the usual name. The Swift twin has to cut the
+ * same way, or one code gives two different names.
  */
-export function truncateDisplayName(name: string, maxChars = DISPLAY_NAME_MAX_CHARS): string {
+export function truncateDisplayName(
+  name: string,
+  maxChars = DISPLAY_NAME_MAX_CHARS,
+  maxUnits = DISPLAY_NAME_MAX_UNITS
+): string {
+  const out: string[] = [];
+  let units = 0;
+  /** Adds one whole character, or says no when either limit would be passed. */
+  const take = (character: string): boolean => {
+    if (out.length >= maxChars || units + character.length > maxUnits) return false;
+    out.push(character);
+    units += character.length;
+    return true;
+  };
   if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
-    const out: string[] = [];
     for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name)) {
-      if (out.length >= maxChars) break;
-      out.push(segment);
+      if (!take(segment)) break;
     }
-    return out.join('');
+  } else {
+    // An older browser: whole code points, so an emoji is still never split in half.
+    for (const codePoint of name) {
+      if (!take(codePoint)) break;
+    }
   }
-  return Array.from(name).slice(0, maxChars).join('');
+  return out.join('');
 }
 
+/** The most visible characters a name keeps. */
 export const DISPLAY_NAME_MAX_CHARS = 24;
+/** The most UTF-16 units a name keeps, whatever its characters are made of. */
+export const DISPLAY_NAME_MAX_UNITS = 256;
 
 export function decodeSaveFromSyncCode(
   code: string,
@@ -990,7 +1031,7 @@ export function isSupersededBy(older: MouthLifeSaveV2, newer: MouthLifeSaveV2): 
     }
   }
   const newerDays = Object.keys(newer.dailySlotsByDate).sort();
-  const oldestKept = newerDays.length >= 45 ? newerDays[0] : '';
+  const oldestKept = newerDays.length >= DAILY_LOG_MAX_DAYS ? newerDays[0] : '';
   for (const [day, a] of Object.entries(older.dailySlotsByDate)) {
     if (day < oldestKept) continue;
     const b = newer.dailySlotsByDate[day];
