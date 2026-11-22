@@ -249,6 +249,7 @@ public struct RootContentView: View {
                         cartridge: coordinator.activeCartridge,
                         snapshot: snap,
                         toastMessage: coordinator.arcadeToast,
+                        coach: coordinator.coach,
                         liveFps: coordinator.liveFps,
                         showProMotionBadge: coordinator.showProMotionBadge,
                         onFireFlossSmart: { coordinator.sceneController.requestSmartFloss() },
@@ -461,6 +462,11 @@ struct BrushIntroCard: View {
                 Text(L10n.t("Brush your real teeth at the sink for 2 minutes. Follow the glow, then floss and rinse."))
                     .font(.system(size: 15, weight: .medium, design: .rounded))
                     .foregroundStyle(MLTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(L10n.t("Any toothbrush works, electric too."))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(MLTheme.mintClean)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {

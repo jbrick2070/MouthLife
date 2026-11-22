@@ -306,6 +306,8 @@ public struct WorldCartridge: Codable, Equatable, Sendable, Identifiable {
     public var basePellicleDensity: Float
     public var baselinePh: Float
     public var probeSpawn: Vec2
+    /// Which way HYDRA-1 faces at the start, in radians (0 = east, π = west, -π/2 = north). Default 0.
+    public var probeSpawnFacingRad: Double?
     public var districts: [DistrictDef]
     public var playableMaskBoxes: [AABB2D]
     public var wallBoxes: [AABB2D]
@@ -338,6 +340,7 @@ public struct WorldCartridge: Codable, Equatable, Sendable, Identifiable {
         basePellicleDensity: Float,
         baselinePh: Float,
         probeSpawn: Vec2,
+        probeSpawnFacingRad: Double? = nil,
         districts: [DistrictDef],
         playableMaskBoxes: [AABB2D],
         wallBoxes: [AABB2D],
@@ -369,6 +372,7 @@ public struct WorldCartridge: Codable, Equatable, Sendable, Identifiable {
         self.basePellicleDensity = basePellicleDensity
         self.baselinePh = baselinePh
         self.probeSpawn = probeSpawn
+        self.probeSpawnFacingRad = probeSpawnFacingRad
         self.districts = districts
         self.playableMaskBoxes = playableMaskBoxes
         self.wallBoxes = wallBoxes

@@ -193,6 +193,11 @@ public struct ProfileAndSettingsSheet: View {
                             .font(.system(.caption, design: .rounded, weight: .bold))
                             .foregroundStyle(MLTheme.cyanAccent)
 
+                        Text(L10n.t("2-Min Brush works with any toothbrush, electric too. It shows where to brush and for how long."))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(MLTheme.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+
                         Toggle(L10n.t("💧 Fluoride Rinse Step"), isOn: Binding(
                             get: { includeRinse },
                             set: { on in

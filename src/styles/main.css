@@ -673,6 +673,57 @@ textarea:focus-visible {
   transition: width 0.12s linear;
 }
 
+/* The zone bar: one segment per zone, left to right. A segment fills as its zone gets clean, turns
+   gold with a check once sealed, and wears a white ring while HYDRA-1 is in that zone. */
+.clean-progress-outer.zone-bar {
+  display: flex;
+  gap: 3px;
+  background: transparent;
+  overflow: visible;
+}
+.zone-seg {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.zone-fill {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #2dd4bf, #38bdf8);
+  border-radius: 99px;
+  transition: width 0.12s linear;
+}
+.zone-seg.sealed .zone-fill {
+  background: var(--gold);
+}
+/* Sealed is told by shape too, not only by colour: a small dark check on the gold. */
+.zone-seg.sealed::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* content-box: the page sets border-box everywhere, which would leave the short leg 0.4px wide */
+  box-sizing: content-box;
+  width: 2px;
+  height: 4px;
+  border: solid rgba(6, 24, 38, 0.92);
+  border-width: 0 1.6px 1.6px 0;
+  transform: translate(-50%, -62%) rotate(45deg);
+  z-index: 1;
+}
+.zone-seg.here::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid #fff;
+  border-radius: 99px;
+  z-index: 2;
+}
+
 .hud-toast {
   align-self: center;
   margin-top: 6px;
@@ -1014,6 +1065,13 @@ textarea:focus-visible {
   animation: zipPulse 0.7s ease-in-out infinite alternate;
 }
 
+/* The first-city coach names a button: it glows the same way until it is tried. */
+.coach-pulse {
+  border-color: #fde047 !important;
+  box-shadow: 0 0 0 3px rgba(253, 224, 71, 0.35), 0 0 18px rgba(253, 224, 71, 0.5);
+  animation: zipPulse 0.7s ease-in-out infinite alternate;
+}
+
 @keyframes zipPulse {
   from {
     filter: brightness(1);
@@ -1064,6 +1122,7 @@ textarea:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .zip-prompt.ready,
+  .coach-pulse,
   .floss-ring.zip-ready,
   #btn-desk-floss.zip-ready {
     animation: none;
@@ -1071,12 +1130,14 @@ textarea:focus-visible {
   .btn,
   .mini-meter-fill,
   .clean-progress-inner,
+  .zone-fill,
   #pacer-card {
     transition: none;
   }
 }
 
 .reduced-motion .zip-prompt.ready,
+.reduced-motion .coach-pulse,
 .reduced-motion .floss-ring.zip-ready,
 .reduced-motion #btn-desk-floss.zip-ready {
   animation: none;
@@ -1410,6 +1471,18 @@ textarea:focus-visible {
     border-radius: 0;
     background: rgba(255, 255, 255, 0.1);
   }
+  /* A city stage: the zone bar, tall enough for its ring and check. */
+  .hud-top.has-zone-bar {
+    padding-bottom: 11px;
+  }
+  #hud-clean-progress.zone-bar {
+    display: flex !important;
+    left: 8px;
+    right: 8px;
+    bottom: 2px;
+    height: 7px;
+    background: transparent;
+  }
   .hud-objective {
     grid-column: 2;
     grid-row: 1;
@@ -1417,12 +1490,15 @@ textarea:focus-visible {
     margin: 0;
     font-size: 0.68rem;
     line-height: 1.2;
+    /* one line where it fits; a long language takes a second rather than lose its end */
     display: -webkit-box;
-    -webkit-line-clamp: 1;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
   #hud-timer { grid-column: 3; grid-row: 1; white-space: nowrap; font-size: 0.62rem; padding: 2px 5px; }
+  /* A new player's first city: the coach's line gets the par timer's room, so it fits in every language. */
+  .hud-top.coaching #hud-timer { display: none; }
   #hud-clean-pct { grid-column: 4; grid-row: 1; min-width: 0 !important; white-space: nowrap; font-size: 0.66rem !important; }
   #btn-hud-pause { grid-column: 5; grid-row: 1; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; }
 

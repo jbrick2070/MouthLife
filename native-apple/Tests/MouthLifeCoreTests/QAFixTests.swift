@@ -17,6 +17,56 @@ final class QAFixTests: XCTestCase {
         }
     }
 
+    // Tooth seams and the start heading (web twin: tests/cartridgeNative.test.ts).
+    func testToothSeamsComeOnlyFromZoneBoundariesAndNarrowDividers() {
+        // Written out, not worked out: a change to the rule or to a city must be made on purpose.
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.world1), [22, 32, 42])
+        // City 2's two dividers stand on its zone boundaries; its ridge stands free, so it is no seam.
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.world2), [22, 42])
+        // Cities 3 to 5 have sideways walls, a jetty on a zone boundary and a walled core: no extra seams.
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.world3), [20, 44])
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.world4), [24, 42])
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.world5), [19, 45])
+        XCTAssertEqual(ToothSeams.seamsX(WorldRegistry.pulpRescue), [])
+        // A wall up to 3.5 wide that reaches the gum is a divider; a wider or free-standing one is not.
+        XCTAssertEqual(ToothSeams.maxWallWidth, 3.5)
+        XCTAssertEqual(ToothSeams.gumReach, 1)
+        var edge = WorldRegistry.pulpRescue
+        edge.districts = []
+        edge.playableMaskBoxes = [AABB2D(minX: 3, minZ: 5, maxX: 61, maxZ: 27)]
+        func wall(_ maxX: Double, _ minZ: Double, _ maxZ: Double) -> [Double] {
+            edge.wallBoxes = [AABB2D(minX: 10, minZ: minZ, maxX: maxX, maxZ: maxZ)]
+            return ToothSeams.seamsX(edge)
+        }
+        XCTAssertEqual(wall(13.5, 5, 15), [11.8])
+        XCTAssertEqual(wall(13.6, 5, 15), [])
+        XCTAssertEqual(wall(13, 20, 27), [11.5])
+        XCTAssertEqual(wall(13, 6, 15), [11.5])
+        XCTAssertEqual(wall(13, 6.1, 25.9), [])
+        var cart = WorldRegistry.world1
+        cart.wallBoxes = [
+            AABB2D(minX: 8, minZ: 13, maxX: 50, maxZ: 15.5),    // a sideways wall
+            AABB2D(minX: 21, minZ: 10, maxX: 43, maxZ: 22),     // an island
+            AABB2D(minX: 30.6, minZ: 11, maxX: 33.4, maxZ: 21)  // a spur standing free of the gum
+        ]
+        XCTAssertEqual(ToothSeams.seamsX(cart), [22, 42])
+        cart.wallBoxes = [AABB2D(minX: 10.6, minZ: 5, maxX: 13.4, maxZ: 15)]
+        XCTAssertEqual(ToothSeams.seamsX(cart), [12, 22, 42])
+        cart.districts = []
+        cart.wallBoxes = []
+        XCTAssertEqual(ToothSeams.seamsX(cart), [])
+    }
+
+    func testHydraFacesEastUnlessTheStageSaysOtherwise() {
+        let save = SaveSystem.createDefaultSave(nowEpochMs: 1_700_000_000_000)
+        let east = WorldSession(cartridge: WorldRegistry.world1, save: save, mode: .arcade, events: EventBus())
+        XCTAssertEqual(east.probeFacingRad, 0)
+        var cart = WorldRegistry.world1
+        cart.probeSpawnFacingRad = Double.pi
+        let west = WorldSession(cartridge: cart, save: save, mode: .arcade, events: EventBus())
+        XCTAssertEqual(west.probeFacingRad, Double.pi)
+    }
+
     // The gum is solid (web twin: tests/multiCityCartridges.test.ts).
     func testHydraCannotDriveAlongTheGumRoundADivider() {
         let cart = WorldRegistry.world1

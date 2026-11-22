@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLOSS_ZIP_ENTRY_DIST, PROBE_RADIUS, STEPHAN_RECOVERY_SEC } from '../src/config/gameConfig';
+import { FLOSS_ZIP_ENTRY_DIST, PROBE_RADIUS, STEPHAN_RECOVERY_SEC, ZIP_PROMPT_RADIUS } from '../src/config/gameConfig';
 import { HOST_CITIES, getHistoryNoteById } from '../src/config/hostsAndHistory';
 import { EventBus } from '../src/engine/EventBus';
 import { SaveSystem } from '../src/engine/persistence/SaveSystem';
@@ -118,8 +118,12 @@ function buildReachability(cart: WorldCartridge, zips = true): (p: Vec2, tol: nu
   };
 }
 
-/** How many separate walking regions each city's dividers make (each needs the floss to cross). */
-const WALK_REGIONS: Record<string, number> = { world_1: 2, world_2: 3, world_3: 2, world_4: 3, world_5: 3 };
+/**
+ * How many separate walking regions each city's walls make (each needs the floss to cross):
+ * city 1 two halves; city 2 three rooms; city 3 north and south of its crossing wall; city 4 the
+ * beach, the lagoon and the pocket behind the jetty; city 5 the ring and its core.
+ */
+const WALK_REGIONS: Record<string, number> = { world_1: 2, world_2: 3, world_3: 2, world_4: 3, world_5: 2 };
 
 /** Splits the walkable enamel (gum solid, no floss) into regions and counts those holding a colony or sugar. */
 function walkRegionsHoldingTargets(cart: WorldCartridge): number {
@@ -244,6 +248,73 @@ describe('Multi-City Cartridge Registry', () => {
       }
     });
   }
+
+  it('every city keeps the rules a layout must keep (AGENTS.md, "A City Is Written Once")', () => {
+    for (const cart of [plaqueCityCartridge, crescentSulcusCartridge, neonAcidClockCartridge, fluorapatiteCoastCartridge, orbitalBiofilmDomeCartridge]) {
+      const id = cart.id;
+      // the same world and the same tooth outline in every city
+      expect([cart.worldWidth, cart.worldDepth], id).toEqual([64, 32]);
+      expect(playableBounds(cart), id).toEqual({ minX: 3, maxX: 61, minZ: 5, maxZ: 27 });
+      // three zones, listed west to east, side by side with no gap or overlap, covering the tooth
+      expect(cart.districts.length, id).toBe(3);
+      expect(cart.districts[0].bounds.minX, id).toBe(2.5);
+      expect(cart.districts[2].bounds.maxX, id).toBe(61.5);
+      cart.districts.forEach((d, i) => {
+        expect([d.bounds.minZ, d.bounds.maxZ], `${id} zone ${i}`).toEqual([4.5, 27.5]);
+        expect(d.bounds.maxX - d.bounds.minX, `${id} zone ${i} width`).toBeGreaterThanOrEqual(6.2);
+        if (i > 0) expect(d.bounds.minX, `${id} zone ${i} starts where the last ends`).toBe(cart.districts[i - 1].bounds.maxX);
+      });
+      // the start has room to turn: well clear of every wall, gap wall and the gum
+      const solid = [...cart.wallBoxes, ...buildAlleyWalls(cart), ...buildGumWalls(cart)];
+      expect(solid.some((w) => circleIntersectsAABB(cart.probeSpawn.x, cart.probeSpawn.z, PROBE_RADIUS + 1, w)), `${id} start`).toBe(false);
+      // nothing to collect or restore sits where the ship cannot stand
+      const things = [
+        ...cart.commensalSiteSpawns.map((t) => t.pos),
+        ...cart.sucroseSpawns.map((t) => t.pos),
+        ...cart.salivaSprings,
+        ...cart.beaconDropSlots,
+      ];
+      for (const p of things) {
+        expect(solid.some((w) => circleIntersectsAABB(p.x, p.z, PROBE_RADIUS, w)), `${id} (${p.x}, ${p.z})`).toBe(false);
+      }
+      // every floss gap is one the ship cannot simply drive through, and has a slime bridge across it
+      for (const alley of cart.interdentalAlleys) {
+        expect(alley.width, alley.id).toBeLessThan(PROBE_RADIUS * 2);
+        expect(alley.width, alley.id).toBeGreaterThanOrEqual(0.9);
+        expect(cart.biofilmBridges.some((b) => b.id === alley.bridgeId), alley.id).toBe(true);
+      }
+      // a start heading, when given, points along the screen's axes
+      const facing = cart.probeSpawnFacingRad ?? 0;
+      expect([0, Math.PI, -Math.PI / 2, Math.PI / 2].some((a) => Math.abs(a - facing) < 1e-9), `${id} heading`).toBe(true);
+    }
+  });
+
+  it('a slime dome never stands within reach of a gap mouth (a Floss cast there would zip, not cut)', () => {
+    // Within ZIP_PROMPT_RADIUS of a mouth the game offers the zip, and within the zip's reach a cast
+    // goes through the gap even when a dome is aimed at: a dome beside a mouth could not be opened.
+    for (const cart of Object.values(PLAYABLE_CARTRIDGES)) {
+      for (const dome of cart.epsDomes ?? []) {
+        for (const alley of cart.interdentalAlleys) {
+          for (const mouth of [alley.endpointA, alley.endpointB]) {
+            const clear = Math.hypot(dome.cx - mouth.x, dome.cz - mouth.z) - dome.radius;
+            expect(clear, `${cart.id} ${dome.id} from ${alley.id}`).toBeGreaterThanOrEqual(ZIP_PROMPT_RADIUS);
+          }
+        }
+      }
+    }
+  });
+
+  it('each city starts somewhere of its own, and two of them have gaps that run north-south', () => {
+    const carts = [plaqueCityCartridge, crescentSulcusCartridge, neonAcidClockCartridge, fluorapatiteCoastCartridge, orbitalBiofilmDomeCartridge];
+    const starts = carts.map((c) => `${c.probeSpawn.x},${c.probeSpawn.z},${c.probeSpawnFacingRad ?? 0}`);
+    expect(new Set(starts).size).toBe(5);
+    const northSouth = (c: WorldCartridge) => c.interdentalAlleys.filter((a) => Math.abs(a.endpointB.z - a.endpointA.z) > Math.abs(a.endpointB.x - a.endpointA.x)).length;
+    expect(carts.map(northSouth)).toEqual([0, 0, 3, 2, 2]);
+    // City 1 is the teaching city and stays exactly as the How to Play pictures show it.
+    expect(plaqueCityCartridge.probeSpawn).toEqual({ x: 7.5, z: 16 });
+    expect(plaqueCityCartridge.probeSpawnFacingRad).toBeUndefined();
+    expect(plaqueCityCartridge.wallBoxes).toHaveLength(3);
+  });
 
   it('HYDRA-1 cannot drive along the gum round the end of a divider', () => {
     const cart = plaqueCityCartridge;

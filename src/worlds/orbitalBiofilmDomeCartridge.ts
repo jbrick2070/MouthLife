@@ -9,6 +9,15 @@ import type { WorldCartridge } from '../engine/types';
  * domes encase key occlusal colonies and deflect raw Sonic Bristles. Players must fracture each
  * dome with a high-shear Polymer Floss slice or a Fluoride-Bicarb Surge wave before sweeping clean!
  */
+/**
+ * World 5 — Station Aurora. Layout: the ring. A walled core sits in the middle of the tooth and the
+ * rest is one open ring round it. HYDRA-1 starts top-right and circles the ring; the core is
+ * reached only by floss, through a north-south gap in its north wall or its south wall. The twin
+ * slime domes are inside the core.
+ *
+ * Every dome stands well clear of the gap mouths: a Floss cast within reach of a mouth zips through
+ * the gap, so a dome beside one could never be cut open from there.
+ */
 export const orbitalBiofilmDomeCartridge: WorldCartridge = {
   id: 'world_5',
   title: 'Slime Dome',
@@ -21,7 +30,8 @@ export const orbitalBiofilmDomeCartridge: WorldCartridge = {
   parTimeSec: 330,
   basePellicleDensity: 0.5,
   baselinePh: 6.85,
-  probeSpawn: { x: 7.5, z: 16.0 },
+  probeSpawn: { x: 56.0, z: 8.5 },
+  probeSpawnFacingRad: Math.PI,
   challengeBlurb:
     'In space, slime domes block the brush! Cut them open with Floss or blast them with Surge, then sweep clean.',
   districts: [
@@ -29,116 +39,113 @@ export const orbitalBiofilmDomeCartridge: WorldCartridge = {
       id: 'cupola_incisor_deck',
       name: 'Cupola Front-Tooth Deck',
       subtitle: 'First Slime Dome & Floss Cut',
-      bounds: { minX: 2.5, maxX: 22.0, minZ: 4.5, maxZ: 27.5 },
+      bounds: { minX: 2.5, maxX: 19.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'airlock_premolar_truss',
       name: 'Airlock Premolar Bridge',
       subtitle: 'Space Floss Zips & Twin Slime Domes',
-      bounds: { minX: 22.0, maxX: 42.0, minZ: 4.5, maxZ: 27.5 },
+      bounds: { minX: 19.0, maxX: 45.0, minZ: 4.5, maxZ: 27.5 },
     },
     {
       id: 'skylab_molar_bioreactor',
       name: 'Skylab Molar Lab',
       subtitle: 'Big Slime Dome & Surge Blast',
-      bounds: { minX: 42.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
+      bounds: { minX: 45.0, maxX: 61.5, minZ: 4.5, maxZ: 27.5 },
     },
   ],
   playableMaskBoxes: [
-    { minX: 3.0, maxX: 22.0, minZ: 5.0, maxZ: 27.0 },
-    { minX: 22.0, maxX: 42.0, minZ: 5.0, maxZ: 27.0 },
-    { minX: 42.0, maxX: 61.0, minZ: 5.0, maxZ: 27.0 },
+    { minX: 3.0, maxX: 19.0, minZ: 5.0, maxZ: 27.0 },
+    { minX: 19.0, maxX: 45.0, minZ: 5.0, maxZ: 27.0 },
+    { minX: 45.0, maxX: 61.0, minZ: 5.0, maxZ: 27.0 },
   ],
   wallBoxes: [
-    // Airlock Divider 1 (x≈25) — south zero-G tether airlock at z=21.0
-    { minX: 23.59, maxX: 26.41, minZ: 4.5, maxZ: 17.6 },
-    { minX: 23.59, maxX: 26.41, minZ: 24.4, maxZ: 27.5 },
-    // Airlock Divider 2 (x≈39) — north zero-G tether airlock at z=11.0
-    { minX: 37.59, maxX: 40.41, minZ: 4.5, maxZ: 7.6 },
-    { minX: 37.59, maxX: 40.41, minZ: 14.4, maxZ: 27.5 },
+    // The core's north wall (z 9.8-12), either side of its gap at x=32
+    { minX: 21.0, maxX: 28.7, minZ: 9.8, maxZ: 12.0 },
+    { minX: 35.3, maxX: 43.0, minZ: 9.8, maxZ: 12.0 },
+    // South wall (z 20-22.2)
+    { minX: 21.0, maxX: 28.7, minZ: 20.0, maxZ: 22.2 },
+    { minX: 35.3, maxX: 43.0, minZ: 20.0, maxZ: 22.2 },
+    // West wall (x 21-23.2) and east wall (x 40.8-43): solid
+    { minX: 21.0, maxX: 23.2, minZ: 9.8, maxZ: 22.2 },
+    { minX: 40.8, maxX: 43.0, minZ: 9.8, maxZ: 22.2 },
   ],
   interdentalAlleys: [
     {
-      id: 'alley_airlock_south',
-      endpointA: { x: 23.2, z: 21.0 },
-      endpointB: { x: 26.8, z: 21.0 },
+      id: 'alley_core_north',
+      endpointA: { x: 32.0, z: 9.41 },
+      endpointB: { x: 32.0, z: 12.39 },
       width: 0.9,
       wallThickness: 2.95,
-      bridgeId: 'bridge_airlock_south',
+      bridgeId: 'bridge_core_north',
     },
     {
-      id: 'alley_airlock_north',
-      endpointA: { x: 37.2, z: 11.0 },
-      endpointB: { x: 40.8, z: 11.0 },
+      id: 'alley_core_south',
+      endpointA: { x: 32.0, z: 19.61 },
+      endpointB: { x: 32.0, z: 22.59 },
       width: 0.9,
       wallThickness: 2.95,
-      bridgeId: 'bridge_airlock_north',
-    },
-    {
-      id: 'alley_reactor_core',
-      endpointA: { x: 48.3, z: 16.0 },
-      endpointB: { x: 51.7, z: 16.0 },
-      width: 0.9,
-      wallThickness: 1.8,
-      bridgeId: 'bridge_reactor_core',
+      bridgeId: 'bridge_core_south',
     },
   ],
   marginBands: [
-    { a: { x: 4.5, z: 6.0 }, b: { x: 20.5, z: 6.0 }, radius: 1.15, initialDensity: 0.82 },
-    { a: { x: 44.5, z: 25.8 }, b: { x: 59.5, z: 25.8 }, radius: 1.2, initialDensity: 0.85 },
-    { a: { x: 54.5, z: 9.5 }, b: { x: 54.5, z: 22.5 }, radius: 1.2, initialDensity: 0.86 },
+    { a: { x: 4.5, z: 6.0 }, b: { x: 17.5, z: 6.0 }, radius: 1.15, initialDensity: 0.82 },
+    { a: { x: 46.5, z: 25.8 }, b: { x: 59.5, z: 25.8 }, radius: 1.2, initialDensity: 0.85 },
+    { a: { x: 47.5, z: 10.5 }, b: { x: 47.5, z: 22.5 }, radius: 1.2, initialDensity: 0.86 },
   ],
   epsDomes: [
     { id: 'dome_cupola_d0', cx: 15.5, cz: 16.0, radius: 3.1, initialDensity: 0.86 },
-    { id: 'dome_truss_d1_n', cx: 31.5, cz: 10.5, radius: 2.9, initialDensity: 0.86 },
-    { id: 'dome_truss_d1_s', cx: 32.5, cz: 21.5, radius: 2.9, initialDensity: 0.86 },
+    // The twin domes, inside the core
+    { id: 'dome_truss_d1_n', cx: 27.0, cz: 16.0, radius: 2.9, initialDensity: 0.86 },
+    { id: 'dome_truss_d1_s', cx: 37.0, cz: 16.0, radius: 2.9, initialDensity: 0.86 },
     { id: 'dome_reactor_d2', cx: 55.0, cz: 16.0, radius: 3.6, initialDensity: 0.9 },
   ],
   heightCuspHills: [
-    { cx: 12.5, cz: 16.0, radius: 10.5, height: 1.2 },
-    { cx: 30.0, cz: 10.0, radius: 5.0, height: 1.5 },
-    { cx: 30.0, cz: 22.0, radius: 5.0, height: 1.5 },
-    { cx: 35.0, cz: 10.0, radius: 4.6, height: 1.4 },
-    { cx: 35.0, cz: 22.0, radius: 4.6, height: 1.4 },
-    { cx: 47.0, cz: 9.8, radius: 6.0, height: 2.2 },
-    { cx: 57.5, cz: 9.8, radius: 6.2, height: 2.3 },
-    { cx: 47.0, cz: 22.2, radius: 6.0, height: 2.2 },
-    { cx: 57.5, cz: 22.2, radius: 6.2, height: 2.3 },
+    { cx: 11.5, cz: 16.0, radius: 10.0, height: 1.2 },
+    // The ring north and south of the core
+    { cx: 27.0, cz: 7.2, radius: 4.4, height: 1.2 },
+    { cx: 37.0, cz: 7.2, radius: 4.4, height: 1.2 },
+    { cx: 27.0, cz: 24.8, radius: 4.4, height: 1.2 },
+    { cx: 37.0, cz: 24.8, radius: 4.4, height: 1.2 },
+    // The core's floor
+    { cx: 32.0, cz: 16.0, radius: 7.5, height: 1.5 },
+    { cx: 52.0, cz: 9.8, radius: 6.2, height: 2.2 },
+    { cx: 52.0, cz: 22.2, radius: 6.2, height: 2.2 },
+    { cx: 58.0, cz: 16.0, radius: 5.5, height: 2.3 },
   ],
   commensalSiteSpawns: [
-    { id: 'aurora_d0_1', pos: { x: 9.5, z: 10.5 }, districtIdx: 0 },
+    { id: 'aurora_d0_1', pos: { x: 9.5, z: 9.5 }, districtIdx: 0 },
     { id: 'aurora_d0_2', pos: { x: 15.5, z: 16.0 }, districtIdx: 0 },
-    { id: 'aurora_d0_3', pos: { x: 14.0, z: 22.5 }, districtIdx: 0 },
-    { id: 'aurora_d1_1', pos: { x: 31.5, z: 10.5 }, districtIdx: 1 },
-    { id: 'aurora_d1_2', pos: { x: 32.0, z: 16.0 }, districtIdx: 1 },
-    { id: 'aurora_d1_3', pos: { x: 32.5, z: 21.5 }, districtIdx: 1 },
-    { id: 'aurora_d2_1', pos: { x: 45.5, z: 10.5 }, districtIdx: 2 },
-    { id: 'aurora_d2_2', pos: { x: 45.5, z: 21.5 }, districtIdx: 2 },
+    { id: 'aurora_d0_3', pos: { x: 9.5, z: 23.0 }, districtIdx: 0 },
+    { id: 'aurora_d1_1', pos: { x: 27.0, z: 16.0 }, districtIdx: 1 },
+    { id: 'aurora_d1_2', pos: { x: 37.0, z: 16.0 }, districtIdx: 1 },
+    { id: 'aurora_d1_3', pos: { x: 26.0, z: 7.2 }, districtIdx: 1 },
+    { id: 'aurora_d2_1', pos: { x: 49.0, z: 8.0 }, districtIdx: 2 },
+    { id: 'aurora_d2_2', pos: { x: 48.0, z: 24.0 }, districtIdx: 2 },
     { id: 'aurora_d2_3', pos: { x: 55.0, z: 16.0 }, districtIdx: 2 },
-    { id: 'aurora_d2_4', pos: { x: 57.5, z: 10.5 }, districtIdx: 2 },
+    { id: 'aurora_d2_4', pos: { x: 58.0, z: 24.0 }, districtIdx: 2 },
   ],
   sucroseSpawns: [
-    { id: 'berry_bar_1', pos: { x: 18.5, z: 10.0 }, districtIdx: 0 },
-    { id: 'berry_bar_2', pos: { x: 29.5, z: 22.0 }, districtIdx: 1 },
-    { id: 'berry_bar_3', pos: { x: 34.5, z: 10.0 }, districtIdx: 1 },
-    { id: 'berry_bar_4', pos: { x: 57.5, z: 21.5 }, districtIdx: 2 },
+    { id: 'berry_bar_1', pos: { x: 7.5, z: 16.5 }, districtIdx: 0 },
+    { id: 'berry_bar_2', pos: { x: 38.5, z: 25.0 }, districtIdx: 1 },
+    { id: 'berry_bar_3', pos: { x: 32.0, z: 16.0 }, districtIdx: 1 },
+    { id: 'berry_bar_4', pos: { x: 58.5, z: 20.5 }, districtIdx: 2 },
   ],
   biofilmBridges: [
-    { id: 'bridge_airlock_south', a: { x: 25.0, z: 20.3 }, b: { x: 25.0, z: 21.7 }, intact: true },
-    { id: 'bridge_airlock_north', a: { x: 39.0, z: 10.3 }, b: { x: 39.0, z: 11.7 }, intact: true },
-    { id: 'bridge_reactor_core', a: { x: 50.0, z: 15.3 }, b: { x: 50.0, z: 16.7 }, intact: true },
+    { id: 'bridge_core_north', a: { x: 31.3, z: 10.9 }, b: { x: 32.7, z: 10.9 }, intact: true },
+    { id: 'bridge_core_south', a: { x: 31.3, z: 21.1 }, b: { x: 32.7, z: 21.1 }, intact: true },
   ],
   salivaSprings: [
-    { x: 11.0, z: 21.0 },
-    { x: 29.0, z: 14.0 },
-    { x: 45.0, z: 16.0 },
-    { x: 53.5, z: 10.0 },
+    { x: 6.0, z: 20.5 },
+    { x: 38.0, z: 7.0 },
+    { x: 26.0, z: 25.0 },
+    { x: 46.5, z: 13.5 },
   ],
   beaconDropSlots: [
-    { x: 11.5, z: 12.5 },
-    { x: 29.5, z: 19.0 },
-    { x: 35.0, z: 16.0 },
-    { x: 53.5, z: 22.0 },
+    { x: 12.0, z: 8.0 },
+    { x: 32.0, z: 13.4 },
+    { x: 32.0, z: 25.0 },
+    { x: 52.5, z: 23.0 },
   ],
   palette: {
     enamelBaseHex: 0xf2f9ff,

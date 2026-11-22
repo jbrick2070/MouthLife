@@ -156,7 +156,8 @@ public enum TutorialGuide {
         TutorialControlHint(label: "Drag beside them to turn")
     ]
     private static let handsFree: [TutorialControlHint] = [
-        TutorialControlHint(label: "Hands-free: just follow along")
+        TutorialControlHint(label: "Hands-free: just follow along"),
+        TutorialControlHint(label: "Any toothbrush works, electric too")
     ]
     private static let dragOnTooth: [TutorialControlHint] = [
         TutorialControlHint(label: "Drag on the tooth")

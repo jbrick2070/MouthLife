@@ -922,6 +922,7 @@ export class CompanionHubOverlay implements OverlayView {
             </div>
             <div style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">Brushing</div>
             <div style="margin-top:6px;background:rgba(4,16,28,0.68);border:1px solid rgba(148,184,204,0.2);border-radius:10px;padding:8px 10px;">
+              <div id="note-any-brush" style="font-size:0.74rem;color:#cbd5e1;margin-bottom:8px;">2-Min Brush works with any toothbrush, electric too. It shows where to brush and for how long.</div>
               <div class="row-between">
                 <span id="lbl-rinse-step" style="font-size:0.78rem;color:#e0f2fe;">💧 Fluoride Rinse Step</span>
                 <button

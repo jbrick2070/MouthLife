@@ -120,6 +120,8 @@ export interface WorldCartridge {
   basePellicleDensity: number;
   baselinePh: number;
   probeSpawn: Vec2;
+  /** Which way HYDRA-1 faces at the start, in radians (0 = east, π = west, -π/2 = north). Default 0. */
+  probeSpawnFacingRad?: number;
   districts: DistrictDef[];
   playableMaskBoxes: AABB2D[];
   wallBoxes: AABB2D[];

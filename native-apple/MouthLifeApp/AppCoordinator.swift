@@ -141,6 +141,17 @@ public final class AppCoordinator {
     public var tappedCrownSummary: CompanionCrownSummary?
     public var hubToast: String?
     public var arcadeToast: String?
+    /// The first-city coach (a new player's city 1 only); nil when it does not apply or has finished.
+    public private(set) var coach: FirstCityCoach.State?
+    /// One-time hints already shown on this device (web twin: `mouthlife.hintsSeen` in localStorage).
+    private var seenHints: Set<String> = decodeSeenHints(from: UserDefaults.standard.string(forKey: hintsStorageKey))
+    private var usedSurgeThisStage = false
+    /// The stage's running count of cleaned film cells at the last snapshot (for the brush sound).
+    private var lastCellsCleanedTotal = 0
+    /// When the sore-gum and slime-dome reminders were last shown, so they never pile up.
+    private var lastGumToastUptime: TimeInterval = -100
+    private var lastDomeToastUptime: TimeInterval = -100
+    private var arcadeToastClearTask: Task<Void, Never>?
     public var liveFps: Int = 120
     /// The frame-rate pill is a developer readout; it is off and no longer offered in Settings.
     public var showProMotionBadge: Bool = false
@@ -154,7 +165,6 @@ public final class AppCoordinator {
     private var toastClearTask: Task<Void, Never>?
     private var unsubscribeToken: (() -> Void)?
     private var lastHudPublishUptime: TimeInterval = 0
-    private var lastSessionCleanRatio: Double = 0
 
     private func shouldPublishHudSnapshot(_ next: SessionSnapshot, now: TimeInterval) -> Bool {
         guard let prev = latestSnapshot else { return true }
@@ -555,9 +565,13 @@ public final class AppCoordinator {
                 self.lastHudPublishUptime = now
                 self.latestSnapshot = snap
             }
-            let deltaClean = max(0.0, snap.worldCleanRatio - self.lastSessionCleanRatio)
-            self.lastSessionCleanRatio = snap.worldCleanRatio
-            let newlyCleanedCells = snap.scrubActive ? Int((deltaClean * 1400.0).rounded()) : 0
+            // The cells really cleaned since the last snapshot, from the stage's own running count
+            // (it restarts at zero with each stage). Estimating them from the change in the clean
+            // percentage rounded to zero on most frames, which took the bite and the chime out of
+            // the brush sound.
+            let cleanedSinceLast = max(0, snap.cellsCleanedTotal - self.lastCellsCleanedTotal)
+            self.lastCellsCleanedTotal = snap.cellsCleanedTotal
+            let newlyCleanedCells = snap.scrubActive ? cleanedSinceLast : 0
             // This snapshot was posted from the render thread and can land after the city ended
             // (finale or score already up): then the brush must stay quiet.
             let stageLive = ScrubGate.mayPlay(mode: self.mode, finale: self.finale != nil, paused: self.sceneController.arcadePaused, stageLive: snap.isRunning)
@@ -705,28 +719,103 @@ public final class AppCoordinator {
         }
     }
 
+    // MARK: - First-city coach and one-time hints
+
+    /// Tells the coach what the player just did; retires it for good once it has nothing left to teach.
+    private func coachSaw(_ event: FirstCityCoach.Event) {
+        guard let state = coach else { return }
+        let next = FirstCityCoach.advance(state, event)
+        if FirstCityCoach.finished(next) {
+            retireCoach()
+        } else if next != state {
+            coach = next
+        }
+    }
+
+    private func retireCoach() {
+        guard coach != nil else { return }
+        coach = nil
+        markHintSeen(FirstCityCoach.doneHintKey)
+    }
+
+    private func markHintSeen(_ key: String) {
+        guard seenHints.insert(key).inserted else { return }
+        UserDefaults.standard.set(encodeSeenHints(seenHints), forKey: hintsStorageKey)
+    }
+
+    /// A hint shown once per device (web twin: `maybeHint`). Kept outside the save, like the web's.
+    private func showHintOnce(_ key: String, _ text: String) {
+        guard !seenHints.contains(key) else { return }
+        markHintSeen(key)
+        showArcadeToast(text, seconds: 4.2)
+    }
+
     private func handleGameEvent(_ event: GameEvent) {
         NativeSoundEngine.shared.handleGameEvent(event)
         HapticsEngine.shared.handleGameEvent(event)
 
-        switch event {
-        case let .saveUpdated(updated):
+        if case let .saveUpdated(updated) = event {
             self.save = updated
             self.sceneController.companionSmoothness = updated.companion.smoothnessIndex
+            return
+        }
+        // Events are posted from the render thread and can land after the stage was left. A stage's
+        // coach, hints and toasts are for a stage that is still on screen; a finished stage's result
+        // is always kept, however late it lands.
+        var isStageResult = false
+        if case .missionComplete = event { isStageResult = true }
+        guard isStageResult || mode == .arcade || mode == .pulpRescue else { return }
+
+        switch event {
+        case let .actuatorScrub(_, newlyCleaned, _, _):
+            if newlyCleaned > 0 { coachSaw(.scrub(newlyCleaned: newlyCleaned)) }
+
+        case let .flossSliced(_, _, _, _, zipped, _):
+            if zipped { coachSaw(.zipped) }
+
+        case .rinseSurged:
+            usedSurgeThisStage = true
+            coachSaw(.surgeFired)
+
+        case .disclosePulsed:
+            coachSaw(.scanPulsed)
+            showHintOnce("two_tone_dye", "🔍 Dye shows plaque: pink = new and thin • purple = old and thick. Scrub purple first!")
+
+        case .surgeReady:
+            // The coach's own line says this for a new player in city 1.
+            if coach == nil, !usedSurgeThisStage {
+                showHintOnce("surge", "🌊 Surge is full! Tap Surge to blast a fluoride wave.")
+            }
 
         case let .districtSealed(_, name, _):
-            showArcadeToast("🏅 24k Gold Seal: \(name)!")
+            coachSaw(.zoneSealed)
+            showArcadeToast("🌊 \(name) sealed with fluoride!")
 
         case .siteRestored:
-            showArcadeToast("🌿 Helper germs are back (+30% Surge)!")
+            coachSaw(.helperRestored)
+            if seenHints.contains("first_colony") {
+                showArcadeToast("✨ Helper germs are back! (+30% Surge)")
+            } else {
+                markHintSeen("first_colony")
+                showArcadeToast("✨ Helper germs are back! Clean glowing rings to charge 🌊 Surge (+30%)", seconds: 3.4)
+            }
 
         case .gumTender:
-            showArcadeToast("💗 Gentle on the gumline! Keep sweeping smoothly.")
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastGumToastUptime >= 6 {
+                lastGumToastUptime = now
+                showArcadeToast("💗 Gentle on the gumline! Keep sweeping smoothly.")
+            }
 
         case .epsDeflected:
-            showArcadeToast("🛡️ Slime dome! Crack it with Floss or Surge first.")
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastDomeToastUptime >= 6 {
+                lastDomeToastUptime = now
+                showArcadeToast("🛡️ Slime dome! Crack it with Floss or Surge first.")
+            }
 
         case let .missionComplete(playMode, worldId, won, breakdown, _):
+            retireCoach()
             let clearedBefore = CityFinale.worldIds.filter { saveSystem.getSave().worlds[$0]?.completed == true }.count
             let outcome = saveSystem.recordMissionCompletion(
                 mode: playMode,
@@ -833,11 +922,22 @@ public final class AppCoordinator {
         self.activeSession = session
         let initialSnap = session.makeSnapshot()
         self.latestSnapshot = initialSnap
-        self.lastSessionCleanRatio = initialSnap.worldCleanRatio
+        self.lastCellsCleanedTotal = initialSnap.cellsCleanedTotal
+        self.arcadeToastClearTask?.cancel()
+        self.arcadeToast = nil
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .arcade)
-        showArcadeToast("\(cart.title) • Scrub to 90% & bring back helper germs!")
+        // A new player's city 1 gets the coach, one thing at a time, instead of the city's whole
+        // challenge at once (web twin: `shouldShowDiveIntroToast` and `coachApplies`).
+        let world1Done = currentSave.worlds["world_1"]?.completed == true
+        usedSurgeThisStage = false
+        coach = FirstCityCoach.applies(worldId: cart.id, mode: .arcade, cityCompleted: world1Done, seenHints: seenHints)
+            ? FirstCityCoach.State()
+            : nil
+        if let blurb = cart.challengeBlurb, shouldShowDiveIntroToast(mode: .arcade, worldId: cart.id, world1Completed: world1Done) {
+            showArcadeToast("🎯 \(blurb)", seconds: 4.2)
+        }
     }
 
     public func launchPulpRescue() {
@@ -853,9 +953,13 @@ public final class AppCoordinator {
         self.activeSession = session
         let initialSnap = session.makeSnapshot()
         self.latestSnapshot = initialSnap
-        self.lastSessionCleanRatio = initialSnap.worldCleanRatio
+        self.lastCellsCleanedTotal = initialSnap.cellsCleanedTotal
+        self.arcadeToastClearTask?.cancel()
+        self.arcadeToast = nil
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
+        coach = nil
+        usedSurgeThisStage = false
         transition(to: .pulpRescue)
         showArcadeToast("🚨 90s Pulp Rescue • Clean 85% (you can’t lose the tooth)!")
     }
@@ -878,6 +982,11 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.stopVoiceCoach()
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.stopScrub()
+        // What belonged to the stage goes with it: its toast, and a coach that had not finished
+        // (it starts again with the next first-city dive).
+        arcadeToastClearTask?.cancel()
+        arcadeToast = nil
+        coach = nil
         transition(to: .hub)
     }
 
@@ -1532,11 +1641,12 @@ public final class AppCoordinator {
         }
     }
 
-    private func showArcadeToast(_ text: String) {
+    /// The stage's toast keeps its own timer: a Home toast must never leave a stage toast stuck.
+    private func showArcadeToast(_ text: String, seconds: Double = 2.8) {
         arcadeToast = L10n.t(text)
-        toastClearTask?.cancel()
-        toastClearTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_800_000_000)
+        arcadeToastClearTask?.cancel()
+        arcadeToastClearTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             if !Task.isCancelled { self.arcadeToast = nil }
         }
     }

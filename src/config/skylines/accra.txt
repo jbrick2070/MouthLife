@@ -5,12 +5,12 @@
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
 ; sunset sky: one strip per district, so the sky over each part brightens as it gets clean
-g -34 0 56 1.8 #fde047 #f97316
-g -34 1.8 56 2.4 #f97316 #9d174d
-g -34 4.2 56 3.4 #9d174d #000000
-g 22 0 20 1.8 #fde047 #f97316
-g 22 1.8 20 2.4 #f97316 #9d174d
-g 22 4.2 20 3.4 #9d174d #000000
+g -34 0 58 1.8 #fde047 #f97316
+g -34 1.8 58 2.4 #f97316 #9d174d
+g -34 4.2 58 3.4 #9d174d #000000
+g 24 0 18 1.8 #fde047 #f97316
+g 24 1.8 18 2.4 #f97316 #9d174d
+g 24 4.2 18 3.4 #9d174d #000000
 g 42 0 56 1.8 #fde047 #f97316
 g 42 1.8 56 2.4 #f97316 #9d174d
 g 42 4.2 56 3.4 #9d174d #000000

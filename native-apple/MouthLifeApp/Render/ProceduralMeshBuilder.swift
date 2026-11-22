@@ -2737,14 +2737,7 @@ public enum ProceduralMeshBuilder {
     }
 
     private static func computeToothSeamsX(_ cartridge: WorldCartridge) -> [Double] {
-        var seams = Set<Int>()
-        for i in 1..<cartridge.districts.count {
-            seams.insert(Int((cartridge.districts[i].bounds.minX * 10.0).rounded()))
-        }
-        for w in cartridge.wallBoxes {
-            seams.insert(Int(((w.minX + w.maxX) * 5.0).rounded()))
-        }
-        return seams.map { Double($0) / 10.0 }.sorted()
+        ToothSeams.seamsX(cartridge)
     }
 
     public static func buildCartridgeStageNodes(

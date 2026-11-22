@@ -8,6 +8,8 @@ public struct ArcadeHudView: View {
     public let cartridge: WorldCartridge
     public let snapshot: SessionSnapshot
     public let toastMessage: String?
+    /// The first-city coach's progress (nil when it does not apply): its line replaces the goal.
+    public let coach: FirstCityCoach.State?
     public let liveFps: Int
     public let showProMotionBadge: Bool
 
@@ -35,6 +37,8 @@ public struct ArcadeHudView: View {
     @State private var stickLatched: Bool = false
     @State private var isPausedSheet: Bool = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private static let stickReach: CGFloat = 30
 
@@ -82,6 +86,7 @@ public struct ArcadeHudView: View {
         cartridge: WorldCartridge,
         snapshot: SessionSnapshot,
         toastMessage: String?,
+        coach: FirstCityCoach.State? = nil,
         liveFps: Int,
         showProMotionBadge: Bool,
         onFireFlossSmart: @escaping () -> Void,
@@ -99,6 +104,7 @@ public struct ArcadeHudView: View {
         self.cartridge = cartridge
         self.snapshot = snapshot
         self.toastMessage = toastMessage
+        self.coach = coach
         self.liveFps = liveFps
         self.showProMotionBadge = showProMotionBadge
         self.onFireFlossSmart = onFireFlossSmart
@@ -118,9 +124,41 @@ public struct ArcadeHudView: View {
             remainingRescueSec: snapshot.remainingRescueSec
         )
     }
+    /// The stage's goal: the single next thing it still needs (web twin: `#hud-objective`). Read
+    /// from the HUD's snapshot, never from the live session. A phone gets the short line.
+    private func goalText(compact: Bool) -> String {
+        // A new player's city 1: the coach's one thing to try replaces the stage's goal while it has one.
+        if let step = coachStep {
+            return "🎯 " + L10n.t(FirstCityCoach.line(step, short: compact))
+        }
+        let input = objectiveInput(snapshot: snapshot, cartridge: cartridge)
+        // These devices have no keyboard keys to press: the lines without "[Q]" and "[E]".
+        let english = compact ? compactObjectiveBreadcrumb(input, keys: false) : computeObjectiveBreadcrumb(input, keys: false)
+        return "🎯 " + L10n.t(english)
+    }
+    /// The coach's step to show now (nil: the stage's own goal line).
+    private var coachStep: FirstCityCoach.Step? {
+        guard let coach else { return nil }
+        // "Floss through the gap" only where a cast will really zip, never beside "Closer to Zip".
+        let mouth = snapshot.probeZip == nil ? snapshot.nearestZipMouth : nil
+        let nearGap = (mouth?.blockedToWalking ?? false) && (mouth?.inZipRange ?? false)
+        return FirstCityCoach.currentStep(coach, .init(surgeReady: surgeReady, nearGap: nearGap))
+    }
+    /// Where the nearest helper spot (or, during Scan, anything left) is, once it is worth pointing at.
+    private var wayfinder: WayfinderArrow? {
+        // Hidden only once HYDRA-1 is on top of it: the goal line can say "follow ➤" at any distance.
+        guard let arrow = computeWayfinder(snapshot: snapshot, cartridge: cartridge), arrow.distance > 2.5 else { return nil }
+        return arrow
+    }
+    /// A phone on its side has little height: the goal goes into the top strip's free space
+    /// instead of taking a row of its own over the tooth.
+    private var goalInStrip: Bool { verticalSizeClass == .compact && split == nil }
+    /// A city stage draws one bar segment per zone; the rescue stage keeps its single bar.
+    private var showsZoneBar: Bool { snapshot.activeMode != .pulpRescue && cartridge.districts.count > 1 }
     private var cleanPct: Int { Int((snapshot.worldCleanRatio * 100.0).rounded()) }
     private var targetPct: Int { snapshot.activeMode == .pulpRescue ? 85 : 90 }
-    private var surgeReady: Bool { snapshot.surgeMeter >= GameConfig.surgeMax - 0.01 }
+    /// Full means full: the same test the game uses before it lets Surge fire.
+    private var surgeReady: Bool { snapshot.surgeMeter >= GameConfig.surgeMax }
 
     public var body: some View {
         ZStack {
@@ -129,6 +167,7 @@ public struct ArcadeHudView: View {
             } else {
                 VStack(spacing: 8) {
                     topStrip
+                    if !goalInStrip { goalLine }
                     subPills
                     toastPill
 
@@ -157,6 +196,11 @@ public struct ArcadeHudView: View {
                     Text(L10n.t(cartridge.title))
                         .font(.system(.title3, design: .rounded, weight: .heavy))
                         .foregroundStyle(MLTheme.textPrimary)
+                    Text(goalText(compact: false))
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                        .foregroundStyle(MLTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(L10n.t(Self.pauseHint))
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(MLTheme.textSecondary)
@@ -241,9 +285,12 @@ public struct ArcadeHudView: View {
         case .stacked:
             VStack(spacing: 8) {
                 topStrip
+                goalLine
                 subPills
-                toastPill
                 Spacer()
+                // at the foot of the short upright page, clear of the ship in its middle
+                toastPill
+                    .padding(.bottom, 10)
             }
             .placed(in: split.firstRect)
             VStack(spacing: 10) {
@@ -270,7 +317,12 @@ public struct ArcadeHudView: View {
             pauseButton
             cleanGauge
                 .frame(maxWidth: 165)
-            Spacer(minLength: 4)
+            if goalInStrip {
+                goalText
+                    .frame(maxWidth: .infinity)
+            } else {
+                Spacer(minLength: 4)
+            }
             synergyPill
             timerPill
             fpsBadge
@@ -316,44 +368,127 @@ public struct ArcadeHudView: View {
         .buttonStyle(.plain)
     }
 
-    /// Cleanliness and the district seal pips.
+    /// How clean the city is, over the zone bar (one segment per zone).
     private var cleanGauge: some View {
-        // Cleanliness + District Seal Pips
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(L10n.t("\(cleanPct)% / \(targetPct)% CLEAN"))
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .foregroundStyle(cleanPct >= targetPct ? MLTheme.mintClean : MLTheme.textPrimary)
+        cleanGauge(zones: showsZoneBar)
+    }
 
-                HStack(spacing: 4) {
-                    ForEach(0..<snapshot.sealedDistricts.count, id: \.self) { idx in
-                        Circle()
-                            .fill(snapshot.sealedDistricts[idx] ? MLTheme.fluorapatiteGold : Color.white.opacity(0.22))
-                            .frame(width: 7, height: 7)
+    /// `zones: false` draws one bar for the whole stage: the rescue stage, and the Duo's book page,
+    /// whose zone cards sit right under it.
+    private func cleanGauge(zones: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(L10n.t("\(cleanPct)% / \(targetPct)% CLEAN"))
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .foregroundStyle(cleanPct >= targetPct ? MLTheme.mintClean : MLTheme.textPrimary)
+
+            if zones {
+                zoneBar
+            } else {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.14))
+                        Capsule()
+                            .fill(Self.cleanGradient)
+                            .frame(width: geo.size.width * CGFloat(min(1.0, snapshot.worldCleanRatio / (Double(targetPct) / 100.0))))
                     }
                 }
+                .frame(height: 6)
             }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.14))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [MLTheme.cyanAccent, MLTheme.mintClean],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(min(1.0, snapshot.worldCleanRatio / (Double(targetPct) / 100.0))))
-                }
-            }
-            .frame(height: 6)
         }
         .frame(maxWidth: 165)
+    }
+
+    private static let cleanGradient = LinearGradient(
+        colors: [MLTheme.cyanAccent, MLTheme.mintClean],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
+    /// The zone bar (web twin: `#hud-clean-progress.zone-bar`): one segment per zone, as wide as
+    /// its zone, left to right. A segment fills as its zone gets clean, turns gold with a check once
+    /// sealed, and wears a white ring while HYDRA-1 is in that zone.
+    private var zoneBar: some View {
+        let here = zoneIndexAt(x: snapshot.probePos.x, z: snapshot.probePos.z, districts: cartridge.districts)
+        let bar = zoneBarModel(districtClean: snapshot.districtCleanRatios, sealed: snapshot.sealedDistricts, hereIndex: here)
+        let widths = bar.indices.map { i -> Double in
+            guard i < cartridge.districts.count else { return 1 }
+            return max(1, cartridge.districts[i].bounds.maxX - cartridge.districts[i].bounds.minX)
+        }
+        let total = max(1, widths.reduce(0, +))
+        let gap: CGFloat = 3
+        return GeometryReader { geo in
+            let usable = max(0, geo.size.width - gap * CGFloat(max(0, bar.count - 1)))
+            HStack(spacing: gap) {
+                ForEach(bar.indices, id: \.self) { i in
+                    let width = usable * CGFloat(widths[i] / total)
+                    ZStack(alignment: .leading) {
+                        // the fill is clipped to the track, so a sliver of it never pokes past the round end
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.14))
+                            Rectangle()
+                                .fill(bar[i].sealed ? AnyShapeStyle(MLTheme.fluorapatiteGold) : AnyShapeStyle(Self.cleanGradient))
+                                .frame(width: width * CGFloat(bar[i].fill))
+                        }
+                        .clipShape(Capsule())
+                        if bar[i].sealed {
+                            // told by shape too, not only by colour
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 6, weight: .black))
+                                .foregroundStyle(MLTheme.deepOcean)
+                                .frame(width: width)
+                        }
+                        if bar[i].here {
+                            Capsule().strokeBorder(Color.white, lineWidth: 1.5)
+                        }
+                    }
+                    .frame(width: width)
+                }
+            }
+        }
+        .frame(height: 9)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(zoneBarSpokenText(bar))
+    }
+
+    /// VoiceOver: each zone by name with its share, "sealed" once sealed, and where HYDRA-1 is
+    /// (web twin: the bar's `aria-valuetext`).
+    private func zoneBarSpokenText(_ bar: [ZoneBarSegment]) -> String {
+        bar.indices.map { i -> String in
+            let name = i < cartridge.districts.count ? L10n.t(cartridge.districts[i].name) : ""
+            let clean = i < snapshot.districtCleanRatios.count ? snapshot.districtCleanRatios[i] : 0
+            let pct = Int((min(1, max(0, clean)) * 100).rounded())
+            let line = bar[i].sealed ? L10n.t("\(name): sealed") : L10n.t("\(name): \(pct)% clean")
+            return bar[i].here ? "\(line) (\(L10n.t("you are here")))" : line
+        }.joined(separator: ", ")
+    }
+
+    /// The goal's words. A touch that starts on them goes through to the tooth underneath.
+    private var goalText: some View {
+        let words = goalText(compact: horizontalSizeClass == .compact || goalInStrip)
+        return Text(words)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(MLTheme.textPrimary)
+            // one line where it fits; a long language may take a second rather than lose its end
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+            // VoiceOver reads the goal, not its target icon
+            .accessibilityLabel(String(words.drop(while: { !$0.isLetter && !$0.isNumber })))
+            .allowsHitTesting(false)
+    }
+
+    /// The goal, in a row of its own under the top strip.
+    private var goalLine: some View {
+        goalText
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(MLTheme.cardBg))
+            .padding(.horizontal, 12)
+            .allowsHitTesting(false)
     }
 
     private var synergyPill: some View {
@@ -397,8 +532,14 @@ public struct ArcadeHudView: View {
     /// readout (helper germs, gum comfort...), where the open page has room for them.
     private var missionPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text(goalText(compact: false))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(MLTheme.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                cleanGauge
+                cleanGauge(zones: false)
                 Spacer(minLength: 4)
                 synergyPill
                 timerPill
@@ -458,24 +599,48 @@ public struct ArcadeHudView: View {
     private var subPills: some View {
         // World Mechanic / Capillary Zip / Toast Sub-Pill
         HStack(spacing: 8) {
-            if let mech = worldMechanicBadge {
+            if let mech = worldMechanicBadge, !goalRepeatsBadge, !showsZipPill {
                 Text(L10n.t(mech.label))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .foregroundStyle(mech.warn ? MLTheme.amberWarn : MLTheme.cyanAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(MLTheme.cardBg))
             }
 
+            if let arrow = wayfinder {
+                HStack(spacing: 5) {
+                    // The camera never turns, so a direction on the tooth is the same direction on screen.
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 11, weight: .black))
+                        .rotationEffect(.radians(arrow.worldAngleRad))
+                        .accessibilityHidden(true) // it turns: its built-in name would say "right"
+                    Text(L10n.t(arrow.target.label))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .foregroundStyle(MLTheme.mintClean)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(MLTheme.cardBg))
+                .accessibilityElement(children: .combine)
+                .allowsHitTesting(false)
+            }
+
             // Only for a gap too narrow to drive through, and not mid-zip: "closer" until the
             // floss can reach, then the button (web twin: `tickZipPrompt`).
-            if let zipHint = snapshot.nearestZipMouth, zipHint.blockedToWalking, snapshot.probeZip == nil {
+            if showsZipPill, let zipHint = snapshot.nearestZipMouth {
                 let ready = zipHint.inZipRange
                 Button {
                     onFireFlossSmart()
                 } label: {
                     Text(L10n.t(ready ? Self.zipReadyText : "🦷 Closer to Zip"))
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .foregroundStyle(ready ? MLTheme.deepOcean : MLTheme.textPrimary)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 5)
@@ -540,6 +705,9 @@ public struct ArcadeHudView: View {
                 .frame(width: 54, height: 54)
                 .background(Circle().fill(MLTheme.cardElevated))
                 .overlay(Circle().strokeBorder(MLTheme.discloseMagenta.opacity(0.55), lineWidth: 1.4))
+                // the coach names Scan: a gold ring until it is tried (web twin: `.coach-pulse`)
+                .overlay(Circle().strokeBorder(MLTheme.fluorapatiteGold, lineWidth: 3).opacity(coachStep == .scan ? 1 : 0))
+                .shadow(color: coachStep == .scan ? MLTheme.fluorapatiteGold.opacity(0.7) : .clear, radius: 10)
             }
             .buttonStyle(.plain)
             .disabled(snapshot.discloseCooldown > 0.05)
@@ -551,7 +719,7 @@ public struct ArcadeHudView: View {
                 VStack(spacing: 2) {
                     Image(systemName: "drop.triangle.fill")
                         .font(.system(size: 20, weight: .bold))
-                    Text(L10n.t(surgeReady ? "SURGE!" : "\(Int(snapshot.surgeMeter.rounded()))%"))
+                    Text(L10n.t(surgeReady ? "SURGE!" : "\(min(99, Int(snapshot.surgeMeter.rounded())))%"))
                         .font(.system(size: 9, weight: .heavy, design: .rounded))
                         .monospacedDigit()
                 }
@@ -620,6 +788,27 @@ public struct ArcadeHudView: View {
         }
     }
 
+    /// The Zip pill: only for a gap too narrow to drive through, and not mid-zip. Three pills do
+    /// not fit a phone in German or Spanish, so the city's badge gives way while this one shows.
+    private var showsZipPill: Bool {
+        guard let mouth = snapshot.nearestZipMouth else { return false }
+        return mouth.blockedToWalking && snapshot.probeZip == nil
+    }
+
+    /// The goal line already says what the city's badge would (the acid clock, the slime dome, the
+    /// helper germs still to wake): one of the two is enough.
+    private var goalRepeatsBadge: Bool {
+        guard coachStep == nil, snapshot.activeMode != .pulpRescue else { return false }
+        let input = objectiveInput(snapshot: snapshot, cartridge: cartridge)
+        guard input.sealed.contains(false) else { return false }
+        switch cartridge.bChannelMode {
+        case .localPh: return cartridge.id != "world_4" && input.acidLockSec > 0
+        case .epsArmor: return input.acidLockSec <= 0 && input.domesRemaining
+        case .marginDensity: return input.acidLockSec <= 0 && !input.domesRemaining && input.sitesLeftOpen > 0
+        case .gumIrritation: return false
+        }
+    }
+
     private var worldMechanicBadge: (label: String, warn: Bool)? {
         switch cartridge.bChannelMode {
         case .gumIrritation:
@@ -638,6 +827,8 @@ public struct ArcadeHudView: View {
             }
         case .epsArmor:
             let rem = Int((snapshot.epsArmorRemainingRatio * 100.0).rounded())
+            // every dome open: the short line the web shows, not a 0% and an instruction
+            if snapshot.epsArmorRemainingRatio <= 0 { return ("✓ Domes Cracked!", false) }
             return ("Slime dome \(rem)% • Crack it with Floss or Surge", rem > 25)
         case .marginDensity:
             let restored = snapshot.sites.filter(\.restored).count
@@ -696,6 +887,13 @@ struct StageMapView: View {
                 check.addLine(to: CGPoint(x: r.midX - s * 0.12, y: r.midY + s * 0.38))
                 check.addLine(to: CGPoint(x: r.midX + s * 0.55, y: r.midY - s * 0.4))
                 c.stroke(check, with: .color(MLTheme.fluorapatiteGold), style: StrokeStyle(lineWidth: max(2.5, s * 0.16), lineCap: .round, lineJoin: .round))
+            }
+            // the walls: dividers, sideways walls, a walled core (where the scrubber cannot go)
+            c.drawLayer { layer in
+                layer.clip(to: ground)
+                for wall in cartridge.wallBoxes + buildAlleyWalls(cartridge) {
+                    layer.fill(Path(roundedRect: rect(wall), cornerRadius: 2), with: .color(Color.white.opacity(0.5)))
+                }
             }
             // the gaps between teeth (floss zips)
             for alley in cartridge.interdentalAlleys {

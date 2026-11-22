@@ -267,14 +267,18 @@ export interface ObjectiveInput {
 /**
  * One-line, always-truthful breadcrumb naming the single next thing a stage still needs.
  * Pure + deterministic so it is unit-testable; never blocks gameplay (it only advises).
+ * `keys: false` gives the lines without keyboard hints ("[Q]"), for touch screens and the native
+ * app: they are whole sentences of their own, so every language translates them cleanly (cutting
+ * "[Q]" out of a translated line left Japanese starting mid-sentence).
  */
-export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
+export function computeObjectiveBreadcrumb(inp: ObjectiveInput, keys = true): string {
   if (inp.mode === 'PULP_RESCUE') {
     const target = inp.rescueTargetRatio ?? 0.85;
     const left = Math.max(0, Math.ceil((target - inp.worldCleanRatio) * 100));
-    return left > 0
-      ? `Pulp: ${left}% more${inp.rescueRemainingSec !== undefined ? ` • ${Math.max(0, Math.ceil(inp.rescueRemainingSec))}s left` : ""} — scrub!`
-      : 'Patching… the pulp is safe!';
+    if (left <= 0) return 'Patching… the pulp is safe!';
+    if (inp.rescueRemainingSec === undefined) return `Pulp: ${left}% more — scrub!`;
+    const secLeft = Math.max(0, Math.ceil(inp.rescueRemainingSec));
+    return `Pulp: ${left}% more • ${secLeft}s left — scrub!`;
   }
   const seal = inp.sealRatio ?? 0.9;
   const openIdx: number[] = [];
@@ -283,7 +287,7 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
   });
   if (inp.sealed.length > 0 && openIdx.length === 0) return '✨ All zones sealed — you did it!';
   if ((inp.acidLockSec ?? 0) > 0) return `Acid clock ${Math.ceil(inp.acidLockSec!)}s — use Saliva Spring!`;
-  if (inp.domesRemaining) return '🛡️ Crack the dome: Floss [E] or Surge [Q]!';
+  if (inp.domesRemaining) return keys ? '🛡️ Crack the dome: Floss [E] or Surge [Q]!' : '🛡️ Crack the dome: Floss or Surge!';
   if (inp.sitesLeftOpen === 1) return '1 helper colony left — follow ➤ Colony!';
   if (inp.sitesLeftOpen > 1) return `Restore ${inp.sitesLeftOpen} colonies — scrub glowing rings!`;
   const worst = openIdx.reduce(
@@ -293,14 +297,12 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
   const worstPct = Math.round((inp.districtClean[worst] ?? 0) * 100);
   const nearly = openIdx.every((i) => (inp.districtClean[i] ?? 0) >= seal - 0.12);
   if (nearly && inp.surgeReady) {
-    return openIdx.length > 1
-      ? 'Almost clean! Fire Fluoride Surge [Q] to seal!'
-      : 'Fire Fluoride Surge [Q] to seal final district!';
+    if (openIdx.length > 1) return keys ? 'Almost clean! Fire Fluoride Surge [Q] to seal!' : 'Almost clean! Fire Fluoride Surge to seal!';
+    return keys ? 'Fire Fluoride Surge [Q] to seal final district!' : 'Fire Fluoride Surge to seal final district!';
   }
   if (nearly) return `Sweep D${worst + 1} (${worstPct}% → ${Math.round(seal * 100)}%) to seal it!`;
-  return inp.surgeReady
-    ? 'Scrub enamel → fire Surge [Q] to seal!'
-    : 'Scrub enamel → bring back colonies → Surge [Q]!';
+  if (inp.surgeReady) return keys ? 'Scrub enamel → fire Surge [Q] to seal!' : 'Scrub enamel → fire Surge to seal!';
+  return keys ? 'Scrub enamel → bring back colonies → Surge [Q]!' : 'Scrub enamel → bring back colonies → Surge!';
 }
 
 /**
@@ -308,12 +310,70 @@ export function computeObjectiveBreadcrumb(inp: ObjectiveInput): string {
  * ("Restore 10 colonie…"): just the goal. The how-to half stays on wider screens and in the
  * pause card, which always shows the full line.
  */
-export function compactObjectiveBreadcrumb(inp: ObjectiveInput): string {
-  const full = computeObjectiveBreadcrumb(inp);
+export function compactObjectiveBreadcrumb(inp: ObjectiveInput, keys = true): string {
+  const full = computeObjectiveBreadcrumb(inp, keys);
   const n = inp.sitesLeftOpen;
   if (full === `Restore ${n} colonies — scrub glowing rings!`) return `Restore ${n} colonies`;
   if (full === '1 helper colony left — follow ➤ Colony!') return '1 colony left — follow ➤';
   return full;
+}
+
+/** A zone's rectangle on the tooth, as a stage declares it. */
+export interface ZoneRect {
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+}
+
+/**
+ * The zone a point on the tooth belongs to: the first one it is inside, else the nearest.
+ * -1 when the stage has no zones. Swift twin: `zoneIndexAt` in `HudHelpers.swift`.
+ */
+export function zoneIndexAt(x: number, z: number, districts: readonly ZoneRect[]): number {
+  let best = -1;
+  let bestDistSq = Infinity;
+  for (let i = 0; i < districts.length; i++) {
+    const b = districts[i].bounds;
+    const dx = x < b.minX ? b.minX - x : x > b.maxX ? x - b.maxX : 0;
+    const dz = z < b.minZ ? b.minZ - z : z > b.maxZ ? z - b.maxZ : 0;
+    const d = dx * dx + dz * dz;
+    if (d < bestDistSq) {
+      bestDistSq = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** One segment of the HUD's zone bar. */
+export interface ZoneBarSegment {
+  /** 0..1: how far the zone is toward the clean share that seals it (1 once sealed). */
+  fill: number;
+  sealed: boolean;
+  /** The zone HYDRA-1 is in. */
+  here: boolean;
+}
+
+/** How full one zone's segment is: its clean share toward the share that seals it (1 once sealed). */
+export function zoneSegmentFill(clean: number, sealed: boolean, sealRatio = 0.9): number {
+  if (sealed) return 1;
+  const share = Number.isFinite(clean) && sealRatio > 0 ? clean / sealRatio : 0;
+  return Math.min(1, Math.max(0, share));
+}
+
+/**
+ * The zone bar: one segment per zone, in the stage's own order (left to right). A segment is full
+ * when its zone is clean enough to seal, and sealed once its helper spots are back too.
+ * Pure, so both editions draw the same bar. Swift twin: `zoneBarModel` in `HudHelpers.swift`.
+ */
+export function zoneBarModel(
+  districtClean: readonly number[],
+  sealed: readonly boolean[],
+  hereIndex: number,
+  sealRatio = 0.9
+): ZoneBarSegment[] {
+  return districtClean.map((clean, i) => {
+    const isSealed = Boolean(sealed[i]);
+    return { fill: zoneSegmentFill(clean, isSealed, sealRatio), sealed: isSealed, here: i === hereIndex };
+  });
 }
 
 /** A cast that cracks armor or fires while the alley Zip prompt is already visible needs no extra miss callout. */

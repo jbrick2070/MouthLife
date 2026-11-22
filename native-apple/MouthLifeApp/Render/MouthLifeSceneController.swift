@@ -386,6 +386,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         prevProbeFacing = snap.probeFacingRad
         currProbeFacing = snap.probeFacingRad
         accumulator = 0
+        // Put the ship's model at this stage's start now. The camera aims at the model, and it
+        // would otherwise open on where the last stage's ship stood and pan across the tooth.
+        probeRig.rootNode.simdPosition = SIMD3<Float>(Float(snap.probePos.x), Float(snap.probeY + 0.52), Float(snap.probePos.z))
+        probeRig.rootNode.simdEulerAngles = SIMD3<Float>(0, Float(-snap.probeFacingRad), 0)
     }
 
     // MARK: - Queued Actuator Actions From SwiftUI HUD
@@ -1055,7 +1059,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             if stage.zipReticleNode.isHidden { stage.zipReticleNode.isHidden = false }
             let y = Float(sampleTerrainHeight(cartridge: cart, x: zipHint.entry.x, z: zipHint.entry.z) + 0.35)
             stage.zipReticleNode.simdPosition = SIMD3<Float>(Float(zipHint.entry.x), y, Float(zipHint.entry.z))
-            stage.zipReticleNode.simdEulerAngles.y = sceneNowSec * 2.4
+            // The chevrons point through the gap (as on the web), whichever way the gap runs.
+            let ex = zipHint.exit.x - zipHint.entry.x
+            let ez = zipHint.exit.z - zipHint.entry.z
+            stage.zipReticleNode.simdEulerAngles.y = Float(-atan2(ez, ex))
         } else if !stage.zipReticleNode.isHidden {
             stage.zipReticleNode.isHidden = true
         }

@@ -163,7 +163,7 @@ D.switchMode('HUB');
 // --- Slime dome in the space city. Taken last: after this city the Home teeth keep a blue tint.
 await G.fresh('world_5');
 G.zoom(1.7);
-G.at(20.6, 16.0, Math.PI);
+G.at(19.6, 16.0, Math.PI); // clear of the core's west wall (x 21) and its floss gap
 G.step(2, {});
 await G.wait(1500);
 await thumb('t-dome', 15.5, 16.0, 1.2, 0.3);

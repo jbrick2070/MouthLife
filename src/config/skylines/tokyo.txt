@@ -6,15 +6,15 @@
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
 ; neon night over Tokyo (west and middle), a warm sodium glow over 1940 Chicago (east)
-g -34 0 56 2 #db2777 #6b21a8
-g -34 2 56 2.5 #6b21a8 #1e1b4b
-g -34 4.5 56 3.1 #1e1b4b #000000
-g 22 0 20 2 #db2777 #6b21a8
-g 22 2 20 2.5 #6b21a8 #1e1b4b
-g 22 4.5 20 3.1 #1e1b4b #000000
-g 42 0 56 2 #fbbf24 #b45309
-g 42 2 56 2.5 #b45309 #451a03
-g 42 4.5 56 3.1 #451a03 #000000
+g -34 0 54 2 #db2777 #6b21a8
+g -34 2 54 2.5 #6b21a8 #1e1b4b
+g -34 4.5 54 3.1 #1e1b4b #000000
+g 20 0 24 2 #db2777 #6b21a8
+g 20 2 24 2.5 #6b21a8 #1e1b4b
+g 20 4.5 24 3.1 #1e1b4b #000000
+g 44 0 54 2 #fbbf24 #b45309
+g 44 2 54 2.5 #b45309 #451a03
+g 44 4.5 54 3.1 #451a03 #000000
 ; full moon
 c 12.5 6.1 0.8 #fef3c7
 ; Mount Fuji, snow running down its gullies

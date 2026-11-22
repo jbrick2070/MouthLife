@@ -149,6 +149,9 @@ public struct SessionSnapshot: Equatable, Sendable {
     public var maxGumIrritation: Float
     public var epsArmorRemainingRatio: Double
     public var nearestZipMouth: ZipMouthHint?
+    /// Film cells cleaned since the stage began (it only grows). The brush sound takes the
+    /// difference between two snapshots, so it never depends on events arriving in order.
+    public var cellsCleanedTotal: Int = 0
 }
 
 public final class WorldSession {
@@ -165,6 +168,8 @@ public final class WorldSession {
     public private(set) var lastBreakdown: ScoreBreakdown? = nil
     public private(set) var elapsedSec: Double = 0
     public private(set) var lastScrubHeld: Bool = false
+    /// Film cells cleaned by the brush since the stage began (see `SessionSnapshot.cellsCleanedTotal`).
+    public private(set) var cellsCleanedTotal: Int = 0
 
     // Probe state
     public var probePos: Vec2 = Vec2(x: 8, z: 16)
@@ -302,12 +307,13 @@ public final class WorldSession {
 
         self.probePos = cartridge.probeSpawn
         self.probeY = sampleTerrainHeight(x: probePos.x, z: probePos.z, cartridge: cartridge)
-        self.probeFacingRad = 0
+        self.probeFacingRad = cartridge.probeSpawnFacingRad ?? 0
         self.probeSpeed = 0
         self.probeZip = nil
         self.knockbackTimer = 0
         self.knockbackVel = .zero
         self.lastScrubHeld = false
+        self.cellsCleanedTotal = 0
 
         self.hasBassUpgrade = equippedUpgrades.brush == "angled_bass_array"
         self.hasHydroSonicUpgrade = equippedUpgrades.brush == "hydro_sonic_pulse"
@@ -664,6 +670,7 @@ public final class WorldSession {
                 events.emit(.epsDeflected(pos: probePos, warnings: res.epsDeflectWarnings))
             }
 
+            cellsCleanedTotal += max(0, res.newlyCleanedCells)
             if res.newlyCleanedCells > 0 || res.acidAbrasionWarnings > 0 || res.fluorapatiteConverted > 0 {
                 events.emit(
                     .actuatorScrub(
@@ -759,7 +766,8 @@ public final class WorldSession {
             stephanSipCountdownSec: stephanSipCountdown,
             maxGumIrritation: chemistry.maxGumIrritation,
             epsArmorRemainingRatio: grid.epsArmorRemainingRatio,
-            nearestZipMouth: nearestZipMouthHint
+            nearestZipMouth: nearestZipMouthHint,
+            cellsCleanedTotal: cellsCleanedTotal
         )
     }
 

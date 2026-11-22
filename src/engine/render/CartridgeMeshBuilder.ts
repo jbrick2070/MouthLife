@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ORAL_LIGHTING_GLSL } from './OralLighting';
 import { buildAlleyWalls, sampleTerrainHeight } from '../physics/CollisionSystem';
 import { distancePointToSegmentSq2D } from '../surface/OralSurfaceGrid';
+import { computeToothSeamsX } from './toothSeams';
 import type { AABB2D, WorldCartridge } from '../types';
 
 // ---------------------------------------------------------------------------------------------
@@ -293,18 +294,6 @@ function signedDistToPlayableBoxes(boxes: readonly AABB2D[], x: number, z: numbe
     if (insideMargin > best) best = insideMargin;
   }
   return best;
-}
-
-/** Interproximal tooth boundaries (district seams + contact divider walls) along X. */
-function computeToothSeamsX(cartridge: WorldCartridge): number[] {
-  const seams = new Set<number>();
-  for (let i = 1; i < cartridge.districts.length; i++) {
-    seams.add(Math.round(cartridge.districts[i].bounds.minX * 10) / 10);
-  }
-  for (const w of cartridge.wallBoxes) {
-    seams.add(Math.round(((w.minX + w.maxX) * 0.5) * 10) / 10);
-  }
-  return [...seams].sort((a, b) => a - b);
 }
 
 /**

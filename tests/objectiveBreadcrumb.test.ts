@@ -143,3 +143,42 @@ describe('Floss feedback & world callout placement', () => {
     expect(Math.abs(dodged.bottomY - 14 - 400)).toBeGreaterThanOrEqual(20 + 14 + 4);
   });
 });
+
+describe('goal lines without keyboard hints (touch screens and the native app)', () => {
+  const none = { ...base, sitesLeftOpen: 0 };
+  it('are whole sentences of their own, never a keyed line with "[Q]" cut out', () => {
+    expect(computeObjectiveBreadcrumb(none, false)).toBe('Scrub enamel → bring back colonies → Surge!');
+    expect(computeObjectiveBreadcrumb({ ...none, surgeReady: true }, false)).toBe('Scrub enamel → fire Surge to seal!');
+    expect(computeObjectiveBreadcrumb({ ...none, districtClean: [0.85, 0.85], surgeReady: true }, false)).toBe(
+      'Almost clean! Fire Fluoride Surge to seal!'
+    );
+    expect(
+      computeObjectiveBreadcrumb({ ...none, districtClean: [0.95, 0.85], sealed: [true, false], surgeReady: true }, false)
+    ).toBe('Fire Fluoride Surge to seal final district!');
+    expect(computeObjectiveBreadcrumb({ ...none, domesRemaining: true }, false)).toBe('🛡️ Crack the dome: Floss or Surge!');
+  });
+
+  it('never show a key, in the full line or the phone line', () => {
+    const cases: ObjectiveInput[] = [
+      none,
+      { ...none, surgeReady: true },
+      { ...none, domesRemaining: true },
+      { ...none, districtClean: [0.85, 0.85], surgeReady: true },
+      { ...base, sitesLeftOpen: 1 },
+      { ...base, sitesLeftOpen: 7 },
+    ];
+    for (const inp of cases) {
+      expect(computeObjectiveBreadcrumb(inp, false)).not.toMatch(/\[[A-Z]\]/);
+      expect(compactObjectiveBreadcrumb(inp, false)).not.toMatch(/\[[A-Z]\]/);
+    }
+    // With keys (a computer) the lines are unchanged.
+    expect(computeObjectiveBreadcrumb(none)).toBe('Scrub enamel → bring back colonies → Surge [Q]!');
+  });
+
+  it('the rescue line is one sentence with its numbers, so it translates whole', () => {
+    const rescue: ObjectiveInput = { ...base, mode: 'PULP_RESCUE', worldCleanRatio: 0.73, rescueRemainingSec: 39.2 };
+    expect(computeObjectiveBreadcrumb(rescue)).toBe('Pulp: 12% more • 40s left — scrub!');
+    expect(computeObjectiveBreadcrumb({ ...rescue, rescueRemainingSec: undefined })).toBe('Pulp: 12% more — scrub!');
+    expect(computeObjectiveBreadcrumb({ ...rescue, worldCleanRatio: 0.9 })).toBe('Patching… the pulp is safe!');
+  });
+});

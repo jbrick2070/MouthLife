@@ -63,7 +63,10 @@ const RUB_AND_TURN: readonly TutorialControlHint[] = [
   { label: 'Rub the teeth' },
   { label: 'Drag beside them to turn' },
 ];
-const HANDS_FREE: readonly TutorialControlHint[] = [{ label: 'Hands-free: just follow along' }];
+const HANDS_FREE: readonly TutorialControlHint[] = [
+  { label: 'Hands-free: just follow along' },
+  { label: 'Any toothbrush works, electric too' },
+];
 const DRAG_ON_TOOTH: readonly TutorialControlHint[] = [{ label: 'Drag on the tooth' }];
 const GOLD_GLOW: readonly TutorialControlHint[] = [{ label: 'It glows gold when Surge is ready' }];
 const PICK_A_CITY: readonly TutorialControlHint[] = [{ label: 'Pick a city on the Home screen' }];

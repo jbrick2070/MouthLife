@@ -44,6 +44,16 @@ Welcome! This repository contains **MouthLife**, with active development focused
    - Find watch runtime problems with the on-watch diary (`MouthLifeWatch/WatchLog.swift`; copy it to the Mac with `xcrun devicectl device copy from ... --domain-type appDataContainer`), not by guessing. `xcrun devicectl device capture screenshot` shows the watch's screen.
    - The plan and decisions for the watch faces are in [`docs/watch-face-plan.md`](docs/watch-face-plan.md).
 
+9. **A City Is Written Once, for Both Editions:**
+   - A stage (size, start, start heading, zones, walls, floss gaps, helper spots, colours) lives in `src/worlds/<name>Cartridge.ts`. `WorldCartridges.swift` is **generated** from them by `npx vite-node scripts/cartridge-native.ts --write`; never edit it by hand (`tests/cartridgeNative.test.ts` fails when it is stale).
+   - Each city has its own shape: Toronto runs west to east (and stays as it is: it is the teaching city and the How to Play pictures show it); New Orleans starts in the east and curves west through three rooms; Tokyo is crossed by one east-west wall with north-south gaps; Accra has a shore wall with a lagoon and a jetty behind it, joined into a loop by three gaps; Station Aurora is a ring round a walled core.
+   - What every layout must keep: the camera sits south looking north and never turns (the stick steers along the screen); the world is 64 x 32 with play bounds 3/61/5/27; zones are side-by-side rectangles listed west to east (skyline lights, the zone bar and sealing depend on it); every helper spot, sugar crystal and spring can be reached by walking and flossing (`tests/multiCityCartridges.test.ts`). A slime dome never stands within reach of a gap mouth: a Floss cast near a mouth zips through the gap, so a dome beside one could not be cut open from there. `npx vite-node scripts/stage-map.ts --print world_3` draws a layout as text and checks reachability.
+   - Tooth seams (the pinch in the gumline) come only from zone boundaries and narrow walls that reach the gum (`toothSeams.ts`, `ToothSeams.swift`); a sideways wall or a wall standing free inside a tooth is not a seam.
+10. **The Stage HUD Shows One Goal and the Zones, in Both Editions:**
+    - The zone bar has one segment per zone, as wide as its zone: it fills as the zone gets clean, turns gold with a check once sealed, and is ringed where HYDRA-1 is (`zoneBarModel` / `zoneIndexAt` in `hudHelpers.ts` and `HudHelpers.swift`, the same test cases on both sides).
+    - The goal line names the single next thing. Touch screens and the native app use the lines without keyboard hints (`computeObjectiveBreadcrumb(..., keys: false)`): never cut "[Q]" out of a translated line. The native HUD reads only its snapshot, never the live session (the render thread owns that).
+    - A new player's city 1 gets the coach (`firstCityCoach.ts`, `FirstCityCoach.swift`): one thing to try at a time on the goal line, ticked off by the game's own events, in any order, never pausing or blocking, gone after the first sealed zone and the first zip. Its flag lives with the one-time hints (`mouthlife.hintsSeen`), outside the save, so Sync Codes are unchanged.
+
 ## 3. Verification Checklist Before Committing
 
 ```bash
@@ -57,4 +67,11 @@ xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Release
 # 3. macOS Release compile verification (0 warnings, 0 errors)
 xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Release \
   -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build
+```
+
+After changing a city (`src/worlds/`) or on-screen text, regenerate what the native app reads, from the repository root:
+
+```bash
+npx vite-node scripts/cartridge-native.ts --write   # cities
+npm run i18n:extract && node scripts/i18n-native.mjs # text
 ```

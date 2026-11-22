@@ -1857,6 +1857,14 @@ public final class NativeSoundEngine {
     private var scrubPlaqueHold: Float = 0
     private var scrubMelodyStep: Int = 0
     private var scrubSparkleCellsAccum: Int = 0
+    /// `newlyCleaned` is real film cells (a quarter unit square each), as on the web. Measured on
+    /// city 1: a sweep cleans one or two cells a step (three at the 90th percentile), about sixty
+    /// a second. So three in one step is the full bite, and a patch of sixty earns a chime: about
+    /// one a second of real sweeping, never sooner than 0.42 s after the last, and none while the
+    /// brush runs over clean enamel. (Until November 2026 the count fed in was a rounded share of
+    /// the tooth, zero on nearly every frame, so the bite and the chime hardly ever sounded.)
+    private static let scrubCellsForFullBite: Float = 3
+    private static let scrubCellsPerChime = 60
 
     public init(defaults: UserDefaults = .standard) {
         if defaults.object(forKey: Self.mutedKey) != nil {
@@ -2812,7 +2820,7 @@ public final class NativeSoundEngine {
         let clean01 = Float(min(1.0, max(0.0, state.cleanRatio)))
 
         if live && state.newlyCleaned > 0 {
-            let fresh = min(1.0, Float(state.newlyCleaned) / 6.0)
+            let fresh = min(1.0, Float(state.newlyCleaned) / Self.scrubCellsForFullBite)
             scrubPlaqueHold = max(scrubPlaqueHold * 0.88, fresh)
             scrubSparkleCellsAccum += state.newlyCleaned
         } else {
@@ -2845,7 +2853,7 @@ public final class NativeSoundEngine {
         }
 
         // Gentle ascending kalimba / glass-harp grace note only as meaningful patches of plaque dissolve
-        if scrubSparkleCellsAccum >= 7, throttle("scrub-chime", minGapSec: 0.42) {
+        if scrubSparkleCellsAccum >= Self.scrubCellsPerChime, throttle("scrub-chime", minGapSec: 0.42) {
             scrubSparkleCellsAccum = 0
             let scaleSteps = [0, 2, 4, 5, 7, 9, 7, 4]
             let deg = scaleSteps[scrubMelodyStep % scaleSteps.count]

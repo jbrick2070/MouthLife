@@ -65,6 +65,8 @@ describe('the one-time "Time Your Real Brush" card', () => {
   it('says it is real brushing, and pictures rinse only when rinse is on', () => {
     expect(brushIntroCardHtml(false)).toContain('Brush your real teeth at the sink for 2 minutes.');
     expect(brushIntroCardHtml(false)).toContain('Start 2-Min Brush');
+    // A grown-up with an electric toothbrush should see at once that the timer is for them too.
+    expect(brushIntroCardHtml(false)).toContain('Any toothbrush works, electric too.');
     expect(brushIntroCardHtml(false)).not.toContain('>Rinse<');
     expect(brushIntroCardHtml(true)).toContain('>Rinse<');
   });

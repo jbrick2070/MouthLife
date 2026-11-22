@@ -29,7 +29,7 @@ public enum CitySkylineArt {
 
     public static func expectedSkyline(forHost hostId: String) -> Expected? {
         switch hostId {
-        case "accra": return Expected(pieces: 134, lightPieces: 50, triangles: 894, checksum: 89887.973, shadedPieces: 9, movingPieces: 42, motions: 9)
+        case "accra": return Expected(pieces: 134, lightPieces: 50, triangles: 894, checksum: 89923.973, shadedPieces: 9, movingPieces: 42, motions: 9)
         case "new_orleans": return Expected(pieces: 253, lightPieces: 154, triangles: 1086, checksum: 133053.135, shadedPieces: 9, movingPieces: 22, motions: 6)
         case "orbit_aurora": return Expected(pieces: 162, lightPieces: 105, triangles: 823, checksum: 92541.542, shadedPieces: 0, movingPieces: 44, motions: 11)
         case "tokyo": return Expected(pieces: 280, lightPieces: 162, triangles: 980, checksum: 109346.943, shadedPieces: 9, movingPieces: 22, motions: 11)
@@ -109,12 +109,12 @@ public enum CitySkylineArt {
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
 ; sunset sky: one strip per district, so the sky over each part brightens as it gets clean
-g -34 0 56 1.8 #fde047 #f97316
-g -34 1.8 56 2.4 #f97316 #9d174d
-g -34 4.2 56 3.4 #9d174d #000000
-g 22 0 20 1.8 #fde047 #f97316
-g 22 1.8 20 2.4 #f97316 #9d174d
-g 22 4.2 20 3.4 #9d174d #000000
+g -34 0 58 1.8 #fde047 #f97316
+g -34 1.8 58 2.4 #f97316 #9d174d
+g -34 4.2 58 3.4 #9d174d #000000
+g 24 0 18 1.8 #fde047 #f97316
+g 24 1.8 18 2.4 #f97316 #9d174d
+g 24 4.2 18 3.4 #9d174d #000000
 g 42 0 56 1.8 #fde047 #f97316
 g 42 1.8 56 2.4 #f97316 #9d174d
 g 42 4.2 56 3.4 #9d174d #000000
@@ -770,15 +770,15 @@ burst 4.4 64 11.6 willow #93c5fd #f8fafc
 ; Format: see src/config/citySkylineGeometry.ts. Capital letter = always shown, small letter = a light.
 @skyline
 ; neon night over Tokyo (west and middle), a warm sodium glow over 1940 Chicago (east)
-g -34 0 56 2 #db2777 #6b21a8
-g -34 2 56 2.5 #6b21a8 #1e1b4b
-g -34 4.5 56 3.1 #1e1b4b #000000
-g 22 0 20 2 #db2777 #6b21a8
-g 22 2 20 2.5 #6b21a8 #1e1b4b
-g 22 4.5 20 3.1 #1e1b4b #000000
-g 42 0 56 2 #fbbf24 #b45309
-g 42 2 56 2.5 #b45309 #451a03
-g 42 4.5 56 3.1 #451a03 #000000
+g -34 0 54 2 #db2777 #6b21a8
+g -34 2 54 2.5 #6b21a8 #1e1b4b
+g -34 4.5 54 3.1 #1e1b4b #000000
+g 20 0 24 2 #db2777 #6b21a8
+g 20 2 24 2.5 #6b21a8 #1e1b4b
+g 20 4.5 24 3.1 #1e1b4b #000000
+g 44 0 54 2 #fbbf24 #b45309
+g 44 2 54 2.5 #b45309 #451a03
+g 44 4.5 54 3.1 #451a03 #000000
 ; full moon
 c 12.5 6.1 0.8 #fef3c7
 ; Mount Fuji, snow running down its gullies

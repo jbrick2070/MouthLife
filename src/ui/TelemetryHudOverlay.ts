@@ -1,6 +1,18 @@
 import { getWorldDentalLesson } from '../config/dentalChart';
+import {
+  COACH_DONE_HINT_KEY,
+  COACH_LINES,
+  coachAdvance,
+  coachApplies,
+  coachCurrentStep,
+  coachFinished,
+  newCoachState,
+  type CoachEvent,
+  type CoachState,
+  type CoachStepId,
+} from '../config/firstCityCoach';
 import { uiTranslator } from '../i18n/uiTranslator';
-import { GUM_TENDER_THRESHOLD, SURGE_MAX } from '../config/gameConfig';
+import { DISTRICT_SEAL_CLEAN_RATIO, GUM_TENDER_THRESHOLD, SURGE_MAX } from '../config/gameConfig';
 import { findNearestZipMouth, sampleTerrainHeight } from '../engine/physics/CollisionSystem';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import type { InputManager } from '../engine/InputManager';
@@ -29,6 +41,8 @@ import {
   findWayfinderLabelY,
   type ScreenBox,
   type WayfinderKind,
+  zoneIndexAt,
+  zoneSegmentFill,
 } from './hudHelpers';
 import { HOME_ICON_SVG } from './homeIcon';
 
@@ -76,6 +90,11 @@ export class TelemetryHudOverlay implements OverlayView {
   // Cached DOM refs for zero-GC 10Hz HUD updates
   private cleanOuterEl: HTMLElement | null = null;
   private cleanBarEl: HTMLElement | null = null;
+  private objectiveEl: HTMLElement | null = null;
+  /** The zone bar's segments (a city stage), each with its fill; empty for the rescue stage. */
+  private zoneSegEls: HTMLElement[] = [];
+  private zoneFillEls: HTMLElement[] = [];
+  private zoneSegState: number[] = [];
   private cleanTextEl: HTMLElement | null = null;
   private phBadgeEl: HTMLElement | null = null;
   private sitesBadgeEl: HTMLElement | null = null;
@@ -123,6 +142,10 @@ export class TelemetryHudOverlay implements OverlayView {
   private seenHints = loadSeenHints();
   private usedFloss = false;
   private usedSurge = false;
+  /** The first-city coach (a new player's city 1 only); null when it does not apply or has finished. */
+  private coach: CoachState | null = null;
+  private coachStepShown: CoachStepId | null = null;
+  private coachingShown = false;
   private lastSurgeReady = false;
   private keyHandler = (e: KeyboardEvent): void => {
     if (this.paused && e.key === 'Tab' && this.pauseSheetEl) {
@@ -290,6 +313,29 @@ export class TelemetryHudOverlay implements OverlayView {
     }
   }
 
+  /** Tells the coach what the player just did; retires it for good once it has nothing left to teach. */
+  private coachSaw(event: CoachEvent): void {
+    if (!this.coach) return;
+    this.coach = coachAdvance(this.coach, event);
+    if (coachFinished(this.coach)) this.retireCoach();
+  }
+
+  private retireCoach(): void {
+    if (!this.coach) return;
+    this.coach = null;
+    this.seenHints.add(COACH_DONE_HINT_KEY);
+    saveSeenHints(this.seenHints);
+  }
+
+  /** The coach's step to show now (null: the stage's own goal line). */
+  private coachStepNow(surgeReady: boolean): CoachStepId | null {
+    if (!this.coach) return null;
+    const cart = this.session.cartridge;
+    const mouth = this.session.probeZip ? null : findNearestZipMouth(this.session.probePos, cart.interdentalAlleys, cart.wallBoxes);
+    // "Floss through the gap" only where a cast will really zip, never beside "Closer to Zip".
+    return coachCurrentStep(this.coach, { surgeReady, nearGap: Boolean(mouth && mouth.blockedToWalking && mouth.inZipRange) });
+  }
+
   private maybeHint(key: string, msg: string): void {
     if (this.seenHints.has(key)) return;
     this.seenHints.add(key);
@@ -307,8 +353,20 @@ export class TelemetryHudOverlay implements OverlayView {
         ? '🚨 PULP RESCUE SCRAMBLE'
         : `🦷 ${this.session.cartridge.title.toUpperCase()}`;
 
+    // A city stage shows one bar segment per zone, as wide as its zone, left to right.
+    const zones = this.mode === 'PULP_RESCUE' ? [] : this.session.cartridge.districts;
+    const zoneSegments =
+      zones.length > 1
+        ? zones
+            .map((d) => {
+              const width = Math.max(1, d.bounds.maxX - d.bounds.minX);
+              return `<div class="zone-seg" style="flex-grow:${width.toFixed(1)};"><div class="zone-fill"></div></div>`;
+            })
+            .join('')
+        : '';
+
     this.container.innerHTML = `
-      <div class="hud-top glass-card ui-interactive">
+      <div class="hud-top glass-card ui-interactive${zoneSegments ? ' has-zone-bar' : ''}">
         <div class="row-between hud-top-row">
           <div class="row-wrap hud-telemetry-pills">
             <strong class="hud-world-title">${titleLabel}</strong>
@@ -355,14 +413,14 @@ export class TelemetryHudOverlay implements OverlayView {
           <span id="hud-clean-pct" style="font-size:0.78rem;font-weight:700;min-width:64px;">0% Clean</span>
           <div
             id="hud-clean-progress"
-            class="clean-progress-outer"
+            class="clean-progress-outer${zoneSegments ? ' zone-bar' : ''}"
             role="progressbar"
             aria-label="Enamel Cleanliness"
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="0"
           >
-            <div id="hud-clean-bar" class="clean-progress-inner" style="width:0%;"></div>
+            ${zoneSegments || '<div id="hud-clean-bar" class="clean-progress-inner" style="width:0%;"></div>'}
           </div>
           <div id="hud-districts" class="row-wrap" style="font-size:0.72rem;"></div>
         </div>
@@ -409,6 +467,10 @@ export class TelemetryHudOverlay implements OverlayView {
 
     this.cleanOuterEl = this.container.querySelector('#hud-clean-progress');
     this.cleanBarEl = this.container.querySelector('#hud-clean-bar');
+    this.objectiveEl = this.container.querySelector('#hud-objective');
+    this.zoneSegEls = Array.from(this.container.querySelectorAll<HTMLElement>('#hud-clean-progress .zone-seg'));
+    this.zoneFillEls = this.zoneSegEls.map((el) => el.firstElementChild as HTMLElement);
+    this.zoneSegState = this.zoneSegEls.map(() => -1);
     this.cleanTextEl = this.container.querySelector('#hud-clean-pct');
     this.phBadgeEl = this.container.querySelector('#hud-ph');
     this.sitesBadgeEl = this.container.querySelector('#hud-sites');
@@ -472,6 +534,14 @@ export class TelemetryHudOverlay implements OverlayView {
 
     this.bindControls();
     this.bindBusEvents();
+    this.coach = coachApplies(
+      this.session.cartridge.id,
+      this.mode === 'PULP_RESCUE' ? 'PULP_RESCUE' : 'ARCADE',
+      Boolean(this.saveSys.getSave().worlds.world_1?.completed),
+      this.seenHints
+    )
+      ? newCoachState()
+      : null;
     this.refreshStats();
     this.lastSynergy = this.session.scoring.getSynergyMultiplier();
 
@@ -835,6 +905,8 @@ export class TelemetryHudOverlay implements OverlayView {
   private bindBusEvents(): void {
     this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteLabels()));
     this.disposers.add(this.bus.on('motion:changed', () => this.syncMotionLabels()));
+    this.disposers.add(this.bus.on('disclose:pulsed', () => this.coachSaw({ type: 'scanPulsed' })));
+    this.disposers.add(this.bus.on('mission:complete', () => this.retireCoach()));
     this.disposers.add(
       this.bus.on('surge:ready', () => {
         this.spawnCallout('🌊 Surge Ready! [Q]', this.session.probePos, 'cyan', 1.45, 2.3);
@@ -864,13 +936,15 @@ export class TelemetryHudOverlay implements OverlayView {
       })
     );
     this.disposers.add(
-      this.bus.on('floss:sliced', () => {
+      this.bus.on('floss:sliced', ({ zipped }) => {
         this.usedFloss = true;
+        if (zipped) this.coachSaw({ type: 'zipped' });
       })
     );
     this.disposers.add(
       this.bus.on('rinse:surged', () => {
         this.usedSurge = true;
+        this.coachSaw({ type: 'surgeFired' });
       })
     );
     this.disposers.add(
@@ -892,6 +966,7 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('site:restored', ({ pos, surgeDelta }) => {
+        this.coachSaw({ type: 'helperRestored' });
         if (!this.seenHints.has('first_colony')) {
           this.seenHints.add('first_colony');
           saveSeenHints(this.seenHints);
@@ -908,7 +983,8 @@ export class TelemetryHudOverlay implements OverlayView {
       })
     );
     this.disposers.add(
-      this.bus.on('actuator:scrub', ({ acidWarn }) => {
+      this.bus.on('actuator:scrub', ({ acidWarn, newlyCleaned }) => {
+        if (newlyCleaned > 0) this.coachSaw({ type: 'scrub', newlyCleaned });
         if (acidWarn) {
           this.maybeHint(
             this.session.hasErosionChallenge() ? 'acid_erosion' : 'acid',
@@ -994,6 +1070,7 @@ export class TelemetryHudOverlay implements OverlayView {
     );
     this.disposers.add(
       this.bus.on('district:sealed', ({ districtName }) => {
+        this.coachSaw({ type: 'zoneSealed' });
         this.showToast(`🌊 ${districtName} sealed with fluoride!`);
       })
     );
@@ -1076,7 +1153,7 @@ export class TelemetryHudOverlay implements OverlayView {
     if (!this.paused && !this.seenHints.has('first_dive') && this.mode === 'ARCADE') {
       this.onboardingElapsed += frameDt;
       if (this.onboardingElapsed >= 5.3) {
-        if (this.session.grid.getWorldCleanRatio() < 0.05) {
+        if (this.session.grid.getWorldCleanRatio() < 0.05 && !this.coach) {
           // Touch screens get their own words (the shortened keyboard line is English only).
           this.maybeHint(
             'first_dive',
@@ -1117,9 +1194,48 @@ export class TelemetryHudOverlay implements OverlayView {
     }
   }
 
+  /** The zone bar: each segment fills toward its zone's seal, turns gold once sealed, and is ringed where HYDRA-1 is. */
+  private refreshZoneBar(): void {
+    const count = this.zoneSegEls.length;
+    if (count === 0) return;
+    const districts = this.session.cartridge.districts;
+    const here = zoneIndexAt(this.session.probePos.x, this.session.probePos.z, districts);
+    // Runs ten times a second: no arrays or strings are made unless a segment really changed.
+    // Each segment's state is one number: whole-percent fill, +1000 sealed, +2000 here, and the
+    // zone's own clean percent (the bar is full from 90%, but the spoken share keeps counting).
+    let changed = false;
+    for (let i = 0; i < count; i++) {
+      const sealed = Boolean(this.session.sealedDistricts[i]);
+      const clean = this.session.grid.getDistrictCleanRatio(i);
+      const pct = Math.round(zoneSegmentFill(clean, sealed, DISTRICT_SEAL_CLEAN_RATIO) * 100);
+      const cleanPct = Math.round(Math.min(1, Math.max(0, Number.isFinite(clean) ? clean : 0)) * 100);
+      const state = pct + (sealed ? 1000 : 0) + (i === here ? 2000 : 0) + cleanPct * 10000;
+      if (this.zoneSegState[i] === state) continue;
+      this.zoneSegState[i] = state;
+      changed = true;
+      this.zoneFillEls[i].style.width = `${pct}%`;
+      this.zoneSegEls[i].classList.toggle('sealed', sealed);
+      this.zoneSegEls[i].classList.toggle('here', i === here);
+    }
+    if (changed) this.cleanOuterEl?.setAttribute('aria-valuetext', this.zoneBarSpokenText(here));
+  }
+
+  /** For screen readers: each zone by name with its share, "sealed" once sealed, and where HYDRA-1 is. */
+  private zoneBarSpokenText(here: number): string {
+    return this.session.cartridge.districts
+      .map((d, i) => {
+        const name = uiTranslator.t(d.name);
+        const pct = Math.round(Math.min(1, Math.max(0, this.session.grid.getDistrictCleanRatio(i))) * 100);
+        const line = this.session.sealedDistricts[i] ? uiTranslator.t(`${name}: sealed`) : uiTranslator.t(`${name}: ${pct}% clean`);
+        return i === here ? `${line} (${uiTranslator.t('you are here')})` : line;
+      })
+      .join(', ');
+  }
+
   private refreshStats(): void {
     const cleanPct = Math.round(this.session.grid.getWorldCleanRatio() * 100);
     if (this.cleanBarEl) this.cleanBarEl.style.width = `${cleanPct}%`;
+    this.refreshZoneBar();
     if (this.cleanOuterEl) this.cleanOuterEl.setAttribute('aria-valuenow', String(cleanPct));
     if (this.cleanTextEl) this.cleanTextEl.textContent = `${cleanPct}% Clean`;
 
@@ -1232,28 +1348,48 @@ export class TelemetryHudOverlay implements OverlayView {
       this.timerEl.style.color = pill.warn ? '#fde68a' : '#e0f2fe';
     }
 
-    const surgePct = Math.round((this.session.surgeMeter / SURGE_MAX) * 100);
-    const surgeReady = surgePct >= 100;
-    const objEl = this.container?.querySelector<HTMLElement>('#hud-objective');
+    // Ready means the game will really fire it: the raw meter, never a rounded 99.5%. The number
+    // shown stops at 99 until then.
+    const surgeReady = this.session.surgeMeter >= SURGE_MAX;
+    const surgePct = surgeReady ? 100 : Math.min(99, Math.round((this.session.surgeMeter / SURGE_MAX) * 100));
+    const objEl = this.objectiveEl;
     if (objEl) {
-      const sealedArr = this.session.sealedDistricts;
-      const objectiveInput: ObjectiveInput = {
-        mode: this.mode === 'PULP_RESCUE' ? 'PULP_RESCUE' : 'ARCADE',
-        worldCleanRatio: this.session.grid.getWorldCleanRatio(),
-        districtClean: this.session.cartridge.districts.map((_d, i) => this.session.grid.getDistrictCleanRatio(i)),
-        sealed: this.session.cartridge.districts.map((_d, i) => Boolean(sealedArr[i])),
-        sitesLeftOpen: this.session.sites.filter((st) => !st.restored && !sealedArr[st.districtIdx]).length,
-        domesRemaining: this.session.hasEpsDomes() && this.session.grid.getEpsArmorRemainingRatio() > 0,
-        surgeReady,
-        acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
-        rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
-      };
       const compact = this.isCompactScreen();
-      this.fullObjectiveText = `🎯 ${uiTranslator.t(computeObjectiveBreadcrumb(objectiveInput))}`;
-      const shown = compact
-        ? compactToastText(`🎯 ${uiTranslator.t(compactObjectiveBreadcrumb(objectiveInput))}`, true)
-        : this.fullObjectiveText;
+      // A new player's city 1: the coach's one thing to try replaces the stage's goal while it has one.
+      const coachStep = this.coachStepNow(surgeReady);
+      this.coachStepShown = coachStep;
+      let shown: string;
+      if (coachStep) {
+        this.fullObjectiveText = `🎯 ${uiTranslator.t(COACH_LINES[coachStep].full)}`;
+        shown = compact ? `🎯 ${uiTranslator.t(COACH_LINES[coachStep].short)}` : this.fullObjectiveText;
+      } else {
+        const sealedArr = this.session.sealedDistricts;
+        const objectiveInput: ObjectiveInput = {
+          mode: this.mode === 'PULP_RESCUE' ? 'PULP_RESCUE' : 'ARCADE',
+          worldCleanRatio: this.session.grid.getWorldCleanRatio(),
+          districtClean: this.session.cartridge.districts.map((_d, i) => this.session.grid.getDistrictCleanRatio(i)),
+          sealed: this.session.cartridge.districts.map((_d, i) => Boolean(sealedArr[i])),
+          sitesLeftOpen: this.session.sites.filter((st) => !st.restored && !sealedArr[st.districtIdx]).length,
+          domesRemaining: this.session.hasEpsDomes() && this.session.grid.getEpsArmorRemainingRatio() > 0,
+          surgeReady,
+          acidLockSec: this.session.hasStephanClock() ? this.session.chemistry.getStephanTimerSec() : 0,
+          rescueRemainingSec: this.mode === 'PULP_RESCUE' ? this.session.getRemainingRescueSec() : undefined,
+        };
+        // Touch screens and phone-sized windows get the lines without keyboard hints.
+        const keys = !compact && !this.isTouchUi();
+        this.fullObjectiveText = `🎯 ${uiTranslator.t(computeObjectiveBreadcrumb(objectiveInput, keys))}`;
+        shown = compact ? `🎯 ${uiTranslator.t(compactObjectiveBreadcrumb(objectiveInput, keys))}` : this.fullObjectiveText;
+      }
       if (objEl.textContent !== shown) objEl.textContent = shown;
+      const coaching = coachStep !== null;
+      if (coaching !== this.coachingShown) {
+        this.coachingShown = coaching;
+        objEl.classList.toggle('coach', coaching);
+        // The coach's few lines are worth hearing; the stage's own goal changes too often to read out.
+        objEl.setAttribute('aria-live', coaching ? 'polite' : 'off');
+        // On a phone the par timer gives its room to the coach's line (see main.css).
+        objEl.closest('.hud-top')?.classList.toggle('coaching', coaching);
+      }
     }
     const scanSec = Math.ceil(Math.max(0, this.session.discloseActiveRemaining));
     const scanOn = scanSec > 0;
@@ -1266,6 +1402,7 @@ export class TelemetryHudOverlay implements OverlayView {
         this.scanBtnEl.innerHTML = scanHtml;
       }
       this.scanBtnEl.classList.toggle('scan-active', scanOn);
+      this.scanBtnEl.classList.toggle('coach-pulse', this.coachStepShown === 'scan' && !scanOn);
       this.scanBtnEl.setAttribute('aria-pressed', scanOn ? 'true' : 'false');
     }
     if (this.scanDeskBtnEl) {
@@ -1273,6 +1410,7 @@ export class TelemetryHudOverlay implements OverlayView {
         ? `🔍 Dye Bio-Scan (${scanSec}s) [R]`
         : '🔍 Dye Bio-Scan [R]';
       this.scanDeskBtnEl.classList.toggle('scan-active', scanOn);
+      this.scanDeskBtnEl.classList.toggle('coach-pulse', this.coachStepShown === 'scan' && !scanOn);
       this.scanDeskBtnEl.setAttribute('aria-pressed', scanOn ? 'true' : 'false');
     }
     if (scanOn) {
@@ -1281,7 +1419,7 @@ export class TelemetryHudOverlay implements OverlayView {
         '🔍 Dye shows plaque: pink = new and thin • purple = old and thick. Scrub purple first!'
       );
     }
-    if (surgeReady && !this.lastSurgeReady && !this.usedSurge) {
+    if (surgeReady && !this.lastSurgeReady && !this.usedSurge && !this.coach) {
       this.maybeHint(
         'surge',
         this.isTouchUi()

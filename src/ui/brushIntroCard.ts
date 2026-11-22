@@ -34,6 +34,7 @@ export function brushIntroCardHtml(includeRinse: boolean): string {
       <div class="modal-sheet" style="text-align:center;">
         <h2 id="brush-intro-title">Time Your Real Brush</h2>
         <p style="color:#cbd5e1;font-size:0.9rem;">Brush your real teeth at the sink for 2 minutes. Follow the glow, then floss and rinse.</p>
+        <p class="brush-intro-any" style="color:#99f6e4;font-size:0.84rem;margin-top:6px;">Any toothbrush works, electric too.</p>
         <div class="brush-intro-tools">
           ${tool(guide('brush-1'), 'Toothbrush')}
           ${tool(guide('floss-1'), 'Floss pick')}

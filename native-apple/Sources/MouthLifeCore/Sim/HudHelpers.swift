@@ -237,6 +237,56 @@ public func computeWayfinder(for session: WorldSession) -> WayfinderArrow? {
     return nil
 }
 
+/// The HUD's direction arrow, from its own snapshot: the nearest thing the web's direction pills
+/// would point at (helper spots once fewer than three are left in an open zone; everything while
+/// Scan is on). Nil when there is nothing to point at. The live session belongs to the render
+/// thread, so the HUD reads only the snapshot. One pass, nothing sorted: this runs with the HUD.
+public func computeWayfinder(snapshot: SessionSnapshot, cartridge: WorldCartridge) -> WayfinderArrow? {
+    let probe = snapshot.probePos
+    let sealed = snapshot.sealedDistricts
+    let scanActive = snapshot.discloseActiveRemaining > 0
+    var best: WayfinderTarget?
+    var bestDistSq = Double.infinity
+    func offer(_ x: Double, _ z: Double, _ kind: WayfinderKind, _ label: String) {
+        let dx = x - probe.x
+        let dz = z - probe.z
+        let d = dx * dx + dz * dz
+        if d < bestDistSq {
+            bestDistSq = d
+            best = WayfinderTarget(x: x, z: z, kind: kind, label: label)
+        }
+    }
+    for site in snapshot.sites where !site.restored {
+        var eligible = scanActive
+        if !eligible {
+            let d = site.districtIdx
+            let open = d < 0 || d >= sealed.count || !sealed[d]
+            if open {
+                var left = 0
+                for other in snapshot.sites where !other.restored && other.districtIdx == d { left += 1 }
+                eligible = left < 3
+            }
+        }
+        if eligible { offer(site.pos.x, site.pos.z, .site, "Colony") }
+    }
+    if scanActive {
+        for crystal in snapshot.sucroseCrystals where crystal.intact {
+            offer(crystal.pos.x, crystal.pos.z, .crystal, "Crystal")
+        }
+        if snapshot.epsArmorRemainingRatio > 0 {
+            for dome in cartridge.epsDomes ?? [] {
+                offer(dome.cx, dome.cz, .dome, "Slime Dome")
+            }
+        }
+    }
+    guard let target = best else { return nil }
+    return WayfinderArrow(
+        target: target,
+        worldAngleRad: atan2(target.z - probe.z, target.x - probe.x),
+        distance: bestDistSq.squareRoot()
+    )
+}
+
 public struct ClampedPoint: Equatable, Sendable {
     public var x: Double
     public var y: Double
@@ -559,19 +609,14 @@ public struct ObjectiveInput: Equatable, Sendable {
     }
 }
 
-public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput) -> String {
+/// `keys: false` gives the lines without keyboard hints ("[Q]"), for touch screens and this app:
+/// they are whole sentences of their own, so every language translates them cleanly.
+public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput, keys: Bool = true) -> String {
     if inp.mode == .pulpRescue {
         let left = max(0, Int(ceil((inp.rescueTargetRatio - inp.worldCleanRatio) * 100.0)))
-        if left > 0 {
-            let secSuffix: String
-            if let rem = inp.rescueRemainingSec {
-                secSuffix = " • \(max(0, Int(ceil(rem))))s left"
-            } else {
-                secSuffix = ""
-            }
-            return "Pulp: \(left)% more\(secSuffix) — scrub!"
-        }
-        return "Patching… the pulp is safe!"
+        if left <= 0 { return "Patching… the pulp is safe!" }
+        guard let rem = inp.rescueRemainingSec else { return "Pulp: \(left)% more — scrub!" }
+        return "Pulp: \(left)% more • \(max(0, Int(ceil(rem))))s left — scrub!"
     }
 
     let openIdx = inp.sealed.enumerated().compactMap { !$0.element ? $0.offset : nil }
@@ -582,7 +627,7 @@ public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput) -> String {
         return "Acid clock \(Int(ceil(inp.acidLockSec)))s — use Saliva Spring!"
     }
     if inp.domesRemaining {
-        return "🛡️ Crack the dome: Floss [E] or Surge [Q]!"
+        return keys ? "🛡️ Crack the dome: Floss [E] or Surge [Q]!" : "🛡️ Crack the dome: Floss or Surge!"
     }
     if inp.sitesLeftOpen == 1 {
         return "1 helper colony left — follow ➤ Colony!"
@@ -603,16 +648,18 @@ public func computeObjectiveBreadcrumb(_ inp: ObjectiveInput) -> String {
         return c >= inp.sealRatio - 0.12
     }
     if nearly && inp.surgeReady {
-        return openIdx.count > 1
-            ? "Almost clean! Fire Fluoride Surge [Q] to seal!"
-            : "Fire Fluoride Surge [Q] to seal final district!"
+        if openIdx.count > 1 {
+            return keys ? "Almost clean! Fire Fluoride Surge [Q] to seal!" : "Almost clean! Fire Fluoride Surge to seal!"
+        }
+        return keys ? "Fire Fluoride Surge [Q] to seal final district!" : "Fire Fluoride Surge to seal final district!"
     }
     if nearly {
         return "Sweep D\(worst + 1) (\(worstPct)% → \(Int((inp.sealRatio * 100.0).rounded()))%) to seal it!"
     }
-    return inp.surgeReady
-        ? "Scrub enamel → fire Surge [Q] to seal!"
-        : "Scrub enamel → bring back colonies → Surge [Q]!"
+    if inp.surgeReady {
+        return keys ? "Scrub enamel → fire Surge [Q] to seal!" : "Scrub enamel → fire Surge to seal!"
+    }
+    return keys ? "Scrub enamel → bring back colonies → Surge [Q]!" : "Scrub enamel → bring back colonies → Surge!"
 }
 
 public func computeObjectiveBreadcrumb(for session: WorldSession) -> String {
@@ -634,6 +681,100 @@ public func computeObjectiveBreadcrumb(for session: WorldSession) -> String {
             acidLockSec: session.hasStephanClock ? session.chemistry.stephanTimerSec : 0
         )
     )
+}
+
+/// The goal line's inputs from the HUD's own snapshot. The live session belongs to the render
+/// thread, so the HUD must never read it directly.
+public func objectiveInput(snapshot: SessionSnapshot, cartridge: WorldCartridge) -> ObjectiveInput {
+    let sealed = snapshot.sealedDistricts
+    var sitesLeftOpen = 0
+    for s in snapshot.sites where !s.restored && (s.districtIdx < 0 || s.districtIdx >= sealed.count || !sealed[s.districtIdx]) {
+        sitesLeftOpen += 1
+    }
+    let hasDomes = !(cartridge.epsDomes ?? []).isEmpty
+    let hasAcidClock = (cartridge.stephanSipIntervalSec ?? 0) > 0
+    return ObjectiveInput(
+        mode: snapshot.activeMode,
+        worldCleanRatio: snapshot.worldCleanRatio,
+        districtClean: snapshot.districtCleanRatios,
+        sealed: sealed,
+        sitesLeftOpen: sitesLeftOpen,
+        domesRemaining: hasDomes && snapshot.epsArmorRemainingRatio > 0,
+        surgeReady: snapshot.surgeMeter >= GameConfig.surgeMax,
+        rescueRemainingSec: snapshot.activeMode == .pulpRescue ? snapshot.remainingRescueSec : nil,
+        acidLockSec: hasAcidClock ? snapshot.stephanTimerSec : 0
+    )
+}
+
+public func computeObjectiveBreadcrumb(snapshot: SessionSnapshot, cartridge: WorldCartridge, keys: Bool = true) -> String {
+    computeObjectiveBreadcrumb(objectiveInput(snapshot: snapshot, cartridge: cartridge), keys: keys)
+}
+
+/// The goal line for a phone's one-line HUD: just the goal. The how-to half stays on wider screens
+/// and in the pause card, which always shows the full line. Web twin: `compactObjectiveBreadcrumb`.
+public func compactObjectiveBreadcrumb(_ inp: ObjectiveInput, keys: Bool = true) -> String {
+    let full = computeObjectiveBreadcrumb(inp, keys: keys)
+    let n = inp.sitesLeftOpen
+    if full == "Restore \(n) colonies — scrub glowing rings!" { return "Restore \(n) colonies" }
+    if full == "1 helper colony left — follow ➤ Colony!" { return "1 colony left — follow ➤" }
+    return full
+}
+
+// MARK: - Zone bar
+
+/// The zone a point on the tooth belongs to: the first one it is inside, else the nearest.
+/// -1 when the stage has no zones. Web twin: `zoneIndexAt` in `hudHelpers.ts`.
+public func zoneIndexAt(x: Double, z: Double, districts: [DistrictDef]) -> Int {
+    var best = -1
+    var bestDistSq = Double.infinity
+    for (i, district) in districts.enumerated() {
+        let b = district.bounds
+        let dx = x < b.minX ? b.minX - x : (x > b.maxX ? x - b.maxX : 0)
+        let dz = z < b.minZ ? b.minZ - z : (z > b.maxZ ? z - b.maxZ : 0)
+        let d = dx * dx + dz * dz
+        if d < bestDistSq {
+            bestDistSq = d
+            best = i
+        }
+    }
+    return best
+}
+
+/// One segment of the HUD's zone bar.
+public struct ZoneBarSegment: Equatable, Sendable {
+    /// 0...1: how far the zone is toward the clean share that seals it (1 once sealed).
+    public var fill: Double
+    public var sealed: Bool
+    /// The zone HYDRA-1 is in.
+    public var here: Bool
+
+    public init(fill: Double, sealed: Bool, here: Bool) {
+        self.fill = fill
+        self.sealed = sealed
+        self.here = here
+    }
+}
+
+/// How full one zone's segment is: its clean share toward the share that seals it (1 once sealed).
+public func zoneSegmentFill(clean: Double, sealed: Bool, sealRatio: Double = GameConfig.districtSealCleanRatio) -> Double {
+    if sealed { return 1 }
+    let share = clean.isFinite && sealRatio > 0 ? clean / sealRatio : 0
+    return min(1, max(0, share))
+}
+
+/// The zone bar: one segment per zone, in the stage's own order (left to right). A segment is full
+/// when its zone is clean enough to seal, and sealed once its helper spots are back too.
+/// Web twin: `zoneBarModel` in `hudHelpers.ts`.
+public func zoneBarModel(
+    districtClean: [Double],
+    sealed: [Bool],
+    hereIndex: Int,
+    sealRatio: Double = GameConfig.districtSealCleanRatio
+) -> [ZoneBarSegment] {
+    districtClean.enumerated().map { i, clean in
+        let isSealed = i < sealed.count && sealed[i]
+        return ZoneBarSegment(fill: zoneSegmentFill(clean: clean, sealed: isSealed, sealRatio: sealRatio), sealed: isSealed, here: i == hereIndex)
+    }
 }
 
 public let hintsStorageKey = "mouthlife.hintsSeen"
@@ -727,22 +868,27 @@ public func formatZipPromptText(
     return inZipRange ? desktopReadyText : "🦷 Narrow Alley — Move Closer to Zip"
 }
 
-public func compactToastText(_ msg: String, compactViewport: Bool) -> String {
-    guard compactViewport, !msg.isEmpty else { return msg }
-    var out = msg
-    let replacements: [(String, String, NSRegularExpression.Options)] = [
+/// Compiled once: toasts are shortened many times a second while a HUD line is on screen.
+private let compactToastReplacements: [(NSRegularExpression, String)] = {
+    let patterns: [(String, String, NSRegularExpression.Options)] = [
         ("\\s*\\(or WASD \\+ Space\\)", "", [.caseInsensitive]),
-        ("Press Q\\s*/\\s*tap Surge", "Tap Surge", [.caseInsensitive]),
+        ("Press Q\\s*(?:/|or)\\s*tap Surge", "Tap Surge", [.caseInsensitive]),
         ("E\\s*/\\s*🧵 Floss", "🧵 Floss", []),
         ("\\s*\\[[A-Z]\\]", "", []),
         ("\\s*\\([EQ]\\)", "", []),
         ("\\s{2,}", " ", []),
     ]
-    for (pattern, rep, opts) in replacements {
-        if let regex = try? NSRegularExpression(pattern: pattern, options: opts) {
-            let range = NSRange(out.startIndex..<out.endIndex, in: out)
-            out = regex.stringByReplacingMatches(in: out, options: [], range: range, withTemplate: rep)
-        }
+    return patterns.compactMap { pattern, rep, opts in
+        (try? NSRegularExpression(pattern: pattern, options: opts)).map { ($0, rep) }
+    }
+}()
+
+public func compactToastText(_ msg: String, compactViewport: Bool) -> String {
+    guard compactViewport, !msg.isEmpty else { return msg }
+    var out = msg
+    for (regex, rep) in compactToastReplacements {
+        let range = NSRange(out.startIndex..<out.endIndex, in: out)
+        out = regex.stringByReplacingMatches(in: out, options: [], range: range, withTemplate: rep)
     }
     return out.trimmingCharacters(in: .whitespacesAndNewlines)
 }

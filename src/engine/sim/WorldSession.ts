@@ -194,7 +194,7 @@ export class WorldSession {
 
     this.probePos = { x: cartridge.probeSpawn.x, z: cartridge.probeSpawn.z };
     this.probeY = sampleTerrainHeight(cartridge, this.probePos.x, this.probePos.z);
-    this.probeFacingRad = 0;
+    this.probeFacingRad = cartridge.probeSpawnFacingRad ?? 0;
     this.probeSpeed = 0;
     this.prevProbeX = this.probePos.x;
     this.prevProbeZ = this.probePos.z;
