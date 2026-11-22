@@ -1838,7 +1838,9 @@ textarea:focus-visible {
     position: sticky;
     top: 0;
     z-index: 3;
-    background: rgba(5, 19, 31, 0.96);
+    /* Solid, so text scrolled up under it never shows through (a playtester saw the goal line
+       and the "pH 7.0" chip ghosting behind "Paused" on a landscape phone). */
+    background: rgb(5, 19, 31);
     padding: 12px 0 6px 0;
     margin-bottom: 8px !important;
     border-bottom: 1px solid rgba(94, 234, 212, 0.16);
