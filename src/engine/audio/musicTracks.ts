@@ -1,7 +1,7 @@
 /**
  * Which bundled recording plays for each music theme. Pure so it can be unit-tested; the same
  * stems, in the same order, as the native app's SunoStreamDeck (see
- * native-apple/MouthLifeApp/Music/README.md), so one folder of tracks serves both editions.
+ * docs/music/README.md), so one folder of tracks serves both editions.
  */
 import type { ThemeId } from './musicTheory';
 

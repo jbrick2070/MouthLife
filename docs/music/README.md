@@ -1,5 +1,7 @@
 # MouthLife Drop-In Suno Soundtrack & Live Earth Radio
 
+These notes are about the music folder, `native-apple/MouthLifeApp/Music/`. They live here and not in that folder because the app ships everything that folder holds.
+
 Drop any `.m4a` (recommended AAC `160–256 kbps` for hardware-decoded zero-CPU playback on iPhone), `.mp3`, `.caf`, or `.wav` tracks directly into `MouthLifeApp/Music/` and rebuild `MouthLife`.
 
 The web edition plays this same folder: `vite.config.ts` serves it as `music/` in dev and copies it into `dist/music/` on build, and `src/engine/audio/musicTracks.ts` resolves the same stems in the same order (browsers skip `.caf`). A theme with no file falls back to the procedural synth in both editions.
@@ -33,7 +35,7 @@ To test **one** Suno song across the whole app right away, name it:
 
 ## Finale Songs (optional): exact lengths, cue sheet and prompts
 
-Each city's finale and the grand finale can have their own song. Drop them in this folder; both
+Each city's finale and the grand finale can have their own song. Drop them in the music folder (`native-apple/MouthLifeApp/Music/`); both
 editions pick them up. Without a file, the built-in synth score plays (it follows the same cues).
 
 | File | Plays | Length | At 120 BPM, 4/4 |

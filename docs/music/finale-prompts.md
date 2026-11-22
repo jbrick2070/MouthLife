@@ -1,6 +1,6 @@
 # Finale music prompts
 
-For Suno with Instrumental on. Paste **Style** into the style box (each under 1000 characters), **Structure** into the lyrics box, and **Exclude** into exclude styles. Save each song in this folder under its file name; both editions play it at that finale.
+For Suno with Instrumental on. Paste **Style** into the style box (each under 1000 characters), **Structure** into the lyrics box, and **Exclude** into exclude styles. Save each song in the music folder (`native-apple/MouthLifeApp/Music/`) under its file name; both editions play it at that finale.
 
 Exclude (all songs):
 

@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MUSIC_TRACK_CANDIDATES, resolveMusicTrack } from '../src/engine/audio/musicTracks';
 import { THEMES, type ThemeId } from '../src/engine/audio/musicTheory';
@@ -60,5 +61,13 @@ describe('bundled soundtrack resolution (matches the native SunoStreamDeck)', ()
     expect(resolveMusicTrack('pulp', ['toronto.m4a'])).toBeNull();
     expect(resolveMusicTrack('pulp', [])).toBeNull();
     expect(resolveMusicTrack('pulp', ['pulp.caf', 'notes.txt'])).toBeNull();
+  });
+
+  it('keeps only audio in the music folder: the native app ships every file in it', () => {
+    // Notes about the music live in docs/music/. A stray document here would be copied into the
+    // app that goes to the App Store.
+    const files = readdirSync('native-apple/MouthLifeApp/Music').filter((f) => !f.startsWith('.'));
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) expect(f, f).toMatch(/\.(m4a|mp3|caf|wav)$/);
   });
 });
