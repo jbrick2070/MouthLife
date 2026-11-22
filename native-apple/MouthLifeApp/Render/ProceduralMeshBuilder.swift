@@ -1508,7 +1508,7 @@ public enum ProceduralMeshBuilder {
             (.molar, 10.2, 11.0, 7.4),
             (.molar, 9.2, 10.6, 7.0)
         ]
-        let orderedSpecs = Array(halfArchSpecs.reversed()) + halfArchSpecs // 14 crowns: right 2nd molar -> left 2nd molar
+        let orderedSpecs = Array(halfArchSpecs.reversed()) + halfArchSpecs // 14 crowns: left 2nd molar (screen left) -> right 2nd molar
         let totalMm = orderedSpecs.reduce(0.0) { $0 + $1.w }
         let table = buildArcTable()
         let contactGap = 0.015

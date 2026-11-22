@@ -573,7 +573,7 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
     { kind: 'molar', w: 10.2, d: 11.0, h: 7.4 },
     { kind: 'molar', w: 9.2, d: 10.6, h: 7.0 },
   ];
-  const ordered = [...halfArchKinds].reverse().concat(halfArchKinds); // right molar → left molar
+  const ordered = [...halfArchKinds].reverse().concat(halfArchKinds); // left molar (screen left, as in a mirror) → right molar
   const totalMm = ordered.reduce((acc, t) => acc + t.w, 0);
   const table = buildArcTable();
   const contactGap = 0.015;
