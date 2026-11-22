@@ -517,6 +517,41 @@ textarea:focus-visible {
   }
 }
 
+/* The one-time "Time Your Real Brush" card: the tools the ritual will use. */
+.brush-intro-tools {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.brush-intro-tool {
+  margin: 0;
+  width: 86px;
+  font-size: 0.74rem;
+  color: var(--text-main);
+}
+
+.brush-intro-tool img,
+.brush-intro-drop {
+  width: 86px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+
+.brush-intro-drop {
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  background: rgba(56, 189, 248, 0.14);
+}
+
+.brush-intro-tool figcaption {
+  margin-top: 4px;
+}
+
 .mohs-item {
   border: 1px solid rgba(148, 184, 204, 0.25);
   background: rgba(8, 25, 40, 0.78);

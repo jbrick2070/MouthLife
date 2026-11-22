@@ -7,7 +7,8 @@ import { EventBus } from './engine/EventBus';
 import { type CanvasPointerPhase, InputManager } from './engine/InputManager';
 import { sampleTerrainHeight } from './engine/physics/CollisionSystem';
 import { SAVE_GENERATION_KEY, SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
-import { readIncludeRinse } from './engine/persistence/pacerPrefs';
+import { markHasSeenBrushIntro, readHasSeenBrushIntro, readIncludeRinse } from './engine/persistence/pacerPrefs';
+import { showBrushIntroCard } from './ui/brushIntroCard';
 import { requestMotionPermissionIfNeeded } from './engine/motionPermission';
 import { SceneManager } from './engine/render/SceneManager';
 import { WorldSession } from './engine/sim/WorldSession';
@@ -777,9 +778,26 @@ function bootstrapMouthLife(): void {
         onLaunchPulpRescue: () => launchPlayableStage('pulp_rescue', 'PULP_RESCUE'),
         onLaunchBrushAlong: () => {
           sound.playUiTap();
-          // The rinse's tilt gauge needs Safari's permission, asked from this tap (M21).
-          if (readIncludeRinse() && !sceneMgr.isReducedMotion()) requestMotionPermissionIfNeeded();
-          switchMode('BRUSH_ALONG');
+          const begin = () => {
+            // The rinse's tilt gauge needs Safari's permission, asked from this tap (M21).
+            if (readIncludeRinse() && !sceneMgr.isReducedMotion()) requestMotionPermissionIfNeeded();
+            switchMode('BRUSH_ALONG');
+          };
+          if (readHasSeenBrushIntro()) {
+            begin();
+            return;
+          }
+          // First brush on this device: say plainly that it times real brushing. Start is a tap
+          // too, so the permission above is still asked from a tap.
+          showBrushIntroCard({
+            includeRinse: readIncludeRinse(),
+            onStart: () => {
+              markHasSeenBrushIntro();
+              sound.playUiTap();
+              begin();
+            },
+            onBack: () => sound.playUiTap(),
+          });
         },
         onReplayCosmicIntro: () => {
           switchMode('COSMIC_INTRO');

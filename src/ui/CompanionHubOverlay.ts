@@ -26,7 +26,13 @@ import {
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
-import { readIncludeRinse, readReminders, writeIncludeRinse, writeReminders } from '../engine/persistence/pacerPrefs';
+import {
+  clearHasSeenBrushIntro,
+  readIncludeRinse,
+  readReminders,
+  writeIncludeRinse,
+  writeReminders,
+} from '../engine/persistence/pacerPrefs';
 import {
   brushCount,
   brushWeek,
@@ -2012,6 +2018,7 @@ export class CompanionHubOverlay implements OverlayView {
       }
       this.confirmResetPending = false;
       this.saveSys.resetToFreshSave();
+      clearHasSeenBrushIntro(); // a fresh start sees the "Time Your Real Brush" card again
       this.selectedCityId = 'toronto';
       this.statusBanner = 'Save erased. You are starting fresh!';
       this.closeActiveModal();

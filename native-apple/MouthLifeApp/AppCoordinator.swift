@@ -276,7 +276,7 @@ public final class AppCoordinator {
             // close whatever is open on Home first (a sheet, How to Play)
             activeSheet = nil
             if isTutorialVisible { closeTutorial() }
-            startBrushAlong()
+            requestBrushAlong()
         } else if mode == .cosmicIntro {
             transition(to: .hub)
         }
@@ -1006,6 +1006,34 @@ public final class AppCoordinator {
         } else {
             showHubToast("\(host.signatureTreat.emoji) \(host.signatureTreat.name) (no more Ions this hour) • Rub the teeth to polish!")
         }
+    }
+
+    // MARK: - The one-time "Time Your Real Brush" card
+
+    private static let brushIntroSeenDefaultsKey = "mouthlife.pacer.hasSeenIntro"
+    /// Shown over Home before a device's first 2-Min Brush (web twin: `src/ui/brushIntroCard.ts`).
+    public var isBrushIntroVisible: Bool = false
+
+    /// Home and the widget start the brush through here: the first time on a device, the card
+    /// says plainly that it times real brushing. The `--mode=brushAlong` test argument skips it.
+    public func requestBrushAlong() {
+        if UserDefaults.standard.bool(forKey: Self.brushIntroSeenDefaultsKey) {
+            startBrushAlong()
+        } else {
+            isBrushIntroVisible = true
+        }
+    }
+
+    /// The card's Start: the ritual begins exactly as from Home. Device-local, outside the save.
+    public func confirmBrushIntro() {
+        guard isBrushIntroVisible else { return }
+        isBrushIntroVisible = false
+        UserDefaults.standard.set(true, forKey: Self.brushIntroSeenDefaultsKey)
+        startBrushAlong()
+    }
+
+    public func dismissBrushIntro() {
+        isBrushIntroVisible = false
     }
 
     // MARK: - 2-Minute Sink Brush-Along Pacer + iPhone Wake-Lock

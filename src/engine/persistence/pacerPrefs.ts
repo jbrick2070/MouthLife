@@ -38,6 +38,41 @@ export function writeIncludeRinse(on: boolean): boolean {
 }
 
 /**
+ * Whether this device has shown the one-time "Time Your Real Brush" card before its first
+ * 2-Min Brush. Device-local, outside the save and the Sync Code; Erase Save clears it. Where
+ * storage is refused, the card shows once per visit instead. Native: the same key in UserDefaults.
+ */
+export const HAS_SEEN_BRUSH_INTRO_KEY = 'mouthlife.pacer.hasSeenIntro';
+let brushIntroSeenThisVisit = false;
+
+export function readHasSeenBrushIntro(): boolean {
+  if (brushIntroSeenThisVisit) return true;
+  try {
+    return window.localStorage.getItem(HAS_SEEN_BRUSH_INTRO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markHasSeenBrushIntro(): void {
+  brushIntroSeenThisVisit = true;
+  try {
+    window.localStorage.setItem(HAS_SEEN_BRUSH_INTRO_KEY, '1');
+  } catch {
+    // Kept for this visit only.
+  }
+}
+
+export function clearHasSeenBrushIntro(): void {
+  brushIntroSeenThisVisit = false;
+  try {
+    window.localStorage.removeItem(HAS_SEEN_BRUSH_INTRO_KEY);
+  } catch {
+    // Nothing stored to clear.
+  }
+}
+
+/**
  * Brush reminders, set by a grown-up: on or off, and the morning and evening times (minutes after
  * midnight). The web edition can only remind while the page is open; the native app uses
  * notifications.

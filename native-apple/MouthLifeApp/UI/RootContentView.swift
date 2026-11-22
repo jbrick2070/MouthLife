@@ -191,7 +191,7 @@ public struct RootContentView: View {
                     onSelectPlanet: { coordinator.selectPlanetRadio() },
                     onClaimIdleIons: { coordinator.claimIdleIons() },
                     onFeedTreat: { coordinator.feedRegionalTreat() },
-                    onStartBrushAlong: { coordinator.startBrushAlong() },
+                    onStartBrushAlong: { coordinator.requestBrushAlong() },
                     onLaunchWorld: { wid in coordinator.diveFromHome(wid) },
                     onLaunchPulpRescue: { coordinator.launchPulpRescue() },
                     onReplayIntro: { coordinator.replayCosmicIntro() },
@@ -313,6 +313,23 @@ public struct RootContentView: View {
                 .transition(.opacity)
                 .zIndex(10)
             }
+
+            // The one-time "Time Your Real Brush" card before a device's first 2-Min Brush.
+            if coordinator.isBrushIntroVisible {
+                BrushIntroCard(
+                    includeRinse: coordinator.includeRinse,
+                    onStart: {
+                        NativeSoundEngine.shared.playUiTap()
+                        coordinator.confirmBrushIntro()
+                    },
+                    onBack: {
+                        NativeSoundEngine.shared.playUiTap()
+                        coordinator.dismissBrushIntro()
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(11)
+            }
         }
     }
 
@@ -421,5 +438,76 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// The one-time card before a device's first 2-Min Brush: it says plainly that the timer is for
+/// brushing your real teeth, and pictures the tools the ritual will use. Web twin:
+/// `src/ui/brushIntroCard.ts` (same words, so both editions share one translation).
+struct BrushIntroCard: View {
+    let includeRinse: Bool
+    let onStart: () -> Void
+    let onBack: () -> Void
+    @State private var started = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea()
+            VStack(spacing: 12) {
+                Text(L10n.t("Time Your Real Brush"))
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundStyle(MLTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                Text(L10n.t("Brush your real teeth at the sink for 2 minutes. Follow the glow, then floss and rinse."))
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(MLTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    tool(image: "brush-1", label: "Toothbrush")
+                    tool(image: "floss-1", label: "Floss pick")
+                    if includeRinse { tool(symbol: "drop.fill", label: "Rinse") }
+                }
+                HStack(spacing: 10) {
+                    Button(L10n.t("Back"), action: onBack)
+                        .buttonStyle(.bordered)
+                    Button(L10n.t("Start 2-Min Brush")) {
+                        guard !started else { return } // one ritual per card, however fast the taps
+                        started = true
+                        onStart()
+                    }
+                    .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.cyanAccent))
+                    .disabled(started)
+                }
+                .padding(.top, 4)
+            }
+            .padding(20)
+            .frame(maxWidth: 420)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MLTheme.cardElevated))
+            .padding(.horizontal, 20)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private func tool(image: String? = nil, symbol: String? = nil, label: String) -> some View {
+        VStack(spacing: 4) {
+            Group {
+                if let image, let picture = TutorialGuideImages.image(named: image) {
+                    picture.resizable().scaledToFill()
+                } else {
+                    Image(systemName: symbol ?? "sparkles")
+                        .font(.system(size: 28))
+                        .foregroundStyle(MLTheme.cyanAccent)
+                }
+            }
+            .frame(width: 86, height: 64)
+            .background(MLTheme.cyanAccent.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(L10n.t(label))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(MLTheme.textPrimary)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
