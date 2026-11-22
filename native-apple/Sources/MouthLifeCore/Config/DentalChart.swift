@@ -499,9 +499,13 @@ public enum DentalChart {
         let pWord = digitWords[pos] ?? "\(pos)"
         let fdiSpoken = "\(qWord)-\(pWord)"
 
+        // The mouth on screen is a mirror: screen left is the player's left. The 3D arch and the
+        // 2-minute brush put crowns 0...6 on screen left (back left molar -> left front tooth) and
+        // 7...13 on screen right, so the names must follow, or Home calls a crown "Right" that the
+        // brush coach calls "left". The web does the same in src/config/dentalChart.ts.
         let companionArchIndex: Int?
         if pos <= 7 {
-            companionArchIndex = (side == .right) ? (7 - pos) : (6 + pos)
+            companionArchIndex = (side == .left) ? (7 - pos) : (6 + pos)
         } else {
             companionArchIndex = nil
         }

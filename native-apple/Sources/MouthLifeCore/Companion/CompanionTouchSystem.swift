@@ -207,7 +207,7 @@ public final class CompanionTouchSystem: @unchecked Sendable {
         }
     }()
 
-    /// Canonical 14-crown parabolic 3D arch anchors (Right 2nd Molar `0` -> Left 2nd Molar `13`).
+    /// Canonical 14-crown parabolic 3D arch anchors (Left 2nd Molar `0`, on screen left as in a mirror -> Right 2nd Molar `13`).
     public static let defaultCrownAnchors: [TouchHit] = (0..<crownCount).map { idx in
         let u = (Double(idx) - 6.5) / 6.5 // -1.0 .. +1.0
         let x = 32.0 + u * 8.4
