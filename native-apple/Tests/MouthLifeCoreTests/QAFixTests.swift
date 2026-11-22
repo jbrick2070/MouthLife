@@ -67,6 +67,23 @@ final class QAFixTests: XCTestCase {
         XCTAssertEqual(west.probeFacingRad, Double.pi)
     }
 
+    // Sound effects start a quarter quieter (web twin: tests/musicAudio.test.ts).
+    func testSoundEffectsStartAQuarterQuieterAndASavedOldDefaultMoves() {
+        XCTAssertEqual(AudioDefaults.sfxVolume, 0.64)
+        XCTAssertEqual(AudioDefaults.oldSfxVolume, 0.85)
+        XCTAssertEqual(AudioDefaults.sfxVolume / AudioDefaults.oldSfxVolume, 0.75, accuracy: 0.01)
+        XCTAssertEqual(AudioDefaults.musicVolume, 0.70)
+        // saved before the change and never touched: the old default moves
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 0.85, savedVersion: 0), 0.64)
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 0.85, savedVersion: 1), 0.64)
+        // any other saved level is a choice
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 0.5, savedVersion: 0), 0.5)
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 1, savedVersion: 0), 1)
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 0, savedVersion: 0), 0)
+        // 0.85 saved since the change is a choice too
+        XCTAssertEqual(AudioDefaults.migratedSfxVolume(stored: 0.85, savedVersion: AudioDefaults.version), 0.85)
+    }
+
     // The gum is solid (web twin: tests/multiCityCartridges.test.ts).
     func testHydraCannotDriveAlongTheGumRoundADivider() {
         let cart = WorldRegistry.world1

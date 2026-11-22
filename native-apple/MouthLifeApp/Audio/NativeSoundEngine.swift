@@ -1801,6 +1801,7 @@ public final class NativeSoundEngine {
     private static let mutedKey = "mouthlife.nativeAudio.muted"
     private static let musicVolKey = "mouthlife.nativeAudio.musicVolume"
     private static let sfxVolKey = "mouthlife.nativeAudio.sfxVolume"
+    private static let defaultsVersionKey = "mouthlife.nativeAudio.defaultsVersion"
     private static let earthRadioKey = "mouthlife.nativeAudio.earthRadio"
     private static let voiceCoachKey = "mouthlife.nativeAudio.voiceCoach"
     private static let coachLangKey = "mouthlife.nativeAudio.coachLanguage"
@@ -1875,12 +1876,14 @@ public final class NativeSoundEngine {
         if defaults.object(forKey: Self.musicVolKey) != nil {
             self.musicVolume = min(1.0, max(0.0, defaults.float(forKey: Self.musicVolKey)))
         } else {
-            self.musicVolume = 0.70
+            self.musicVolume = AudioDefaults.musicVolume
         }
         if defaults.object(forKey: Self.sfxVolKey) != nil {
-            self.sfxVolume = min(1.0, max(0.0, defaults.float(forKey: Self.sfxVolKey)))
+            // a level saved under the old, louder default and never changed moves to the new one
+            let stored = min(1.0, max(0.0, defaults.float(forKey: Self.sfxVolKey)))
+            self.sfxVolume = AudioDefaults.migratedSfxVolume(stored: stored, savedVersion: defaults.integer(forKey: Self.defaultsVersionKey))
         } else {
-            self.sfxVolume = 0.85
+            self.sfxVolume = AudioDefaults.sfxVolume
         }
         if defaults.object(forKey: Self.earthRadioKey) != nil {
             self.isEarthRadioEnabled = defaults.bool(forKey: Self.earthRadioKey)
@@ -2151,6 +2154,7 @@ public final class NativeSoundEngine {
         d.set(isMuted, forKey: Self.mutedKey)
         d.set(musicVolume, forKey: Self.musicVolKey)
         d.set(sfxVolume, forKey: Self.sfxVolKey)
+        d.set(AudioDefaults.version, forKey: Self.defaultsVersionKey)
         onPreferencesChanged?(isMuted, musicVolume, sfxVolume)
     }
 

@@ -636,7 +636,28 @@ export interface AudioPrefs {
 }
 
 export const AUDIO_PREFS_KEY = 'mouthlife.audioPrefs';
-export const DEFAULT_AUDIO_PREFS: AudioPrefs = { muted: false, musicVolume: 0.7, sfxVolume: 0.85 };
+/**
+ * Sound effects start a quarter quieter than they did before November 2026 (0.85): the owner found
+ * them too loud beside the music. Native twin: `AudioDefaults` in MouthLifeCore.
+ */
+export const DEFAULT_AUDIO_PREFS: AudioPrefs = { muted: false, musicVolume: 0.7, sfxVolume: 0.64 };
+/** The sound-effect default before it was lowered. */
+export const OLD_DEFAULT_SFX_VOLUME = 0.85;
+/** The level the effects' echo and reverb were tuned at. It stays put when the default moves, so a quieter default is quieter all through. */
+export const SFX_WET_REFERENCE = 0.85;
+/** Saved with the preferences, so a level saved under an older default can be told from a chosen one. */
+export const AUDIO_DEFAULTS_VERSION = 2;
+
+/**
+ * A sound-effect level saved before the default was lowered, and still exactly the old default,
+ * was never chosen (the three settings are saved together whenever any one changes): it moves to
+ * the new default. A level saved since, or any other level, is the player's own and is kept.
+ */
+export function migrateSfxVolume(stored: number, savedVersion: unknown): number {
+  const savedSince = typeof savedVersion === 'number' && savedVersion >= AUDIO_DEFAULTS_VERSION;
+  if (savedSince) return stored;
+  return Math.abs(stored - OLD_DEFAULT_SFX_VOLUME) < 0.005 ? DEFAULT_AUDIO_PREFS.sfxVolume : stored;
+}
 
 const clamp01 = (n: unknown, fallback: number): number =>
   typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
@@ -657,7 +678,11 @@ export function loadAudioPrefs(storage?: MiniStorage | null): AudioPrefs {
     const s = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     const txt = s?.getItem(AUDIO_PREFS_KEY);
     if (!txt) return { ...DEFAULT_AUDIO_PREFS };
-    return sanitizeAudioPrefs(JSON.parse(txt));
+    const raw = JSON.parse(txt);
+    const prefs = sanitizeAudioPrefs(raw);
+    const savedVersion = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).defaultsVersion : undefined;
+    prefs.sfxVolume = migrateSfxVolume(prefs.sfxVolume, savedVersion);
+    return prefs;
   } catch {
     return { ...DEFAULT_AUDIO_PREFS };
   }
@@ -666,7 +691,7 @@ export function loadAudioPrefs(storage?: MiniStorage | null): AudioPrefs {
 export function saveAudioPrefs(prefs: AudioPrefs, storage?: MiniStorage | null): void {
   try {
     const s = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
-    s?.setItem(AUDIO_PREFS_KEY, JSON.stringify(sanitizeAudioPrefs(prefs)));
+    s?.setItem(AUDIO_PREFS_KEY, JSON.stringify({ ...sanitizeAudioPrefs(prefs), defaultsVersion: AUDIO_DEFAULTS_VERSION }));
   } catch {
     /* storage unavailable — non-fatal */
   }

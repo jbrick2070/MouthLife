@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ClockController } from '../src/engine/ClockController';
 import { EventBus } from '../src/engine/EventBus';
@@ -5,9 +6,12 @@ import { SoundEngine } from '../src/engine/audio/SoundEngine';
 import { SaveSystem } from '../src/engine/persistence/SaveSystem';
 import { WorldSession } from '../src/engine/sim/WorldSession';
 import {
+  AUDIO_DEFAULTS_VERSION,
   AUDIO_PREFS_KEY,
   COSMIC_BEAT_BARS,
   DEFAULT_AUDIO_PREFS,
+  OLD_DEFAULT_SFX_VOLUME,
+  SFX_WET_REFERENCE,
   THEMES,
   chordAtBar,
   chordMidis,
@@ -16,6 +20,7 @@ import {
   harmonicSfxMidi,
   loadAudioPrefs,
   midiToFreq,
+  migrateSfxVolume,
   sanitizeAudioPrefs,
   saveAudioPrefs,
   scaleMidi,
@@ -169,6 +174,48 @@ describe('music theory & theme selection', () => {
 });
 
 describe('audio preference persistence', () => {
+  it('starts sound effects a quarter quieter than the old default, with the echo in step', () => {
+    expect(OLD_DEFAULT_SFX_VOLUME).toBe(0.85);
+    expect(DEFAULT_AUDIO_PREFS.sfxVolume).toBe(0.64);
+    expect(DEFAULT_AUDIO_PREFS.sfxVolume / OLD_DEFAULT_SFX_VOLUME).toBeCloseTo(0.75, 2);
+    expect(DEFAULT_AUDIO_PREFS.musicVolume).toBe(0.7);
+    // The echo and reverb are still measured against the level they were tuned at, so they drop
+    // by the same quarter instead of staying as loud as before.
+    expect(SFX_WET_REFERENCE).toBe(0.85);
+    const engine = readFileSync('src/engine/audio/SoundEngine.ts', 'utf8');
+    expect(engine.match(/this\.prefs\.sfxVolume \/ SFX_WET_REFERENCE/g)).toHaveLength(2);
+    expect(engine).not.toContain('sfxVolume / DEFAULT_AUDIO_PREFS.sfxVolume');
+  });
+
+  it('moves a level saved under the old default, and keeps one the player chose', () => {
+    // saved before the change, never touched: the old default
+    expect(migrateSfxVolume(0.85, undefined)).toBe(0.64);
+    expect(migrateSfxVolume(0.85, 1)).toBe(0.64);
+    // any other saved level is a choice
+    expect(migrateSfxVolume(0.5, undefined)).toBe(0.5);
+    expect(migrateSfxVolume(1, undefined)).toBe(1);
+    expect(migrateSfxVolume(0, undefined)).toBe(0);
+    // 0.85 saved since the change is a choice too
+    expect(migrateSfxVolume(0.85, AUDIO_DEFAULTS_VERSION)).toBe(0.85);
+
+    const store = new Map<string, string>();
+    const st = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    store.set(AUDIO_PREFS_KEY, JSON.stringify({ muted: true, musicVolume: 0.4, sfxVolume: 0.85 }));
+    expect(loadAudioPrefs(st)).toEqual({ muted: true, musicVolume: 0.4, sfxVolume: 0.64 });
+    // the player then picks 85% on purpose: it is saved with the version and stays
+    saveAudioPrefs({ muted: true, musicVolume: 0.4, sfxVolume: 0.85 }, st);
+    expect(JSON.parse(store.get(AUDIO_PREFS_KEY)!).defaultsVersion).toBe(AUDIO_DEFAULTS_VERSION);
+    expect(loadAudioPrefs(st)).toEqual({ muted: true, musicVolume: 0.4, sfxVolume: 0.85 });
+  });
+
+  it('keeps the same numbers in the native app', () => {
+    const swift = readFileSync('native-apple/Sources/MouthLifeCore/Config/AudioDefaults.swift', 'utf8');
+    expect(swift).toContain(`public static let sfxVolume: Float = ${DEFAULT_AUDIO_PREFS.sfxVolume}`);
+    expect(swift).toContain(`public static let oldSfxVolume: Float = ${OLD_DEFAULT_SFX_VOLUME}`);
+    expect(swift).toContain(`public static let version = ${AUDIO_DEFAULTS_VERSION}`);
+    expect(swift).toContain('public static let musicVolume: Float = 0.70');
+  });
+
   it('round-trips {muted, musicVolume, sfxVolume} under mouthlife.audioPrefs', () => {
     expect(AUDIO_PREFS_KEY).toBe('mouthlife.audioPrefs');
     const st = memStore();

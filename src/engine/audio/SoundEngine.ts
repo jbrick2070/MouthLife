@@ -6,6 +6,7 @@ import { BUNDLED_MUSIC_FILES } from 'virtual:bundled-music';
 import {
   COSMIC_BEAT_BARS,
   DEFAULT_AUDIO_PREFS,
+  SFX_WET_REFERENCE,
   THEMES,
   chordAtBar,
   chordMidis,
@@ -338,7 +339,7 @@ export class SoundEngine {
     this.musicDelSend.connect(this.delaySend);
 
     const sfxWetScale =
-      this.prefs.sfxVolume <= 0.001 ? 0 : this.prefs.sfxVolume / DEFAULT_AUDIO_PREFS.sfxVolume;
+      this.prefs.sfxVolume <= 0.001 ? 0 : this.prefs.sfxVolume / SFX_WET_REFERENCE;
     this.sfxRevSend = ctx.createGain();
     this.sfxRevSend.gain.value = sfxWetScale;
     this.sfxRevSend.connect(this.reverbSend);
@@ -486,7 +487,7 @@ export class SoundEngine {
       const now = this.ctx.currentTime;
       const silent = this.prefs.sfxVolume <= 0.001;
       this.sfxBus.gain.setTargetAtTime(silent ? 0 : this.prefs.sfxVolume * SFX_SCALE, now, 0.04);
-      const wet = silent ? 0 : this.prefs.sfxVolume / DEFAULT_AUDIO_PREFS.sfxVolume;
+      const wet = silent ? 0 : this.prefs.sfxVolume / SFX_WET_REFERENCE;
       this.sfxRevSend?.gain.setTargetAtTime(wet, now, 0.04);
       this.sfxDelSend?.gain.setTargetAtTime(wet, now, 0.04);
       if (silent) this.scrubGain?.gain.setTargetAtTime(0, now, 0.03);
