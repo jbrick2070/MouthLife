@@ -6,6 +6,7 @@ import {
   DEFAULT_REMINDER_TIMES,
   dueReminder,
   minutesToClock,
+  REMINDER_DAYS_AHEAD,
   reminderPlan,
 } from '../src/config/brushDays';
 
@@ -47,11 +48,19 @@ describe('brush log', () => {
 describe('brush reminders', () => {
   const times = DEFAULT_REMINDER_TIMES; // 07:30 and 19:30
 
-  it('plans each morning and evening for a week, skipping what has passed today', () => {
+  it('plans each morning and evening for 30 days, skipping what has passed today', () => {
     const plan = reminderPlan(at(2026, 11, 19, 8, 0), times, 0);
     expect(plan[0]).toEqual({ at: at(2026, 11, 19, 19, 30), slot: 'evening' });
     expect(plan[1]).toEqual({ at: at(2026, 11, 20, 7, 30), slot: 'morning' });
-    expect(plan).toHaveLength(13);
+    // 30 days of two, less this morning's, which has passed
+    expect(plan).toHaveLength(59);
+    expect(plan[58]).toEqual({ at: at(2026, 12, 18, 19, 30), slot: 'evening' });
+  });
+
+  it('never plans more than 60 at once (an iPhone keeps 64 for one app)', () => {
+    expect(REMINDER_DAYS_AHEAD).toBe(30);
+    // the fullest plan there is: before the morning time, nothing brushed yet
+    expect(reminderPlan(at(2026, 11, 19, 6, 0), times, 0)).toHaveLength(60);
   });
 
   it('stays quiet today once that brush is done', () => {

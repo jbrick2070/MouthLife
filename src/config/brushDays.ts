@@ -64,8 +64,12 @@ export interface ReminderTimes {
 
 export const DEFAULT_REMINDER_TIMES: ReminderTimes = { morning: 7 * 60 + 30, evening: 19 * 60 + 30 };
 
-/** How many days ahead the native app schedules reminders (it refreshes them whenever it opens). */
-export const REMINDER_DAYS_AHEAD = 7;
+/**
+ * How many days ahead the native app schedules reminders: a month, so a family that has not opened
+ * the app for a while is still nudged (it plans them afresh whenever it opens). Two a day makes at
+ * most 60 waiting at once, under the 64 an iPhone keeps for one app.
+ */
+export const REMINDER_DAYS_AHEAD = 30;
 
 /** The words of each reminder. */
 export const REMINDER_TEXT: Record<ReminderSlot, string> = {

@@ -5,10 +5,13 @@ import {
   COACH_LANGUAGE_INFO,
   GYRO_SLOSH_IDLE,
   GyroSloshSim,
+  deviceMotionSign,
   evaluateBrushPhase,
   isCoachLanguage,
   isPatientRightQuadrant,
   isUpperQuadrant,
+  motionGravityG,
+  motionUserAccelG,
   mouthwashDurationSec,
   type BrushPhaseState,
   type CoachLanguage,
@@ -31,11 +34,13 @@ import {
   HabitBank,
   brushAlongMultiplier,
   brushAlongRinseCredit,
+  brushRewardDay,
   formatLocalDateKey,
 } from '../engine/persistence/HabitBank';
 import { readIncludeRinse } from '../engine/persistence/pacerPrefs';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
+import { uiTranslator } from '../i18n/uiTranslator';
 import { HOME_ICON_SVG } from './homeIcon';
 
 // Same preference names as the native app (it keeps these outside the save too).
@@ -125,6 +130,8 @@ export class BrushAlongOverlay implements OverlayView {
   private gyro: GyroSloshSnapshot = GYRO_SLOSH_IDLE;
   private motionBound = false;
   private lastMotionMs = 0;
+  /** Which way round this browser signs its motion numbers (see deviceMotionSign); set when tilt starts. */
+  private motionSign: 1 | -1 = -1;
 
   private rewardResult: {
     ionsAwarded: number;
@@ -167,14 +174,18 @@ export class BrushAlongOverlay implements OverlayView {
     const rotMag = rot
       ? Math.hypot((rot.alpha ?? 0) * deg2rad, (rot.beta ?? 0) * deg2rad, (rot.gamma ?? 0) * deg2rad)
       : 0;
-    // The web reports the reaction to gravity in m/s²; the slosh model wants gravity in g.
+    // The web reports motion in m/s², and iPhone and Android browsers sign it opposite ways. The
+    // slosh model wants what the native app feeds it: gravity alone, in g, pointing at the ground.
+    const sign = this.motionSign;
+    const ax = e.acceleration?.x ?? 0;
+    const ay = e.acceleration?.y ?? 0;
     this.gyro = this.slosh.step({
       dt,
-      gravityX: -(g.x ?? 0) / 9.81,
-      gravityY: -(g.y ?? 0) / 9.81,
+      gravityX: motionGravityG(sign, g.x, ax),
+      gravityY: motionGravityG(sign, g.y, ay),
       rotationRateMag: rotMag,
-      userAccelX: (e.acceleration?.x ?? 0) / 9.81,
-      userAccelY: (e.acceleration?.y ?? 0) / 9.81,
+      userAccelX: motionUserAccelG(sign, ax),
+      userAccelY: motionUserAccelG(sign, ay),
       sensorAvailable: true,
       reducedMotion: this.prefersReducedMotion(),
     });
@@ -288,6 +299,8 @@ export class BrushAlongOverlay implements OverlayView {
     if (this.motionBound || typeof window.DeviceMotionEvent === 'undefined' || this.prefersReducedMotion()) return;
     this.motionBound = true;
     this.lastMotionMs = 0;
+    // Settle once which way round this browser reports tilt, so left is left on iPhone and Android.
+    this.motionSign = deviceMotionSign(navigator.vendor);
     window.addEventListener('devicemotion', this.motionHandler);
   }
 
@@ -412,6 +425,10 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private completeSession(withFlossBonus: boolean, withMouthwashBonus: boolean): void {
+    // How long ago the last step really ended. Normally no time at all, but the session clock keeps
+    // going behind a hidden page or a locked phone (H04), so a brush left overnight ended hours ago.
+    // Read before stopPacer(), which forgets the step this is measured from.
+    const endedSecAgo = this.clock.getPacerOverflowSec();
     this.unbindMotion();
     this.clock.stopPacer();
     this.callbacks.onPauseChanged?.(false);
@@ -424,7 +441,15 @@ export class BrushAlongOverlay implements OverlayView {
       fullBrush: this.fullBrush,
       rinseStepOff: !this.includeRinse,
     };
-    const outcome = HabitBank.completeBrushAlong(save, rewardOptions);
+    // Paid on the day it really ended, so a brush found finished the next morning does not use up
+    // one of today's two full rewards.
+    const now = new Date();
+    const endedAt = new Date(now.getTime() - endedSecAgo * 1000);
+    const outcome = HabitBank.completeBrushAlong(save, {
+      ...rewardOptions,
+      date: now,
+      rewardDay: brushRewardDay(endedAt, now),
+    });
     this.saveSys.save(save);
     this.rewardResult = {
       ...outcome,
@@ -889,6 +914,8 @@ export class BrushAlongOverlay implements OverlayView {
       : rinse
         ? '💜 FLUORIDE RINSE SEAL COMPLETE!'
         : '🦷 100% MIRROR-SMOOTH BASK RESTORED!';
+    // The bonus badge is a number joined to a label. The page translator knows the label but not
+    // the joined line, so the label is put into the player's language here, before the two are joined.
     this.container.innerHTML = `
       <div class="hub-top-bar glass-card ui-interactive row-between">
         <strong style="color:#5eead4;">${banner}</strong>
@@ -911,7 +938,7 @@ export class BrushAlongOverlay implements OverlayView {
         </p>
         <div class="row-wrap" style="justify-content:center;margin-bottom:12px;">
           ${goodTry && (r?.ionsAwarded ?? 0) === 0 ? '' : `<span class="pill-badge">✦ +${r?.ionsAwarded ?? 0} Fluoride Ions</span>`}
-          ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${r.multiplier >= 2 ? (rinse ? 'Floss + Rinse' : 'Floss Bonus') : 'Bonus Step'}</span>` : ''}
+          ${r?.slotType === 'full' && (r?.multiplier ?? 1) > 1 ? `<span class="pill-badge">×${r.multiplier} ${uiTranslator.t(r.multiplier >= 2 ? (rinse ? 'Floss + Rinse' : 'Floss Bonus') : 'Bonus Step')}</span>` : ''}
           ${r?.stampAwarded ? '<span class="pill-badge">🦷 +1 Permanent Habit Stamp</span>' : ''}
           ${r?.slotType === 'full' ? '<span class="pill-badge">📡 +1 Supply Beacon</span><span class="pill-badge">⚡ +1 Overdrive Run</span>' : ''}
           ${r?.slotType === 'capped' && !goodTry ? '<span class="pill-badge">Daily rewards already collected</span>' : ''}

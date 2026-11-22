@@ -193,6 +193,8 @@ function bootstrapMouthLife(): void {
       uiRoot!.innerHTML = '';
     }
     finaleActive = true;
+    // Nothing to touch for up to 90 seconds: keep the phone from dimming and locking mid-show.
+    clock.setShowAwake(true);
     sound.stopScrub();
     sound.setFinaleDucked(true);
     const overlay = new CityFinaleOverlay({
@@ -214,6 +216,7 @@ function bootstrapMouthLife(): void {
         if (finaleOverlay === overlay) finaleOverlay = null;
         finaleActive = false;
         sceneHidden = false;
+        clock.setShowAwake(false);
         sound.setFinaleDucked(false);
         then();
       },
@@ -714,6 +717,7 @@ function bootstrapMouthLife(): void {
       finaleOverlay = null;
       finaleActive = false;
       sceneHidden = false;
+      clock.setShowAwake(false);
       sound.setFinaleDucked(false);
     }
 

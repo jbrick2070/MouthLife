@@ -566,6 +566,42 @@ export const BrushCoachCopy = {
 
 // ---------------------------------------------------------------- tilt slosh
 
+// The three helpers below are for the web only. Browsers disagree about which way a phone's motion
+// numbers point; the native app reads gravity straight from the phone and needs no such step.
+
+/** One g in m/s²: a browser reports motion in m/s², the slosh model below works in g. */
+const MOTION_ONE_G = 9.81;
+
+/**
+ * Which way round a browser signs the phone's motion: +1 or -1, to multiply its numbers by.
+ *
+ * The slosh model wants gravity pointing at the ground, as the native app gets it from the phone
+ * (lower the right edge and gravity reads to the right). iPhone and iPad browsers pass those same
+ * numbers on unchanged: +1. The web standard, which Android browsers follow, reports the opposite
+ * (the push of the hand holding the phone up): -1.
+ *
+ * `browserVendor` is the maker a browser names (`navigator.vendor`). Every browser on an iPhone or
+ * iPad is built on Apple's engine and names Apple, whatever it is called; the others name Google or
+ * nobody. The question an iPhone asks before sharing motion (`requestPermission`) cannot tell them
+ * apart: Chrome has had that question too since version 152.
+ */
+export function deviceMotionSign(browserVendor: string | null | undefined): 1 | -1 {
+  return (browserVendor ?? '').startsWith('Apple') ? 1 : -1;
+}
+
+/**
+ * Gravity alone on one axis, in g, pointing at the ground: the browser's reading with gravity in it
+ * (`includingGravity`, m/s²) less the push of the hand (`userAccel`, m/s²), signed for this browser.
+ */
+export function motionGravityG(sign: 1 | -1, includingGravity: number, userAccel: number): number {
+  return (sign * (includingGravity - userAccel)) / MOTION_ONE_G;
+}
+
+/** The push of the hand on one axis, in g, signed the way the native app feeds the slosh model. */
+export function motionUserAccelG(sign: 1 | -1, userAccel: number): number {
+  return (sign * userAccel) / MOTION_ONE_G;
+}
+
 export interface GyroSloshSnapshot {
   isHandheld: boolean;
   handheldBlend01: number;

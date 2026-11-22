@@ -19,6 +19,25 @@ export function formatLocalDateKey(date = new Date()): string {
 }
 
 /**
+ * How far back a brush may be dated, in seconds: two days, the same limit the native app uses for
+ * a brush arriving late from the Apple Watch (`WatchImportLedger.backdateLimit`).
+ */
+export const BRUSH_BACKDATE_LIMIT_SEC = 2 * 86_400;
+
+/**
+ * The day a brush is paid on: the day it really ended. A brush whose timer ran out behind a hidden
+ * page or a locked phone ended back then, not when the page was opened again. One dated in the
+ * future (a wrong clock) or more than two days old counts as now.
+ */
+export function brushRewardDay(endedAt: Date, now: Date): Date {
+  const endedMs = endedAt.getTime();
+  const nowMs = now.getTime();
+  // Written so that a time that is not a real number also counts as now.
+  const usable = endedMs <= nowMs && endedMs >= nowMs - BRUSH_BACKDATE_LIMIT_SEC * 1000;
+  return usable ? endedAt : now;
+}
+
+/**
  * Fluoride Ions for one full brushing session. Brushing is the base reward; flossing and the
  * fluoride rinse multiply it: one of them x1.5, both x2 (50 / 75 / 100).
  */
@@ -57,6 +76,10 @@ export class HabitBank {
    *
    * When the rinse step is off (`rinseStepOff`: it waits for a grown-up to say the brusher is 6 or
    * older), flossing pays what flossing and rinsing would, so younger children are not paid less.
+   *
+   * `rewardDay` (see `brushRewardDay`): a brush that ended earlier than now counts against the day
+   * it was brushed, as in the native app. Everything else (the companion's polish, clearing out old
+   * days) uses `date`, now.
    */
   static completeBrushAlong(
     save: MouthLifeSaveV2,
@@ -66,6 +89,7 @@ export class HabitBank {
       fullBrush?: boolean;
       rinseStepOff?: boolean;
       date?: Date;
+      rewardDay?: Date;
     }
   ): {
     ionsAwarded: number;
@@ -74,7 +98,7 @@ export class HabitBank {
     fullBrush: boolean;
   } {
     const now = options.date ?? new Date();
-    const dateKey = formatLocalDateKey(now);
+    const dateKey = formatLocalDateKey(options.rewardDay ?? now);
     const slot = save.dailySlotsByDate[dateKey] ?? { fullRewards: 0, tips: 0 };
     const fullBrush = options.fullBrush ?? true;
 

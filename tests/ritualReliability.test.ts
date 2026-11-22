@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClockController } from '../src/engine/ClockController';
@@ -169,6 +171,223 @@ describe('H07: a page that may not use controllers keeps running', () => {
   it('works with no Gamepad API at all', () => {
     vi.stubGlobal('navigator', {});
     expect(readGamepads()).toEqual([]);
+  });
+});
+
+/** The browser's frame timer, run by hand: each queued callback is one frame it would draw. */
+function handFrames() {
+  const queued: Array<(nowMs: number) => void> = [];
+  vi.stubGlobal('requestAnimationFrame', (cb: (nowMs: number) => void) => {
+    queued.push(cb);
+    return queued.length;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  let nowMs = -1;
+  /** Runs the next frame, 1/60 s after the last. False when no frame was asked for. */
+  const runFrame = (): boolean => {
+    const cb = queued.shift();
+    if (!cb) return false;
+    if (nowMs < 0) nowMs = performance.now();
+    nowMs += 1000 / 60;
+    cb(nowMs);
+    return true;
+  };
+  return { runFrame, pending: () => queued.length };
+}
+
+describe('W5: one bad frame does not end the frame loop, or the brushing timer with it', () => {
+  it('a frame that throws leaves the next one asked for, and the timer keeps counting', () => {
+    const { runFrame, pending } = handFrames();
+    const clock = new ClockController(new EventBus());
+    let renders = 0;
+    let failNext = false;
+    clock.setCallbacks(
+      () => {},
+      () => {
+        renders++;
+        if (failNext) {
+          failNext = false;
+          throw new Error('one bad frame');
+        }
+      }
+    );
+    clock.start();
+    clock.startPacer();
+    for (let i = 0; i < 60; i++) expect(runFrame()).toBe(true);
+    const before = clock.getPacerElapsedSec();
+    expect(before).toBeGreaterThan(0.9);
+
+    failNext = true;
+    expect(() => runFrame()).toThrow('one bad frame');
+    // The browser reports the error and carries on, because the next frame was already asked for.
+    expect(pending()).toBe(1);
+    for (let i = 0; i < 60; i++) expect(runFrame()).toBe(true);
+    expect(renders).toBe(121);
+    expect(clock.getPacerElapsedSec()).toBeCloseTo(before + 61 / 60, 3);
+  });
+
+  it('a tick listener that throws once does not silence the ticks after it', () => {
+    const { runFrame, pending } = handFrames();
+    const bus = new EventBus();
+    const clock = new ClockController(bus);
+    let ticks = 0;
+    bus.on('pacer:tick', () => {
+      ticks++;
+      if (ticks === 3) throw new Error('listener failed once');
+    });
+    clock.start();
+    clock.startPacer();
+    for (let i = 0; i < 120; i++) {
+      try {
+        runFrame();
+      } catch {
+        // The browser would report this one frame's error and go on to the next frame.
+      }
+    }
+    expect(pending()).toBe(1);
+    // a tick every tenth of a second, for two seconds
+    expect(ticks).toBeGreaterThanOrEqual(19);
+    expect(clock.getPacerElapsedSec()).toBeCloseTo(2, 1);
+  });
+});
+
+/**
+ * A stand-in for the browser's screen wake lock: it counts what was asked for and what is still
+ * held, and can let go of everything the way a browser does when the page is hidden.
+ */
+function fakeWakeLock() {
+  interface Lock {
+    released: boolean;
+    release(): Promise<void>;
+    addEventListener(type: 'release', cb: () => void): void;
+    drop(): void;
+  }
+  const locks: Lock[] = [];
+  vi.stubGlobal('navigator', {
+    wakeLock: {
+      request: (): Promise<Lock> => {
+        let onRelease: (() => void) | null = null;
+        const lock: Lock = {
+          released: false,
+          release: () => {
+            lock.drop();
+            return Promise.resolve();
+          },
+          addEventListener: (_type, cb) => {
+            onRelease = cb;
+          },
+          drop: () => {
+            if (lock.released) return;
+            lock.released = true;
+            onRelease?.();
+          },
+        };
+        locks.push(lock);
+        return Promise.resolve(lock);
+      },
+    },
+  });
+  return {
+    asked: () => locks.length,
+    held: () => locks.filter((l) => !l.released).length,
+    pageHidden: () => locks.forEach((l) => l.drop()),
+  };
+}
+
+/** Lets the browser's answers to wake-lock requests arrive. */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('W14: a city finale keeps the screen awake', () => {
+  it('holds the screen on from the start of the show to its end', async () => {
+    const wake = fakeWakeLock();
+    const clock = new ClockController(new EventBus());
+    clock.setShowAwake(true);
+    await settle();
+    expect(wake.asked()).toBe(1);
+    expect(wake.held()).toBe(1);
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(0);
+  });
+
+  it('asks again when the page comes back into view mid-show, and not once the show is over', async () => {
+    const wake = fakeWakeLock();
+    const clock = new ClockController(new EventBus());
+    clock.setShowAwake(true);
+    await settle();
+    clock.noteHidden(1_800_000_000_000);
+    wake.pageHidden();
+    expect(wake.held()).toBe(0);
+    clock.noteVisible(1_800_000_020_000, 20_000);
+    await settle();
+    expect(wake.asked()).toBe(2);
+    expect(wake.held()).toBe(1);
+
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(0);
+    clock.noteHidden(1_800_000_030_000);
+    clock.noteVisible(1_800_000_040_000, 40_000);
+    await settle();
+    expect(wake.asked()).toBe(2);
+  });
+
+  it('a brush that pauses or ends during a show does not take the show’s lock', async () => {
+    const wake = fakeWakeLock();
+    const clock = new ClockController(new EventBus());
+    clock.setShowAwake(true);
+    clock.startPacer();
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.setPacerPaused(true);
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.stopPacer();
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(0);
+  });
+
+  it('the show ending leaves a running brush its lock, but not a paused one', async () => {
+    const wake = fakeWakeLock();
+    const clock = new ClockController(new EventBus());
+    clock.startPacer();
+    clock.setShowAwake(true);
+    await settle();
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.stopPacer();
+    await settle();
+    expect(wake.held()).toBe(0);
+
+    clock.startPacer();
+    clock.setPacerPaused(true);
+    await settle();
+    expect(wake.held()).toBe(0);
+    clock.setShowAwake(true);
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(0);
+  });
+
+  it('the game turns it on when a finale starts and off on both ways out of one', () => {
+    const main = readFileSync(join(__dirname, '..', 'src/main.ts'), 'utf8').replace(/\r\n/g, '\n');
+    // On: straight after the finale is marked as playing.
+    expect(main).toMatch(/finaleActive = true;\n(\s*\/\/[^\n]*\n)*\s*clock\.setShowAwake\(true\);/);
+    // Off: when the show ends by itself or is skipped...
+    const onDone = /onDone: \(\) => \{[\s\S]*?\n {6}\},/.exec(main)?.[0] ?? '';
+    expect(onDone).toContain('overlay.dispose();');
+    expect(onDone).toContain('clock.setShowAwake(false);');
+    // ...and when another screen takes over while it plays.
+    const takenOver = /if \(finaleOverlay\) \{\n\s*finaleOverlay\.dispose\(\);[\s\S]*?\n {4}\}/.exec(main)?.[0] ?? '';
+    expect(takenOver).toContain('clock.setShowAwake(false);');
+    expect(main.match(/clock\.setShowAwake\(true\)/g)).toHaveLength(1);
+    expect(main.match(/clock\.setShowAwake\(false\)/g)).toHaveLength(2);
   });
 });
 

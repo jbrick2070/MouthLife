@@ -64,8 +64,10 @@ export class ClockController {
     }
     this.lastNowMs = performance.now();
     const loop = (nowMs: number) => {
-      this.tickFrame(nowMs);
+      // Ask for the next frame before running this one. If anything in this frame fails (a browser
+      // refusing some feature, as in H07), the picture and the 2-minute brushing timer still go on.
       this.rafId = requestAnimationFrame(loop);
+      this.tickFrame(nowMs);
     };
     this.rafId = requestAnimationFrame(loop);
   }
@@ -104,6 +106,23 @@ export class ClockController {
       this.pacerRawSec += Math.max(0, wallNowMs - hiddenAt) / 1000;
       this.lastEmittedDecisecond = -1;
       this.requestScreenWakeLock();
+    }
+    // The browser lets go of the wake lock whenever the page is hidden, so a finale that is still
+    // playing asks for it again.
+    if (this.showAwake) this.requestScreenWakeLock();
+  }
+
+  /**
+   * A city's finale starts (on) or ends (off). The show plays by itself for 30 to 90 seconds with
+   * nothing to touch, so without this the phone would dim and lock in the middle of it. Off lets
+   * the screen go again, unless a brush is running and still needs it.
+   */
+  setShowAwake(on: boolean): void {
+    this.showAwake = on;
+    if (on) {
+      this.requestScreenWakeLock();
+    } else if (!this.pacerActive || this.pacerPausedManual) {
+      this.releaseScreenWakeLock();
     }
   }
 
@@ -210,9 +229,14 @@ export class ClockController {
     return pacerStageEndSec(this.pacerStage, this.pacerMouthwashDurationSec);
   }
 
-  /** One screen wake lock, held while the pacer runs and let go when it pauses or stops. */
+  /**
+   * One screen wake lock, held while the pacer runs and let go when it pauses or stops. A city's
+   * finale holds the same lock for as long as it plays (`showAwake`).
+   */
   private wakeLock: { release(): Promise<void>; addEventListener?: (type: 'release', cb: () => void) => void } | null = null;
   private wakeWanted = false;
+  /** A finale is playing: the screen stays awake whatever the pacer does meanwhile. */
+  private showAwake = false;
 
   private requestScreenWakeLock(): void {
     this.wakeWanted = true;
@@ -234,6 +258,8 @@ export class ClockController {
   }
 
   private releaseScreenWakeLock(): void {
+    // A finale still needs the screen: a brush pausing or ending must not take the lock from it.
+    if (this.showAwake) return;
     this.wakeWanted = false;
     const lock = this.wakeLock;
     this.wakeLock = null;
