@@ -36,27 +36,130 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  /* No pinch zoom and no double-tap zoom anywhere on the page; sheets still scroll. iPhone
-     browsers ignore the viewport's user-scalable=no, and a zoomed page hides the top bar and the
-     thumbstick with no way back (see src/engine/zoomGuard.ts). */
+  /* An iPhone turned on its side enlarges some blocks of text by itself: every size here is set
+     on purpose, so it must not. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* No pinch zoom and no double-tap zoom on the page; sheets still scroll. iPhone browsers ignore
+     the viewport's user-scalable=no, and a zoomed page hides the top bar and the thumbstick
+     (see src/engine/zoomGuard.ts). */
   touch-action: pan-x pan-y;
 }
 
-/* A quick second tap on a button (Scan, Surge, a menu) must never zoom the page. */
-button,
-.btn,
-.ui-interactive,
-[role='button'] {
+/* An iPhone starts again from "any gesture" inside everything that scrolls, so each scroller says
+   the page's rule again; without it two fingers on a sheet, a card or Home's deck still pinch the
+   page. A new scroller must be added here (tests/zoomGuard.test.ts looks for every one). */
+.city-strip,
+.cosmic-card,
+.cosmic-beat-copy,
+.modal-sheet,
+.hub-bottom-deck,
+.report-scroll-body {
+  touch-action: pan-x pan-y;
+}
+
+/* A quick second tap on a button (Scan, Surge, a menu) must never zoom the page. :where() keeps
+   this the weakest rule in the file, so the thumbstick, the Floss ring and anything else with a
+   touch-action of its own win whatever order the rules come in. */
+:where(button, .btn, [role='button']) {
   touch-action: manipulation;
 }
 
-/* The way back. If the page is zoomed in anyway, every touch may pinch and pan the page again, the
-   play field, the thumbstick and the Floss ring included, until it is back to full size
-   (src/engine/zoomGuard.ts puts this class on and takes it off). */
+/* The way back. If the page is zoomed in anyway, every touch is the browser's again, so two
+   fingers pinch the page back and one finger pans it, from anywhere: the play field, the
+   thumbstick and the Floss ring included (src/engine/zoomGuard.ts puts this class on and takes it
+   off). "manipulation", not "auto": a double tap must not zoom it further. */
 html.page-zoomed,
 html.page-zoomed body,
 html.page-zoomed * {
   touch-action: manipulation !important;
+}
+
+/* The picture that says "pinch", with no words: two fingertips closing, drawn in the middle of
+   what the player can see (zoomGuard.ts sets --zx, --zy and --zk, because a fixed element stays
+   with the page and not with the part of it that is visible). */
+.zoom-hint {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9500;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 2px solid rgba(94, 234, 212, 0.75);
+  background: rgba(3, 12, 23, 0.9);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transform-origin: 0 0;
+  transform: translate(var(--zx, 50vw), var(--zy, 50vh)) scale(var(--zk, 1)) translate(-50%, -50%);
+}
+.zoom-hint[hidden] {
+  display: none;
+}
+/* The two arrowheads, pointing at the middle. */
+.zoom-hint::before,
+.zoom-hint::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 0 solid rgba(226, 232, 240, 0.9);
+}
+.zoom-hint::before {
+  left: 44px;
+  top: 44px;
+  border-right-width: 4px;
+  border-bottom-width: 4px;
+}
+.zoom-hint::after {
+  right: 44px;
+  bottom: 44px;
+  border-left-width: 4px;
+  border-top-width: 4px;
+}
+/* The two fingertips. */
+.zoom-hint span {
+  --dx: -36px;
+  --dy: -36px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 0 5px rgba(94, 234, 212, 0.25);
+  transform: translate(var(--dx), var(--dy));
+  animation: zoomHintPinch 1.5s ease-in-out infinite;
+}
+.zoom-hint span + span {
+  --dx: 36px;
+  --dy: 36px;
+}
+@keyframes zoomHintPinch {
+  0%,
+  12% {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 1;
+  }
+  68%,
+  84% {
+    transform: translate(calc(var(--dx) * 0.42), calc(var(--dy) * 0.42));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--dx) * 0.42), calc(var(--dy) * 0.42));
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zoom-hint span {
+    animation: none;
+  }
+}
+.reduced-motion .zoom-hint span {
+  animation: none;
 }
 
 input,
@@ -2766,6 +2869,8 @@ textarea:focus-visible {
   overflow: hidden;
   outline: none;
   pointer-events: auto;
+  /* A show: nothing here scrolls, so no gesture on it is the browser's (see the top of this file). */
+  touch-action: none;
 }
 .finale-canvas {
   position: absolute;

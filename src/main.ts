@@ -67,7 +67,11 @@ declare global {
 }
 
 function bootstrapMouthLife(): void {
-  installZoomGuard();
+  // `?zoomTest` on the development server leaves the page zoomable, so the way back out of a zoom
+  // can be tried on a phone. A published build never does.
+  const zoomGuard = installZoomGuard(window, {
+    allowZoomForTesting: import.meta.env.DEV && new URLSearchParams(window.location.search).has('zoomTest'),
+  });
   const canvas = document.getElementById('mouthlife-canvas') as HTMLCanvasElement | null;
   const uiRoot = document.getElementById('ui-root') as HTMLElement | null;
   if (!canvas || !uiRoot) return;
@@ -423,6 +427,13 @@ function bootstrapMouthLife(): void {
       activeTelemetryHud.setPaused(true);
     }
   });
+  // The same when the page is found zoomed in: the top bar and the thumbstick may be off the
+  // screen, so the clock must not run. zoomGuard.ts shows how to pinch back; the player resumes.
+  zoomGuard.onZoomedIn = () => {
+    if ((currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') && activeTelemetryHud && !activeTelemetryHud.isPaused()) {
+      activeTelemetryHud.setPaused(true);
+    }
+  };
 
   bus.on('mutans:popped', ({ pos }) => {
     sound.playMutansPop();
@@ -880,6 +891,8 @@ function bootstrapMouthLife(): void {
     }
 
     activeOverlay?.mount(uiRoot!);
+    // A stage must not start running on a page that is still zoomed in (see onZoomedIn above).
+    if ((next === 'ARCADE' || next === 'PULP_RESCUE') && zoomGuard.isZoomed()) activeTelemetryHud?.setPaused(true);
 
     // Restore keyboard focus cleanly to the logical Hub trigger when returning from a mode/sheet.
     if (next === 'HUB' && prev !== 'HUB') {

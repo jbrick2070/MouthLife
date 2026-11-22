@@ -20,6 +20,7 @@ import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { SceneManager } from '../engine/render/SceneManager';
 import type { WorldSession } from '../engine/sim/WorldSession';
 import type { OverlayView, QualityTier, Vec2 } from '../engine/types';
+import { PAGE_ZOOMED_CLASS } from '../engine/zoomGuard';
 import {
   bindBottomSheetSwipeClose,
   buildTimerPill,
@@ -1534,7 +1535,9 @@ export class TelemetryHudOverlay implements OverlayView {
     this.container.appendChild(sheet);
     this.pauseSheetEl = sheet;
     sheet.addEventListener('click', (e) => {
-      if (e.target === sheet) this.setPaused(false);
+      // Zoomed in, the dim area is where two fingers land to pinch the page back: a stray tap
+      // there must not start the clock again. Resume and the X still do.
+      if (e.target === sheet && !document.documentElement.classList.contains(PAGE_ZOOMED_CLASS)) this.setPaused(false);
     });
     const q = <T extends HTMLElement>(sel: string) => sheet.querySelector<T>(sel);
     bindBottomSheetSwipeClose(
