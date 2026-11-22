@@ -1202,6 +1202,38 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(stillHug.fold, 1)
         XCTAssertEqual(stillHug.squeeze, 0)
         XCTAssertEqual(CityFinale.endingHug(E.wink + 1.9, reducedMotion: true).hearts, 0.5, accuracy: 1e-6)
+        // L04: the hug lasts 18 s: a squeeze, happy eyes and a puff of hearts at each beat, breathing
+        // in between, still for the last two seconds; a goodbye wink for all gold.
+        XCTAssertEqual(E.end - E.face, 18)
+        XCTAssertEqual(E.squeezes.first, E.wink + 1.5)
+        for at in E.squeezes {
+            XCTAssertEqual(CityFinale.endingHug(at + 0.225, reducedMotion: false).squeeze, 1, accuracy: 1e-6, "squeeze at \(at)")
+            XCTAssertTrue(CityFinale.endingHug(at, reducedMotion: false).happyEyes)
+            XCTAssertFalse(CityFinale.endingHug(at + 0.9, reducedMotion: false).happyEyes)
+            let puff = (0..<E.hearts).filter { CityFinale.endingHeart($0, t: at + 1.2, reducedMotion: false).fade > 0.01 }
+            XCTAssertGreaterThanOrEqual(puff.count, 6, "hearts after \(at)")
+        }
+        // the first 60 s hug as before (one squeeze at 57); then it breathes, and is still at the end
+        var early = E.face
+        while early < E.songEnd {
+            XCTAssertEqual(CityFinale.endingHug(early, reducedMotion: false).squeeze, CityFinale.nod(early, at: E.squeezes[0], reducedMotion: false), "t=\(early)")
+            early += 0.05
+        }
+        XCTAssertEqual(CityFinale.endingHug(63.0, reducedMotion: false).squeeze, 0.3, accuracy: 1e-9)
+        XCTAssertEqual(CityFinale.endingHug(67.0, reducedMotion: false).squeeze, 0.3, accuracy: 1e-9)
+        XCTAssertEqual(CityFinale.endingHug(E.end - 1.0, reducedMotion: false).squeeze, 0)
+        XCTAssertTrue((0..<E.hearts).allSatisfy { CityFinale.endingHeart($0, t: E.end - 0.5, reducedMotion: false).fade == 0 })
+        XCTAssertEqual((0..<E.hearts).filter { CityFinale.endingHeart($0, t: E.end - 0.5, reducedMotion: true).fade > 0 }.count, E.heartsPerSqueeze)
+        XCTAssertTrue(CityFinale.endingFace(E.goodbyeWink + 0.1, allGold: true).wink)
+        XCTAssertFalse(CityFinale.endingFace(E.goodbyeWink + 0.1, allGold: false).wink)
+        // the lullaby under the long hug plays over a recorded song; under the song only the effects do
+        let endingScore = CityFinale.endingNotes(plans, allGold: false)
+        XCTAssertGreaterThanOrEqual(endingScore.filter { $0.t >= E.songEnd && $0.voice == .celesta }.count, 12)
+        for n in endingScore {
+            XCTAssertEqual(CityFinale.endingNotePlaysOverSong(n), n.t >= E.songEnd || CityFinale.effectVoices.contains(n.voice))
+            XCTAssertLessThanOrEqual(n.t + n.dur, E.end + 1e-9, "\(n.voice) at \(n.t)")
+            if n.t >= E.songEnd { XCTAssertEqual((n.t * 2).truncatingRemainder(dividingBy: 1), 0, accuracy: 1e-9, "lullaby \(n.voice) at \(n.t) off the half-beat grid") }
+        }
 
         // The campaign's cities line up with the worlds, and each grade has its finish.
         for (i, host) in CityFinale.hostIds.enumerated() {
@@ -1214,7 +1246,8 @@ final class MouthLifeCoreTests: XCTestCase {
 
         // Exact lengths for recorded songs, and the climb: each city to its own ledge, the last to the top.
         XCTAssertEqual(CityFinale.end, 30)
-        XCTAssertEqual(CityFinale.Ending.end, 60)
+        XCTAssertEqual(CityFinale.Ending.end, 72)
+        XCTAssertEqual(CityFinale.Ending.songEnd, 60)
         for i in 0..<CityFinale.campaignPieces {
             let p = CityFinale.probe(CityFinale.portalLift - 0.01, reducedMotion: false, climbTo: i, summit: false)
             let l = CityFinale.ledge(i, t: CityFinale.portalLift - 0.01, reducedMotion: false)

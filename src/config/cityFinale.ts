@@ -19,11 +19,12 @@
  *             is not finished yet. The city that completes the set climbs all the way to the top.
  *   liftoff   the probe flies off, and the score follows
  *
- * Exact lengths, so a recorded song can be made to fit: a city's finale is 30 s, the ending 60 s,
- * and every cue sits on a 120 BPM grid (a 4/4 bar every 2 s): 15 bars a city, 30 for the ending.
+ * Exact lengths, so a recorded song can be made to fit: a city's finale is 30 s, the ending 72 s,
+ * and every cue sits on a 120 BPM grid (a 4/4 bar every 2 s): 15 bars a city, 36 for the ending.
  * A song dropped into the music folder (FINALE_TRACK_CANDIDATES) plays in place of the score's
  * instruments, starting the moment the last zone seals; the score's effects (booms, whistles,
- * sparkles) still play over it.
+ * sparkles) still play over it. The ending's song is written to 60 s (ENDING_TIMES.songEnd): the
+ * last 12 s are the Golden Molar's long hug, under the game's own music-box lullaby.
  *
  * A lower first molar has five cusps: one per city. The finish of each piece follows the city's best
  * grade, so a replay can turn a pearl piece silver or gold. Sealing all five plays the ending (see
@@ -94,9 +95,23 @@ export const ENDING_TIMES = {
   finaleStart: 52.0,
   face: 54.0,
   wink: 55.5,
-  end: 60.0,
+  /** A recorded ending song is written to end here; the score's own lullaby carries the rest. */
+  songEnd: 60.0,
+  /** All gold: the molar winks once more, to say goodbye. */
+  goodbyeWink: 69.0,
+  /** The hug runs from the face to here: 18 s. */
+  end: 72.0,
   skipAfter: 1.0,
 } as const;
+
+/** The hug's gentle squeezes (seconds into the ending): one just after the wink, then every two bars. */
+export const ENDING_SQUEEZES: readonly number[] = [57.0, 61.0, 65.0];
+/** Each squeeze sends up a puff of this many hearts. */
+export const ENDING_HEARTS_PER_SQUEEZE = 12;
+/** Every heart the hug sends up. */
+export const ENDING_HEARTS = ENDING_SQUEEZES.length * ENDING_HEARTS_PER_SQUEEZE;
+/** How long one heart takes to float up and fade. */
+export const ENDING_HEART_LIFE = 2.4;
 
 /**
  * Songs for the finales, by file name without extension, from the shared music folder
@@ -292,8 +307,10 @@ export function finaleNod(t: number, at: number, reducedMotion: boolean): number
 
 /**
  * "A hug for you" at the very end (an idea from Codex Astra 6.2): once its face is on, the Golden
- * Molar opens its arms wide to the child, folds them into a hug on the wink, gives one gentle squeeze
- * with happy eyes, and hearts float up. With Reduce Motion the arms fade in already hugging.
+ * Molar opens its arms wide to the child and folds them into a hug on the wink. Then it holds the hug
+ * for the rest of the ending (18 s from the face): a gentle squeeze with happy eyes and a puff of
+ * hearts at each of ENDING_SQUEEZES, breathing softly in between. With Reduce Motion the arms fade in
+ * already hugging and nothing moves.
  */
 export function endingHug(
   t: number,
@@ -310,14 +327,39 @@ export function endingHug(
       hearts: smooth01((t - (E.wink + 1.5)) / 0.8),
     };
   }
+  // between squeezes the hug breathes: a soft pulse once a bar, from where a recorded song ends (so
+  // the first 60 s are as they always were) until two seconds before the end
+  const breathFrom = E.songEnd;
+  const breathTo = E.end - 2.0;
+  const breath = Math.sin((Math.PI * (t - breathFrom)) / 2);
+  let squeeze = t > breathFrom && t < breathTo ? 0.3 * breath * breath : 0;
+  let happyEyes = false;
+  for (const at of ENDING_SQUEEZES) {
+    squeeze = Math.max(squeeze, finaleNod(t, at, false));
+    if (t >= at - 0.7 && t < at + 0.9) happyEyes = true;
+  }
   return {
     arms: smooth01((t - (E.face + 0.2)) / 0.4),
     open: smooth01((t - (E.face + 0.2)) / 0.7),
     fold: smooth01((t - E.wink) / 0.7),
-    squeeze: finaleNod(t, E.wink + 1.5, false),
-    happyEyes: t >= E.wink + 0.8 && t < E.wink + 2.4,
-    hearts: smooth01((t - (E.wink + 1.5)) / 0.4),
+    squeeze,
+    happyEyes,
+    hearts: smooth01((t - ENDING_SQUEEZES[0]) / 0.4),
   };
+}
+
+/**
+ * Heart `k` (0 to ENDING_HEARTS - 1) of the hug: how long it has been floating up and how visible it
+ * is (0..1). Each squeeze sends up a puff of ENDING_HEARTS_PER_SQUEEZE, 0.22 s apart. With Reduce
+ * Motion only the first puff shows, standing still at fixed heights.
+ */
+export function endingHeart(k: number, t: number, reducedMotion: boolean): { age: number; fade: number } {
+  const puff = Math.floor(k / ENDING_HEARTS_PER_SQUEEZE);
+  const j = k % ENDING_HEARTS_PER_SQUEEZE;
+  if (reducedMotion) return { age: 0.9 + (j % 4) * 0.25, fade: puff === 0 ? 1 : 0 };
+  const age = t - (ENDING_SQUEEZES[puff] + j * 0.22);
+  if (age <= 0) return { age, fade: 0 };
+  return { age, fade: Math.min(1, age / 0.25) * Math.max(0, 1 - age / ENDING_HEART_LIFE) };
 }
 
 /** How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1). */
@@ -1168,10 +1210,11 @@ export function endingEmblemOrbit(i: number, t: number, reducedMotion: boolean):
   return { x: Math.cos(angle) * 1.05, y: 0.05 + Math.sin(angle) * 0.82, alpha };
 }
 
-/** The molar smiles at everyone who finishes; gold in every city also earns the wink. */
+/** The molar smiles at everyone who finishes; gold in every city also earns the wink, and a goodbye wink. */
 export function endingFace(t: number, allGold: boolean): { alpha: number; wink: boolean } {
   const E = ENDING_TIMES;
-  return { alpha: smooth01((t - E.face) / 0.5), wink: allGold && t >= E.wink && t < E.wink + 0.35 };
+  const winking = (at: number): boolean => t >= at && t < at + 0.35;
+  return { alpha: smooth01((t - E.face) / 0.5), wink: allGold && (winking(E.wink) || winking(E.goodbyeWink)) };
 }
 
 /** The ending's own fireworks, in stage space, round the finished molar. */
@@ -1261,10 +1304,36 @@ export function endingNotes(plans: readonly CityFinalePlan[], allGold: boolean):
     add(E.wink, 'sparkle', home, 0.9, 0.55);
     add(E.wink + 0.05, 'kalimba', home + 24, 0.4, 0.55);
     add(E.wink + 0.2, 'kalimba', home + 31, 0.6, 0.55);
+    add(E.goodbyeWink, 'sparkle', home, 0.9, 0.45);
+    add(E.goodbyeWink + 0.05, 'kalimba', home + 24, 0.4, 0.45);
+    add(E.goodbyeWink + 0.2, 'kalimba', home + 31, 0.6, 0.45);
   }
-  for (const iv of [0, 4, 7, 11, 14]) add(E.end - 2.0, 'rhodes', home + iv, 1.9, 0.45);
-  add(E.end - 2.0, 'pad', home - 12, 2.0, 0.35);
+  // where a recorded song ends: the theme resolves
+  for (const iv of [0, 4, 7, 11, 14]) add(E.songEnd - 2.0, 'rhodes', home + iv, 1.9, 0.45);
+  add(E.songEnd - 2.0, 'pad', home - 12, 2.0, 0.35);
+  // the long hug (bars 31-36): a music-box lullaby, which plays after a recorded song too
+  // (endingNotePlaysOverSong): [seconds after songEnd, steps above home + 12, length]
+  const lullaby: readonly (readonly [number, number, number])[] = [
+    [0, 16, 0.5], [0.5, 12, 0.5], [1, 7, 1], [2, 9, 0.5], [2.5, 7, 0.5], [3, 4, 1],
+    [4, 16, 0.5], [4.5, 12, 0.5], [5, 7, 1], [6, 5, 0.5], [6.5, 4, 0.5], [7, 2, 1],
+    [8, 4, 0.5], [8.5, 7, 0.5], [9, 12, 1],
+  ];
+  for (const [at, step, dur] of lullaby) add(E.songEnd + at, 'celesta', home + 12 + step, dur, 0.32);
+  [[0, 4, 7], [5, 9, 12], [0, 4, 7], [7, 11, 14], [0, 4, 7]].forEach((chord, k) => {
+    for (const iv of chord) add(E.songEnd + 2 * k, 'pad', home + iv, 2.0, 0.2);
+  });
+  for (const at of ENDING_SQUEEZES) if (at >= E.songEnd) add(at, 'kalimba', home + 24, 0.5, 0.3);
+  for (const iv of [0, 4, 7, 11, 14]) add(E.end - 2.0, 'rhodes', home + iv, 1.9, 0.4);
+  add(E.end - 2.0, 'pad', home - 12, 2.0, 0.3);
   return notes.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Whether an ending note still plays over a recorded ending song: the show's sound effects, and
+ * everything from ENDING_TIMES.songEnd on, where the song has finished and the lullaby takes over.
+ */
+export function endingNotePlaysOverSong(note: FinaleNote): boolean {
+  return FINALE_EFFECT_VOICES.includes(note.voice) || note.t >= ENDING_TIMES.songEnd;
 }
 
 // ------------------------------------------------------------------ parity
@@ -1366,11 +1435,12 @@ export function endingChecksum(plans: readonly CityFinalePlan[], allGold: boolea
     });
     for (const d of endingGoldRain(t, 1.6)) sum += d.x + d.y * 1.3 + d.alpha;
   }
-  // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeeze, the eyes, the hearts
+  // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeezes, the eyes, the hearts
   for (let t = ENDING_TIMES.face; t <= ENDING_TIMES.end; t += 0.1) {
     const hug = endingHug(t, reducedMotion);
     sum += hug.arms * 1.3 + hug.open * 1.7 + hug.fold * 1.9;
     sum += hug.squeeze * 2.3 + (hug.happyEyes ? 1 : 0) + hug.hearts * 2.9;
+    for (let k = 0; k < ENDING_HEARTS; k++) sum += endingHeart(k, t, reducedMotion).fade * 0.3;
   }
   sum += sumNotes(endingNotes(plans, allGold)) * 0.001;
   return Math.round(sum * 1000) / 1000;

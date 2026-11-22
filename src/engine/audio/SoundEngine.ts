@@ -613,13 +613,10 @@ export class SoundEngine {
       src.connect(gain);
       gain.connect(this.finaleBus);
       src.start(ctx.currentTime + 0.01, Math.max(0, offset));
+      // Kept after the song finishes, until the show stops it: a show with its own song keeps the
+      // game's music silent to the end, as the native app does. (The ending's song is 60 s of a
+      // 72 s show; the game's lullaby plays alone under the hug.)
       this.finaleVoice = { src, gain };
-      src.onended = () => {
-        if (this.finaleVoice?.src === src) {
-          this.finaleVoice = null;
-          this.applyPlaybackState();
-        }
-      };
       this.applyPlaybackState();
     });
   }

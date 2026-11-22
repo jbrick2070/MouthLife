@@ -18,6 +18,7 @@ import {
   CAMPAIGN_PIECES,
   ENDING_BURSTS,
   ENDING_BURST_SCALE,
+  ENDING_HEARTS,
   ENDING_TIMES,
   FINALE_EFFECT_VOICES,
   FINALE_EMBLEM,
@@ -30,11 +31,13 @@ import {
   PORTAL_STAGE,
   endingCityBubbles,
   endingCredit,
+  endingHeart,
   endingHug,
   endingEmblemOrbit,
   endingFace,
   endingGoldRain,
   endingMolarPlace,
+  endingNotePlaysOverSong,
   endingNotes,
   endingPiece,
   finaleBackdropDim,
@@ -229,8 +232,9 @@ type FinalePart = 'city' | 'ending';
 
 /**
  * The show's score: the city's notes (if any), then the ending's (if any) shifted to start where the
- * city part ends. A part whose recorded song is ready keeps only the score's sound effects; a part
- * without one (offline, still loading, none bundled) keeps the whole synth score.
+ * city part ends. A part whose recorded song is ready keeps only the score's sound effects (and the
+ * ending also its lullaby, which starts where the song ends); a part without one (offline, still
+ * loading, none bundled) keeps the whole synth score.
  */
 export function finaleScore(
   city: { plan: CityFinalePlan; worldIndex: number } | null,
@@ -239,12 +243,16 @@ export function finaleScore(
   reducedMotion: boolean,
   songReady: Readonly<Record<FinalePart, boolean>>
 ): FinaleNote[] {
-  const effectsOnly = (part: FinalePart) => (note: FinaleNote) => !songReady[part] || FINALE_EFFECT_VOICES.includes(note.voice);
   const notes: FinaleNote[] = [];
-  if (city) notes.push(...finaleNotes(city.plan, finishes, city.worldIndex, reducedMotion).filter(effectsOnly('city')));
+  if (city) {
+    const cityNotes = finaleNotes(city.plan, finishes, city.worldIndex, reducedMotion);
+    notes.push(...cityNotes.filter((n) => !songReady.city || FINALE_EFFECT_VOICES.includes(n.voice)));
+  }
   const offset = city ? FINALE_TIMES.end : 0;
   if (ending) {
-    for (const n of endingNotes(ending.plans, ending.allGold).filter(effectsOnly('ending'))) notes.push({ ...n, t: n.t + offset });
+    for (const n of endingNotes(ending.plans, ending.allGold)) {
+      if (!songReady.ending || endingNotePlaysOverSong(n)) notes.push({ ...n, t: n.t + offset });
+    }
   }
   return notes.sort((a, b) => a.t - b.t);
 }
@@ -1744,19 +1752,17 @@ export class CityFinaleOverlay implements OverlayView {
     ctx.globalAlpha = 1;
   }
 
-  /** Little hearts floating up from the hug, swaying as they rise (still, with Reduce Motion). */
+  /** Little hearts floating up from the hug, a puff at each squeeze, swaying as they rise (still, with Reduce Motion). */
   private paintHearts(ctx: CanvasRenderingContext2D, x: number, y: number, u: number, t: number, amount: number): void {
     if (amount <= 0.01 || u < 4) return;
     const d = this.dpr;
     const rm = this.opts.reducedMotion;
     const colors = ['#fb7185', '#f472b6', '#fde047', '#fda4af'];
-    for (let k = 0; k < 12; k++) {
-      const start = ENDING_TIMES.wink + 1.5 + k * 0.22;
-      const age = rm ? 0.9 + (k % 4) * 0.25 : t - start;
-      if (age <= 0) continue;
-      const life = rm ? 1 : 2.4;
-      const fade = rm ? amount : Math.min(1, age / 0.25) * Math.max(0, 1 - age / life);
-      if (fade <= 0.01) continue;
+    for (let k = 0; k < ENDING_HEARTS; k++) {
+      const heart = endingHeart(k, t, rm);
+      if (heart.fade <= 0.01) continue;
+      const age = heart.age;
+      const fade = rm ? amount : heart.fade;
       const hx = x + (finaleHash(k, 71) - 0.5) * 3.0 * u + (rm ? 0 : Math.sin(age * 3 + k) * 0.12 * u);
       const hy = y + 0.3 * u - age * 0.95 * u;
       const s = u * (0.14 + 0.08 * finaleHash(k, 73));

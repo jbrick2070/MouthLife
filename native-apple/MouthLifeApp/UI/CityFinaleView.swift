@@ -170,7 +170,8 @@ final class FinaleClock {
         worldIndex = request.worldIndex
         cityLength = hasCity ? CityFinale.end : 0
         total = cityLength + (hasEnding ? CityFinale.Ending.end : 0)
-        // With a recorded song for a part, only the score's sound effects play over it.
+        // With a recorded song for a part, only the score's sound effects play over it (and, in the
+        // ending, the lullaby that starts where the song ends).
         let cityHasTrack = hasCity && NativeSoundEngine.shared.hasFinaleTrack(request.worldIndex)
         let endingHasTrack = hasEnding && NativeSoundEngine.shared.hasFinaleTrack(-1)
         var all: [FinaleNote] = []
@@ -182,7 +183,7 @@ final class FinaleClock {
             let allGold = request.finishes.count == CityFinale.campaignPieces && request.finishes.allSatisfy { $0 == .gold }
             let offset = cityLength
             all += CityFinale.endingNotes(CityFinale.campaignPlans(), allGold: allGold)
-                .filter { !endingHasTrack || CityFinale.effectVoices.contains($0.voice) }
+                .filter { !endingHasTrack || CityFinale.endingNotePlaysOverSong($0) }
                 .map { FinaleNote(t: $0.t + offset, voice: $0.voice, midi: $0.midi, dur: $0.dur, vel: $0.vel, pan: $0.pan) }
         }
         notes = all.enumerated().sorted { a, b in a.element.t == b.element.t ? a.offset < b.offset : a.element.t < b.element.t }.map(\.element)
@@ -1393,7 +1394,8 @@ struct FinalePainter {
         }
     }
 
-    /// Little hearts floating up from the hug, swaying as they rise (still, with Reduce Motion).
+    /// Little hearts floating up from the hug, a puff at each squeeze, swaying as they rise (still,
+    /// with Reduce Motion).
     func paintHearts(_ ctx: inout GraphicsContext, x: Double, y: Double, u: Double, t: Double, amount: Double) {
         guard amount > 0.01, u >= 4 else { return }
         let colors: [Color] = [
@@ -1405,13 +1407,11 @@ struct FinalePainter {
         heart.addCurve(to: CGPoint(x: 0, y: -0.45), control1: CGPoint(x: -1.1, y: -0.35), control2: CGPoint(x: -0.45, y: -1.15))
         heart.addCurve(to: CGPoint(x: 0, y: 0.35), control1: CGPoint(x: 0.45, y: -1.15), control2: CGPoint(x: 1.1, y: -0.35))
         heart.closeSubpath()
-        for k in 0..<12 {
-            let start = CityFinale.Ending.wink + 1.5 + Double(k) * 0.22
-            let age = rm ? 0.9 + Double(k % 4) * 0.25 : t - start
-            if age <= 0 { continue }
-            let life = rm ? 1.0 : 2.4
-            let fade = rm ? amount : min(1, age / 0.25) * max(0, 1 - age / life)
-            if fade <= 0.01 { continue }
+        for k in 0..<CityFinale.Ending.hearts {
+            let life = CityFinale.endingHeart(k, t: t, reducedMotion: rm)
+            if life.fade <= 0.01 { continue }
+            let age = life.age
+            let fade = rm ? amount : life.fade
             let hx = x + (CityFinale.hash(k, 71) - 0.5) * 3.0 * u + (rm ? 0 : sin(age * 3 + Double(k)) * 0.12 * u)
             let hy = y + 0.3 * u - age * 0.95 * u
             let s = u * (0.14 + 0.08 * CityFinale.hash(k, 73))

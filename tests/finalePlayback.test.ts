@@ -82,7 +82,10 @@ describe('M15: the city hands over to the ending by the show clock, whatever son
       const cityNotes = notes.filter((n) => n.t < CITY);
       const endingNotes = notes.filter((n) => n.t >= CITY);
       expect(cityNotes.some(melodic)).toBe(!city);
-      expect(endingNotes.some(melodic)).toBe(!ending);
+      const underEndingSong = endingNotes.filter((n) => n.t < CITY + ENDING_TIMES.songEnd);
+      expect(underEndingSong.some(melodic)).toBe(!ending);
+      // the lullaby under the long hug plays either way: the ending's song is written to end where it starts
+      expect(endingNotes.some((n) => n.t >= CITY + ENDING_TIMES.songEnd && melodic(n))).toBe(true);
       // effects play either way, so neither part is ever silent
       expect(cityNotes.length).toBeGreaterThan(0);
       expect(endingNotes.length).toBeGreaterThan(0);

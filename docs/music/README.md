@@ -45,13 +45,15 @@ editions pick them up. Without a file, the built-in synth score plays (it follow
 | `finale_tokyo.m4a` | Tokyo & Chicago's finale | **30.0 s** | 15 bars |
 | `finale_accra.m4a` | Accra & Colorado's finale | **30.0 s** | 15 bars |
 | `finale_aurora.m4a` | Station Aurora's finale | **30.0 s** | 15 bars (or 7½ bars of half time at 60) |
-| `finale_ending.m4a` (or `grand_finale.m4a`) | The grand finale, after the fifth city | **60.0 s** | 30 bars |
+| `finale_ending.m4a` (or `grand_finale.m4a`) | The grand finale, after the fifth city | **60.0 s** (the show runs 72 s: the last 12 s are the hug, under the game's own lullaby) | 30 bars |
 
 Every cue sits on a beat of a **120 BPM grid**: one 4/4 bar = 2.0 s, one beat = 0.5 s. Write at
 120 (or 60 half time) and every hit lands on the bar lines below. The song starts the instant
 the last zone seals. Over a song the game still plays its own firework booms, whistles and
 sparkles, so leave a little air for them. A song that runs long is faded out; one that runs
-short simply stops. Skip jumps straight to the grand finale's song (or ends).
+short simply stops. The grand finale's song must stop at exactly 60.0 s: the show goes on to
+72 s with the game's own lullaby, which starts there and would play over a longer song. Skip
+jumps straight to the grand finale's song (or ends).
 
 **City finale, 15 bars** (the same in every city; bar.beat, then seconds):
 
@@ -77,7 +79,7 @@ short simply stops. Skip jumps straight to the grand finale's song (or ends).
 Any city can be the last one, so every city song should hang at the end. The grand finale is
 where the music finally comes home.
 
-**Grand finale, 30 bars:**
+**Grand finale, 30 bars of song, then 6 bars of hug:**
 
 | Bar.beat | Time | What happens | Music |
 | :--- | :--- | :--- | :--- |
@@ -87,9 +89,11 @@ where the music finally comes home.
 | 5.1 – 6.4 | 8.0 – 11.9 | "The Golden Molar" | The triumphant theme, full |
 | 7.1 – 26.4 | 12.0 – 51.9 | Credits, **4 bars per city**: Toronto 7–10, New Orleans 11–14, Tokyo & Chicago 15–18, Accra & Colorado 19–22, Station Aurora 23–26 | A medley: each city's groove and instruments for its 4 bars |
 | **27.1** | **52.0** | Final scene: fireworks, the five signs circling the molar | Full reprise, a key change up |
-| 28.1 / 28.4 | 54.0 / 55.5 | (Gold in every city) the molar smiles, then winks | A wink of a sound on 28.4 |
+| 28.1 / 28.4 | 54.0 / 55.5 | The molar smiles and opens its arms; on 28.4 it folds them into a hug (and, with gold in every city, winks) | A wink of a sound on 28.4 |
+| 29.3 | 57.0 | The first squeeze, happy eyes, a puff of hearts | |
 | **30.1** | **58.0** | Last chord | **Resolve home**, and let it ring |
-| 30.4 | 59.4 – 60.0 | Fade to dark | Ring out |
+| 30.4 | 59.5 – 60.0 | The song ends | Ring out to 60.0 exactly |
+| 31.1 – 36.4 | 60.0 – 72.0 | The long hug: squeezes with hearts on 31.3 and 33.3 (61.0, 65.0), a goodbye wink for all gold on 35.3 (69.0), fade to dark at the very end | **Not in the song**: the game plays its own soft music-box lullaby here |
 
 ### Music direction and prompts
 

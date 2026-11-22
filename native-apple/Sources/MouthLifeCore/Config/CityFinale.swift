@@ -135,7 +135,8 @@ public enum CityFinale {
     /// The longest a show runs; a burst must go up inside it.
     public static let showSeconds = 5.5
 
-    /// The ending: exactly 60 s.
+    /// The ending: exactly 72 s. A recorded ending song is written to 60 s (`songEnd`); the last
+    /// 12 s are the Golden Molar's long hug, under the score's own music-box lullaby.
     public enum Ending {
         public static let fadeEnd = 1.0
         public static let firstPiece = 1.5
@@ -147,8 +148,21 @@ public enum CityFinale {
         public static let finaleStart = 52.0
         public static let face = 54.0
         public static let wink = 55.5
-        public static let end = 60.0
+        /// A recorded ending song is written to end here; the score's own lullaby carries the rest.
+        public static let songEnd = 60.0
+        /// All gold: the molar winks once more, to say goodbye.
+        public static let goodbyeWink = 69.0
+        /// The hug runs from the face to here: 18 s.
+        public static let end = 72.0
         public static let skipAfter = 1.0
+        /// The hug's gentle squeezes: one just after the wink, then every two bars.
+        public static let squeezes: [Double] = [57.0, 61.0, 65.0]
+        /// Each squeeze sends up a puff of this many hearts.
+        public static let heartsPerSqueeze = 12
+        /// Every heart the hug sends up.
+        public static let hearts = squeezes.count * heartsPerSqueeze
+        /// How long one heart takes to float up and fade.
+        public static let heartLife = 2.4
     }
 
     // MARK: - Songs
@@ -165,6 +179,13 @@ public enum CityFinale {
     public static let endingTrackCandidates = ["finale_ending", "grand_finale", "ending"]
     /// Score voices that still play over a recorded song: the show's sound effects.
     public static let effectVoices: Set<FinaleVoice> = [.whistle, .boom, .sparkle, .whoosh]
+
+    /// Whether an ending note still plays over a recorded ending song: the show's sound effects, and
+    /// everything from `Ending.songEnd` on, where the song has finished and the lullaby takes over.
+    /// (The web's endingNotePlaysOverSong.)
+    public static func endingNotePlaysOverSong(_ note: FinaleNote) -> Bool {
+        effectVoices.contains(note.voice) || note.t >= Ending.songEnd
+    }
 
     /// The candidate names for a city's finale (0...4) or the ending (-1).
     public static func trackCandidates(_ index: Int) -> [String] {
@@ -352,8 +373,10 @@ public enum CityFinale {
     }
 
     /// "A hug for you" at the very end: once its face is on, the Golden Molar opens its arms wide to
-    /// the child, folds them into a hug on the wink, gives one gentle squeeze with happy eyes, and
-    /// hearts float up. With Reduce Motion the arms fade in already hugging. (The web's endingHug.)
+    /// the child and folds them into a hug on the wink. Then it holds the hug for the rest of the
+    /// ending (18 s from the face): a gentle squeeze with happy eyes and a puff of hearts at each of
+    /// `Ending.squeezes`, breathing softly in between. With Reduce Motion the arms fade in already
+    /// hugging and nothing moves. (The web's endingHug.)
     public struct EndingHug: Sendable {
         public let arms: Double
         public let open: Double
@@ -371,14 +394,37 @@ public enum CityFinale {
                 hearts: smooth01((t - (E.wink + 1.5)) / 0.8)
             )
         }
+        // between squeezes the hug breathes: a soft pulse once a bar, from where a recorded song ends
+        // (so the first 60 s are as they always were) until two seconds before the end
+        let breathFrom = E.songEnd
+        let breathTo = E.end - 2.0
+        let breath = sin((Double.pi * (t - breathFrom)) / 2)
+        var squeeze = t > breathFrom && t < breathTo ? 0.3 * breath * breath : 0
+        var happyEyes = false
+        for at in E.squeezes {
+            squeeze = max(squeeze, nod(t, at: at, reducedMotion: false))
+            if t >= at - 0.7 && t < at + 0.9 { happyEyes = true }
+        }
         return EndingHug(
             arms: smooth01((t - (E.face + 0.2)) / 0.4),
             open: smooth01((t - (E.face + 0.2)) / 0.7),
             fold: smooth01((t - E.wink) / 0.7),
-            squeeze: nod(t, at: E.wink + 1.5, reducedMotion: false),
-            happyEyes: t >= E.wink + 0.8 && t < E.wink + 2.4,
-            hearts: smooth01((t - (E.wink + 1.5)) / 0.4)
+            squeeze: squeeze,
+            happyEyes: happyEyes,
+            hearts: smooth01((t - E.squeezes[0]) / 0.4)
         )
+    }
+
+    /// Heart `k` (0 to `Ending.hearts` - 1) of the hug: how long it has been floating up and how
+    /// visible it is (0...1). Each squeeze sends up a puff of `Ending.heartsPerSqueeze`, 0.22 s apart.
+    /// With Reduce Motion only the first puff shows, standing still at fixed heights. (The web's endingHeart.)
+    public static func endingHeart(_ k: Int, t: Double, reducedMotion: Bool) -> (age: Double, fade: Double) {
+        let puff = k / Ending.heartsPerSqueeze
+        let j = k % Ending.heartsPerSqueeze
+        if reducedMotion { return (0.9 + Double(j % 4) * 0.25, puff == 0 ? 1 : 0) }
+        let age = t - (Ending.squeezes[puff] + Double(j) * 0.22)
+        if age <= 0 { return (age, 0) }
+        return (age, min(1, age / 0.25) * max(0, 1 - age / Ending.heartLife))
     }
 
     /// How far the five city bubbles over the Golden Molar's pieces have faded in (grand finale, 0..1).
@@ -1112,9 +1158,10 @@ public enum CityFinale {
         return (cos(angle) * 1.05, 0.05 + sin(angle) * 0.82, alpha)
     }
 
-    /// The molar smiles at everyone who finishes; gold in every city also earns the wink.
+    /// The molar smiles at everyone who finishes; gold in every city also earns the wink, and a goodbye wink.
     public static func endingFace(_ t: Double, allGold: Bool) -> (alpha: Double, wink: Bool) {
-        (smooth01((t - Ending.face) / 0.5), allGold && t >= Ending.wink && t < Ending.wink + 0.35)
+        func winking(_ at: Double) -> Bool { t >= at && t < at + 0.35 }
+        return (smooth01((t - Ending.face) / 0.5), allGold && (winking(Ending.wink) || winking(Ending.goodbyeWink)))
     }
 
     public static let endingBursts: [FinaleBurst] = [
@@ -1190,9 +1237,27 @@ public enum CityFinale {
             add(Ending.wink, .sparkle, home, 0.9, 0.55)
             add(Ending.wink + 0.05, .kalimba, home + 24, 0.4, 0.55)
             add(Ending.wink + 0.2, .kalimba, home + 31, 0.6, 0.55)
+            add(Ending.goodbyeWink, .sparkle, home, 0.9, 0.45)
+            add(Ending.goodbyeWink + 0.05, .kalimba, home + 24, 0.4, 0.45)
+            add(Ending.goodbyeWink + 0.2, .kalimba, home + 31, 0.6, 0.45)
         }
-        for iv in [0, 4, 7, 11, 14] { add(Ending.end - 2.0, .rhodes, home + iv, 1.9, 0.45) }
-        add(Ending.end - 2.0, .pad, home - 12, 2.0, 0.35)
+        // where a recorded song ends: the theme resolves
+        for iv in [0, 4, 7, 11, 14] { add(Ending.songEnd - 2.0, .rhodes, home + iv, 1.9, 0.45) }
+        add(Ending.songEnd - 2.0, .pad, home - 12, 2.0, 0.35)
+        // the long hug (bars 31-36): a music-box lullaby, which plays after a recorded song too
+        // (endingNotePlaysOverSong): (seconds after songEnd, steps above home + 12, length)
+        let lullaby: [(Double, Int, Double)] = [
+            (0, 16, 0.5), (0.5, 12, 0.5), (1, 7, 1), (2, 9, 0.5), (2.5, 7, 0.5), (3, 4, 1),
+            (4, 16, 0.5), (4.5, 12, 0.5), (5, 7, 1), (6, 5, 0.5), (6.5, 4, 0.5), (7, 2, 1),
+            (8, 4, 0.5), (8.5, 7, 0.5), (9, 12, 1),
+        ]
+        for (at, step, dur) in lullaby { add(Ending.songEnd + at, .celesta, home + 12 + step, dur, 0.32) }
+        for (k, chord) in [[0, 4, 7], [5, 9, 12], [0, 4, 7], [7, 11, 14], [0, 4, 7]].enumerated() {
+            for iv in chord { add(Ending.songEnd + 2 * Double(k), .pad, home + iv, 2.0, 0.2) }
+        }
+        for at in Ending.squeezes where at >= Ending.songEnd { add(at, .kalimba, home + 24, 0.5, 0.3) }
+        for iv in [0, 4, 7, 11, 14] { add(Ending.end - 2.0, .rhodes, home + iv, 1.9, 0.4) }
+        add(Ending.end - 2.0, .pad, home - 12, 2.0, 0.3)
         return sortedStable(notes)
     }
 
@@ -1289,12 +1354,13 @@ public enum CityFinale {
             for d in endingGoldRain(t, halfWidth: 1.6) { sum += d.x + d.y * 1.3 + d.alpha }
             t += 0.41
         }
-        // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeeze, the eyes, the hearts
+        // the hug, finely, so every beat counts: arms out, the fold on the wink, the squeezes, the eyes, the hearts
         var h = Ending.face
         while h <= Ending.end {
             let hug = endingHug(h, reducedMotion: reducedMotion)
             sum += hug.arms * 1.3 + hug.open * 1.7 + hug.fold * 1.9
             sum += hug.squeeze * 2.3 + (hug.happyEyes ? 1.0 : 0.0) + hug.hearts * 2.9
+            for k in 0..<Ending.hearts { sum += endingHeart(k, t: h, reducedMotion: reducedMotion).fade * 0.3 }
             h += 0.1
         }
         sum += sumNotes(endingNotes(plans, allGold: allGold)) * 0.001

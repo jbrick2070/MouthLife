@@ -5,7 +5,12 @@ import { cityArtForHost } from '../src/config/citySkylines';
 import { FINALE_SHOW_SECONDS, parseCityArt } from '../src/config/citySkylineGeometry';
 import {
   CAMPAIGN_PIECES,
+  ENDING_HEART_LIFE,
+  ENDING_HEARTS,
+  ENDING_HEARTS_PER_SQUEEZE,
+  ENDING_SQUEEZES,
   ENDING_TIMES,
+  FINALE_EFFECT_VOICES,
   FINALE_HOST_IDS,
   FINALE_TIMES,
   GOLDEN_MOLAR,
@@ -20,11 +25,14 @@ import {
   endingChecksum,
   endingCredit,
   endingFace,
+  endingHeart,
   endingHug,
   endingMolarPlace,
+  endingNotePlaysOverSong,
   endingNotes,
   endingPiece,
   finaleBurstSparks,
+  finaleNod,
   finaleCityTint,
   finaleEmblemTargets,
   finaleHash,
@@ -185,7 +193,21 @@ describe('city finale music', () => {
     const gold = endingNotes(plans, true);
     const mixed = endingNotes(plans, false);
     expect(gold.length).toBeGreaterThan(mixed.length);
-    for (const n of gold) expect(n.t).toBeLessThan(ENDING_TIMES.end);
+    for (const n of gold) expect(n.t + n.dur, `${n.voice} at ${n.t}`).toBeLessThanOrEqual(ENDING_TIMES.end + 1e-9);
+  });
+
+  it('gives the long hug its own lullaby, which still plays after a recorded song', () => {
+    const E = ENDING_TIMES;
+    const notes = endingNotes(plans, false);
+    const lullaby = notes.filter((n) => n.t >= E.songEnd);
+    expect(lullaby.filter((n) => n.voice === 'celesta').length).toBeGreaterThanOrEqual(12);
+    expect(lullaby.every(endingNotePlaysOverSong)).toBe(true);
+    // under the song itself only the effects play
+    for (const n of notes.filter((m) => m.t < E.songEnd)) {
+      expect(endingNotePlaysOverSong(n)).toBe(FINALE_EFFECT_VOICES.includes(n.voice));
+    }
+    // every lullaby note sits on the half-beat grid
+    for (const n of lullaby) expect((n.t * 2) % 1, `${n.voice} at ${n.t}`).toBeCloseTo(0, 9);
   });
 });
 
@@ -244,6 +266,10 @@ describe('the ending', () => {
     expect(endingFace(at, false)).toEqual({ alpha: 1, wink: false });
     expect(endingFace(ENDING_TIMES.wink + 0.5, true).wink).toBe(false);
     expect(endingFace(ENDING_TIMES.face - 0.1, true).alpha).toBe(0);
+    // and a goodbye wink near the end of the hug
+    expect(endingFace(ENDING_TIMES.goodbyeWink + 0.1, true).wink).toBe(true);
+    expect(endingFace(ENDING_TIMES.goodbyeWink + 0.1, false).wink).toBe(false);
+    expect(endingFace(ENDING_TIMES.goodbyeWink + 0.5, true).wink).toBe(false);
     // four gold and one pearl: still the hug, no wink
     expect(endingHug(at + 0.6, false).fold).toBe(1);
   });
@@ -272,6 +298,44 @@ describe('the ending', () => {
     expect(endingHug(E.wink + 1.9, true).hearts).toBeCloseTo(0.5, 5);
   });
 
+  it('L04: the hug lasts 18 s: a squeeze, happy eyes and a puff of hearts at 57, 61 and 65 s, breathing in between', () => {
+    const E = ENDING_TIMES;
+    expect(E.end - E.face).toBe(18);
+    expect(ENDING_SQUEEZES[0]).toBe(E.wink + 1.5);
+    expect(ENDING_HEARTS).toBe(ENDING_SQUEEZES.length * ENDING_HEARTS_PER_SQUEEZE);
+    const visibleHearts = (t: number, rm = false) => {
+      let n = 0;
+      for (let k = 0; k < ENDING_HEARTS; k++) if (endingHeart(k, t, rm).fade > 0.01) n++;
+      return n;
+    };
+    for (const at of ENDING_SQUEEZES) {
+      expect((at * 2) % 1).toBe(0);
+      expect(endingHug(at + 0.225, false).squeeze, `squeeze at ${at}`).toBeCloseTo(1, 5);
+      expect(endingHug(at, false).happyEyes).toBe(true);
+      expect(endingHug(at + 0.9, false).happyEyes).toBe(false);
+      expect(visibleHearts(at + 1.2), `hearts after ${at}`).toBeGreaterThanOrEqual(6);
+    }
+    // the first 60 s hug exactly as before: one squeeze at 57, nothing else moving
+    for (let t = E.face; t < E.songEnd; t += 0.05) {
+      expect(endingHug(t, false).squeeze, `t=${t.toFixed(2)}`).toBe(finaleNod(t, ENDING_SQUEEZES[0], false));
+    }
+    // then it breathes between squeezes, and is still for the last two seconds
+    expect(endingHug(63.0, false).squeeze).toBeCloseTo(0.3, 9);
+    expect(endingHug(67.0, false).squeeze).toBeCloseTo(0.3, 9);
+    for (let t = E.end - 2.0; t <= E.end; t += 0.05) expect(endingHug(t, false).squeeze).toBe(0);
+    // with Reduce Motion the hug holds perfectly still from the fold to the end
+    const still = endingHug(E.wink + 1.4, true);
+    for (let t = E.wink + 1.4; t <= E.end; t += 0.1) expect(endingHug(t, true)).toEqual({ ...still, hearts: endingHug(t, true).hearts });
+    // the last heart has faded before the show ends
+    const lastStart = ENDING_SQUEEZES[ENDING_SQUEEZES.length - 1] + (ENDING_HEARTS_PER_SQUEEZE - 1) * 0.22;
+    expect(lastStart + ENDING_HEART_LIFE).toBeLessThan(E.end);
+    expect(visibleHearts(E.end - 0.5)).toBe(0);
+    // with Reduce Motion only the first puff shows, standing still
+    expect(visibleHearts(E.wink + 3, true)).toBe(ENDING_HEARTS_PER_SQUEEZE);
+    expect(visibleHearts(E.end - 0.5, true)).toBe(ENDING_HEARTS_PER_SQUEEZE);
+    expect(endingHeart(3, E.wink + 3, true)).toEqual(endingHeart(3, E.end - 1, true));
+  });
+
   it('L03: the ending checksum tells gold from mixed and Reduce Motion from full motion', () => {
     const gold = endingChecksum(plans, true, false);
     expect(endingChecksum(plans, false, false)).not.toBe(gold);
@@ -283,12 +347,15 @@ describe('the ending', () => {
 describe('the climb', () => {
   it('puts every cue on a 120 BPM beat, so songs can be written to the bar', () => {
     for (const v of Object.values(FINALE_TIMES)) expect((v * 2) % 1).toBe(0);
-    for (const k of ['snap', 'creditsStart', 'creditSeconds', 'finaleStart', 'face', 'wink', 'end'] as const) expect((ENDING_TIMES[k] * 2) % 1).toBe(0);
+    for (const k of ['snap', 'creditsStart', 'creditSeconds', 'finaleStart', 'face', 'wink', 'songEnd', 'goodbyeWink', 'end'] as const) {
+      expect((ENDING_TIMES[k] * 2) % 1).toBe(0);
+    }
   });
 
-  it('runs exactly 30 s a city and 60 s for the ending, so songs can be made to fit', () => {
+  it('runs exactly 30 s a city and 72 s for the ending (its song 60 s), so songs can be made to fit', () => {
     expect(FINALE_TIMES.end).toBe(30);
-    expect(ENDING_TIMES.end).toBe(60);
+    expect(ENDING_TIMES.end).toBe(72);
+    expect(ENDING_TIMES.songEnd).toBe(60);
     expect(ENDING_TIMES.creditsStart + 5 * ENDING_TIMES.creditSeconds).toBe(ENDING_TIMES.finaleStart);
   });
 

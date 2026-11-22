@@ -85,20 +85,20 @@ public enum CitySkylineArt {
 
     /// The ending's checksum for every combination of (all gold, Reduce Motion), and two hash values.
     public static let expectedEnding: [String: Double] = [
-        "gold": 7109.064,
-        "gold-reduced": 7066.056,
-        "mixed": 7105.066,
-        "mixed-reduced": 7062.058,
+        "gold": 10364.013,
+        "gold-reduced": 10781.16,
+        "mixed": 10358.199,
+        "mixed-reduced": 10775.346,
     ]
     public static let expectedHash: [Double] = [0.10232719359919429, 0.7369172223843634, 0.5687719557899982]
 
     /// The 3D finale's checksum for each city (see src/config/finale3d.ts and Finale3D.swift).
     public static let expectedFinale3D: [String: Double] = [
-        "toronto": 17944.999,
-        "new_orleans": 17294.01,
-        "tokyo": 16340.147,
-        "accra": 15653.498,
-        "orbit_aurora": 14990.215,
+        "toronto": 18097.21,
+        "new_orleans": 17446.221,
+        "tokyo": 16492.358,
+        "accra": 15805.709,
+        "orbit_aurora": 15142.426,
     ]
 
     static let accra = #"""
