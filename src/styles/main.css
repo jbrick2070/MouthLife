@@ -36,6 +36,27 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  /* No pinch zoom and no double-tap zoom anywhere on the page; sheets still scroll. iPhone
+     browsers ignore the viewport's user-scalable=no, and a zoomed page hides the top bar and the
+     thumbstick with no way back (see src/engine/zoomGuard.ts). */
+  touch-action: pan-x pan-y;
+}
+
+/* A quick second tap on a button (Scan, Surge, a menu) must never zoom the page. */
+button,
+.btn,
+.ui-interactive,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* The way back. If the page is zoomed in anyway, every touch may pinch and pan the page again, the
+   play field, the thumbstick and the Floss ring included, until it is back to full size
+   (src/engine/zoomGuard.ts puts this class on and takes it off). */
+html.page-zoomed,
+html.page-zoomed body,
+html.page-zoomed * {
+  touch-action: manipulation !important;
 }
 
 input,

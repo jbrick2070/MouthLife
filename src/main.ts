@@ -37,6 +37,7 @@ import { graphicsCardHtml, mountGraphicsFailureCard } from './ui/graphicsFailure
 import { molarFinishForGrade, type MolarFinish } from './config/cityFinale';
 import { shouldHandleGlobalMuteKey } from './ui/hudHelpers';
 import { getCartridgeById } from './worlds/worldRegistry';
+import { installZoomGuard } from './engine/zoomGuard';
 
 export const CAMPAIGN_WORLD_IDS = ['world_1', 'world_2', 'world_3', 'world_4', 'world_5'];
 
@@ -66,6 +67,7 @@ declare global {
 }
 
 function bootstrapMouthLife(): void {
+  installZoomGuard();
   const canvas = document.getElementById('mouthlife-canvas') as HTMLCanvasElement | null;
   const uiRoot = document.getElementById('ui-root') as HTMLElement | null;
   if (!canvas || !uiRoot) return;

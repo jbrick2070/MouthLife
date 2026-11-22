@@ -54,6 +54,10 @@ Welcome! This repository contains **MouthLife**, with active development focused
     - The goal line names the single next thing. Touch screens and the native app use the lines without keyboard hints (`computeObjectiveBreadcrumb(..., keys: false)`): never cut "[Q]" out of a translated line. The native HUD reads only its snapshot, never the live session (the render thread owns that).
     - A new player's city 1 gets the coach (`firstCityCoach.ts`, `FirstCityCoach.swift`): one thing to try at a time on the goal line, ticked off by the game's own events, in any order, never pausing or blocking, gone after the first sealed zone and the first zip. Its flag lives with the one-time hints (`mouthlife.hintsSeen`), outside the save, so Sync Codes are unchanged.
 
+11. **The Web Page Never Zooms During Play, and Always Has a Way Back:**
+    - iPhone browsers ignore the viewport's `user-scalable=no`. A quick double tap on a button or a pinch that starts on the HUD zoomed the whole page, and the play field (`touch-action: none`) then refused the pinch back out, so a player was stuck with the top bar and the thumbstick off the screen (found on an iPhone, November 2026).
+    - Keep the `touch-action` rules at the top of `src/styles/main.css` (`pan-x pan-y` on the page, `manipulation` on buttons and `.ui-interactive`) and `src/engine/zoomGuard.ts` (cancels the pinch on touch screens; while the page is zoomed in anyway, the `page-zoomed` class on `<html>` lets every touch pinch and pan it back). A new touch target that sets its own `touch-action` must not undo the way back.
+
 ## 3. Verification Checklist Before Committing
 
 ```bash
