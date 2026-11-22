@@ -40,7 +40,10 @@ export interface AdultToothInfo {
   anatomyFact: string;
   /** Practical daily brushing/flossing tip. */
   careTip: string;
-  /** Corresponding crown index (0..13) on the 14-tooth 3D Companion Arch, or null for 3rd molars (wisdom teeth). */
+  /**
+   * Corresponding crown index (0..13) on the 14-tooth 3D Companion Arch, or null for 3rd molars (wisdom teeth).
+   * Crown 0 is the leftmost on screen, which in the mirror view is the player's own left.
+   */
   companionArchIndex: number | null;
 }
 
@@ -228,9 +231,11 @@ function buildToothRecord(
 
   let companionArchIndex: number | null = null;
   if (pos <= 7) {
-    // CompanionArch ti=0..6 is Right 2nd Molar (pos 7) -> Right Central Incisor (pos 1)
-    // CompanionArch ti=7..13 is Left Central Incisor (pos 1) -> Left 2nd Molar (pos 7)
-    companionArchIndex = side === 'right' ? 7 - pos : 6 + pos;
+    // The mouth on screen is a mirror: screen-left is the player's own left, the same rule the
+    // 2-Min Brush and the 3D mesh follow. Crown 0 is the leftmost crown on screen, so:
+    // CompanionArch ti=0..6 is Left 2nd Molar (pos 7) -> Left Central Incisor (pos 1)
+    // CompanionArch ti=7..13 is Right Central Incisor (pos 1) -> Right 2nd Molar (pos 7)
+    companionArchIndex = side === 'left' ? 7 - pos : 6 + pos;
   }
 
   const archWord = arch === 'upper' ? 'Upper' : 'Lower';

@@ -9,6 +9,7 @@ import {
   QUADRANT_NUMBERING_META,
   TOOTH_SURFACES_GUIDE,
 } from '../src/config/dentalChart';
+import { quadrantToothRange } from '../src/engine/render/PacerPropRig';
 
 describe('Clinical 32-tooth numbering & dental education reference', () => {
   it('defines all 32 permanent teeth with unique Universal, FDI, and Palmer codes', () => {
@@ -68,26 +69,46 @@ describe('Clinical 32-tooth numbering & dental education reference', () => {
     expect(formatToothBadge(urFirstMolar, 'palmer')).toBe('6┘');
   });
 
-  it('maps all 14 sculpted 3D Companion Arch crowns (0..13) from Right 2nd Molar to Left 2nd Molar', () => {
-    const rightM2 = getCompanionCrownSummary(0);
-    expect(rightM2.toothTypeLabel).toBe('Right 2nd Molar');
-    expect(rightM2.upperTooth.universal).toBe(2);
-    expect(rightM2.lowerTooth.universal).toBe(31);
+  // The mouth on screen is a mirror: crown 0, the leftmost on screen, is the player's own left.
+  it('maps all 14 sculpted 3D Companion Arch crowns (0..13) from Left 2nd Molar to Right 2nd Molar', () => {
+    const leftM2 = getCompanionCrownSummary(0);
+    expect(leftM2.toothTypeLabel).toBe('Left 2nd Molar');
+    expect(leftM2.upperTooth.universal).toBe(15);
+    expect(leftM2.lowerTooth.universal).toBe(18);
 
-    const rightC1 = getCompanionCrownSummary(6);
-    expect(rightC1.toothTypeLabel).toBe('Right Central Incisor');
-    expect(rightC1.upperTooth.universal).toBe(8);
-    expect(rightC1.lowerTooth.universal).toBe(25);
-
-    const leftC1 = getCompanionCrownSummary(7);
+    const leftC1 = getCompanionCrownSummary(6);
     expect(leftC1.toothTypeLabel).toBe('Left Central Incisor');
     expect(leftC1.upperTooth.universal).toBe(9);
     expect(leftC1.lowerTooth.universal).toBe(24);
 
-    const leftM2 = getCompanionCrownSummary(13);
-    expect(leftM2.toothTypeLabel).toBe('Left 2nd Molar');
-    expect(leftM2.upperTooth.universal).toBe(15);
-    expect(leftM2.lowerTooth.universal).toBe(18);
+    const rightC1 = getCompanionCrownSummary(7);
+    expect(rightC1.toothTypeLabel).toBe('Right Central Incisor');
+    expect(rightC1.upperTooth.universal).toBe(8);
+    expect(rightC1.lowerTooth.universal).toBe(25);
+
+    const rightM2 = getCompanionCrownSummary(13);
+    expect(rightM2.toothTypeLabel).toBe('Right 2nd Molar');
+    expect(rightM2.upperTooth.universal).toBe(2);
+    expect(rightM2.lowerTooth.universal).toBe(31);
+  });
+
+  it('names every crown by the side the 2-minute brush lights for it', () => {
+    // The brush lights crowns 7..13 for the player's right quadrants (upper-right 0, lower-right 3)
+    // and crowns 0..6 for the left ones. Home must call the same crowns Right and Left.
+    for (const [quadrant, side, fdiUpper, fdiLower] of [
+      [0, 'Right', '1', '4'],
+      [3, 'Right', '1', '4'],
+      [1, 'Left', '2', '3'],
+      [2, 'Left', '2', '3'],
+    ] as const) {
+      const { from, to } = quadrantToothRange(quadrant);
+      for (let crown = from; crown <= to; crown++) {
+        const s = getCompanionCrownSummary(crown);
+        expect(s.sideLabel, `crown ${crown}`).toBe(side);
+        expect(s.upperTooth.fdi[0], `crown ${crown} upper`).toBe(fdiUpper);
+        expect(s.lowerTooth.fdi[0], `crown ${crown} lower`).toBe(fdiLower);
+      }
+    }
   });
 
   it('covers all 4 quadrants, 5 tooth surfaces, and tailored per-world dentistry lessons', () => {
