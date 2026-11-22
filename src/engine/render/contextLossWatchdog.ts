@@ -3,6 +3,12 @@
  * `restore()` in time cancels it (a generation number makes a late timer from an earlier loss
  * harmless); a timeout, or `fail()` from elsewhere, is terminal: later losses and restores are
  * ignored until the page reloads.
+ *
+ * Only time with the page in view counts. A phone may drop the 3D picture while the game is in
+ * the background and give it back only when the player returns, so a wait that ran out behind a
+ * locked screen would put up the "graphics failed" card for a picture that was about to come
+ * back. While the page is hidden no timer runs at all; `visibilityChanged()` starts a full wait
+ * again when the page is shown and the picture is still missing.
  */
 export class ContextLossWatchdog {
   private generation = 0;
@@ -12,7 +18,9 @@ export class ContextLossWatchdog {
 
   constructor(
     private readonly timeoutMs: number,
-    private readonly onTimeout: () => void
+    private readonly onTimeout: () => void,
+    /** True while the page cannot be seen (another tab, another app, a locked phone). */
+    private readonly isHidden: () => boolean = () => false
   ) {}
 
   get lost(): boolean {
@@ -26,12 +34,28 @@ export class ContextLossWatchdog {
   lose(): void {
     if (this.failedNow) return;
     this.lostNow = true;
+    this.startWait();
+  }
+
+  /**
+   * The page was hidden or shown. Hidden: the wait stops. Shown: if the picture is still lost, a
+   * full wait starts from the beginning, however long the page was away.
+   */
+  visibilityChanged(): void {
+    if (this.lostNow && !this.failedNow) this.startWait();
+  }
+
+  private startWait(): void {
     const generation = ++this.generation;
     this.clearTimer();
+    if (this.isHidden()) return;
     this.timer = setTimeout(() => {
       if (generation !== this.generation || !this.lostNow || this.failedNow) return;
-      this.failedNow = true;
       this.timer = null;
+      // A phone can freeze a page before telling it that it was hidden; the overdue timer then
+      // runs as the page wakes. Do not give up here: being shown starts the wait again.
+      if (this.isHidden()) return;
+      this.failedNow = true;
       this.onTimeout();
     }, this.timeoutMs);
   }

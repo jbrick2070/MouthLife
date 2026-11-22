@@ -10,10 +10,6 @@ import {
   DISCLOSE_WAVE_RADIUS,
   EARTH_BACKDROP_POS,
   EARTH_BACKDROP_RADIUS,
-  FPS_DOWNGRADE_THRESHOLD,
-  FPS_UPGRADE_THRESHOLD,
-  QUALITY_GOVERNOR_COOLDOWN_SEC,
-  QUALITY_ROLLING_FRAMES,
   QUALITY_TIER_SPECS,
   RINSE_WAVE_DURATION_SEC,
   RINSE_WAVE_RADIUS,
@@ -39,6 +35,7 @@ import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
 import { brushCameraAim } from './brushCamera';
 import { CitySkylineBackdrop } from './CitySkylineBackdrop';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
+import { createQualityGovernor, governQuality } from './qualityGovernor';
 
 export type HubCameraFocus = 'companion' | 'globe';
 
@@ -76,8 +73,37 @@ function systemReducedMotionQuery(): MediaQueryList | null {
 
 export type GraphicsState = 'ready' | 'unavailable' | 'failed';
 export type GraphicsFailureReason = 'compile' | 'context-timeout';
-/** How long a lost WebGL context may take to come back before the 3D is given up. */
+/**
+ * How long a lost WebGL context may take to come back before the 3D is given up. Only time with
+ * the page in view counts (see ContextLossWatchdog).
+ */
 export const CONTEXT_RESTORE_TIMEOUT_MS = 10_000;
+
+/**
+ * How far the flight into a city has got: 0 above the Earth, 1 arrived over the teeth. Under
+ * Reduce Motion there is no flight: the first frame is already the arrival, so the picture cuts
+ * to the city instead of diving down to it.
+ */
+export function diveProgress01(elapsedSec: number, reducedMotion: boolean): number {
+  return reducedMotion ? 1 : Math.min(1, elapsedSec / ZOOM_TRANSITION_SEC);
+}
+
+/**
+ * How much of the way to its new place the camera moves in one frame (1 is all of it: a cut).
+ * Normally it glides, and slowly in Brush-Along, so a change of view reads as calm. Under Reduce
+ * Motion a change of screen (another mode, the other Home tab) is a cut, as the native app makes
+ * it; inside a screen the camera still follows gently, as brushCamera.ts asks for the brushing
+ * views.
+ */
+export function cameraGlide01(
+  dt: number,
+  brushAlong: boolean,
+  reducedMotion: boolean,
+  screenChanged: boolean
+): number {
+  if (reducedMotion && screenChanged) return 1;
+  return 1 - Math.exp(-(brushAlong ? 2.4 : 6.5) * dt);
+}
 
 export class SceneManager {
   readonly scene = new THREE.Scene();
@@ -91,8 +117,10 @@ export class SceneManager {
    * failed, nothing is drawn again until reload, and `webgl:failed` has been emitted once.
    */
   graphicsState: GraphicsState = 'unavailable';
-  private readonly lostWatchdog = new ContextLossWatchdog(CONTEXT_RESTORE_TIMEOUT_MS, () =>
-    this.markGraphicsFailed('context-timeout')
+  private readonly lostWatchdog = new ContextLossWatchdog(
+    CONTEXT_RESTORE_TIMEOUT_MS,
+    () => this.markGraphicsFailed('context-timeout'),
+    () => document.visibilityState === 'hidden'
   );
 
   readonly enamelMat = new EnamelBiophysicsMaterial();
@@ -136,6 +164,8 @@ export class SceneManager {
 
   private currentMode: AppMode = 'HUB';
   private hubFocus: HubCameraFocus = 'companion';
+  /** True from a change of mode or Home tab until the camera's next step (see cameraGlide01). */
+  private screenChanged = false;
   private cosmicBeat = 0;
 
   // Companion orbit angles (draggable by touch/mouse!)
@@ -169,13 +199,10 @@ export class SceneManager {
 
   private currentLookAt = new THREE.Vector3(32, 2.0, 16);
 
-  // Hitch-Free 3-Tier QualityGovernor
+  // Hitch-Free 3-Tier QualityGovernor (the rules are in qualityGovernor.ts)
   private qualityPref: 'auto' | QualityTier = 'auto';
   private activeTier: QualityTier = 'medium';
-  private dtRing = new Float32Array(QUALITY_ROLLING_FRAMES);
-  private dtRingIdx = 0;
-  private dtRingFilled = 0;
-  private governorCooldownSec = 3.0;
+  private readonly governor = createQualityGovernor();
   private lastDrawCalls = 0;
   private warnedDrawBudget = false;
 
@@ -336,7 +363,8 @@ export class SceneManager {
     }
 
     // WebGL context loss & restoration resilience. A context that does not come back within
-    // 10 s ends the 3D for this page load; a restore is only announced once a real draw passes.
+    // 10 s (with the page in view) ends the 3D for this page load; a restore is only announced
+    // once a real draw passes.
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       if (this.graphicsState === 'failed') return;
@@ -352,6 +380,10 @@ export class SceneManager {
       if (this.graphicsState !== 'ready') return;
       this.bus.emit('webgl:restored', {});
     });
+    // A phone may take the picture away while the game is in the background and give it back
+    // only when the player returns. Hidden time must not count towards giving up: hiding stops
+    // the wait, and coming back starts a full one if the picture is still missing.
+    document.addEventListener('visibilitychange', () => this.lostWatchdog.visibilityChanged());
 
     window.addEventListener('resize', () => this.handleResize());
     window.visualViewport?.addEventListener('resize', () => this.handleResize());
@@ -496,6 +528,7 @@ export class SceneManager {
 
   setMode(mode: AppMode): void {
     if (mode === 'COSMIC_INTRO' && this.currentMode !== 'COSMIC_INTRO') this.cosmicYaw = 0;
+    if (mode !== this.currentMode) this.screenChanged = true;
     this.currentMode = mode;
     this.hubInsetTimer = 0;
     this.canvas.classList.toggle('arcade-backdrop', mode === 'ARCADE' || mode === 'PULP_RESCUE');
@@ -503,6 +536,7 @@ export class SceneManager {
   }
 
   setHubFocus(focus: HubCameraFocus): void {
+    if (focus !== this.hubFocus) this.screenChanged = true;
     this.hubFocus = focus;
     this.syncStageVisibility();
   }
@@ -553,6 +587,7 @@ export class SceneManager {
 
   /**
    * Executes the 1.35s bounded Powers-of-Ten dive from 3D Orbital Earth into the Dental Arch!
+   * Under Reduce Motion it is a cut instead (diveProgress01).
    */
   beginDiveTransition(targetProbeX: number, targetProbeZ: number, onComplete: () => void): void {
     this.diveActive = true;
@@ -971,7 +1006,9 @@ export class SceneManager {
     // 1. Bounded Powers-of-Ten Dive Transition
     if (this.diveActive) {
       this.diveElapsed += dt;
-      const u = Math.min(1, this.diveElapsed / ZOOM_TRANSITION_SEC);
+      // Under Reduce Motion this is 1 at once: the stage is swapped in and the dive finished
+      // below, in this same frame, before anything is drawn. A cut, with no Earth frame.
+      const u = diveProgress01(this.diveElapsed, this.reducedMotion);
       const ease = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
 
       if (!this.diveSwapped && u >= 0.55) {
@@ -1144,7 +1181,9 @@ export class SceneManager {
     }
 
     // Brush-Along glides slowly between views so the move reads as calm, not a jump cut.
-    const damp = 1 - Math.exp(-(this.currentMode === 'BRUSH_ALONG' ? 2.4 : 6.5) * dt);
+    const brushAlong = this.currentMode === 'BRUSH_ALONG';
+    const damp = cameraGlide01(dt, brushAlong, this.reducedMotion, this.screenChanged);
+    this.screenChanged = false;
     this.rigPos.lerp(desiredPos, damp);
     this.currentLookAt.lerp(desiredLook, damp);
     this.camera.position.copy(this.rigPos);
@@ -1301,41 +1340,9 @@ export class SceneManager {
     return bestId;
   }
 
+  /** One drawn frame for the automatic quality; applies the new level when it asks for one. */
   private stepQualityGovernor(dt: number): void {
-    if (dt <= 0 || dt > 0.25) return;
-    this.dtRing[this.dtRingIdx] = dt;
-    this.dtRingIdx = (this.dtRingIdx + 1) % QUALITY_ROLLING_FRAMES;
-    if (this.dtRingFilled < QUALITY_ROLLING_FRAMES) this.dtRingFilled++;
-
-    this.governorCooldownSec = Math.max(0, this.governorCooldownSec - dt);
-    if (
-      this.qualityPref !== 'auto' ||
-      this.dtRingFilled < QUALITY_ROLLING_FRAMES ||
-      this.governorCooldownSec > 0
-    ) {
-      return;
-    }
-
-    let sum = 0;
-    for (let i = 0; i < QUALITY_ROLLING_FRAMES; i++) sum += this.dtRing[i];
-    const avgFps = QUALITY_ROLLING_FRAMES / Math.max(0.001, sum);
-
-    if (avgFps < FPS_DOWNGRADE_THRESHOLD) {
-      if (this.activeTier === 'ultra') {
-        this.governorCooldownSec = QUALITY_GOVERNOR_COOLDOWN_SEC;
-        this.applyQualityTier('medium', avgFps);
-      } else if (this.activeTier === 'medium') {
-        this.governorCooldownSec = QUALITY_GOVERNOR_COOLDOWN_SEC;
-        this.applyQualityTier('low', avgFps);
-      }
-    } else if (avgFps > FPS_UPGRADE_THRESHOLD) {
-      if (this.activeTier === 'low') {
-        this.governorCooldownSec = QUALITY_GOVERNOR_COOLDOWN_SEC;
-        this.applyQualityTier('medium', avgFps);
-      } else if (this.activeTier === 'medium') {
-        this.governorCooldownSec = QUALITY_GOVERNOR_COOLDOWN_SEC;
-        this.applyQualityTier('ultra', avgFps);
-      }
-    }
+    const next = governQuality(this.governor, dt, this.activeTier, this.qualityPref === 'auto');
+    if (next !== null) this.applyQualityTier(next, this.governor.fps);
   }
 }

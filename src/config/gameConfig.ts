@@ -169,6 +169,23 @@ export const FPS_DOWNGRADE_THRESHOLD = 42;
 export const FPS_UPGRADE_THRESHOLD = 57;
 export const QUALITY_GOVERNOR_COOLDOWN_SEC = 5.0;
 export const QUALITY_ROLLING_FRAMES = 90;
+/**
+ * Lowering the quality must raise the frame rate by at least this much (0.15 is 15%), or it is
+ * undone: a phone held at 30 frames a second (iPhone Low Power Mode) gains nothing from it.
+ * The same margin decides whether the rate is still "near" the one that lowering could not help.
+ */
+export const QUALITY_LOWER_MIN_GAIN = 0.15;
+/**
+ * The newest frames, the last second or so. They must be slow as well before a lowering, and the
+ * rate "before" it is read from them.
+ */
+export const QUALITY_RECENT_FRAMES = 30;
+/** A level that proves too slow within this long of being raised to counts as a failed try. */
+export const QUALITY_RAISE_TRIAL_SEC = 60;
+/** After a failed try, no raising for this long; every further failed try doubles the wait... */
+export const QUALITY_RAISE_RETRY_MIN_SEC = 60;
+/** ...up to this, so a phone that cannot hold a level is asked again at most every ten minutes. */
+export const QUALITY_RAISE_RETRY_MAX_SEC = 600;
 
 //Bounded Powers-of-Ten Camera Rig Constants
 export const CAMERA_NEAR = 0.5;

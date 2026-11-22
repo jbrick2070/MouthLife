@@ -9,9 +9,10 @@ import {
   checksumFinishes,
   type FinaleNote,
 } from '../src/config/cityFinale';
+import { ZOOM_TRANSITION_SEC } from '../src/config/gameConfig';
 import { SoundEngine } from '../src/engine/audio/SoundEngine';
 import { FinaleStage3D } from '../src/engine/render/FinaleStage3D';
-import { SceneManager } from '../src/engine/render/SceneManager';
+import { SceneManager, cameraGlide01, diveProgress01 } from '../src/engine/render/SceneManager';
 import { FinaleSoundtrack, finaleScore, holdModalFocus } from '../src/ui/CityFinaleOverlay';
 
 const plans = FINALE_HOST_IDS.map((h) => cityArtForHost(h)!.finale!);
@@ -279,6 +280,176 @@ describe('M10: Reduce Motion follows the system, live', () => {
     system.set(false);
     expect(fake.reducedMotion).toBe(false);
     expect(emitted).toEqual([true, false]);
+  });
+});
+
+describe('Reduce Motion: the camera cuts to a new screen instead of flying there', () => {
+  type Rig = {
+    updateCameraRig(this: unknown, dt: number, nowSec: number, session: unknown, quadrant: number): void;
+    syncStageVisibility(this: unknown): void;
+  };
+  const rig = SceneManager.prototype as unknown as Rig;
+  const FRAME = 1 / 60;
+
+  /** Just the parts of the scene the dive touches, with the Home screen showing. */
+  function sceneAboutToDive(reducedMotion: boolean) {
+    const arrived = vi.fn();
+    const scene = {
+      reducedMotion,
+      currentMode: 'ARCADE',
+      hubFocus: 'companion',
+      cosmicBeat: 0,
+      screenChanged: true,
+      diveActive: false,
+      diveElapsed: 0,
+      diveSwapped: false,
+      diveOnComplete: null as (() => void) | null,
+      diveStartPos: new THREE.Vector3(),
+      diveStartLook: new THREE.Vector3(),
+      diveEndPos: new THREE.Vector3(),
+      diveEndLook: new THREE.Vector3(),
+      rigPos: new THREE.Vector3(32, 20, 40),
+      currentLookAt: new THREE.Vector3(32, 2, 16),
+      camera: new THREE.PerspectiveCamera(46, 1, 0.5, 320),
+      companionArch: { group: { visible: true } },
+      cartridgeStage: { group: { visible: true } },
+      earthBackdrop: { rootGroup: { visible: false }, setCosmicIntroState: () => undefined },
+      syncStageVisibility: rig.syncStageVisibility,
+    };
+    SceneManager.prototype.beginDiveTransition.call(scene as unknown as SceneManager, 10, 12, arrived);
+    return { scene, arrived };
+  }
+
+  it('the flight into a city takes 1.35 s; under Reduce Motion it is over at once', () => {
+    expect(diveProgress01(0, false)).toBe(0);
+    expect(diveProgress01(ZOOM_TRANSITION_SEC / 2, false)).toBeCloseTo(0.5, 6);
+    expect(diveProgress01(ZOOM_TRANSITION_SEC, false)).toBe(1);
+    expect(diveProgress01(60, false)).toBe(1);
+    expect(diveProgress01(0, true)).toBe(1);
+    expect(diveProgress01(FRAME, true)).toBe(1);
+    expect(diveProgress01(ZOOM_TRANSITION_SEC / 2, true)).toBe(1);
+  });
+
+  it('under Reduce Motion the first frame of the dive is already the city: stage in, Earth out, dive over', () => {
+    const { scene, arrived } = sceneAboutToDive(true);
+    // the dive has been asked for: until the next frame the Earth is what would be drawn
+    expect(scene.diveActive).toBe(true);
+    expect(scene.earthBackdrop.rootGroup.visible).toBe(true);
+    expect(scene.cartridgeStage.group.visible).toBe(false);
+
+    rig.updateCameraRig.call(scene, FRAME, 0, null, -1);
+
+    expect(scene.diveActive).toBe(false);
+    expect(SceneManager.prototype.isTransitioning.call(scene as unknown as SceneManager)).toBe(false);
+    expect(arrived).toHaveBeenCalledTimes(1);
+    expect(scene.cartridgeStage.group.visible).toBe(true);
+    expect(scene.earthBackdrop.rootGroup.visible).toBe(false);
+    expect(scene.companionArch.group.visible).toBe(false);
+    // the camera stands where the flight would have ended, over the start of the stage
+    expect(scene.camera.position.distanceTo(new THREE.Vector3(10, 18.5, 24.5))).toBeLessThan(1e-9);
+    expect(scene.currentLookAt.distanceTo(new THREE.Vector3(10, 1.2, 10.8))).toBeLessThan(1e-9);
+  });
+
+  it('a frame of no length still cuts (the cut does not depend on the clock)', () => {
+    const { scene, arrived } = sceneAboutToDive(true);
+    rig.updateCameraRig.call(scene, 0, 0, null, -1);
+    expect(scene.diveActive).toBe(false);
+    expect(arrived).toHaveBeenCalledTimes(1);
+  });
+
+  it('without Reduce Motion the flight is unchanged: Earth first, the stage from 55%, done at 1.35 s', () => {
+    const { scene, arrived } = sceneAboutToDive(false);
+    rig.updateCameraRig.call(scene, FRAME, 0, null, -1);
+    expect(scene.diveActive).toBe(true);
+    expect(arrived).not.toHaveBeenCalled();
+    expect(scene.earthBackdrop.rootGroup.visible).toBe(true);
+    expect(scene.cartridgeStage.group.visible).toBe(false);
+    expect(scene.camera.position.y).toBeGreaterThan(117); // still up at the Earth
+
+    const wholeFlight = Math.round(ZOOM_TRANSITION_SEC * 60); // 81 frames at 60 a second
+    let frames = 1;
+    while (scene.diveActive && frames < 600) {
+      rig.updateCameraRig.call(scene, FRAME, frames * FRAME, null, -1);
+      frames++;
+      if (frames === Math.floor(wholeFlight / 2)) {
+        expect(scene.earthBackdrop.rootGroup.visible).toBe(true);
+        expect(scene.cartridgeStage.group.visible).toBe(false);
+      }
+    }
+    expect(arrived).toHaveBeenCalledTimes(1);
+    expect(frames).toBeGreaterThanOrEqual(wholeFlight);
+    expect(frames).toBeLessThanOrEqual(wholeFlight + 1);
+    expect(scene.cartridgeStage.group.visible).toBe(true);
+    expect(scene.earthBackdrop.rootGroup.visible).toBe(false);
+  });
+
+  it('a change of screen is a cut under Reduce Motion; inside a screen the camera still glides', () => {
+    // another mode or the other Home tab, Reduce Motion on: all the way in one frame
+    expect(cameraGlide01(FRAME, false, true, true)).toBe(1);
+    expect(cameraGlide01(FRAME, true, true, true)).toBe(1);
+    // same screen: the gentle follow stays, also under Reduce Motion (brushCamera.ts keeps "the
+    // gentle slide toward the active teeth")
+    const follow = 1 - Math.exp(-6.5 * FRAME);
+    const brushing = 1 - Math.exp(-2.4 * FRAME);
+    expect(cameraGlide01(FRAME, false, true, false)).toBeCloseTo(follow, 12);
+    expect(cameraGlide01(FRAME, true, true, false)).toBeCloseTo(brushing, 12);
+    // Reduce Motion off: the glide between screens is unchanged
+    expect(cameraGlide01(FRAME, false, false, true)).toBeCloseTo(follow, 12);
+    expect(cameraGlide01(FRAME, true, false, true)).toBeCloseTo(brushing, 12);
+    expect(brushing).toBeLessThan(follow);
+  });
+
+  it('a new mode or the other Home tab marks the change; the same one again does not', () => {
+    const scene = {
+      currentMode: 'HUB',
+      hubFocus: 'companion',
+      screenChanged: false,
+      cosmicYaw: 0,
+      hubInsetTimer: 1,
+      canvas: { classList: { toggle: () => undefined } },
+      syncStageVisibility: () => undefined,
+    };
+    const as = scene as unknown as SceneManager;
+    SceneManager.prototype.setMode.call(as, 'HUB');
+    SceneManager.prototype.setHubFocus.call(as, 'companion');
+    expect(scene.screenChanged).toBe(false);
+    SceneManager.prototype.setHubFocus.call(as, 'globe');
+    expect(scene.screenChanged).toBe(true);
+    scene.screenChanged = false;
+    SceneManager.prototype.setMode.call(as, 'BRUSH_ALONG');
+    expect(scene.screenChanged).toBe(true);
+  });
+
+  it('the camera takes the change in on its next step: a cut to the globe, then gliding again', () => {
+    // Home, on the globe tab, in a landscape window with no hub chrome to measure
+    const scene = {
+      reducedMotion: true,
+      screenChanged: true,
+      diveActive: false,
+      currentMode: 'HUB',
+      hubFocus: 'globe',
+      hubSideFrac: 0,
+      hubBandFrac: 1,
+      baseFov: 46,
+      measureHubBand: () => undefined,
+      rigPos: new THREE.Vector3(32, 15, 36), // where the camera was, looking at the teeth
+      currentLookAt: new THREE.Vector3(32, 1.05, 18.2),
+      camera: new THREE.PerspectiveCamera(46, 16 / 9, 0.5, 320),
+    };
+    rig.updateCameraRig.call(scene, FRAME, 0, null, -1);
+    // in front of the Earth at once (it hangs at y 110), not somewhere on the way up
+    expect(scene.camera.position.distanceTo(new THREE.Vector3(32, 115.5, 65))).toBeLessThan(1e-9);
+    expect(scene.screenChanged).toBe(false);
+
+    // the same jump without Reduce Motion is a glide: one frame covers about a tenth of it
+    const gliding = { ...scene, reducedMotion: false, screenChanged: true };
+    gliding.rigPos = new THREE.Vector3(32, 15, 36);
+    gliding.currentLookAt = new THREE.Vector3(32, 1.05, 18.2);
+    gliding.camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.5, 320);
+    rig.updateCameraRig.call(gliding, FRAME, 0, null, -1);
+    expect(gliding.camera.position.y).toBeGreaterThan(15);
+    expect(gliding.camera.position.y).toBeLessThan(30);
+    expect(gliding.screenChanged).toBe(false);
   });
 });
 
