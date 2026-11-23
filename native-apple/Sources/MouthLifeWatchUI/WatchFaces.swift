@@ -212,10 +212,9 @@ public struct MouthMap: View, Animatable {
         guard zoom > 0.0005, size.width > 1, size.height > 1 else { return .identity }
         guard case let .quarter(q) = focus else { return .identity }
         let u = min(size.width, size.height * 1.15)
-        var box = CGRect.null
-        for t in teeth(q, in: size, unit: u) { box = box.union(outline(t).boundingRect) }
-        box = box.insetBy(dx: -u * 0.1, dy: -u * 0.1)
-        let close = min(2.4, max(1, min(size.width / box.width, size.height / box.height)))
+        // (from the cache: the brush calls this on every frame of its glide)
+        let box = PacerGeometryCache.shared.quarter(q, in: size, unit: u).box
+        let close = min(2.0, max(1, min(size.width / box.width, size.height / box.height)))
         let halfW = size.width / (2 * close), halfH = size.height / (2 * close)
         let fx = min(max(box.midX, halfW), size.width - halfW)
         let fy = min(max(box.midY, halfH), size.height - halfH)
@@ -414,7 +413,7 @@ public struct MouthMap: View, Animatable {
     /// The tongue: a broad base toward the throat, a rounded tip just behind the lower front teeth.
     private func drawTongue(_ ctx: inout GraphicsContext, size: CGSize, u: Double) {
         let lower = Self.arch(false, in: size, unit: u)
-        let frontDepth = Self.teeth(.lowerRight, in: size, unit: u)[0].depth
+        let frontDepth = PacerGeometryCache.shared.teeth(.lowerRight, in: size, unit: u)[0].depth
         let tipY = lower.cy + lower.ry - frontDepth - max(2, u * 0.02)
         let baseY = lower.cy + lower.ry * 0.3
         let bw = lower.rx * 0.38
@@ -434,7 +433,11 @@ public struct MouthMap: View, Animatable {
 
     private func drawQuarter(_ q: BrushQuadrant, ctx: inout GraphicsContext, size: CGSize, u: Double) {
         let arch = Self.arch(q.isUpper, in: size, unit: u)
-        let teeth = Self.teeth(q, in: size, unit: u)
+        // the quarter's teeth and their outlines, built once per size (the mouth redraws on every
+        // frame of a camera move)
+        let geometry = PacerGeometryCache.shared.quarter(q, in: size, unit: u)
+        let teeth = geometry.teeth
+        let outlines = geometry.outlines
         let (front, back) = Self.angles(q)
         let thin = max(1, u * 0.009)
         let mark = max(1.3, u * 0.013)
@@ -491,13 +494,12 @@ public struct MouthMap: View, Animatable {
         // the quarter being brushed glows: two soft wide outlines (no blur, so the zoom stays smooth)
         if surface != nil && !dimmed {
             for (width, alpha) in [(u * 0.05, 0.18), (u * 0.028, 0.32)] {
-                for t in teeth { ctx.stroke(Self.outline(t), with: .color(fill.opacity(alpha)), style: StrokeStyle(lineWidth: width, lineJoin: .round)) }
+                for path in outlines { ctx.stroke(path, with: .color(fill.opacity(alpha)), style: StrokeStyle(lineWidth: width, lineJoin: .round)) }
             }
         }
 
         let shadow = CGAffineTransform(translationX: 0, y: max(1, u * 0.009))
-        for t in teeth {
-            let path = Self.outline(t)
+        for (t, path) in zip(teeth, outlines) {
             if dimmed {
                 // Always On: only the quarter being brushed is bright (done quarters look idle), in a
                 // bold line so it still reads at arm's length
@@ -514,7 +516,7 @@ public struct MouthMap: View, Animatable {
                 ))
                 if done { ctx.stroke(path, with: .color(WatchLook.gold.opacity(0.9)), lineWidth: thin) }
             }
-            if surface == .chewingGrooves { drawGroove(t, ctx: &ctx, u: u) }
+            if surface == .chewingGrooves { drawGroove(t, outline: path, ctx: &ctx, u: u) }
         }
 
         // inside: a dashed line along the tongue side of the teeth
@@ -532,7 +534,7 @@ public struct MouthMap: View, Animatable {
         if isNext {
             var style = StrokeStyle(lineWidth: thin * 1.3, lineCap: .round, lineJoin: .round)
             style.dash = [max(2, u * 0.02), max(1.5, u * 0.015)]
-            for t in teeth { ctx.stroke(Self.outline(t), with: .color(WatchLook.gold.opacity(dimmed ? 0.5 : 0.6)), style: style) }
+            for path in outlines { ctx.stroke(path, with: .color(WatchLook.gold.opacity(dimmed ? 0.5 : 0.6)), style: style) }
         }
 
         // floss: a thread in every gap (gold once flossed, white where the pick is, faint ahead); the
@@ -629,7 +631,7 @@ public struct MouthMap: View, Animatable {
     }
 
     /// The chewing tops: a Y groove on the molars, a short groove on the premolars, a bright edge in front.
-    private func drawGroove(_ t: Tooth, ctx: inout GraphicsContext, u: Double) {
+    private func drawGroove(_ t: Tooth, outline: Path, ctx: inout GraphicsContext, u: Double) {
         let l = t.length, d = t.depth
         let style = StrokeStyle(lineWidth: max(1, u * 0.009), lineCap: .round, lineJoin: .round)
         let color = Color.white.opacity(0.9)
@@ -645,7 +647,7 @@ public struct MouthMap: View, Animatable {
             g.move(to: t.at(-l * 0.22, d * 0.5))
             g.addLine(to: t.at(l * 0.22, d * 0.5))
         default:
-            ctx.stroke(Self.outline(t), with: .color(color), lineWidth: max(1, u * 0.009))
+            ctx.stroke(outline, with: .color(color), lineWidth: max(1, u * 0.009))
             return
         }
         ctx.stroke(g, with: .color(color), style: style)
@@ -847,22 +849,20 @@ public struct FlossPacer: View, Animatable {
 }
 
 /// On each new quarter the mouth gives a quick nod toward it (10 degrees and back to flat in 0.6 s,
-/// with the tap on the wrist), so it is flat and sharp whenever the child looks.
+/// with the tap on the wrist), so it is flat and sharp whenever the child looks. Turned off (Always
+/// On, Reduce Motion) it stays flat, in the same view: raising or lowering the wrist must not
+/// rebuild the mouth.
 struct QuarterNod: ViewModifier {
     let key: Int
     let axis: (x: CGFloat, y: CGFloat, z: CGFloat)
     let enabled: Bool
 
     func body(content: Content) -> some View {
-        if enabled {
-            content.keyframeAnimator(initialValue: 0.0, trigger: key) { view, angle in
-                view.rotation3DEffect(.degrees(angle), axis: axis, perspective: 0.45)
-            } keyframes: { _ in
-                CubicKeyframe(10, duration: 0.22)
-                CubicKeyframe(0, duration: 0.38)
-            }
-        } else {
-            content
+        content.keyframeAnimator(initialValue: 0.0, trigger: key) { view, angle in
+            view.rotation3DEffect(.degrees(enabled ? angle : 0), axis: axis, perspective: 0.45)
+        } keyframes: { _ in
+            CubicKeyframe(10, duration: 0.22)
+            CubicKeyframe(0, duration: 0.38)
         }
     }
 }
@@ -890,8 +890,10 @@ struct FlossPick: View {
     }
 }
 
-/// A cup of rinse.
+/// A cup of rinse (in Always On, the cup and its waterline as outlines).
 struct RinseCup: View {
+    var dimmed = false
+
     var body: some View {
         Canvas { ctx, size in
             let s = min(size.width, size.height)
@@ -899,6 +901,13 @@ struct RinseCup: View {
             func pt(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
             var cup = Path()
             cup.move(to: pt(0.2, 0.2)); cup.addLine(to: pt(0.8, 0.2)); cup.addLine(to: pt(0.7, 0.88)); cup.addLine(to: pt(0.3, 0.88)); cup.closeSubpath()
+            if dimmed {
+                var waterline = Path()
+                waterline.move(to: pt(0.25, 0.48)); waterline.addLine(to: pt(0.75, 0.48))
+                ctx.stroke(waterline, with: .color(WatchLook.rinse), style: StrokeStyle(lineWidth: s * 0.05, lineCap: .round))
+                ctx.stroke(cup, with: .color(.white.opacity(0.8)), lineWidth: s * 0.04)
+                return
+            }
             ctx.fill(cup, with: .color(Color.white.opacity(0.18)))
             var liquid = Path()
             liquid.move(to: pt(0.25, 0.48)); liquid.addLine(to: pt(0.75, 0.48)); liquid.addLine(to: pt(0.7, 0.88)); liquid.addLine(to: pt(0.3, 0.88)); liquid.closeSubpath()
@@ -939,8 +948,10 @@ public struct WatchFaceState: Equatable {
     public var syncPending: Bool
     public var dimmed: Bool
     public var reduceMotion: Bool
+    /// The clock just moved on by more than a second (a stalled tick): the brush jumps, not glides.
+    public var skippedAhead: Bool
 
-    public init(ritual: WatchRitual? = nil, language: CoachLanguage = .english, includeRinse: Bool = false, canResume: Bool = false, ack: WatchBrushAck? = nil, syncPending: Bool = false, dimmed: Bool = false, reduceMotion: Bool = false) {
+    public init(ritual: WatchRitual? = nil, language: CoachLanguage = .english, includeRinse: Bool = false, canResume: Bool = false, ack: WatchBrushAck? = nil, syncPending: Bool = false, dimmed: Bool = false, reduceMotion: Bool = false, skippedAhead: Bool = false) {
         self.ritual = ritual
         self.language = language
         self.includeRinse = includeRinse
@@ -949,6 +960,7 @@ public struct WatchFaceState: Equatable {
         self.syncPending = syncPending
         self.dimmed = dimmed
         self.reduceMotion = reduceMotion
+        self.skippedAhead = skippedAhead
     }
 }
 
@@ -1015,7 +1027,7 @@ public struct WatchReadyFace: View {
                     FlossPick().frame(width: w * 0.12, height: w * 0.12)
                     if state.includeRinse {
                         Image(systemName: "chevron.right").font(.system(size: w * 0.06, weight: .bold)).foregroundStyle(WatchLook.soft)
-                        RinseCup().frame(width: w * 0.12, height: w * 0.12)
+                        RinseCup(dimmed: state.dimmed).frame(width: w * 0.12, height: w * 0.12)
                     }
                 }
                 .accessibilityHidden(true)
@@ -1051,7 +1063,7 @@ struct StageCard: View {
             Group {
                 switch word {
                 case .floss: FlossPick()
-                case .rinse: RinseCup()
+                case .rinse: RinseCup(dimmed: dimmed)
                 default: Toothbrush()
                 }
             }
@@ -1118,19 +1130,24 @@ public struct WatchActiveFace: View {
                     let zoom: Double = zoomed ? 1 : 0
                     let cameraMove: Animation? = dim ? nil : .easeInOut(duration: state.reduceMotion ? 0.35 : 0.7)
                     let position = brushTooth(ritual, phase).map(Double.init)
-                    let glide: Animation? = dim || state.reduceMotion ? nil : .easeInOut(duration: 0.3)
+                    // after a stalled tick the brush and pick jump to their place, as with Reduce Motion
+                    let glide: Animation? = dim || state.reduceMotion || state.skippedAhead ? nil : .easeInOut(duration: 0.3)
                     ZStack {
                         // the mouth: close on the teeth being brushed, pulled back to the whole mouth
                         // (tipped away a little, for depth) around each new quarter
                         MouthMap(mode: mapMode(ritual, phase), dimmed: dim, focus: focus, zoom: zoom)
                             .overlay {
                                 // the brush glides tooth to tooth (it jumps to a new surface, and with
-                                // Reduce Motion); the camera's own move wins when both change at once
-                                MouthPacer(quadrant: phase.quadrant, surface: phase.surface, position: position, focus: focus, zoom: zoom, dimmed: dim)
-                                    .animation(cameraMove, value: zoomed)
-                                    .animation(glide, value: position)
-                                    .id(phase.quadrant.rawValue * 3 + phase.surface.rawValue)
-                                    .transition(.identity)
+                                // Reduce Motion); the camera's own move wins when both change at once.
+                                // Only while brushing: the rinse swings its quarter to and fro, and an
+                                // empty brush would be rebuilt with every swing.
+                                if ritual.stage == .brushing {
+                                    MouthPacer(quadrant: phase.quadrant, surface: phase.surface, position: position, focus: focus, zoom: zoom, dimmed: dim)
+                                        .animation(cameraMove, value: zoomed)
+                                        .animation(glide, value: position)
+                                        .id(phase.quadrant.rawValue * 3 + phase.surface.rawValue)
+                                        .transition(.identity)
+                                }
                                 if ritual.stage == .floss {
                                     // the floss pick glides gap to gap (it jumps to the other arch)
                                     FlossPacer(upper: phase.flossIsUpper, position: Double(phase.flossContactIndex), dimmed: dim)
@@ -1152,6 +1169,8 @@ public struct WatchActiveFace: View {
                                 .foregroundStyle(WatchLook.gold)
                                 .shadow(color: .black.opacity(0.9), radius: 3)
                                 .offset(y: -mouthSize.height * 0.04)
+                                // each digit is its own view, so 3, 2 and 1 each pop in
+                                .id(digit)
                                 .transition(state.reduceMotion || dim ? .identity : AnyTransition.scale.combined(with: .opacity).animation(.easeInOut(duration: 0.2)))
                         }
                         if let card = stageCard(ritual) {
@@ -1184,17 +1203,18 @@ public struct WatchActiveFace: View {
                     .accessibilityHidden(true)
                     HStack(spacing: w * 0.03) {
                         if ritual.paused {
-                            // paused: one big Resume (the "…" still holds End)
+                            // paused: one big Resume (the "…" still holds End); an outline in Always On
                             Button(action: onResume) {
                                 Label(WatchCopy.word(.resume, lang), systemImage: "play.fill")
                                     .labelStyle(.titleAndIcon)
                                     .font(WatchLook.font(w * 0.1))
-                                    .foregroundStyle(WatchLook.purple)
+                                    .foregroundStyle(dim ? WatchLook.gold : WatchLook.purple)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.5)
                                     .padding(.horizontal, w * 0.03)
                                     .frame(maxWidth: .infinity, minHeight: button)
-                                    .background(RoundedRectangle(cornerRadius: w * 0.06, style: .continuous).fill(WatchLook.gold))
+                                    .background(RoundedRectangle(cornerRadius: w * 0.06, style: .continuous).fill(dim ? Color.clear : WatchLook.gold))
+                                    .overlay(RoundedRectangle(cornerRadius: w * 0.06, style: .continuous).strokeBorder(dim ? WatchLook.gold : Color.clear, lineWidth: 1.5))
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -1446,22 +1466,42 @@ public struct WatchDoneFace: View {
     }
 }
 
-/// The pacers' tooth and gap layouts for the last size drawn. A pacer redraws on every frame while it
-/// glides (the watch, the iPad and Duo overview), and its layout only changes with the size, so the
-/// arrays are built once instead of every frame. Locked, because a Canvas may draw off the main thread.
+/// The mouth's tooth and gap layouts for the last size drawn. The mouth redraws on every frame of a
+/// camera move and a pacer on every frame of its glide (the watch, the iPad and Duo overview), and
+/// the layout only changes with the size, so the teeth, their outlines and the camera's framing are
+/// built once instead of every frame. Locked, because a Canvas may draw off the main thread.
 final class PacerGeometryCache: @unchecked Sendable {
     static let shared = PacerGeometryCache()
+
+    /// One quarter at one size: its seven teeth, their outlines, and the box the camera frames
+    /// when it is close on them.
+    struct Quarter {
+        let size: CGSize
+        let unit: Double
+        let teeth: [MouthMap.Tooth]
+        let outlines: [Path]
+        let box: CGRect
+    }
+
     private let lock = NSLock()
-    private var teethBy: [BrushQuadrant: (size: CGSize, unit: Double, teeth: [MouthMap.Tooth])] = [:]
+    private var quarterBy: [BrushQuadrant: Quarter] = [:]
     private var gapsBy: [Bool: (size: CGSize, unit: Double, gaps: [MouthMap.Gap])] = [:]
 
-    func teeth(_ q: BrushQuadrant, in size: CGSize, unit u: Double) -> [MouthMap.Tooth] {
+    func quarter(_ q: BrushQuadrant, in size: CGSize, unit u: Double) -> Quarter {
         lock.lock()
         defer { lock.unlock() }
-        if let hit = teethBy[q], hit.size == size, hit.unit == u { return hit.teeth }
+        if let hit = quarterBy[q], hit.size == size, hit.unit == u { return hit }
         let teeth = MouthMap.teeth(q, in: size, unit: u)
-        teethBy[q] = (size, u, teeth)
-        return teeth
+        let outlines = teeth.map(MouthMap.outline)
+        var box = CGRect.null
+        for path in outlines { box = box.union(path.boundingRect) }
+        let built = Quarter(size: size, unit: u, teeth: teeth, outlines: outlines, box: box.insetBy(dx: -u * 0.1, dy: -u * 0.1))
+        quarterBy[q] = built
+        return built
+    }
+
+    func teeth(_ q: BrushQuadrant, in size: CGSize, unit u: Double) -> [MouthMap.Tooth] {
+        quarter(q, in: size, unit: u).teeth
     }
 
     func gaps(upper: Bool, size: CGSize, unit u: Double, build: () -> [MouthMap.Gap]) -> [MouthMap.Gap] {

@@ -25,14 +25,21 @@ final class WatchController: NSObject {
     private(set) var outbox: [WatchBrushRecord] = []
     var showControls = false
     private(set) var armed: String?
+    /// The last update moved the clock on by more than a second (a stalled tick): the brush jumps
+    /// to its tooth instead of gliding across several.
+    private(set) var skippedAhead = false
 
     var language: CoachLanguage { settings.language ?? CoachLanguage.detectSystemDefault() }
 
-    private var timer: Timer?
-    private var lastTick: TimeInterval?
-    private var runtime: WKExtendedRuntimeSession?
-    private var lastCheckpoint: TimeInterval = 0
-    private var armTask: Task<Void, Never>?
+    // Not watched by the faces: `tick()` writes the clock ten times a second, and a face that read
+    // it through `ritual(at:)` would be rebuilt every tick instead of once a second.
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var lastTick: TimeInterval?
+    @ObservationIgnored private var runtime: WKExtendedRuntimeSession?
+    @ObservationIgnored private var lastCheckpoint: TimeInterval = 0
+    @ObservationIgnored private var armTask: Task<Void, Never>?
+    /// Ends the runtime a moment after Done, so "Done" and the song's fade finish with the wrist down.
+    @ObservationIgnored private var endRuntimeTask: Task<Void, Never>?
     /// The phone's brush, floss and rinse songs, following the ritual.
     @ObservationIgnored private let music = WatchMusic()
     /// One spoken word per change, like the phone's coach.
@@ -72,6 +79,7 @@ final class WatchController: NSObject {
         engine = r
         ritual = r
         ritualShownAt = Date()
+        if skippedAhead { skippedAhead = false }
         music.follow(r)
     }
 
@@ -100,6 +108,10 @@ final class WatchController: NSObject {
         if let cue { play(cue) }
         if r.paused {
             stopClock()
+            voice.stop()
+            // let the self-care runtime go while paused (it lasts 10 minutes from its start, and
+            // keeps the app awake); Resume is a tap, so a fresh one starts then
+            endRuntime()
             checkpoint(force: true)
         } else {
             run()
@@ -125,8 +137,26 @@ final class WatchController: NSObject {
     /// Back to the start screen after Done.
     func close() {
         set(nil)
+        voice.stop()
         ack = nil
         showControls = false
+    }
+
+    /// The app came to the front: anything still waiting for the iPhone goes again.
+    func cameForward() {
+        flushOutbox()
+    }
+
+    /// The app left the front. With the self-care runtime the brush carries on with the wrist down;
+    /// without it (it could not start, or was lost) the clock would stop mid-brush, so pause and keep it.
+    func wentBackground() {
+        guard runtime?.state != .running, var r = engine, r.stage != .done, !r.paused else { return }
+        WatchLog.note("background without runtime: pausing")
+        _ = r.setPaused(true)
+        set(r)
+        stopClock()
+        voice.stop()
+        checkpoint(force: true)
     }
 
     private func confirm(_ what: String, _ action: (inout WatchRitual) -> WatchCue?) {
@@ -157,6 +187,8 @@ final class WatchController: NSObject {
             let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.tick() }
             }
+            // a little slack lets watchOS group the wake-ups (cues still land within ~0.1 s)
+            t.tolerance = 0.02
             RunLoop.main.add(t, forMode: .common)
             timer = t
         }
@@ -180,6 +212,13 @@ final class WatchController: NSObject {
         let shown = ritual
         if cue != nil || shown?.stage != r.stage || shown?.paused != r.paused
             || Int(r.stageElapsed) != Int(shown?.stageElapsed ?? -1) {
+            // a Done, Skip or End armed for the stage that just ended must not land on the next one
+            if shown?.stage != r.stage, armed != nil {
+                armed = nil
+                armTask?.cancel()
+            }
+            let jumped = shown?.stage == r.stage && r.stageElapsed - (shown?.stageElapsed ?? r.stageElapsed) > 1.5
+            if skippedAhead != jumped { skippedAhead = jumped }
             ritual = r
             ritualShownAt = Date()
             music.follow(r)
@@ -198,17 +237,18 @@ final class WatchController: NSObject {
 
     private func finish() {
         stopClock()
-        endRuntime()
+        endRuntimeSoon()
         ritual = engine
         guard let record = engine?.record else { return clearCheckpoint() }
         // saved for the iPhone first, then the checkpoint cleared: a crash in between loses nothing
+        // (and `load()` drops a checkpoint whose brush is already in the outbox)
         if !outbox.contains(where: { $0.sessionId == record.sessionId }) {
             outbox.append(record)
             trimOutbox()
             saveOutbox()
         }
         clearCheckpoint()
-        send(record)
+        flushOutbox()
     }
 
     private func stopClock() {
@@ -253,6 +293,8 @@ final class WatchController: NSObject {
     // MARK: - Runtime with the wrist down (the "self care" session Apple lists for tooth-brushing)
 
     private func beginRuntime() {
+        endRuntimeTask?.cancel()
+        endRuntimeTask = nil
         if let runtime, runtime.state == .running || runtime.state == .scheduled { return }
         let session = WKExtendedRuntimeSession()
         session.delegate = self
@@ -267,8 +309,28 @@ final class WatchController: NSObject {
     }
 
     private func endRuntime() {
+        endRuntimeTask?.cancel()
+        endRuntimeTask = nil
         runtime?.invalidate()
         runtime = nil
+    }
+
+    /// Ends the runtime once "Done" has been said and the song has faded (a new brush started in
+    /// the meantime keeps it).
+    private func endRuntimeSoon() {
+        endRuntimeTask?.cancel()
+        guard let session = runtime else { return }
+        endRuntimeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled, let self, self.runtime === session else { return }
+            self.endRuntime()
+        }
+    }
+
+    /// Whether a runtime callback is about the session in use now (not one already let go).
+    fileprivate func isCurrentRuntime(_ id: ObjectIdentifier) -> Bool {
+        guard let runtime else { return false }
+        return ObjectIdentifier(runtime) == id
     }
 
     /// The runtime ended early (the child left the app, or time ran out): pause and keep the
@@ -282,6 +344,7 @@ final class WatchController: NSObject {
             set(r)
         }
         stopClock()
+        voice.stop()
         checkpoint(force: true)
     }
 
@@ -320,7 +383,8 @@ final class WatchController: NSObject {
         if let data = defaults.data(forKey: Self.ritualKey), var r = try? JSONDecoder().decode(WatchRitual.self, from: data) {
             let savedAt = defaults.object(forKey: Self.savedAtKey) as? Double
             let since = savedAt.map { Date().timeIntervalSince1970 - $0 } ?? Date().timeIntervalSince(r.startedAt)
-            if r.stage != .done && since < Self.resumeWindow {
+            let alreadyFinished = outbox.contains { $0.sessionId == r.sessionId.uuidString }
+            if r.stage != .done && since < Self.resumeWindow && !alreadyFinished {
                 _ = r.setPaused(true)
                 resumable = r
             } else {
@@ -359,9 +423,14 @@ final class WatchController: NSObject {
         if !queued { session.transferUserInfo(record.dictionary) }
     }
 
+    /// Sends every brush still waiting for the iPhone's answer (one already queued is not queued twice).
+    private func flushOutbox() {
+        for record in outbox { send(record) }
+    }
+
     fileprivate func sessionReady(companionInstalled: Bool) {
         self.companionInstalled = companionInstalled
-        for record in outbox { send(record) }
+        flushOutbox()
     }
 
     fileprivate func received(_ settings: WatchPhoneSettings) {
@@ -385,8 +454,11 @@ extension WatchController: WKExtendedRuntimeSessionDelegate {
     }
 
     nonisolated func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        let id = ObjectIdentifier(extendedRuntimeSession)
         Task { @MainActor in
             WatchLog.note("runtime willExpire")
+            // only the session in use now (a newer one may have replaced it)
+            guard self.isCurrentRuntime(id) else { return }
             self.runtimeEnded()
         }
     }
@@ -400,7 +472,7 @@ extension WatchController: WKExtendedRuntimeSessionDelegate {
         Task { @MainActor in
             WatchLog.note(why)
             // our own invalidate at the end of a ritual is not an interruption
-            guard let runtime = self.runtime, ObjectIdentifier(runtime) == id else { return }
+            guard self.isCurrentRuntime(id) else { return }
             if tookAway { self.runtimeEnded() } else { self.runtimeLost() }
         }
     }
@@ -408,6 +480,11 @@ extension WatchController: WKExtendedRuntimeSessionDelegate {
 
 extension WatchController: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        // the session's state can be read only once it is active
+        guard activationState == .activated else {
+            Task { @MainActor in WatchLog.note("watch session not activated: \(activationState.rawValue)") }
+            return
+        }
         let context = WatchPhoneSettings(dictionary: session.receivedApplicationContext)
         let installed = session.isCompanionAppInstalled
         Task { @MainActor in

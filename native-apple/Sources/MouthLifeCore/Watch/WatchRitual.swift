@@ -225,18 +225,22 @@ public struct WatchRitual: Codable, Equatable, Sendable {
         fullBrush = brushedSec >= Self.brushSec - GameConfig.brushAlongFullBrushGraceSec
     }
 
+    /// Moves on to the next stage. A new stage always runs: "Done" or "Skip" tapped while paused
+    /// starts it (its card, tap and word announce it), rather than leaving it frozen.
     private mutating func finishStage(_ how: WatchStageOutcome, now: Date) -> WatchCue? {
         switch stage {
         case .brushing:
             latchBrush()
             stage = .floss
             stageElapsed = 0
+            paused = false
             return .stageStart(.floss)
         case .floss:
             flossOutcome = how
             if includeRinse {
                 stage = .rinse
                 stageElapsed = 0
+                paused = false
                 return .stageStart(.rinse)
             }
             return complete(now: now)

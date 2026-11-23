@@ -53,8 +53,21 @@ The draft below was reviewed by Astra. These are the decisions being built.
     - The face ticks on a 1 s `TimelineView`, so it keeps redrawing in Always On.
     - New tests: the camera stays inside the mouth, and the floss path runs right to left on screen.
 
-Not done this pass: coalescing the mid-second floss-halfway update, and caching tooth geometry
-between frames. Both are small, and can be revisited if the wrist shows any stutter.
+Not done this pass: coalescing the mid-second floss-halfway update. Small, and can be revisited if
+the wrist shows any stutter.
+
+13. **Last review (Opus, Codex and agy, 2026-11-22): built.**
+    - The faces no longer watch the controller's 10 Hz clock, so they are rebuilt once a second.
+    - A second tap armed for floss no longer lands on the rinse that follows it.
+    - Pause lets the self-care runtime go (Resume starts a fresh one), and a delayed expiry only
+      acts on the session in use.
+    - Brushes still waiting for the iPhone go again whenever the app comes to the front.
+    - Done or Skip while paused starts the next stage instead of leaving it frozen.
+    - The teeth, their outlines and the camera's framing are cached per size; the close-up limit
+      is 2.0, as planned.
+    - Always On: the paused Resume button and the rinse cup are outlines. After a stalled tick the
+      brush jumps instead of gliding across teeth, and each 3-2-1 digit pops in.
+    - Audio waits out calls and Siri instead of retrying every second.
 
 State on `master` at `1cf5616`, worn on the owner's Series 9 (watchOS 27.2.1) on 2026-11-19. The owner's
 verdict: "much better representation", "actually pretty good", but "I don't see a brush".

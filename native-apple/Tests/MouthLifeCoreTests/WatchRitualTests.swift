@@ -142,6 +142,25 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertEqual(r.setPaused(false), .resume)
     }
 
+    /// Done or Skip tapped while paused moves on to the next stage and runs it (the watch says
+    /// "Rinse" and taps for it, so the rinse must not sit frozen).
+    func testDoneOrSkipWhilePausedStartsTheNextStage() {
+        var r = WatchRitual(startedAt: t0, includeRinse: true)
+        _ = run(&r, seconds: 130)
+        _ = r.setPaused(true)
+        XCTAssertEqual(r.next(now: t0), .stageStart(.rinse))
+        XCTAssertEqual(r.flossOutcome, .markedDone)
+        XCTAssertFalse(r.paused)
+        XCTAssertEqual(r.advance(by: 21, now: t0), .rinseStep)
+        XCTAssertEqual(r.stageElapsed, 21, accuracy: 1e-9)
+
+        var s = WatchRitual(startedAt: t0, includeRinse: true)
+        _ = run(&s, seconds: 130)
+        _ = s.setPaused(true)
+        XCTAssertEqual(s.skip(now: t0), .stageStart(.rinse))
+        XCTAssertFalse(s.paused)
+    }
+
     func testSkipAndEndRecordWhatWasLeftOut() {
         var r = WatchRitual(startedAt: t0, includeRinse: true)
         _ = run(&r, seconds: 120)

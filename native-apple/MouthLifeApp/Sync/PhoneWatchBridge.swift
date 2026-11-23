@@ -37,7 +37,11 @@ final class PhoneWatchBridge: NSObject {
 
     fileprivate func receive(_ record: WatchBrushRecord) {
         guard let ack = onRecord?(record), WCSession.isSupported() else { return }
-        WCSession.default.transferUserInfo(ack.dictionary)
+        // Only on an active session (the family may be switching watches); an answer not sent here
+        // is not lost: the watch sends the brush again and the ledger returns the same answer.
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        session.transferUserInfo(ack.dictionary)
     }
 }
 

@@ -13,6 +13,29 @@ final class WatchMusic {
     private var fading: [AVAudioPlayer] = []
     private var sessionActive = false
     private var duckTask: Task<Void, Never>?
+    /// A call, Siri or an alarm has the audio: no song tries to start until it is given back.
+    private var interrupted = false
+    /// After a song failed to start, the next try waits until this uptime (not every second).
+    private var retryAfter: TimeInterval = 0
+    private var interruptionObserver: NSObjectProtocol?
+
+    init() {
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let began = raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
+            MainActor.assumeIsolated { self?.interruption(began: began) }
+        }
+    }
+
+    /// The system took the audio away (the player pauses itself) or gave it back (the next
+    /// `follow` starts the song again at the ritual's place).
+    private func interruption(began: Bool) {
+        WatchLog.note("audio interruption \(began ? "began" : "ended")")
+        interrupted = began
+        if began { sessionActive = false } else { retryAfter = 0 }
+    }
 
     /// The song for each stage (nil: quiet).
     static func song(_ stage: WatchRitualStage) -> String? {
@@ -42,11 +65,21 @@ final class WatchMusic {
         let at = r.stageElapsed.truncatingRemainder(dividingBy: max(1, player.duration))
         if abs(player.currentTime - at) > 1.5 { player.currentTime = at }
         if !player.isPlaying {
-            activate()
+            let now = ProcessInfo.processInfo.systemUptime
+            guard !interrupted, now >= retryAfter else { return }
+            guard activate() else {
+                retryAfter = now + 5
+                return
+            }
             // a song starting mid-way (a resume, a new stage) fades in; from its start it just plays
             let fadeIn: TimeInterval = player.currentTime < 0.5 ? 0 : 0.6
             player.volume = fadeIn > 0 ? 0 : 1
-            player.play()
+            guard player.play() else {
+                WatchLog.note("song did not start")
+                retryAfter = now + 5
+                return
+            }
+            retryAfter = 0
             if fadeIn > 0 { player.setVolume(1, fadeDuration: fadeIn) }
         }
     }
@@ -100,16 +133,19 @@ final class WatchMusic {
 
     /// Short in-app audio plays on the watch speaker, or on Bluetooth earbuds when they are on.
     /// Activated again every time a song starts (a call, Siri or an alarm may have taken the audio
-    /// away in between; setting it active again is cheap).
-    private func activate() {
+    /// away in between; setting it active again is cheap). False when the audio could not be had.
+    @discardableResult
+    private func activate() -> Bool {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playback, mode: .default, policy: .default, options: [])
             try session.setActive(true)
         } catch {
             WatchLog.note("audio activate failed: \(error)")
+            return false
         }
         sessionActive = true
+        return true
     }
 
     private func release() {
