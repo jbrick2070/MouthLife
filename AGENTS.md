@@ -64,7 +64,7 @@ Welcome! This repository contains **MouthLife**, with active development focused
 ## 3. Verification Checklist Before Committing
 
 ```bash
-# 1. Pure Swift engine, 8-language coach, 3-stage timeline & 120Hz gyro slosh tests (16/16)
+# 1. Pure Swift engine, 8-language coach, 3-stage timeline & 120Hz gyro slosh tests
 cd native-apple && swift test
 
 # 2. iOS Release compile & Metal shader verification (0 warnings, 0 errors)

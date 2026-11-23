@@ -8,8 +8,9 @@ import Foundation
 /// timer ran out, not at the moment the app came back. Otherwise last night's brush takes one of
 /// this morning's two rewards, and the widget and Apple Health show a brush at a time nobody brushed.
 ///
-/// Web twin: none yet. The web's `completeSession` (BrushAlongOverlay.ts) should date its brush
-/// the same way, from `getPacerOverflowSec()`.
+/// Web twin: `brushRewardDay` in src/engine/persistence/HabitBank.ts, which the web's
+/// `completeSession` (BrushAlongOverlay.ts) feeds from `getPacerOverflowSec()`, with the same
+/// two-day limit.
 public enum BrushEndTime {
     /// The moment a stage's time ran out: `overflowSec` before `now`
     /// (`PacerSessionClock.overflowSec`). A brush that was never left has no overflow: it ended now.
