@@ -172,8 +172,8 @@ export function migrateSave(raw: unknown, nowEpochMs = Date.now()): MouthLifeSav
     // Days that can have happened come first: everything up to tomorrow (tomorrow, because a code
     // may come from a device a time zone ahead). Days dated later only fill the room that is left.
     // A crafted code full of days in the year 9999 can then never push the real days out, and a
-    // device whose own clock is set too early still keeps its newest days. The Swift twin has to
-    // follow the same rule, or the two editions keep different days from one code.
+    // device whose own clock is set too early still keeps its newest days. The Swift twin
+    // (SaveSystem.swift migrateSave) follows the same rule, so one code keeps the same days in both.
     const tomorrow = formatLocalDateKey(new Date(nowEpochMs + 86_400_000));
     const happened = dated.filter(([dateKey]) => dateKey <= tomorrow).slice(-DAILY_LOG_MAX_DAYS);
     const room = DAILY_LOG_MAX_DAYS - happened.length;
@@ -361,8 +361,8 @@ export function encodeSaveToSyncCode(save: MouthLifeSaveV2): string {
  * One visible character can carry any number of stacked marks, so 24 of them can still be very
  * long: a crafted name made a save's own Sync Code too long to be read back. So the name also stops
  * before it passes 256 UTF-16 units, still at a whole character. A first character that is too long
- * by itself leaves nothing, and the caller then uses the usual name. The Swift twin has to cut the
- * same way, or one code gives two different names.
+ * by itself leaves nothing, and the caller then uses the usual name. The Swift twin
+ * (SaveSystem.truncateDisplayName) cuts the same way, so one code gives one name in both editions.
  */
 export function truncateDisplayName(
   name: string,

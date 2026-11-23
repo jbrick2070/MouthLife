@@ -259,4 +259,171 @@ final class SaveIntegrityTests: XCTestCase {
         // An unreadable cloud copy leaves the local save alone.
         XCTAssertFalse(sys.reconcileExternalStorageEvent(#"{"schemaVersion":9}"#, nowEpochMs: t0 + 50))
     }
+
+    // W8 (web twin in tests/saveIntegrity.test.ts): a name is never longer than 24 characters or
+    // 256 UTF-16 units, cut the same way in both editions.
+    func testANameStopsAt24CharactersOr256Units() {
+        /// A combining accent: it stacks on the letter before it, and any number of them is one character.
+        let mark = "\u{0301}"
+        func cut(_ s: String) -> String { SaveSystem.truncateDisplayName(s) }
+        func units(_ s: String) -> Int { s.utf16.count }
+        XCTAssertEqual(SaveSystem.displayNameMaxChars, 24)
+        XCTAssertEqual(SaveSystem.displayNameMaxUnits, 256)
+        // ordinary names are left alone, and the cut is still at 24 whole characters
+        XCTAssertEqual(cut("Explorer"), "Explorer")
+        XCTAssertEqual(cut("Zoë 🦷 Ōkafor"), "Zoë 🦷 Ōkafor")
+        XCTAssertEqual(cut("abcdefghijklmnopqrstuvwxyz"), "abcdefghijklmnopqrstuvwx")
+        XCTAssertEqual(cut("a" + String(repeating: "😀", count: 30)), "a" + String(repeating: "😀", count: 23))
+        let stacked = "Zoe" + mark + " Nguye" + "\u{0302}" + mark + "n"
+        XCTAssertEqual(cut(stacked), stacked)
+        // one letter carrying 20,000 marks leaves nothing, so the save uses the usual name
+        let monster = "a" + String(repeating: mark, count: 20_000)
+        XCTAssertEqual(cut(monster), "")
+        let fromCode = SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "playerProfile": ["displayName": monster]], nowEpochMs: t0)
+        XCTAssertEqual(fromCode.playerProfile.displayName, "Explorer")
+        XCTAssertEqual(SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "playerProfile": ["displayName": "   "]], nowEpochMs: t0).playerProfile.displayName, "Explorer")
+        // the whole characters that fit stay, and the cut comes before the 257th unit
+        XCTAssertEqual(cut(String(repeating: "a", count: 23) + "e" + String(repeating: mark, count: 19_977)), String(repeating: "a", count: 23))
+        let sixteenUnits = "e" + String(repeating: mark, count: 15)
+        XCTAssertEqual(units(cut(String(repeating: sixteenUnits, count: 16))), 256)
+        XCTAssertEqual(cut(String(repeating: sixteenUnits, count: 17)), String(repeating: sixteenUnits, count: 16))
+        let thirteenUnits = "e" + String(repeating: mark, count: 12)
+        XCTAssertEqual(cut(String(repeating: thirteenUnits, count: 24)), String(repeating: thirteenUnits, count: 19))
+        // at 255 units one more plain letter still fits; the cut never skips a character to fit a smaller one
+        let first255 = String(repeating: "e" + String(repeating: mark, count: 16), count: 15)
+        XCTAssertEqual(units(first255), 255)
+        XCTAssertEqual(cut(first255 + "zq"), first255 + "z")
+        XCTAssertEqual(cut(first255 + "e" + mark + "z"), first255)
+        // renaming in the app cuts the same way
+        let sys = SaveSystem(storage: InMemorySaveStorage(), nowEpochMs: t0)
+        XCTAssertEqual(sys.updateProfile(displayName: "  " + monster + "  ", nowEpochMs: t0 + 1).displayName, "Explorer")
+        XCTAssertEqual(sys.updateProfile(displayName: String(repeating: sixteenUnits, count: 17), nowEpochMs: t0 + 2).displayName, String(repeating: sixteenUnits, count: 16))
+    }
+
+    // W8 (web twin in tests/saveIntegrity.test.ts): days that have not happened yet cannot push out
+    // the real ones; they only fill the room the real days leave.
+    func testDaysThatHaveNotHappenedCannotPushOutTheRealOnes() throws {
+        // Gregorian in the device's time zone, as day keys are, whatever calendar the Mac shows
+        let noonDate = try XCTUnwrap(HabitBank.keyCalendar().date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 12)))
+        let noon = Int64(noonDate.timeIntervalSince1970 * 1000)
+        func day(_ offset: Int) -> String { formatLocalDateKey(noonDate.addingTimeInterval(Double(offset) * 86_400)) }
+        func keys(_ daily: [String: Any], now: Int64) -> [String] {
+            SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "dailySlotsByDate": daily], nowEpochMs: now).dailySlotsByDate.keys.sorted()
+        }
+        XCTAssertEqual(SaveSystem.dailyLogMaxDays, 45)
+        // 45 days in the year 9999 (January and 14 days of February) and eight real days
+        var daily: [String: Any] = [:]
+        for d in 1...31 { daily[String(format: "9999-01-%02d", d)] = ["fullRewards": 0, "tips": 0] }
+        for d in 1...14 { daily[String(format: "9999-02-%02d", d)] = ["fullRewards": 0, "tips": 0] }
+        for back in 0...7 { daily[day(-back)] = ["fullRewards": 2, "tips": 0] }
+        let kept = keys(daily, now: noon)
+        XCTAssertEqual(kept.count, 45)
+        for back in 0...7 { XCTAssertTrue(kept.contains(day(-back)), "real day \(day(-back))") }
+        let later = kept.filter { $0.hasPrefix("9999") }
+        XCTAssertEqual(later.count, 37)
+        XCTAssertFalse(later.contains("9999-01-08"))
+        XCTAssertTrue(later.contains("9999-01-09"))
+        XCTAssertTrue(later.contains("9999-02-14"))
+
+        // tomorrow counts as a day that can have happened; the day after is later
+        var near: [String: Any] = [:]
+        for back in 0...43 { near[day(-back)] = ["fullRewards": 1, "tips": 0] }
+        near[day(1)] = ["fullRewards": 1, "tips": 0]
+        near[day(2)] = ["fullRewards": 1, "tips": 0]
+        let nearKept = keys(near, now: noon)
+        XCTAssertEqual(nearKept.count, 45)
+        XCTAssertTrue(nearKept.contains(day(-43)))
+        XCTAssertTrue(nearKept.contains(day(1)))
+        XCTAssertFalse(nearKept.contains(day(2)))
+        // with more than 45 days that can have happened, the oldest of those go
+        near[day(-44)] = ["fullRewards": 1, "tips": 0]
+        near[day(-45)] = ["fullRewards": 1, "tips": 0]
+        let full = keys(near, now: noon)
+        XCTAssertEqual(full.count, 45)
+        XCTAssertEqual(full.first, day(-43))
+        XCTAssertEqual(full.last, day(1))
+
+        // a device whose clock is behind still keeps its newest days
+        var behind: [String: Any] = [:]
+        for d in 1...30 { behind[String(format: "2026-09-%02d", d)] = ["fullRewards": 1, "tips": 0] }
+        for d in 1...31 { behind[String(format: "2026-10-%02d", d)] = ["fullRewards": 1, "tips": 0] }
+        let behindKept = keys(behind, now: t0)
+        XCTAssertEqual(behindKept.count, 45)
+        XCTAssertEqual(behindKept.first, "2026-09-17")
+        XCTAssertEqual(behindKept.last, "2026-10-31")
+
+        // a list where a day belongs is kept as an empty day, as the web reads it
+        let listDay = SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "dailySlotsByDate": ["2026-11-20": [1, 2], "2026-11-19": true]], nowEpochMs: noon)
+        XCTAssertEqual(listDay.dailySlotsByDate["2026-11-20"], DailySlotLog(fullRewards: 0, tips: 0))
+        XCTAssertNil(listDay.dailySlotsByDate["2026-11-19"])
+
+        // the crafted code's days, stored by the old rule: at load the real days stay, and the daily cap holds
+        var stored = farFutureAndRealDays(day: day)
+        stored["2026-11-21-not-a-day"] = ["fullRewards": 2, "tips": 0]
+        let json = try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "dailySlotsByDate": stored])
+        let mem = InMemorySaveStorage(initialValues: [SaveSystem.storageKey: String(decoding: json, as: UTF8.self)])
+        let sys = SaveSystem(bus: EventBus(), storage: mem)
+        var loaded = sys.load(nowEpochMs: noon)
+        XCTAssertEqual(loaded.dailySlotsByDate.count, 45)
+        for back in 0...7 { XCTAssertEqual(loaded.dailySlotsByDate[day(-back)], DailySlotLog(fullRewards: 2, tips: 0), day(-back)) }
+        let third = HabitBank.completeBrushAlong(save: &loaded, withFlossBonus: true, date: noonDate, calendar: HabitBank.keyCalendar())
+        XCTAssertEqual(third.slotType, .tip)
+        XCTAssertFalse(third.stampAwarded)
+    }
+
+    /// 45 days in the year 9999 and eight real days ending today, each with two full brushes.
+    private func farFutureAndRealDays(day: (Int) -> String) -> [String: Any] {
+        var daily: [String: Any] = [:]
+        for d in 1...31 { daily[String(format: "9999-01-%02d", d)] = ["fullRewards": 0, "tips": 0] }
+        for d in 1...14 { daily[String(format: "9999-02-%02d", d)] = ["fullRewards": 0, "tips": 0] }
+        for back in 0...7 { daily[day(-back)] = ["fullRewards": 2, "tips": 0] }
+        return daily
+    }
+
+    // W8: a name is trimmed of exactly the spaces the web trims (String.prototype.trim), so one code
+    // gives one name. The same cases are pinned in tests/saveIntegrity.test.ts.
+    func testANameIsTrimmedExactlyAsTheWebTrimsIt() {
+        func name(_ raw: String) -> String {
+            SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "playerProfile": ["displayName": raw]], nowEpochMs: t0).playerProfile.displayName
+        }
+        XCTAssertEqual(name("\u{FEFF}Mia\u{3000}"), "Mia")
+        XCTAssertEqual(name("\u{FEFF}"), "Explorer")
+        XCTAssertEqual(name("\u{2007}\u{00A0}Mia\u{2028}\t"), "Mia")
+        XCTAssertEqual(name("\u{200B}"), "\u{200B}")
+        XCTAssertEqual(name("\u{0085}Mia"), "\u{0085}Mia")
+        let sys = SaveSystem(storage: InMemorySaveStorage(), nowEpochMs: t0)
+        XCTAssertEqual(sys.updateProfile(displayName: "\u{FEFF} Zoë ", nowEpochMs: t0 + 1).displayName, "Zoë")
+
+        // Codes and backup text are trimmed the same way: byte-order marks at either end go,
+        // a U+0085 in front is not a space (the web then reads it as a code, not as text).
+        let json = #"{"schemaVersion":2,"totalBrushStamps":7}"#
+        XCTAssertEqual(try SaveSystem.decodeSaveFromText("\u{FEFF}\u{FEFF}" + json + "\u{FEFF}\n", nowEpochMs: t0).totalBrushStamps, 7)
+        XCTAssertThrowsError(try SaveSystem.decodeSaveFromText("\u{0085}" + json, nowEpochMs: t0))
+        let code = SaveSystem.encodeSaveToSyncCode(SaveSystem.migrateSave(jsonObject: ["schemaVersion": 2, "totalBrushStamps": 9], nowEpochMs: t0))
+        let wrapped = "\u{FEFF}" + code.prefix(12) + "\u{2028}" + code.dropFirst(12) + "\u{3000}"
+        XCTAssertEqual(try SaveSystem.decodeSaveFromSyncCode(wrapped, nowEpochMs: t0).totalBrushStamps, 9)
+        XCTAssertThrowsError(try SaveSystem.decodeSaveFromSyncCode(code.prefix(12) + "\u{200B}" + code.dropFirst(12), nowEpochMs: t0))
+    }
+
+    // W8: a crafted name can no longer make the save's own Sync Code too long to read back, and a
+    // save already holding such a name repairs itself at load.
+    func testALongNameIsCutOnTheCodePathAndRepairsAtLoad() throws {
+        let mark = "\u{0301}"
+        let text = #"{"schemaVersion":2,"playerProfile":{"displayName":"e"# + String(repeating: mark, count: 200_000) + #""}}"#
+        let fromText = try SaveSystem.decodeSaveFromText(text, nowEpochMs: t0 + 2)
+        XCTAssertEqual(fromText.playerProfile.displayName, "Explorer")
+        let own = SaveSystem.encodeSaveToSyncCode(fromText)
+        XCTAssertLessThan(own.count, 4096)
+        XCTAssertEqual(try SaveSystem.decodeSaveFromText(own, nowEpochMs: t0 + 3).playerProfile.displayName, "Explorer")
+
+        func loadName(_ spoiledName: String) throws -> String {
+            var spoiled = SaveSystem.createDefaultSave(nowEpochMs: t0)
+            spoiled.playerProfile.displayName = spoiledName
+            let json = String(decoding: try JSONEncoder().encode(spoiled), as: UTF8.self)
+            let sys = SaveSystem(bus: EventBus(), storage: InMemorySaveStorage(initialValues: [SaveSystem.storageKey: json]))
+            return sys.load(nowEpochMs: t0 + 10).playerProfile.displayName
+        }
+        XCTAssertEqual(try loadName("a" + String(repeating: mark, count: 20_000)), "Explorer")
+        XCTAssertEqual(try loadName("Mia" + "e" + String(repeating: mark, count: 19_977)), "Mia")
+    }
 }

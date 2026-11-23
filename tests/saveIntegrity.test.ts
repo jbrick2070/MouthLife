@@ -12,6 +12,7 @@ import {
   SaveSystem,
   createDefaultSave,
   decodeSaveFromText,
+  encodeSaveToSyncCode,
   migrateSave,
   truncateDisplayName,
   type StorageLike,
@@ -448,6 +449,24 @@ describe('W8: a name is never longer than 24 characters or 256 UTF-16 units', ()
     expect(second.getSave().playerProfile.displayName).toBe('Mia');
   });
 
+  it('trims a name of exactly the spaces String.prototype.trim does (the Swift twin pins the same cases)', () => {
+    const name = (raw: string) => migrateSave({ schemaVersion: 2, playerProfile: { displayName: raw } }, T0).playerProfile.displayName;
+    expect(name('\uFEFFMia\u3000')).toBe('Mia');
+    expect(name('\uFEFF')).toBe('Explorer');
+    expect(name('\u2007\u00A0Mia\u2028\t')).toBe('Mia');
+    expect(name('\u200B')).toBe('\u200B');
+    expect(name('\u0085Mia')).toBe('\u0085Mia');
+
+    // Codes and backup text are trimmed the same way (the Swift twin pins these too).
+    const json = '{"schemaVersion":2,"totalBrushStamps":7}';
+    expect(decodeSaveFromText('﻿﻿' + json + '﻿\n', T0).totalBrushStamps).toBe(7);
+    expect(() => decodeSaveFromText('\u0085' + json, T0)).toThrow();
+    const code = encodeSaveToSyncCode(migrateSave({ schemaVersion: 2, totalBrushStamps: 9 }, T0));
+    const wrapped = '﻿' + code.slice(0, 12) + ' ' + code.slice(12) + '　';
+    expect(decodeSaveFromText(wrapped, T0).totalBrushStamps).toBe(9);
+    expect(() => decodeSaveFromText(code.slice(0, 12) + '​' + code.slice(12), T0)).toThrow();
+  });
+
   it('keeps both limits in a browser that cannot tell whole characters apart', () => {
     const segmenter = Object.getOwnPropertyDescriptor(Intl, 'Segmenter');
     delete (Intl as { Segmenter?: unknown }).Segmenter;
@@ -517,6 +536,12 @@ describe('W8: days that have not happened yet cannot push out the real ones', ()
     expect(full).toHaveLength(45);
     expect(full[0]).toBe(day(-43));
     expect(full[44]).toBe(day(1));
+  });
+
+  it('keeps a list where a day belongs as an empty day, and drops a true (the Swift twin does the same)', () => {
+    const days = migrateSave({ schemaVersion: 2, dailySlotsByDate: { '2026-11-20': [1, 2], '2026-11-19': true } }, NOON.getTime()).dailySlotsByDate;
+    expect(days['2026-11-20']).toEqual({ fullRewards: 0, tips: 0 });
+    expect(days['2026-11-19']).toBeUndefined();
   });
 
   it('a device whose clock is behind still keeps its newest days', () => {

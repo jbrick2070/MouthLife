@@ -166,6 +166,57 @@ public final class SaveSystem {
 
     private static let maxSafeJsInt: Int64 = 9_007_199_254_740_991
 
+    /// How many brushing days a save keeps: the newest ones (see the day rule in `migrateSave`).
+    /// The web's DAILY_LOG_MAX_DAYS.
+    public static let dailyLogMaxDays = 45
+    /// The most visible characters a name keeps. The web's DISPLAY_NAME_MAX_CHARS.
+    public static let displayNameMaxChars = 24
+    /// The most UTF-16 units a name keeps, whatever its characters are made of. The web's
+    /// DISPLAY_NAME_MAX_UNITS.
+    public static let displayNameMaxUnits = 256
+
+    /// The spaces a name is trimmed of, exactly as the web's `String.prototype.trim` trims them:
+    /// the ECMAScript white space (tab, vertical tab, form feed, space, no-break space, the byte
+    /// order mark and every Unicode space separator) and line terminators. Not Foundation's
+    /// `.whitespacesAndNewlines`, which also trims U+0085 and U+200B and keeps U+FEFF, so one code
+    /// could give two different names.
+    static let webTrimmedSpaces: CharacterSet = {
+        var set = CharacterSet(charactersIn: "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D}\u{0020}\u{00A0}\u{1680}")
+        set.insert(charactersIn: "\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}")
+        set.insert(charactersIn: Unicode.Scalar(0x2000)!...Unicode.Scalar(0x200A)!)
+        return set
+    }()
+
+    /// A name with spaces trimmed from both ends, as the web trims it (`webTrimmedSpaces`).
+    static func trimName(_ name: String) -> String {
+        name.trimmingCharacters(in: webTrimmedSpaces)
+    }
+
+    /// The first 24 whole visible characters of a name, stopping before it passes 256 UTF-16 units.
+    ///
+    /// One visible character can carry any number of stacked marks, so 24 of them can still be very
+    /// long: a crafted name could make a save's own Sync Code too long to read back. The cut is
+    /// always at a whole character and never skips one to fit a smaller one after it; a first
+    /// character too long by itself leaves nothing, and the caller then uses the usual name. Same
+    /// rule as the web's `truncateDisplayName`, so one code gives one name in both editions.
+    public static func truncateDisplayName(
+        _ name: String,
+        maxChars: Int = displayNameMaxChars,
+        maxUnits: Int = displayNameMaxUnits
+    ) -> String {
+        var out = ""
+        var kept = 0
+        var units = 0
+        for character in name {
+            let size = character.utf16.count
+            if kept >= maxChars || units + size > maxUnits { break }
+            out.append(character)
+            kept += 1
+            units += size
+        }
+        return out
+    }
+
     private let bus: EventBus
     private let storage: SaveStorageBackend
     private let memoryBackup = InMemorySaveStorage()
@@ -382,8 +433,17 @@ public final class SaveSystem {
         // Daily slots (V1 stored numbers; V2 stores { fullRewards, tips })
         if let rawDaily = obj["dailySlotsByDate"] as? [String: Any] {
             // The 45 most recent valid days: a malformed key must not take the place of a real one.
-            let sortedKeys = rawDaily.keys.filter { isValidDateKey($0) }.sorted().suffix(45)
-            for dateKey in sortedKeys {
+            let dated = rawDaily.keys.filter { isValidDateKey($0) }.sorted()
+            // Days that can have happened come first: everything up to tomorrow (tomorrow, because a
+            // code may come from a device a time zone ahead). Days dated later only fill the room
+            // that is left. A crafted code full of days in the year 9999 can then never push the real
+            // days out, and a device whose own clock is set too early still keeps its newest days.
+            // Same rule as the web's migrateSave, so one code keeps the same days in both editions.
+            let tomorrow = formatLocalDateKey(Date(timeIntervalSince1970: Double(nowEpochMs) / 1000 + 86_400))
+            let happened = Array(dated.filter { $0 <= tomorrow }.suffix(dailyLogMaxDays))
+            let room = dailyLogMaxDays - happened.count
+            let later = room > 0 ? Array(dated.filter { $0 > tomorrow }.suffix(room)) : []
+            for dateKey in happened + later {
                 let val = rawDaily[dateKey]
                 if jsonDouble(val) != nil {
                     base.dailySlotsByDate[dateKey] = DailySlotLog(
@@ -395,14 +455,20 @@ public final class SaveSystem {
                         fullRewards: clampInt(vObj["fullRewards"], min: 0, max: GameConfig.dailyFullRewardCap, fallback: 0),
                         tips: clampInt(vObj["tips"], min: 0, max: GameConfig.dailyCourtesyTipCap, fallback: 0)
                     )
+                } else if val is [Any] {
+                    // A list where a day belongs: the web reads it as an object with no counts and
+                    // keeps an empty day, so this does too (one code, the same days in both editions).
+                    base.dailySlotsByDate[dateKey] = DailySlotLog(fullRewards: 0, tips: 0)
                 }
             }
         }
 
         // Player profile
         if let p = obj["playerProfile"] as? [String: Any] {
-            let rawName = (p["displayName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let safeName = rawName.isEmpty ? "Explorer" : String(rawName.prefix(24))
+            let rawName = trimName(p["displayName"] as? String ?? "")
+            // Nothing left after the cut (no name, or one "letter" too long to keep): the usual name.
+            let cutName = truncateDisplayName(rawName)
+            let safeName = cutName.isEmpty ? "Explorer" : cutName
             let skinIdx = clampInt(
                 p["skinToneIndex"],
                 min: 0,
@@ -589,7 +655,9 @@ public final class SaveSystem {
         _ code: String,
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) throws -> MouthLifeSaveV2 {
-        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The web's code.trim() and /\s+/g remove exactly `webTrimmedSpaces`: the same here, so a
+        // code pasted with a stray invisible character reads (or fails) the same in both editions.
+        let trimmed = code.trimmingCharacters(in: webTrimmedSpaces)
         guard trimmed.hasPrefix(syncCodePrefix) else {
             throw SyncCodeError.missingPrefix
         }
@@ -597,7 +665,7 @@ public final class SaveSystem {
         let afterPrefix = trimmed.dropFirst(syncCodePrefix.count)
         var compactScalars = String.UnicodeScalarView()
         for scalar in afterPrefix.unicodeScalars {
-            if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+            if webTrimmedSpaces.contains(scalar) {
                 continue
             }
             compactScalars.append(scalar)
@@ -689,14 +757,15 @@ public final class SaveSystem {
         _ text: String,
         nowEpochMs: Int64 = CompanionArchSim.currentEpochMs()
     ) throws -> MouthLifeSaveV2 {
-        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("\u{FEFF}") {
-            trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        // As the web's text.trim(): it also takes off a byte-order mark (U+FEFF) at either end,
+        // however many there are.
+        let trimmed = text.trimmingCharacters(in: webTrimmedSpaces)
         guard trimmed.hasPrefix("{") else {
             return try decodeSaveFromSyncCode(trimmed, nowEpochMs: nowEpochMs)
         }
-        guard trimmed.utf8.count <= 262_144,
+        // Counted in UTF-16 units, as the web's `trimmed.length > 262144` counts: in bytes, a text
+        // full of accents or emoji the web accepts would be refused here.
+        guard trimmed.utf16.count <= 262_144,
               let data = trimmed.data(using: .utf8),
               let parsed = try? JSONSerialization.jsonObject(with: data, options: []),
               let dict = parsed as? [String: Any]
@@ -1157,8 +1226,8 @@ public final class SaveSystem {
     ) -> PlayerHostProfile {
         var next = currentSave
         if let displayName {
-            let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            next.playerProfile.displayName = trimmed.isEmpty ? "Explorer" : String(trimmed.prefix(24))
+            let cut = Self.truncateDisplayName(Self.trimName(displayName))
+            next.playerProfile.displayName = cut.isEmpty ? "Explorer" : cut
         }
         if let skinToneIndex {
             let maxIdx = max(0, HostsAndHistory.realisticSkinTones.count - 1)
@@ -1234,7 +1303,7 @@ public final class SaveSystem {
             }
         }
         let newerDays = newer.dailySlotsByDate.keys.sorted()
-        let oldestKept = newerDays.count >= 45 ? (newerDays.first ?? "") : ""
+        let oldestKept = newerDays.count >= dailyLogMaxDays ? (newerDays.first ?? "") : ""
         for (day, a) in older.dailySlotsByDate where day >= oldestKept {
             let b = newer.dailySlotsByDate[day]
             if a.fullRewards > (b?.fullRewards ?? 0) || a.tips > (b?.tips ?? 0) { return false }
