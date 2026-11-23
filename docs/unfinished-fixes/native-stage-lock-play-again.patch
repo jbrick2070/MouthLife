@@ -1,0 +1,94 @@
+diff --git a/native-apple/MouthLifeApp/Render/MouthLifeSceneController.swift b/native-apple/MouthLifeApp/Render/MouthLifeSceneController.swift
+index ace094e..57b47f1 100644
+--- a/native-apple/MouthLifeApp/Render/MouthLifeSceneController.swift
++++ b/native-apple/MouthLifeApp/Render/MouthLifeSceneController.swift
+@@ -40,6 +40,21 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+     private var districtSealBirthSec: [Float] = [-1, -1, -1, -1]
+     private var foamTrail: [FoamTrailSample] = []
+     private var lastFoamSampleSec: Float = -10
++    /// The mounted stage's size, kept for the score camera so that it never has to ask the session.
++    private var stageWorldWidth: Double = 64.0
++    private var stageWorldDepth: Double = 32.0
++    /// Guards the stage: everything `mountStage` rebuilds (the session, the stage and skyline nodes,
++    /// the germ and acid pools, the cached snapshot and zone boxes, the foam trail, the seal times,
++    /// the stage's size, the ship's place and the stage enamel's uniform shadow).
++    /// `mountStage` runs on the main thread and holds it for the whole mount. SceneKit's render
++    /// thread asks for it with `try()` before a stage frame and sits that frame out when a stage is
++    /// mounting. It asks and never waits: `mountStage` calls into SceneKit while holding the lock,
++    /// and if SceneKit ever made the main thread wait for the frame in progress, a frame waiting
++    /// for this lock would hang the app for good.
++    /// Not recursive: nothing that runs while it is held may call `mountStage`.
++    /// The web needs no such lock: its `mountCartridgeMesh` runs on the one thread that also draws
++    /// its frames.
++    private let stageLock = NSLock()
+ 
+     // Bound Simulation & Touch State
+     public weak var activeSession: WorldSession?
+@@ -342,9 +357,15 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+     }
+ 
+     public func mountStage(for session: WorldSession) {
++        // "Play again" and "Next city" mount a stage while the score screen's frames are still
++        // running on SceneKit's render thread. No stage frame may run until the mount is whole.
++        stageLock.lock()
++        defer { stageLock.unlock() }
+         self.activeSession = session
+         resetStageInput()
+         let cart = session.cartridge
++        stageWorldWidth = cart.worldWidth
++        stageWorldDepth = cart.worldDepth
+ 
+         // Tear down old stage nodes
+         activeStageNodes?.rootNode.removeFromParentNode()
+@@ -435,7 +456,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+     /// Lets go of everything a stage was being told: the stick, a finger on the tooth and any floss,
+     /// Surge or Scan still waiting for the next step. Called on pause, on leaving a stage, when a
+     /// finale starts and when a new stage mounts (web twin: `releaseThumbPad` + `setVirtualMove(0, 0,
+-    /// false)` in `TelemetryHudOverlay.setPaused`).
++    /// false)` in `TelemetryHudOverlay.setPaused`). It must never take the stage lock: `mountStage`
++    /// calls it while holding that lock, and a second `lock()` on the same thread would hang.
+     public func resetStageInput() {
+         stickMoveX = 0
+         stickMoveZ = 0
+@@ -664,9 +686,19 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+             )
+         }
+ 
++        // A stage frame and its camera read what `mountStage` rebuilds on the main thread, so they
++        // run only while no stage is mounting (see `stageLock`: ask, never wait). A frame that
++        // cannot have the lock leaves the stage and the camera as they are. Its time was already
++        // counted above, so the first frame after the mount takes an ordinary step, not a long one.
++        let stageFrame = appMode == .arcade || appMode == .pulpRescue || appMode == .report
++        if stageFrame {
++            guard stageLock.try() else { return }
++        }
++        defer { if stageFrame { stageLock.unlock() } }
++
+         if appMode == .hub || appMode == .brushAlong {
+             updateCompanionFrame(dt: dtFloat, motionTime: motionTime)
+-        } else if appMode == .arcade || appMode == .pulpRescue || appMode == .report {
++        } else if stageFrame {
+             updateArcadeFrame(rawDt: rawDt, dtFloat: dtFloat, motionTime: motionTime)
+         }
+ 
+@@ -828,6 +860,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+         )
+     }
+ 
++    /// One stage frame. Runs only with the stage lock held (taken in `renderer(_:updateAtTime:)`),
++    /// so `mountStage` cannot swap the stage under it.
+     private func updateArcadeFrame(rawDt: Double, dtFloat: Float, motionTime: Float) {
+         guard let session = activeSession else { return }
+         let cart = session.cartridge
+@@ -1226,8 +1260,9 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate
+             )
+ 
+         case .report:
+-            let cx = Float((activeSession?.cartridge.worldWidth ?? 64.0) * 0.5)
+-            let cz = Float((activeSession?.cartridge.worldDepth ?? 32.0) * 0.5)
++            // The size `mountStage` stored, not the session: the camera never reads the session.
++            let cx = Float(stageWorldWidth * 0.5)
++            let cz = Float(stageWorldDepth * 0.5)
+             let orbit = reducedMotion ? Float(0.2) : sceneNowSec * 0.22
+             return (
+                 SIMD3<Float>(cx + sin(orbit) * 22.0, 24.0, cz + cos(orbit) * 22.0),

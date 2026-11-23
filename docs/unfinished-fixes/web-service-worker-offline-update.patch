@@ -1,0 +1,1381 @@
+diff --git a/public/sw.js b/public/sw.js
+index d221dcb..bef9b33 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -1,5 +1,8 @@
+ // MouthLife Offline PWA Service Worker
+ // Network-first for HTML/shell (instant updates when online) + cache-first for immutable hashed Vite bundles.
++
++// Keep this name. `activate` deletes every other "mouthlife-shell-" cache, and on a phone this one
++// is the only copy of the game that starts without a connection.
+ const CACHE_NAME = 'mouthlife-shell-v3';
+ const SHELL_URLS = [
+   './',
+@@ -17,11 +20,116 @@ const SHELL_URLS = [
+ // names carry their content hash, so the header cannot change what they hold.
+ const MATCH = { ignoreVary: true, ignoreSearch: false };
+ 
++// A stored page is only useful if the game can start from it with no connection. After an update
++// the new page names new script and style files. A launch cut short just after the page arrived
++// used to store that page without them, on top of the older page that still worked: a blank screen
++// at every launch without a connection. So a page is stored only once every script and style file
++// it names is stored. Until then the page from before stays, with its own files, and the game
++// still starts. This only decides what is kept for later: what the player is sent right now does
++// not change, and no stored file is ever deleted.
++
++// The script and style files a page names, as full addresses. The build writes them into the page
++// as src="./assets/index-<hash>.js" and href="./assets/index-<hash>.css". Pictures do not count:
++// the game starts without them.
++function namedBundles(html, pageUrl) {
++  const named = [];
++  // src=… or href=…, written in double quotes, single quotes or none.
++  const attribute = /(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
++  let found = attribute.exec(html);
++  while (found) {
++    const written = found[1] || found[2] || found[3] || '';
++    try {
++      // A page writes "&" as "&amp;"; the browser asks for the file with a plain "&".
++      const url = new URL(written.replace(/&amp;/g, '&'), pageUrl);
++      url.hash = '';
++      if (
++        url.origin === self.location.origin &&
++        url.pathname.includes('/assets/') &&
++        /\.(?:m?js|css)$/i.test(url.pathname) &&
++        named.indexOf(url.href) < 0
++      ) {
++        named.push(url.href);
++      }
++    } catch (e) {
++      // Not an address at all, so not a file the game could need.
++    }
++    found = attribute.exec(html);
++  }
++  return named;
++}
++
++// True when every script and style file the page names is stored. `fetchMissing` is used only once
++// a page has started: a file that is not stored yet is then downloaded first, and if that download
++// fails the promise fails, so the caller stores nothing.
++function bundlesAreStored(cache, html, pageUrl, fetchMissing) {
++  return Promise.all(
++    namedBundles(html, pageUrl).map((u) =>
++      cache.match(u, MATCH).then((hit) => {
++        if (hit) return true;
++        return fetchMissing ? cache.add(u).then(() => true) : false;
++      })
++    )
++  ).then((stored) => stored.every(Boolean));
++}
++
++// Stores one answer from the network. A page waits for its bundles (see above); everything else
++// (icons, the manifest) is stored as it comes.
++function storeShell(cache, key, res, fetchMissing) {
++  const type = (res.headers.get('content-type') || '').toLowerCase();
++  if (!type.includes('text/html')) return cache.put(key, res);
++  // A page that reached us by way of a redirect cannot open the game later (browsers refuse to
++  // start from one), so it must not take the place of a stored page that can.
++  if (res.redirected) return Promise.resolve();
++  // The address the page will be opened at, which is what its "./assets/…" names are read against.
++  const pageUrl = new URL(typeof key === 'string' ? key : key.url, self.location.href).href;
++  return res
++    .clone()
++    .text()
++    .then((html) => bundlesAreStored(cache, html, pageUrl, fetchMissing))
++    .then((ready) => (ready ? cache.put(key, res) : undefined));
++}
++
++// Stores an answer while the player already has it. Nothing in here may get in the way of that
++// answer, so every failure ends here and the copy stored before stays as it was.
++function storeLater(event, key, copy) {
++  try {
++    const stored = caches
++      .open(CACHE_NAME)
++      .then((cache) => storeShell(cache, key, copy))
++      .catch(() => undefined);
++    // Ask the browser to keep this worker awake until the page has been read and stored.
++    event.waitUntil(stored);
++  } catch (e) {
++    // The answer is already on its way; the next launch stores it.
++  }
++}
++
++// A page that reports in has started, so its bundles are stored: now the page itself can be, under
++// both names it is opened by. Should the host hold a newer page by now, its bundles are downloaded
++// first, and if one of them cannot be had the page stored before stays.
++function storeStartedPage(cache) {
++  return fetch('./').then((res) => {
++    if (!res || res.status !== 200) return undefined;
++    const second = res.clone();
++    return storeShell(cache, './', res, true).then(() => storeShell(cache, './index.html', second));
++  });
++}
++
+ self.addEventListener('install', (event) => {
+   event.waitUntil(
+     caches
+       .open(CACHE_NAME)
+-      .then((cache) => cache.addAll(SHELL_URLS))
++      .then((cache) =>
++        // One file at a time, so a page that has to wait for its bundles does not hold back the
++        // icons, and one missing file does not hold back the rest.
++        Promise.all(
++          SHELL_URLS.map((u) =>
++            fetch(u)
++              .then((res) => (res && res.status === 200 ? storeShell(cache, u, res) : undefined))
++              .catch(() => undefined)
++          )
++        )
++      )
+       .catch(() => undefined)
+       .then(() => self.skipWaiting())
+   );
+@@ -57,6 +165,9 @@ self.addEventListener('message', (event) => {
+           cache.match(u, MATCH).then((hit) => hit || cache.add(u).catch(() => undefined))
+         )
+       )
++        // The bundles are in, so the page that named them can be stored too.
++        .then(() => storeStartedPage(cache))
++        .catch(() => undefined)
+     )
+   );
+ });
+@@ -94,7 +205,7 @@ self.addEventListener('fetch', (event) => {
+       .then((res) => {
+         if (res && res.status === 200) {
+           const copy = res.clone();
+-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
++          storeLater(event, req, copy);
+         }
+         return res;
+       })
+diff --git a/tests/serviceWorker.test.ts b/tests/serviceWorker.test.ts
+new file mode 100644
+index 0000000..26b4c5b
+--- /dev/null
++++ b/tests/serviceWorker.test.ts
+@@ -0,0 +1,1225 @@
++import { readFileSync } from 'node:fs';
++import { join } from 'node:path';
++import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
++
++// The browser runs public/sw.js by itself, outside the page, so it cannot be imported like the rest
++// of the game. These tests read the real file and run its text inside a pretend phone: a host that
++// can be updated and cut off, the browser's file store, and a page that loads what its HTML names
++// the way the built page does (src/main.ts registers ./sw.js on load and reports its bundles).
++// None of the worker's rules are repeated here: only what a player would get is checked.
++const WORKER_SOURCE = readFileSync(join(__dirname, '..', 'public/sw.js'), 'utf8');
++
++/** Phones in the field keep their game under this name; a worker that looks elsewhere strands them. */
++const STORE_NAME = 'mouthlife-shell-v3';
++const LANGUAGES = ['de', 'es', 'fr', 'ja', 'ko', 'pt', 'zh'];
++const PICTURES = ['t-plaque-DTRyxbod.jpg', 'home-DG65wR2T.jpg'];
++const SHELL_FILES = ['manifest.webmanifest', 'icon.svg', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'privacy.html'];
++
++// ---------------------------------------------------------------------------------------------
++// The page
++// ---------------------------------------------------------------------------------------------
++
++/** The three lines the build adds to the page (see dist/index.html after `npm run build`). */
++const builtHead = (version: string, three = 'AAA'): string => `    <script type="module" crossorigin src="./assets/index-${version}.js"></script>
++    <link rel="modulepreload" crossorigin href="./assets/three-${three}.js">
++    <link rel="stylesheet" crossorigin href="./assets/index-${version}.css">`;
++
++/** The game's page around those lines. The closing comment tells a test which build a page is. */
++const pageWith = (version: string, head: string): string => `<!DOCTYPE html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta property="og:image" content="./og-card.png" />
++    <link rel="manifest" href="./manifest.webmanifest" />
++    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
++    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
++    <title>MouthLife: The Plaque Dimension</title>
++${head}
++  </head>
++  <body>
++    <div id="app">
++      <canvas id="mouthlife-canvas" aria-label="MouthLife 3D Viewport"></canvas>
++      <div id="ui-root"></div>
++    </div>
++    <!-- build ${version} -->
++  </body>
++</html>`;
++
++const versionOf = (html: string): string => /<!-- build (\w+) -->/.exec(html)?.[1] ?? '?';
++
++interface PageFile {
++  url: string;
++  kind: 'script' | 'style';
++}
++
++/** What a browser loads before this page can start: its scripts and style sheets, read tag by tag. */
++function filesThePageLoads(html: string, pageUrl: string): PageFile[] {
++  const files: PageFile[] = [];
++  const visible = html.replace(/<!--[\s\S]*?-->/g, '');
++  for (const tag of visible.match(/<(?:script|link)\b[^>]*>/gi) ?? []) {
++    const value = (name: string): string | undefined => {
++      const found = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i').exec(tag);
++      return found ? (found[1] ?? found[2] ?? found[3]).replace(/&amp;/g, '&') : undefined;
++    };
++    const isScript = /^<script/i.test(tag);
++    const name = value(isScript ? 'src' : 'href');
++    const rel = (value('rel') ?? '').toLowerCase();
++    if (!name || (!isScript && rel !== 'stylesheet' && rel !== 'modulepreload')) continue;
++    try {
++      files.push({ url: new URL(name, pageUrl).href, kind: isScript || rel === 'modulepreload' ? 'script' : 'style' });
++    } catch {
++      // Not an address at all: a browser leaves such a tag alone.
++    }
++  }
++  return files;
++}
++
++// ---------------------------------------------------------------------------------------------
++// The host
++// ---------------------------------------------------------------------------------------------
++
++type Ask = string | { url: string; method?: string; mode?: string };
++
++interface DeployOptions {
++  /** A page written differently from the build's; gets the version, returns the whole HTML. */
++  page?: (version: string) => string;
++  /** The hash of the three.js chunk, which most updates leave alone. */
++  three?: string;
++  /** This update also changed sw.js, so browsers install the worker again. */
++  workerChanged?: boolean;
++  /** Files the page names that a browser never asks for (a hint it skips, a file on another site). */
++  skippedByBrowsers?: string[];
++  /** Files that should be on the host and are not. */
++  without?: string[];
++}
++
++/** The static host. An update replaces every file, as GitHub Pages does: the old hashed bundles are gone. */
++class Site {
++  readonly workerUrl: string;
++  files = new Map<string, { body: string; type: string }>();
++  online = true;
++  /** Every path the host was asked for, in order ('' is the page itself). */
++  asked: string[] = [];
++  workerRevision = 0;
++  skippedByBrowsers = new Set<string>();
++  /** When set, the copy of the page that a worker keeps for storing cannot be read. */
++  pageCopyCannotBeRead = false;
++  /** When set, a plain request for the page is answered with a redirect to it, which is followed. */
++  redirectsThePage = false;
++  /** Downloads, writes and promises a worker asked the browser to wait for, still going on. */
++  busy = 0;
++
++  constructor(readonly base = 'https://kids.example/MouthLife/') {
++    this.workerUrl = `${base}sw.js`;
++  }
++
++  deploy(version: string, options: DeployOptions = {}): void {
++    const three = options.three ?? 'AAA';
++    const page = options.page ? options.page(version) : pageWith(version, builtHead(version, three));
++    const files = new Map<string, { body: string; type: string }>();
++    const put = (path: string, body: string, type: string): void => void files.set(path, { body, type });
++    put('', page, 'text/html; charset=utf-8');
++    put('index.html', page, 'text/html; charset=utf-8');
++    put(`assets/index-${version}.js`, `/* app ${version} */`, 'application/javascript');
++    put(`assets/three-${three}.js`, `/* three ${three} */`, 'application/javascript');
++    put(`assets/index-${version}.css`, `/* look ${version} */`, 'text/css');
++    for (const language of LANGUAGES) put(`assets/${language}-${version}.js`, `/* ${language} ${version} */`, 'application/javascript');
++    for (const picture of PICTURES) put(`assets/${picture}`, 'jpg', 'image/jpeg');
++    put('manifest.webmanifest', '{"start_url":"./"}', 'application/manifest+json');
++    put('icon.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>', 'image/svg+xml');
++    for (const png of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'og-card.png']) put(png, 'png', 'image/png');
++    put('privacy.html', `<!DOCTYPE html><html><body>privacy ${version}</body></html>`, 'text/html; charset=utf-8');
++    put('music/tokyo.m4a', 'song', 'audio/mp4');
++    for (const path of options.without ?? []) files.delete(path);
++    this.files = files;
++    this.skippedByBrowsers = new Set(options.skippedByBrowsers ?? []);
++    if (options.workerChanged || this.workerRevision === 0) this.workerRevision++;
++  }
++
++  /** The full address of a request, the way the browser's store keeps it (no #part). */
++  address(ask: Ask): string {
++    const url = new URL(typeof ask === 'string' ? ask : ask.url, this.workerUrl);
++    url.hash = '';
++    return url.href;
++  }
++
++  /** What the page fetches once it runs and nobody is waiting: other languages, guide pictures. */
++  lazy(): string[] {
++    return [...this.files.keys()].filter((path) => /^assets\/([a-z]{2}-|t-|home-)/.test(path)).map((path) => this.base + path);
++  }
++
++  /** How often the host was asked for a path since the list was last cleared. */
++  timesAsked(path: string): number {
++    return this.asked.filter((asked) => asked === path).length;
++  }
++
++  track<T>(work: () => Promise<T>): Promise<T> {
++    this.busy++;
++    return work().finally(() => void this.busy--);
++  }
++
++  /** The network, for the page and for the worker alike. */
++  readonly fetch = (ask: Ask): Promise<Response> =>
++    this.track(async () => {
++      const url = this.address(ask);
++      if (!this.online || !url.startsWith(this.base)) throw new TypeError('Failed to fetch');
++      const path = url.slice(this.base.length).split('?')[0]; // a static host ignores ?queries
++      this.asked.push(path);
++      const file = this.files.get(path);
++      if (!file) return new Response('<!DOCTYPE html><title>Not found</title>', { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } });
++      const headers = { 'content-type': file.type, 'cache-control': 'max-age=600', vary: 'Accept-Encoding' };
++      const answer = new Response(file.body, { status: 200, headers });
++      if (this.pageCopyCannotBeRead && path === '') return withUnreadableCopies(answer);
++      // A browser follows a redirect for the worker's own requests; a page load it follows itself.
++      const plain = typeof ask === 'string' || ask.mode !== 'navigate';
++      return this.redirectsThePage && plain && (path === '' || path === 'index.html') ? arrivedByRedirect(answer) : answer;
++    });
++}
++
++/** An answer that reads fine itself, while every copy made of it fails to read. */
++function withUnreadableCopies(answer: Response): Response {
++  const unreadable = (): Response => {
++    const copy = new Response(null, { status: answer.status, headers: answer.headers });
++    const fail = (): Promise<never> => Promise.reject(new TypeError('the copy could not be read'));
++    Object.defineProperties(copy, { text: { value: fail }, arrayBuffer: { value: fail }, clone: { value: unreadable } });
++    return copy;
++  };
++  Object.defineProperty(answer, 'clone', { value: unreadable });
++  return answer;
++}
++
++/** Marks an answer the way a browser does when it followed a redirect to get it; copies stay marked. */
++function arrivedByRedirect(answer: Response): Response {
++  const copy = answer.clone.bind(answer);
++  Object.defineProperty(answer, 'redirected', { value: true });
++  Object.defineProperty(answer, 'clone', { value: () => arrivedByRedirect(copy()) });
++  return answer;
++}
++
++/** Waits until the pretend phone is at rest: nothing downloading, nothing being written. */
++async function settle(site: Site): Promise<void> {
++  let quiet = 0;
++  for (let turn = 0; quiet < 10; turn++) {
++    if (turn > 20000) throw new Error('the pretend phone never came to rest');
++    await new Promise((resolve) => setImmediate(resolve));
++    quiet = site.busy === 0 ? quiet + 1 : 0;
++  }
++}
++
++// ---------------------------------------------------------------------------------------------
++// The browser's file store (Cache Storage)
++// ---------------------------------------------------------------------------------------------
++
++interface StoredAnswer {
++  status: number;
++  headers: [string, string][];
++  body: ArrayBuffer;
++  redirected: boolean;
++}
++
++const rebuilt = (stored: StoredAnswer): Response => {
++  const answer = new Response(stored.body, { status: stored.status, headers: stored.headers });
++  return stored.redirected ? arrivedByRedirect(answer) : answer;
++};
++
++/** A way for the store to let the worker down, to see that the player still gets an answer. */
++interface StoreFailure {
++  step: 'open' | 'match' | 'put';
++  how: 'throws' | 'rejects' | 'hangs';
++}
++
++class FakeCache {
++  readonly stored = new Map<string, StoredAnswer>();
++  /** Every address ever deleted from this cache. The worker has no reason to delete a file. */
++  readonly deleted: string[] = [];
++
++  constructor(private readonly storage: FakeCacheStorage) {}
++
++  /** The stored answer for an address, without going through the worker's own calls. */
++  peek(ask: Ask, ignoreSearch = false): StoredAnswer | undefined {
++    const wanted = this.storage.site.address(ask);
++    if (!ignoreSearch) return this.stored.get(wanted);
++    const bare = (url: string): string => url.split('?')[0];
++    for (const [url, answer] of this.stored) if (bare(url) === bare(wanted)) return answer;
++    return undefined;
++  }
++
++  match(ask: Ask, options?: { ignoreSearch?: boolean }): Promise<Response | undefined> {
++    return this.storage.step('match', async () => {
++      const hit = this.peek(ask, options?.ignoreSearch);
++      return hit ? rebuilt(hit) : undefined;
++    });
++  }
++
++  put(ask: Ask, answer: Response): Promise<void> {
++    return this.storage.step('put', async () => {
++      if (typeof ask !== 'string' && ask.method && ask.method !== 'GET') throw new TypeError('only GET requests can be stored');
++      if (answer.status === 206) throw new TypeError('a partial answer cannot be stored');
++      if (answer.bodyUsed) throw new TypeError('this answer was already read');
++      const body = await answer.arrayBuffer();
++      this.stored.set(this.storage.site.address(ask), { status: answer.status, headers: [...answer.headers.entries()], body, redirected: answer.redirected });
++    });
++  }
++
++  add(ask: Ask): Promise<void> {
++    return this.storage.site.track(async () => {
++      const answer = await this.storage.site.fetch(ask);
++      if (!answer.ok) throw new TypeError('bad status');
++      await this.put(ask, answer);
++    });
++  }
++
++  /** All or nothing, as in a browser: one bad answer and none of the files is stored. */
++  addAll(asks: Ask[]): Promise<void> {
++    return this.storage.site.track(async () => {
++      const answers = await Promise.all(
++        asks.map(async (ask) => {
++          const answer = await this.storage.site.fetch(ask);
++          if (!answer.ok) throw new TypeError('bad status');
++          return [ask, answer] as const;
++        })
++      );
++      for (const [ask, answer] of answers) await this.put(ask, answer);
++    });
++  }
++
++  async delete(ask: Ask): Promise<boolean> {
++    const url = this.storage.site.address(ask);
++    this.deleted.push(url);
++    return this.stored.delete(url);
++  }
++
++  async keys(): Promise<{ url: string }[]> {
++    return [...this.stored.keys()].map((url) => ({ url }));
++  }
++}
++
++class FakeCacheStorage {
++  readonly caches = new Map<string, FakeCache>();
++  failure: StoreFailure | null = null;
++
++  constructor(readonly site: Site) {}
++
++  /** Runs one store call, or lets it fail the way `failure` says. */
++  step<T>(name: StoreFailure['step'], work: () => Promise<T>): Promise<T> {
++    if (this.failure?.step !== name) return this.site.track(work);
++    if (this.failure.how === 'throws') throw new TypeError(`pretend store failure: ${name}`);
++    if (this.failure.how === 'rejects') return Promise.reject(new DOMException('pretend store failure: no room left', 'QuotaExceededError'));
++    return new Promise<T>(() => undefined); // never answers
++  }
++
++  open(name: string): Promise<FakeCache> {
++    return this.step('open', async () => {
++      let cache = this.caches.get(name);
++      if (!cache) this.caches.set(name, (cache = new FakeCache(this)));
++      return cache;
++    });
++  }
++
++  async keys(): Promise<string[]> {
++    return [...this.caches.keys()];
++  }
++
++  async delete(name: string): Promise<boolean> {
++    return this.caches.delete(name);
++  }
++
++  match(ask: Ask, options?: { ignoreSearch?: boolean }): Promise<Response | undefined> {
++    return this.step('match', async () => {
++      for (const cache of this.caches.values()) {
++        const hit = cache.peek(ask, options?.ignoreSearch);
++        if (hit) return rebuilt(hit);
++      }
++      return undefined;
++    });
++  }
++
++  /** The game's own cache, made on the spot for a test that fills it by hand. */
++  game(): FakeCache {
++    let cache = this.caches.get(STORE_NAME);
++    if (!cache) this.caches.set(STORE_NAME, (cache = new FakeCache(this)));
++    return cache;
++  }
++}
++
++// ---------------------------------------------------------------------------------------------
++// The worker
++// ---------------------------------------------------------------------------------------------
++
++interface PretendRequest {
++  url: string;
++  method: string;
++  mode: string;
++}
++
++const navigation = (url: string): PretendRequest => ({ url, method: 'GET', mode: 'navigate' });
++const subresource = (url: string): PretendRequest => ({ url, method: 'GET', mode: 'cors' });
++
++/** One running copy of public/sw.js. A browser starts a new one whenever the file on the host changes. */
++class WorkerInstance {
++  private readonly handlers = new Map<string, ((event: unknown) => void)[]>();
++  /** Promises the worker handed to the browser that failed: work it left unfinished without noticing. */
++  readonly problems: string[] = [];
++  skipWaitingCalls = 0;
++  claimCalls = 0;
++  /** Requests the worker left to the browser (it never called respondWith). */
++  stoodAside = 0;
++  /** A browser may refuse to wait once the answer is on its way; set this to try that. */
++  refusesToWait = false;
++  /** How often the worker asked the browser, while answering a request, to keep it awake a little longer. */
++  askedToStayAwake = 0;
++
++  constructor(
++    private readonly site: Site,
++    store: FakeCacheStorage
++  ) {
++    const scope = {
++      location: new URL(site.workerUrl),
++      addEventListener: (type: string, handler: (event: unknown) => void): void => {
++        this.handlers.set(type, [...(this.handlers.get(type) ?? []), handler]);
++      },
++      skipWaiting: (): Promise<void> => {
++        this.skipWaitingCalls++;
++        return Promise.resolve();
++      },
++      clients: {
++        claim: (): Promise<void> => {
++          this.claimCalls++;
++          return Promise.resolve();
++        },
++      },
++    };
++    new Function('self', 'caches', 'fetch', 'Response', 'URL', WORKER_SOURCE)(scope, store, site.fetch, Response, URL);
++  }
++
++  listensFor(): string[] {
++    return [...this.handlers.keys()].sort();
++  }
++
++  private waitFor(label: string, work: unknown): void {
++    void this.site.track(() => Promise.resolve(work).then(() => undefined, (reason) => void this.problems.push(`${label}: ${String(reason)}`)));
++  }
++
++  /** An install, activate or message event; resolves when the worker has finished with it. */
++  async dispatch(type: 'install' | 'activate' | 'message', extra: Record<string, unknown> = {}): Promise<void> {
++    const event = { ...extra, waitUntil: (work: unknown): void => this.waitFor(type, work) };
++    for (const handler of this.handlers.get(type) ?? []) handler(event);
++    await settle(this.site);
++  }
++
++  /** The page reporting in (src/main.ts posts this once the page has loaded). */
++  message(data: unknown): Promise<void> {
++    return this.dispatch('message', { data });
++  }
++
++  /** A request from the page. Fails the way a page would see it when there is no answer. */
++  async fetch(request: PretendRequest): Promise<Response> {
++    const reply: { answer?: Promise<Response | undefined> } = {};
++    let active = true;
++    const event = {
++      request,
++      respondWith: (answer: unknown): void => {
++        reply.answer = Promise.resolve(answer) as Promise<Response | undefined>;
++      },
++      waitUntil: (work: unknown): void => {
++        if (!active || this.refusesToWait) throw new DOMException('The event is no longer active.', 'InvalidStateError');
++        this.askedToStayAwake++;
++        this.waitFor('fetch', work);
++      },
++    };
++    for (const handler of this.handlers.get('fetch') ?? []) handler(event);
++    if (!reply.answer) {
++      this.stoodAside++;
++      return this.site.fetch(request);
++    }
++    try {
++      const answer = await reply.answer;
++      if (!answer || answer.type === 'error') throw new TypeError('Failed to fetch');
++      // Browsers refuse to open a page from an answer that came through a redirect.
++      if (request.mode === 'navigate' && answer.redirected) throw new TypeError('Failed to fetch');
++      return answer;
++    } finally {
++      active = false;
++    }
++  }
++}
++
++// ---------------------------------------------------------------------------------------------
++// The phone
++// ---------------------------------------------------------------------------------------------
++
++interface Launch {
++  /** Which build's page the browser was given; 'none' is the browser's own "no connection" screen. */
++  page: string;
++  /** Which build's game script ran; 'none' with a page is a blank screen. */
++  script: string;
++  started: boolean;
++  /** Files the page needed and did not get. */
++  missing: string[];
++}
++
++interface LaunchOptions {
++  online: boolean;
++  /** The connection is lost as soon as the page itself has arrived. */
++  cutAfterPage?: boolean;
++  /** False for a browser that cannot list what the page loaded, so the page has nothing to report. */
++  reports?: boolean;
++  /** When a changed sw.js on the host is installed, compared with the page's report. */
++  update?: 'before the report' | 'during the report' | 'after the report';
++  /** The address opened, after the game's folder: '' (the default), 'index.html', '?from=homescreen'. */
++  at?: string;
++  /** Runs when the page has arrived and the worker has done what it does with it, before any bundle. */
++  whenPageArrived?: () => Promise<void>;
++}
++
++const startsWith = (version: string): Launch => ({ page: version, script: version, started: true, missing: [] });
++
++/** One installed copy of the game: a store and the worker in control of it. */
++class Phone {
++  readonly store: FakeCacheStorage;
++  /** The worker in control of the page; none before the first visit. */
++  worker: WorkerInstance | null = null;
++  private revision = 0;
++
++  constructor(readonly site: Site) {
++    this.store = new FakeCacheStorage(site);
++  }
++
++  /** The browser finds a changed sw.js on the host, installs it, and it takes over at once. */
++  async updateCheck(): Promise<void> {
++    if (!this.site.online || this.revision === this.site.workerRevision) return;
++    const next = new WorkerInstance(this.site, this.store);
++    await next.dispatch('install');
++    await next.dispatch('activate');
++    this.worker = next;
++    this.revision = this.site.workerRevision;
++  }
++
++  /** One launch from start to finish. */
++  async open(how: LaunchOptions): Promise<Launch> {
++    const { site } = this;
++    site.online = how.online;
++    const ask = (request: PretendRequest): Promise<Response> => (this.worker ? this.worker.fetch(request) : site.fetch(request));
++
++    const pageUrl = site.base + (how.at ?? '');
++    let html: string;
++    try {
++      const answer = await ask(navigation(pageUrl));
++      if (!answer.ok) return { page: `HTTP ${answer.status}`, script: 'none', started: false, missing: [] };
++      html = await answer.text();
++    } catch {
++      await settle(site);
++      return { page: 'none', script: 'none', started: false, missing: [] };
++    }
++    await settle(site);
++    if (how.whenPageArrived) await how.whenPageArrived();
++    if (how.cutAfterPage) site.online = false;
++
++    const loaded: string[] = [];
++    const missing: string[] = [];
++    let script = 'none';
++    let scripts = 0;
++    let scriptsMissing = 0;
++    for (const file of filesThePageLoads(html, pageUrl)) {
++      const url = site.address(file.url);
++      if (site.skippedByBrowsers.has(url.slice(site.base.length)) || site.skippedByBrowsers.has(url)) continue;
++      if (file.kind === 'script') scripts++;
++      let arrived = false;
++      try {
++        const answer = await ask(subresource(url));
++        const text = await answer.text();
++        // A browser refuses a script that is served as a web page, and a style sheet likewise.
++        arrived = answer.ok && (file.kind === 'script' ? /javascript/ : /css/).test(answer.headers.get('content-type') ?? '');
++        if (arrived) script = /\/\* app (\w+) \*\//.exec(text)?.[1] ?? script;
++      } catch {
++        arrived = false;
++      }
++      if (arrived) loaded.push(url);
++      else {
++        missing.push(url.slice(site.base.length));
++        if (file.kind === 'script') scriptsMissing++;
++      }
++    }
++    await settle(site);
++    const started = scripts > 0 && scriptsMissing === 0;
++
++    if (started) {
++      // src/main.ts, on load: register ./sw.js, then tell the worker which bundles this visit loaded.
++      const report = async (to: WorkerInstance | null): Promise<void> => {
++        if (to && how.reports !== false && loaded.length > 0) await to.message({ type: 'precache', urls: loaded });
++      };
++      const order = this.worker ? (how.update ?? 'after the report') : 'before the report';
++      if (order === 'before the report') {
++        await this.updateCheck();
++        await report(this.worker);
++      } else if (order === 'during the report') {
++        const sent = report(this.worker);
++        await this.updateCheck();
++        await sent;
++      } else {
++        await report(this.worker);
++        await this.updateCheck();
++      }
++      // Then the page warms up what a first visit never asks for: other languages, guide pictures.
++      for (const url of site.lazy()) {
++        await ask(subresource(url))
++          .then((answer) => answer.arrayBuffer())
++          .catch(() => undefined);
++      }
++    } else {
++      await this.updateCheck(); // the browser looks for a new worker whether or not the page starts
++    }
++    await settle(site);
++    return { page: versionOf(html), script: started ? script : 'none', started, missing };
++  }
++
++  /** Which build's page is stored under a name ('./' or './index.html'); 'none' when nothing is. */
++  pageAt(name: string): string {
++    const hit = this.store.caches.get(STORE_NAME)?.peek(name);
++    return hit ? versionOf(new TextDecoder().decode(hit.body)) : 'none';
++  }
++
++  /** Whether a file of the game ('assets/index-V1.js') is stored. */
++  has(path: string): boolean {
++    return Boolean(this.store.caches.get(STORE_NAME)?.peek(this.site.base + path));
++  }
++
++  /** Everything stored for the game, as short names. */
++  storedFiles(): string[] {
++    const stored = this.store.caches.get(STORE_NAME)?.stored ?? new Map<string, StoredAnswer>();
++    return [...stored.keys()].map((url) => url.slice(this.site.base.length) || './').sort();
++  }
++}
++
++/** A phone that has been to the game once, on a good connection, and so holds build V1. */
++async function phoneWithV1(site = new Site()): Promise<Phone> {
++  site.deploy('V1');
++  const phone = new Phone(site);
++  expect(await phone.open({ online: true })).toEqual(startsWith('V1'));
++  return phone;
++}
++
++// ---------------------------------------------------------------------------------------------
++// The tests
++// ---------------------------------------------------------------------------------------------
++
++// A failed promise nobody listens to is a stumble the worker did not notice. None is acceptable.
++const unnoticed: string[] = [];
++const noteUnnoticed = (reason: unknown): void => void unnoticed.push(String(reason));
++beforeAll(() => void process.on('unhandledRejection', noteUnnoticed));
++afterAll(() => void process.off('unhandledRejection', noteUnnoticed));
++afterEach(async () => {
++  for (let turn = 0; turn < 5; turn++) await new Promise((resolve) => setImmediate(resolve));
++  expect(unnoticed.splice(0), 'a promise in the worker failed with nobody listening').toEqual([]);
++});
++
++describe('offline copy of the game: launches', () => {
++  it('after one full visit the game starts with no connection', async () => {
++    const phone = await phoneWithV1();
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    // Opened by another address (a home-screen link with a note on it), the stored page still serves.
++    expect(await phone.open({ online: false, at: '?from=homescreen' })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: false, at: 'index.html' })).toEqual(startsWith('V1'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('a first visit that ends before the page reports in stores nothing that cannot start', async () => {
++    const site = new Site();
++    site.deploy('V1');
++    const phone = new Phone(site);
++    // The worker is installed, but the page is closed before it can say which bundles it loaded.
++    expect(await phone.open({ online: true, reports: false })).toEqual(startsWith('V1'));
++    expect(phone.pageAt('./')).toBe('none');
++    expect(phone.pageAt('./index.html')).toBe('none');
++    // No connection next time: the browser says so itself. A stored page with no script would be
++    // a blank screen instead, with nothing to tell a child what is wrong.
++    expect((await phone.open({ online: false })).page).toBe('none');
++    // The next visit with a connection puts it right.
++    expect(await phone.open({ online: true })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++
++  it('after an update, the new page is stored only once its script and style are', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2');
++    const launch = await phone.open({
++      online: true,
++      whenPageArrived: async () => {
++        // The player is already looking at V2, but its bundles are not stored yet: keep V1.
++        expect(phone.has('assets/index-V2.js')).toBe(false);
++        expect(phone.pageAt('./')).toBe('V1');
++        expect(phone.pageAt('./index.html')).toBe('V1');
++      },
++    });
++    expect(launch).toEqual(startsWith('V2'));
++    expect(phone.has('assets/index-V2.js')).toBe(true);
++    expect(phone.has('assets/index-V2.css')).toBe(true);
++    expect(phone.pageAt('./')).toBe('V2');
++    expect(phone.pageAt('./index.html')).toBe('V2');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('a launch cut off right after the new page arrived keeps the old game for offline play', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2'); // sw.js itself is unchanged
++    const cut = await phone.open({ online: true, cutAfterPage: true });
++    expect(cut).toMatchObject({ page: 'V2', started: false }); // this launch is lost either way
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    // In the bathroom, no connection: the old page and the old script, not a blank screen.
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    // One full launch later the phone has moved on to the new build.
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('several updates with a cut-off launch after each still leave a game that starts', async () => {
++    const phone = await phoneWithV1();
++    for (const version of ['V2', 'V3', 'V4', 'V5']) {
++      phone.site.deploy(version, { three: version === 'V4' ? 'BBB' : 'AAA' });
++      await phone.open({ online: true, cutAfterPage: true });
++      expect(await phone.open({ online: false }), `after the cut-off launch at ${version}`).toEqual(startsWith('V1'));
++    }
++    expect(await phone.open({ online: true })).toEqual(startsWith('V5'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V5'));
++  });
++
++  it('a browser that never reports still ends up with a game that starts offline', async () => {
++    const site = new Site();
++    site.deploy('V1');
++    const phone = new Phone(site);
++    const quietly = { online: true, reports: false } as const;
++    for (let visit = 1; visit <= 3; visit++) {
++      expect(await phone.open(quietly)).toEqual(startsWith('V1'));
++      // Whatever is stored so far, there is never a page without its script.
++      const offline = await phone.open({ online: false, reports: false });
++      expect(offline.started || offline.page === 'none', `after visit ${visit}`).toBe(true);
++    }
++    expect(await phone.open({ online: false, reports: false })).toEqual(startsWith('V1'));
++  });
++});
++
++describe('offline copy of the game: worker updates', () => {
++  it('a worker update while the new bundles are not stored keeps the old page', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2', { workerChanged: true });
++    // The browser checks sw.js on its own, without the page having loaded anything new.
++    await phone.updateCheck();
++    expect(phone.worker!.skipWaitingCalls).toBe(1);
++    expect(phone.worker!.claimCalls).toBe(1);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('a worker update with the bundles already stored stores the page, as before', async () => {
++    const phone = await phoneWithV1();
++    const cache = phone.store.game();
++    cache.stored.delete(phone.site.base);
++    cache.stored.delete(`${phone.site.base}index.html`);
++    phone.site.deploy('V1', { workerChanged: true }); // the same game, a changed worker file
++    await phone.updateCheck();
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++
++  it('a worker update while the host has lost its page keeps the stored one', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2', { workerChanged: true, without: ['', 'index.html'] });
++    await phone.updateCheck();
++    // The host's "not found" page names no bundles at all; it must not pass for the game.
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++
++  it('one missing file at install does not hold back the others', async () => {
++    const site = new Site();
++    site.deploy('V1', { without: ['privacy.html'] });
++    const phone = new Phone(site);
++    await phone.open({ online: true });
++    for (const file of SHELL_FILES.filter((name) => name !== 'privacy.html')) expect(phone.has(file), file).toBe(true);
++    expect(phone.has('privacy.html')).toBe(false);
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++
++  // A full launch during which the browser also swaps the worker. The page reports to whichever
++  // worker is in charge at that moment, so the old one and the new one must each cope.
++  it.each([
++    ['before the report (it reaches the new worker)', 'before the report'],
++    ['while the old worker is still handling the report', 'during the report'],
++    ['after the report (it reached the old worker)', 'after the report'],
++  ] as const)('the worker is replaced %s: the new game is stored all the same', async (_when, update) => {
++    const phone = await phoneWithV1();
++    const old = phone.worker!;
++    phone.site.deploy('V2', { workerChanged: true });
++    expect(await phone.open({ online: true, update })).toEqual(startsWith('V2'));
++    expect(phone.worker).not.toBe(old);
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect([...old.problems, ...phone.worker!.problems]).toEqual([]);
++  });
++
++  it('a phone filled by the worker published before this one keeps its game when this one takes over', async () => {
++    const site = new Site();
++    site.deploy('V1');
++    const phone = new Phone(site);
++    // What that worker leaves after a full visit: pages, bundles and the rest, under the same name.
++    const cache = phone.store.game();
++    for (const path of site.files.keys()) if (!path.startsWith('music/')) await cache.add(site.base + path);
++    // The update ships a new build together with this worker. That launch is still the old worker's:
++    // it stores the new page as it arrives and each bundle as the page loads it, and the page's
++    // report reaches it too (it stores the listed bundles, which it already has).
++    site.deploy('V2', { workerChanged: true });
++    for (const path of ['', 'assets/index-V2.js', 'assets/three-AAA.js', 'assets/index-V2.css']) await cache.add(site.base + path);
++    // Then the browser installs this worker and hands the page over.
++    await phone.updateCheck();
++    expect(await phone.store.keys()).toEqual([STORE_NAME]);
++    expect(cache.deleted).toEqual([]);
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect(phone.has('assets/index-V1.js')).toBe(true);
++  });
++
++  it('taking over from that worker after its cut-off launch does no further harm, and one full launch heals', async () => {
++    const site = new Site();
++    site.deploy('V1');
++    const phone = new Phone(site);
++    const cache = phone.store.game();
++    for (const path of site.files.keys()) if (!path.startsWith('music/')) await cache.add(site.base + path);
++    // The old worker stored the V2 page on arrival and the launch was cut: that copy at ./ cannot
++    // start, and nothing done from here can change it until a launch gets through.
++    site.deploy('V2', { workerChanged: true });
++    await cache.add(site.base);
++    await phone.updateCheck();
++    // This worker did not add to the damage: the other stored page is still the old, whole game.
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false, at: 'index.html' })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++  });
++
++  it('keeps the cache name, skips waiting, takes over, and clears only the game’s older caches', async () => {
++    const site = new Site();
++    site.deploy('V1');
++    const phone = new Phone(site);
++    // GitHub Pages serves every project of an account from one origin, so other caches may be here.
++    await phone.store.open('mouthlife-shell-v1');
++    await phone.store.open('mouthlife-shell-v2');
++    await phone.store.open('another-project');
++    await phone.updateCheck();
++    const worker = phone.worker!;
++    expect(worker.listensFor()).toEqual(['activate', 'fetch', 'install', 'message']);
++    expect(worker.skipWaitingCalls).toBe(1);
++    expect(worker.claimCalls).toBe(1);
++    expect((await phone.store.keys()).sort()).toEqual(['another-project', STORE_NAME]);
++    expect(worker.problems).toEqual([]);
++  });
++});
++
++describe('offline copy of the game: the page’s report', () => {
++  it('a newer build on the host by the time the page reports is fetched whole before its page is stored', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    // The page running is V1 (it reports V1’s bundles), and V2 went live in the meantime.
++    phone.site.deploy('V2');
++    await worker.message({ type: 'precache', urls: ['index-V1.js', 'three-AAA.js', 'index-V1.css'].map((name) => `${phone.site.base}assets/${name}`) });
++    expect(phone.has('assets/index-V2.js')).toBe(true);
++    expect(phone.has('assets/index-V2.css')).toBe(true);
++    expect(phone.pageAt('./')).toBe('V2');
++    expect(phone.pageAt('./index.html')).toBe('V2');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('…and when one of the newer bundles cannot be had, the page stored before stays', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    phone.site.deploy('V2', { without: ['assets/index-V2.css'] });
++    await worker.message({ type: 'precache', urls: [`${phone.site.base}assets/index-V1.js`] });
++    expect(phone.site.timesAsked('assets/index-V2.css')).toBe(1);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('a report while the host has lost its page keeps the stored one', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    phone.site.deploy('V2', { without: ['', 'index.html'] });
++    phone.site.asked = [];
++    await worker.message({ type: 'precache', urls: [`${phone.site.base}assets/index-V1.js`] });
++    expect(phone.site.asked).toEqual(['']); // it asked for the page, and got "not found"
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('a report with no connection, or one that is not a list of this site’s bundles, changes nothing', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const before = phone.storedFiles();
++    phone.site.deploy('V2');
++    phone.site.asked = [];
++    const notReports = [
++      null,
++      'precache',
++      { type: 'other', urls: [] },
++      { type: 'precache', urls: 'all' },
++      { type: 'precache', urls: [] },
++      { type: 'precache', urls: [7, 'https://elsewhere.example/assets/x.js'] },
++    ];
++    for (const data of notReports) await worker.message(data);
++    expect(phone.site.asked).toEqual([]);
++    phone.site.online = false;
++    await worker.message({ type: 'precache', urls: [`${phone.site.base}assets/index-V1.js`] });
++    expect(phone.storedFiles()).toEqual(before);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('an update launch downloads each bundle once, and the page once more to store it', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2', { three: 'BBB' });
++    phone.site.asked = [];
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    const more = [...new Set(phone.site.asked)].filter((path) => phone.site.timesAsked(path) > 1);
++    expect(more).toEqual(['']);
++    expect(phone.site.timesAsked('')).toBe(2);
++    // With nothing new on the host, a launch asks for the page (twice) and nothing else.
++    phone.site.asked = [];
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(phone.site.asked).toEqual(['', '']);
++  });
++});
++
++describe('offline copy of the game: what is stored and what is not', () => {
++  it('files that are not pages are stored as they arrive, and a page with no bundles too', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const { base } = phone.site;
++    await worker.fetch(subresource(`${base}og-card.png`)).then((answer) => answer.arrayBuffer());
++    await settle(phone.site);
++    phone.site.online = false;
++    expect(await (await worker.fetch(subresource(`${base}manifest.webmanifest`))).text()).toBe('{"start_url":"./"}');
++    expect((await worker.fetch(subresource(`${base}icon-192.png`))).status).toBe(200);
++    expect((await worker.fetch(subresource(`${base}og-card.png`))).status).toBe(200);
++    expect(await (await worker.fetch(navigation(`${base}privacy.html`))).text()).toContain('privacy V1');
++    // A changed privacy page is stored again on the next visit to it with a connection.
++    phone.site.deploy('V2');
++    phone.site.online = true;
++    await worker.fetch(navigation(`${base}privacy.html`)).then((answer) => answer.text());
++    await settle(phone.site);
++    phone.site.online = false;
++    expect(await (await worker.fetch(navigation(`${base}privacy.html`))).text()).toContain('privacy V2');
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('an answer that is not OK is passed on and never stored', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    phone.site.deploy('V2', { without: ['', 'index.html'] }); // the host has lost its page
++    const answer = await worker.fetch(navigation(phone.site.base));
++    expect(answer.status).toBe(404);
++    await answer.text();
++    await settle(phone.site);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('a page that names a script the host does not have is never stored', async () => {
++    const phone = await phoneWithV1();
++    const gone = 'assets/gone-XYZ.js';
++    phone.site.deploy('V2', {
++      page: (version) => pageWith(version, `${builtHead(version)}\n    <link rel="modulepreload" crossorigin href="./${gone}">`),
++      skippedByBrowsers: [gone], // a hint: the page starts without it while there is a connection
++    });
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(phone.site.timesAsked(gone)).toBeGreaterThan(0); // the worker did try
++    expect(phone.has(gone)).toBe(false);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(phone.pageAt('./index.html')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(phone.worker!.problems).toEqual([]);
++    // Once the host is whole again, so is the stored copy.
++    phone.site.deploy('V3');
++    expect(await phone.open({ online: true })).toEqual(startsWith('V3'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V3'));
++  });
++
++  it('a page that reached the worker by way of a redirect is never stored', async () => {
++    // A browser will not open a page from a stored answer that came through a redirect, so such a
++    // copy would mean no game at all without a connection.
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2', { workerChanged: true });
++    phone.site.redirectsThePage = true;
++    const redirectedPages = (): string[] => [...phone.store.game().stored].filter(([, answer]) => answer.redirected).map(([url]) => url);
++    // The worker update and the page's report both ask for the page themselves, and get a redirect.
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(redirectedPages()).toEqual([]);
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    // The page as the browser itself loaded it is stored at the next launch, once its bundles are.
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(redirectedPages()).toEqual([]);
++    expect(phone.pageAt('./')).toBe('V2');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('pictures and files on other sites named by a page do not hold it back, and are not downloaded for it', async () => {
++    const phone = await phoneWithV1();
++    const lines = [
++      '<link rel="preload" as="image" media="(min-width: 9999px)" href="./assets/poster-XYZ.jpg">',
++      '<link rel="icon" href="./assets/icon-abc.svg">',
++      '<link rel="stylesheet" href="https://letters.example/assets/letters.css">',
++      '<link rel="modulepreload" href="http://[not-an-address/assets/x.js">',
++    ];
++    phone.site.deploy('V2', {
++      page: (version) => pageWith(version, `${builtHead(version)}\n    ${lines.join('\n    ')}`),
++      skippedByBrowsers: ['https://letters.example/assets/letters.css'], // fetched from the other site, not from this host
++    });
++    phone.site.asked = [];
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(phone.pageAt('./')).toBe('V2');
++    expect(phone.pageAt('./index.html')).toBe('V2');
++    expect(phone.site.asked).not.toContain('assets/poster-XYZ.jpg');
++    expect(phone.site.asked).not.toContain('assets/icon-abc.svg');
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('nothing stored is ever deleted: older bundles, other languages and guide pictures all stay', async () => {
++    const phone = await phoneWithV1();
++    const first = phone.storedFiles();
++    expect(first).toEqual(expect.arrayContaining(['assets/de-V1.js', 'assets/zh-V1.js', 'assets/t-plaque-DTRyxbod.jpg', 'assets/home-DG65wR2T.jpg']));
++    for (const version of ['V2', 'V3']) {
++      phone.site.deploy(version, { workerChanged: version === 'V3' });
++      await phone.open({ online: true, cutAfterPage: true });
++      await phone.open({ online: true });
++    }
++    expect(phone.storedFiles()).toEqual(expect.arrayContaining(first));
++    expect(phone.storedFiles()).toEqual(expect.arrayContaining(['assets/de-V3.js', 'assets/index-V2.js', 'assets/index-V3.js']));
++    expect(phone.store.game().deleted).toEqual([]);
++    expect(await phone.store.keys()).toEqual([STORE_NAME]);
++  });
++});
++
++describe('offline copy of the game: how a page may name its bundles', () => {
++  const FORMS: [string, (version: string, site: Site) => string][] = [
++    ['./assets/… (how the build writes it today)', (v) => `<script type="module" crossorigin src="./assets/index-${v}.js"></script>`],
++    ['assets/… with no dot', (v) => `<script type="module" src="assets/index-${v}.js"></script>`],
++    ['/MouthLife/assets/… from the top of the site', (v, site) => `<script type="module" src="${new URL(site.base).pathname}assets/index-${v}.js"></script>`],
++    ['a full https address', (v, site) => `<script type="module" src="${site.base}assets/index-${v}.js"></script>`],
++    ['an address without https:', (v, site) => `<script type="module" src="${site.base.replace('https:', '')}assets/index-${v}.js"></script>`],
++    ['a name with a ?query', (v) => `<script type="module" src="./assets/index-${v}.js?v=7"></script>`],
++    ['a name with a two-part ?query', (v) => `<script type="module" src="./assets/index-${v}.js?a=1&amp;b=2"></script>`],
++    ['a name with a #part', (v) => `<script type="module" src="./assets/index-${v}.js#main"></script>`],
++    ['single quotes', (v) => `<script type='module' src='./assets/index-${v}.js'></script>`],
++    ['no quotes', (v) => `<script type=module src=./assets/index-${v}.js></script>`],
++    ['capital letters', (v) => `<SCRIPT TYPE="module" SRC="./assets/index-${v}.js"></SCRIPT>`],
++    ['spaces round the equals sign', (v) => `<script type="module" src = "./assets/index-${v}.js"></script>`],
++  ];
++
++  it.each(FORMS)('%s', async (_name, entry) => {
++    const phone = await phoneWithV1();
++    const { site } = phone;
++    // The page names this one script and nothing else, so the way it is written decides the outcome.
++    const page = (version: string): string => pageWith(version, `    ${entry(version, site)}`);
++    site.deploy('V2', { page });
++    // Cut off after the page: its bundle, however it is named, is not stored, so neither is the page.
++    await phone.open({ online: true, cutAfterPage: true });
++    expect(phone.pageAt('./')).toBe('V1');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    // A full launch: the page is stored once the bundle is, and starts with no connection.
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(phone.pageAt('./')).toBe('V2');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++    // A newer build that the worker fetches by itself when the running page reports in: the bundle
++    // must be stored under the very address the browser will ask for.
++    site.deploy('V3', { page });
++    site.online = true;
++    await phone.worker!.message({ type: 'precache', urls: [`${site.base}assets/three-AAA.js`] });
++    expect(phone.pageAt('./')).toBe('V3');
++    expect(await phone.open({ online: false })).toEqual(startsWith('V3'));
++    expect(phone.worker!.problems).toEqual([]);
++  });
++
++  it('a page in a folder of its own has its names read against its own address', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const { site } = phone;
++    site.files.set('help/index.html', { body: pageWith('H1', '    <script type="module" src="./assets/help-1.js"></script>'), type: 'text/html; charset=utf-8' });
++    site.files.set('help/assets/help-1.js', { body: '/* app H1 */', type: 'application/javascript' });
++    const visit = async (path: string): Promise<void> => {
++      await worker.fetch(path.endsWith('.html') ? navigation(site.base + path) : subresource(site.base + path)).then((answer) => answer.text());
++      await settle(site);
++    };
++    await visit('help/index.html'); // the page arrives before its script, so it waits
++    expect(phone.has('help/index.html')).toBe(false);
++    await visit('help/assets/help-1.js');
++    await visit('help/index.html'); // its script is stored now, so the page is too
++    expect(phone.has('help/index.html')).toBe(true);
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('the same holds with the game at the top of a site instead of in a folder', async () => {
++    const phone = await phoneWithV1(new Site('https://brush.example/'));
++    phone.site.deploy('V2');
++    await phone.open({ online: true, cutAfterPage: true });
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++  });
++});
++
++describe('offline copy of the game: storing never gets in the way of the answer', () => {
++  const FAILURES: [string, (phone: Phone) => void][] = [
++    ['the store cannot be opened (the call throws)', (phone) => (phone.store.failure = { step: 'open', how: 'throws' })],
++    ['the store cannot be opened (the promise fails)', (phone) => (phone.store.failure = { step: 'open', how: 'rejects' })],
++    ['looking a bundle up throws', (phone) => (phone.store.failure = { step: 'match', how: 'throws' })],
++    ['looking a bundle up fails', (phone) => (phone.store.failure = { step: 'match', how: 'rejects' })],
++    ['there is no room to write', (phone) => (phone.store.failure = { step: 'put', how: 'rejects' })],
++    ['writing throws', (phone) => (phone.store.failure = { step: 'put', how: 'throws' })],
++    ['the browser refuses to wait for the write', (phone) => (phone.worker!.refusesToWait = true)],
++  ];
++
++  it.each(FAILURES)('%s: the page still arrives and the stored game is untouched', async (_name, breakIt) => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const { site } = phone;
++    breakIt(phone);
++    // The same build again (a page that would be stored), then a new build (one that must wait).
++    for (const version of ['V1', 'V2']) {
++      if (version === 'V2') site.deploy('V2');
++      const answer = await worker.fetch(navigation(site.base));
++      expect(answer.status).toBe(200);
++      expect(versionOf(await answer.text())).toBe(version);
++      await settle(site);
++      expect(phone.pageAt('./')).toBe('V1');
++      expect(phone.pageAt('./index.html')).toBe('V1');
++    }
++    expect(worker.problems).toEqual([]);
++    // With the store working again, the game starts offline and moves on at the next full launch.
++    phone.store.failure = null;
++    worker.refusesToWait = false;
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++    expect(await phone.open({ online: true })).toEqual(startsWith('V2'));
++    expect(await phone.open({ online: false })).toEqual(startsWith('V2'));
++  });
++
++  it('a page whose copy cannot be read is still passed on whole, and not stored', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    phone.site.pageCopyCannotBeRead = true;
++    for (const version of ['V1', 'V2']) {
++      if (version === 'V2') phone.site.deploy('V2');
++      const answer = await worker.fetch(navigation(phone.site.base));
++      expect(answer.status).toBe(200);
++      expect(versionOf(await answer.text())).toBe(version);
++      await settle(phone.site);
++      expect(phone.pageAt('./')).toBe('V1');
++    }
++    expect(worker.problems).toEqual([]);
++    phone.site.pageCopyCannotBeRead = false;
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++
++  it('the player is never kept waiting for the store', async () => {
++    const phone = await phoneWithV1();
++    phone.site.deploy('V2');
++    phone.store.failure = { step: 'open', how: 'hangs' }; // the store never answers
++    const answer = await phone.worker!.fetch(navigation(phone.site.base));
++    expect(versionOf(await answer.text())).toBe('V2');
++  });
++
++  it('the browser is asked to keep the worker awake until the page has been checked and stored', async () => {
++    // A phone stops a worker soon after its answer is delivered; reading the page and looking up
++    // its bundles takes a moment longer than that answer.
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const before = worker.askedToStayAwake;
++    await worker.fetch(navigation(phone.site.base)).then((answer) => answer.text());
++    expect(worker.askedToStayAwake).toBe(before + 1);
++    await settle(phone.site);
++    expect(worker.problems).toEqual([]);
++  });
++
++  it('a failure while the page reports in ends quietly and leaves the stored game untouched', async () => {
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    phone.site.deploy('V2');
++    const report = { type: 'precache', urls: [`${phone.site.base}assets/index-V1.js`] };
++    for (const failure of [{ step: 'put', how: 'rejects' }, { step: 'put', how: 'throws' }, { step: 'match', how: 'rejects' }] as const) {
++      phone.store.failure = failure;
++      await worker.message(report);
++      phone.store.failure = null;
++      expect(phone.pageAt('./'), `${failure.step} ${failure.how}`).toBe('V1');
++      expect(phone.pageAt('./index.html'), `${failure.step} ${failure.how}`).toBe('V1');
++      expect(worker.problems, `${failure.step} ${failure.how}`).toEqual([]);
++    }
++    expect(await phone.open({ online: false })).toEqual(startsWith('V1'));
++  });
++});
++
++describe('offline copy of the game: what the worker answers with is unchanged', () => {
++  it('pages come from the network first, bundles from the store first, and the rest is left alone', async () => {
++    // This one passes on the worker published before the fix too: nothing here was meant to change.
++    const phone = await phoneWithV1();
++    const worker = phone.worker!;
++    const { site } = phone;
++    const { base } = site;
++
++    // A page: asked of the host every time, although a stored copy is at hand.
++    site.asked = [];
++    expect(versionOf(await (await worker.fetch(navigation(base))).text())).toBe('V1');
++    expect(site.timesAsked('')).toBe(1);
++    await settle(site);
++
++    // A stored bundle: from the store, without asking the host.
++    site.asked = [];
++    expect(await (await worker.fetch(subresource(`${base}assets/index-V1.js`))).text()).toBe('/* app V1 */');
++    expect(site.asked).toEqual([]);
++    // A bundle that is not stored: fetched, passed on and stored for next time.
++    site.files.set('assets/late-999.js', { body: '/* late */', type: 'application/javascript' });
++    expect(await (await worker.fetch(subresource(`${base}assets/late-999.js`))).text()).toBe('/* late */');
++    await settle(site);
++    expect(phone.has('assets/late-999.js')).toBe(true);
++    // A bundle the host does not have: its 404 is passed on and not stored.
++    expect((await worker.fetch(subresource(`${base}assets/nowhere-000.js`))).status).toBe(404);
++    await settle(site);
++    expect(phone.has('assets/nowhere-000.js')).toBe(false);
++
++    // Music, other sites and anything that is not a plain GET: the worker stands aside.
++    const aside = worker.stoodAside;
++    await worker.fetch(subresource(`${base}music/tokyo.m4a`)).then((answer) => answer.arrayBuffer());
++    await worker.fetch({ url: `${base}privacy.html`, method: 'POST', mode: 'cors' }).then((answer) => answer.arrayBuffer());
++    await worker.fetch(subresource('https://elsewhere.example/assets/x.js')).catch(() => undefined);
++    expect(worker.stoodAside).toBe(aside + 3);
++    await settle(site);
++    expect(phone.has('music/tokyo.m4a')).toBe(false);
++
++    // No connection: the stored page for the game’s address, the stored index.html for any other
++    // page address, the stored bundle, and a plain failure for a file that is not stored.
++    site.online = false;
++    expect(versionOf(await (await worker.fetch(navigation(base))).text())).toBe('V1');
++    expect(versionOf(await (await worker.fetch(navigation(`${base}?from=homescreen`))).text())).toBe('V1');
++    expect(await (await worker.fetch(subresource(`${base}assets/index-V1.js`))).text()).toBe('/* app V1 */');
++    await expect(worker.fetch(subresource(`${base}og-card.png`))).rejects.toThrow('Failed to fetch');
++    await expect(worker.fetch(subresource(`${base}assets/index-V3.js`))).rejects.toThrow('Failed to fetch');
++
++    // With a connection again and a new build on the host, the player is sent the new page at once.
++    site.online = true;
++    site.deploy('V2');
++    expect(versionOf(await (await worker.fetch(navigation(base))).text())).toBe('V2');
++    await settle(site);
++    expect(worker.problems).toEqual([]);
++  });
++});

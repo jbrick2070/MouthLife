@@ -1,0 +1,2505 @@
+diff --git a/native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift b/native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift
+index 53d2bfe..e413a21 100644
+--- a/native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift
++++ b/native-apple/Sources/MouthLifeCore/Config/L10nCatalogs.swift
+@@ -61,7 +61,7 @@ enum L10nCatalogs {
+ "← Back":"← Zurück",
+ "↻ Replay Stage":"↻ Nochmal spielen",
+ "↻ Restart Dive":"↻ Abtauchen neu starten",
+-"⇄ Swap {0}{1}":"⇄ Tausche {0}{1}",
++"⇄ Swap {0}":"⇄ Tausche {0}",
+ "+{0} Surge":"+{0} Schub",
+ "≈{0}% mineral":"≈{0}% Mineral",
+ "⌚ Brushed on Apple Watch!":"⌚ Auf der Apple Watch geputzt!",
+@@ -381,6 +381,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"Blechblasinstrumentenbauer",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"Breite, meißelförmige Krone mit einer einzelnen kegelförmigen Wurzel; bricht mit 3 kleinen Zacken (Mamelonen) durch, die sich mit der Zeit glatt abnutzen.",
+ "Broad Sweeps Between Sweet Sips":"Breite Schwünge zwischen süßen Schlucken",
++"BRUSH":"BÜRSTE",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"Putz die Innenseite der hinteren Zähne. Halte die Bürste hinter den Vorderzähnen senkrecht.",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"Putz die ganzen 2 Minuten, dann gibt es einen Routine-Stempel.",
+ "Brush Thumbstick":"Bürsten-Joystick",
+@@ -858,6 +859,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"Sattes Bernsteinbraun",
+ "Right":"Rechts",
+ "Rinse":"Ausspülen",
++"RINSE":"SPÜLUNG",
+ "Rinse duration":"Spüldauer",
+ "Rinse washes acid off nearby enamel.":"Spülen wäscht Säure vom Zahnschmelz in der Nähe ab.",
+ "Root Cover & Tooth Cushion":"Wurzelschutz & Zahnpolster",
+@@ -1181,7 +1183,7 @@ enum L10nCatalogs {
+ "← Back":"← Atrás",
+ "↻ Replay Stage":"↻ Repetir nivel",
+ "↻ Restart Dive":"↻ Reiniciar Inmersión",
+-"⇄ Swap {0}{1}":"⇄ Cambiar {0}{1}",
++"⇄ Swap {0}":"⇄ Cambiar {0}",
+ "+{0} Surge":"+{0} Impulso",
+ "≈{0}% mineral":"≈{0}% mineral",
+ "⌚ Brushed on Apple Watch!":"⌚ ¡Cepillado con el Apple Watch!",
+@@ -1501,6 +1503,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"Fabricantes de instrumentos de metal",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"Corona ancha en forma de cincel con una sola raíz cónica; sale con 3 piquitos (mamelones) que se alisan con el tiempo.",
+ "Broad Sweeps Between Sweet Sips":"Barridos amplios entre sorbos dulces",
++"BRUSH":"CEPILLO",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"Cepilla por dentro los dientes de atrás. Pon el cepillo vertical detrás de los dientes frontales.",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"Cepíllate los 2 minutos completos para ganar un sello de hábito.",
+ "Brush Thumbstick":"Joystick de cepillo",
+@@ -1978,6 +1981,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"Ámbar tierra intenso",
+ "Right":"Derecha",
+ "Rinse":"Enjuague",
++"RINSE":"ENJUAGUE",
+ "Rinse duration":"Duración del enjuague",
+ "Rinse washes acid off nearby enamel.":"El enjuague limpia el ácido del esmalte cercano.",
+ "Root Cover & Tooth Cushion":"Cubierta de raíz y cojín del diente",
+@@ -2301,7 +2305,7 @@ enum L10nCatalogs {
+ "← Back":"← Retour",
+ "↻ Replay Stage":"↻ Rejouer le niveau",
+ "↻ Restart Dive":"↻ Recommencer à plonger",
+-"⇄ Swap {0}{1}":"⇄ Changer {0}{1}",
++"⇄ Swap {0}":"⇄ Changer {0}",
+ "+{0} Surge":"+{0} Vague",
+ "≈{0}% mineral":"≈{0}% minéral",
+ "⌚ Brushed on Apple Watch!":"⌚ Brossage fait sur l'Apple Watch !",
+@@ -2621,6 +2625,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"Fabricants d'instruments en cuivre",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"Couronne large en biseau avec une seule racine conique ; sort avec 3 petites bosses (mamelons) qui deviennent lisses avec le temps.",
+ "Broad Sweeps Between Sweet Sips":"Grands coups de brosse entre deux gorgées sucrées",
++"BRUSH":"BROSSE",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"Brosse l'intérieur des dents du fond. Tiens la brosse à la verticale derrière les dents de devant.",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"Brosse-toi les dents pendant les 2 minutes entières pour gagner un tampon routine.",
+ "Brush Thumbstick":"Joystick de brosse",
+@@ -3098,6 +3103,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"Terre d’ombre ambrée",
+ "Right":"Droite",
+ "Rinse":"Rincer",
++"RINSE":"RINÇAGE",
+ "Rinse duration":"Durée du rinçage",
+ "Rinse washes acid off nearby enamel.":"Le rinçage chasse l’acide de l’émail tout proche.",
+ "Root Cover & Tooth Cushion":"Enveloppe de la racine et coussin de la dent",
+@@ -3421,7 +3427,7 @@ enum L10nCatalogs {
+ "← Back":"← もどる",
+ "↻ Replay Stage":"↻ ステージをもう一回",
+ "↻ Restart Dive":"↻ ダイブをやりなおす",
+-"⇄ Swap {0}{1}":"⇄ きりかえ {0}{1}",
++"⇄ Swap {0}":"⇄ きりかえ {0}",
+ "+{0} Surge":"+{0} サージ",
+ "≈{0}% mineral":"≈{0}% ミネラル",
+ "⌚ Brushed on Apple Watch!":"⌚ Apple Watchでみがいたよ！",
+@@ -3741,6 +3747,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"金管楽器を作る人たち",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"頭の部分は平たくて広く、根っこは1本でとがった形です。はえたばかりのときは先に3つの小さなでこぼこ（マメロン）があり、使ううちにすりへってつるつるになります。",
+ "Broad Sweeps Between Sweet Sips":"あまい飲み物の合間に大きくブラッシング",
++"BRUSH":"ブラシ",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"おく歯の内側をみがきましょう。前歯のうらは、ブラシをたてにもってみがきます。",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"2分間ぜんぶみがくと、しゅうかんスタンプがもらえるよ。",
+ "Brush Thumbstick":"ブラシ用スティック",
+@@ -4218,6 +4225,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"こいアンバーブラウン",
+ "Right":"右",
+ "Rinse":"うがい",
++"RINSE":"うがい",
+ "Rinse duration":"うがいの時間",
+ "Rinse washes acid off nearby enamel.":"うがいで近くのエナメルしつからさんをあらい流します。",
+ "Root Cover & Tooth Cushion":"根のカバー＆歯のクッション",
+@@ -4541,7 +4549,7 @@ enum L10nCatalogs {
+ "← Back":"← 뒤로",
+ "↻ Replay Stage":"↻ 스테이지 다시 하기",
+ "↻ Restart Dive":"↻ 다이브 다시 시작",
+-"⇄ Swap {0}{1}":"⇄ {0}{1} 바꾸기",
++"⇄ Swap {0}":"⇄ {0} 바꾸기",
+ "+{0} Surge":"+{0} 파동",
+ "≈{0}% mineral":"≈{0}% 미네랄",
+ "⌚ Brushed on Apple Watch!":"⌚ Apple Watch로 양치했어요!",
+@@ -4861,6 +4869,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"금관악기 제작자들",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"원뿔 모양 뿌리 1개와 넓은 끌 모양 머리를 가졌어요. 처음 날 때는 작은 돌기 3개가 있지만 시간이 지나면 매끈하게 닳아요.",
+ "Broad Sweeps Between Sweet Sips":"달콤한 음료 사이사이 넓게 닦기",
++"BRUSH":"칫솔",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"뒤쪽 치아의 안쪽 면도 닦아요. 앞니 뒤쪽을 닦을 때는 칫솔을 세로로 세워 잡아요.",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"2분 동안 끝까지 닦으면 습관 도장을 받아요.",
+ "Brush Thumbstick":"칫솔 조이스틱",
+@@ -5338,6 +5347,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"진한 호박빛 갈색",
+ "Right":"오른쪽",
+ "Rinse":"헹구기",
++"RINSE":"헹구기",
+ "Rinse duration":"헹굼 시간",
+ "Rinse washes acid off nearby enamel.":"헹구면 주변 법랑질에 묻은 산이 씻겨 나가요.",
+ "Root Cover & Tooth Cushion":"뿌리 덮개 & 치아 쿠션",
+@@ -5661,7 +5671,7 @@ enum L10nCatalogs {
+ "← Back":"← Voltar",
+ "↻ Replay Stage":"↻ Repetir Fase",
+ "↻ Restart Dive":"↻ Reiniciar Mergulho",
+-"⇄ Swap {0}{1}":"⇄ Trocar {0}{1}",
++"⇄ Swap {0}":"⇄ Trocar {0}",
+ "+{0} Surge":"+{0} Pulso",
+ "≈{0}% mineral":"≈{0}% mineral",
+ "⌚ Brushed on Apple Watch!":"⌚ Escovação feita no Apple Watch!",
+@@ -5981,6 +5991,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"Fabricantes de Instrumentos de Metal",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"Coroa larga em forma de cinzel com uma única raiz cônica; nasce com 3 montinhos (mamelões) que ficam lisos com o tempo.",
+ "Broad Sweeps Between Sweet Sips":"Varreduras Amplas Entre Goles Doces",
++"BRUSH":"ESCOVA",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"Escove a parte de dentro dos dentes de trás. Segure a escova em pé atrás dos dentes da frente.",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"Escove os dentes por 2 minutos inteiros para ganhar um selo de hábito.",
+ "Brush Thumbstick":"Joystick da Escova",
+@@ -6458,6 +6469,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"Âmbar Terroso Intenso",
+ "Right":"Direita",
+ "Rinse":"Enxágue",
++"RINSE":"ENXÁGUE",
+ "Rinse duration":"Tempo de enxágue",
+ "Rinse washes acid off nearby enamel.":"O enxágue limpa o ácido do esmalte por perto.",
+ "Root Cover & Tooth Cushion":"Capa da Raiz e Almofada do Dente",
+@@ -6781,7 +6793,7 @@ enum L10nCatalogs {
+ "← Back":"← 返回",
+ "↻ Replay Stage":"↻ 重玩本关",
+ "↻ Restart Dive":"↻ 重新潜入",
+-"⇄ Swap {0}{1}":"⇄ 切换 {0}{1}",
++"⇄ Swap {0}":"⇄ 切换 {0}",
+ "+{0} Surge":"+{0} 爆发",
+ "≈{0}% mineral":"≈{0}% 矿物质",
+ "⌚ Brushed on Apple Watch!":"⌚ 用 Apple Watch 刷好牙啦！",
+@@ -7101,6 +7113,7 @@ enum L10nCatalogs {
+ "Brass Instrument Makers":"铜管乐器工匠",
+ "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.":"宽宽的凿子形牙冠，只有一条圆锥形牙根；刚长出来时边缘有 3 个小凸起，用久了就会磨平。",
+ "Broad Sweeps Between Sweet Sips":"两口甜饮之间大范围刷一刷",
++"BRUSH":"牙刷",
+ "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.":"刷刷后牙的内侧。刷前牙背面时，把牙刷竖起来上下刷。",
+ "Brush the whole 2 minutes to earn a Habit Stamp.":"刷满整整 2 分钟，就能获得习惯印章。",
+ "Brush Thumbstick":"刷牙摇杆",
+@@ -7578,6 +7591,7 @@ enum L10nCatalogs {
+ "Rich Amber Umber":"浓郁琥珀棕",
+ "Right":"右",
+ "Rinse":"漱口",
++"RINSE":"漱口",
+ "Rinse duration":"漱口时长",
+ "Rinse washes acid off nearby enamel.":"漱口能冲掉附近牙釉质上的酸。",
+ "Root Cover & Tooth Cushion":"牙根保护层与牙齿缓冲垫",
+diff --git a/public/privacy.html b/public/privacy.html
+index df7b425..da8d7c6 100644
+--- a/public/privacy.html
++++ b/public/privacy.html
+@@ -113,8 +113,9 @@
+           reads health data. It can be turned off in the app or in the Health app at any time.
+         </li>
+         <li>
+-          You can reset and erase all local save data at any time inside the in-app
+-          <strong>☁️ Sync</strong> menu.
++          A grown-up can erase the saved game at any time. In the web game it is under
++          <strong>☁️ Sync</strong> (Erase Save); in the app it is in <strong>Settings</strong>.
++          Erasing starts the game over. Comfort settings such as sound and language are kept.
+         </li>
+       </ul>
+ 
+diff --git a/src/config/dentalChart.ts b/src/config/dentalChart.ts
+index dab7cbb..0acae01 100644
+--- a/src/config/dentalChart.ts
++++ b/src/config/dentalChart.ts
+@@ -40,7 +40,10 @@ export interface AdultToothInfo {
+   anatomyFact: string;
+   /** Practical daily brushing/flossing tip. */
+   careTip: string;
+-  /** Corresponding crown index (0..13) on the 14-tooth 3D Companion Arch, or null for 3rd molars (wisdom teeth). */
++  /**
++   * Corresponding crown index (0..13) on the 14-tooth 3D Companion Arch, or null for 3rd molars (wisdom teeth).
++   * Crown 0 is the leftmost on screen, which in the mirror view is the player's own left.
++   */
+   companionArchIndex: number | null;
+ }
+ 
+@@ -228,9 +231,11 @@ function buildToothRecord(
+ 
+   let companionArchIndex: number | null = null;
+   if (pos <= 7) {
+-    // CompanionArch ti=0..6 is Right 2nd Molar (pos 7) -> Right Central Incisor (pos 1)
+-    // CompanionArch ti=7..13 is Left Central Incisor (pos 1) -> Left 2nd Molar (pos 7)
+-    companionArchIndex = side === 'right' ? 7 - pos : 6 + pos;
++    // The mouth on screen is a mirror: screen-left is the player's own left, the same rule the
++    // 2-Min Brush and the 3D mesh follow. Crown 0 is the leftmost crown on screen, so:
++    // CompanionArch ti=0..6 is Left 2nd Molar (pos 7) -> Left Central Incisor (pos 1)
++    // CompanionArch ti=7..13 is Right Central Incisor (pos 1) -> Right 2nd Molar (pos 7)
++    companionArchIndex = side === 'left' ? 7 - pos : 6 + pos;
+   }
+ 
+   const archWord = arch === 'upper' ? 'Upper' : 'Lower';
+@@ -275,6 +280,24 @@ export function getToothByFdi(fdi: string): AdultToothInfo | undefined {
+   return ADULT_TEETH_BY_UNIVERSAL.find((t) => t.fdi === fdi.trim());
+ }
+ 
++/**
++ * The three parts of a tooth's full name, in the order they are said: arch, side, kind of tooth
++ * ("Upper", "Right", "1st Molar"). A screen translates each part and then joins them: the
++ * language files hold these twelve words, not the 32 joined names.
++ */
++export function toothNameParts(tooth: AdultToothInfo): readonly [string, string, string] {
++  return [
++    tooth.arch === 'upper' ? 'Upper' : 'Lower',
++    tooth.side === 'right' ? 'Right' : 'Left',
++    POSITION_TEMPLATES[tooth.positionFromMidline - 1].shortRole,
++  ];
++}
++
++/** How a tooth's name is written out. English unless a screen passes the player's language. */
++export type ToothNamer = (tooth: AdultToothInfo) => string;
++
++const englishToothName: ToothNamer = (tooth) => tooth.clinicalName;
++
+ /** Formats a compact badge label for a tooth in the active numbering system. */
+ export function formatToothBadge(tooth: AdultToothInfo, system: ToothNumberingSystem): string {
+   if (system === 'universal') return `#${tooth.universal}`;
+@@ -461,10 +484,15 @@ export interface SpotQuizResult {
+   message: string;
+ }
+ 
+-/** Builds one friendly prompt. `rand` is injectable (0..1) so tests are deterministic. */
++/**
++ * Builds one friendly prompt. `rand` is injectable (0..1) so tests are deterministic. `nameOf`
++ * writes the tooth's name: the page translates the sentence around it, but cannot translate a
++ * name sitting inside it, so the screen passes the name already in the player's language.
++ */
+ export function buildSpotQuizQuestion(
+   rand: () => number = Math.random,
+-  avoidUniversal?: number
++  avoidUniversal?: number,
++  nameOf: ToothNamer = englishToothName
+ ): SpotQuizQuestion {
+   let n = 1 + Math.floor(rand() * 32);
+   if (n > 32) n = 32;
+@@ -475,14 +503,14 @@ export function buildSpotQuizQuestion(
+     return {
+       targetUniversal: n,
+       difficulty: 'full',
+-      prompt: `Can you tap the ${t.clinicalName} (${t.commonNickname}) — #${t.universal} / FDI ${t.fdi}?`,
++      prompt: `Can you tap the ${nameOf(t)} (${t.commonNickname}) — #${t.universal} / FDI ${t.fdi}?`,
+     };
+   }
+   if (style === 1) {
+     return {
+       targetUniversal: n,
+       difficulty: 'name',
+-      prompt: `Find the ${t.clinicalName}!`,
++      prompt: `Find the ${nameOf(t)}!`,
+     };
+   }
+   if (style === 2) {
+@@ -499,12 +527,16 @@ export function buildSpotQuizQuestion(
+   };
+ }
+ 
+-/** Pure answer check; streak resets gently on a miss and the best streak never decreases. */
++/**
++ * Pure answer check; streak resets gently on a miss and the best streak never decreases.
++ * `nameOf` writes the tooth's name, as for the question.
++ */
+ export function judgeSpotQuizAnswer(
+   targetUniversal: number,
+   tappedUniversal: number,
+   streak: number,
+-  bestStreak: number
++  bestStreak: number,
++  nameOf: ToothNamer = englishToothName
+ ): SpotQuizResult {
+   const target = getToothByUniversal(targetUniversal);
+   if (targetUniversal === tappedUniversal) {
+@@ -513,7 +545,7 @@ export function judgeSpotQuizAnswer(
+       correct: true,
+       nextStreak,
+       bestStreak: Math.max(bestStreak, nextStreak),
+-      message: `Yes! ${target.clinicalName} = #${target.universal} • FDI ${target.fdi} • Palmer ${target.palmer}`,
++      message: `Yes! ${nameOf(target)} = #${target.universal} • FDI ${target.fdi} • Palmer ${target.palmer}`,
+     };
+   }
+   const tapped = getToothByUniversal(tappedUniversal);
+@@ -521,7 +553,7 @@ export function judgeSpotQuizAnswer(
+     correct: false,
+     nextStreak: 0,
+     bestStreak,
+-    message: `Close! That one is ${tapped.clinicalName} (#${tapped.universal}). Try again — you’ve got this!`,
++    message: `Close! That one is ${nameOf(tapped)} (#${tapped.universal}). Try again — you’ve got this!`,
+   };
+ }
+ 
+diff --git a/src/config/tutorial.ts b/src/config/tutorial.ts
+index 5210b94..4637cf7 100644
+--- a/src/config/tutorial.ts
++++ b/src/config/tutorial.ts
+@@ -396,4 +396,16 @@ export class TutorialGate {
+   getProgress(): TutorialProgress {
+     return { ...this.progress };
+   }
++
++  /**
++   * Erase Save: back to how a first launch finds it. The stored progress goes, and so does what
++   * this object holds in memory, so the next time Home appears the guide is offered again and
++   * the first Dive opens it, without a reload.
++   */
++  reset(): void {
++    this.progress = { ...TUTORIAL_PROGRESS_START };
++    this.countedThisLaunch = false;
++    this.offerVisible = false;
++    saveTutorialProgress(this.progress, this.storage);
++  }
+ }
+diff --git a/src/engine/persistence/SaveSystem.ts b/src/engine/persistence/SaveSystem.ts
+index 421d07a..109af8b 100644
+--- a/src/engine/persistence/SaveSystem.ts
++++ b/src/engine/persistence/SaveSystem.ts
+@@ -453,6 +453,8 @@ export type SaveLoadOutcome = 'new' | 'loaded' | 'unreadable' | 'newer-version';
+ export interface StorageLike {
+   getItem(key: string): string | null;
+   setItem(key: string, value: string): void;
++  /** Optional: Erase Save uses it to take the kept copies of an old save out of storage. */
++  removeItem?(key: string): void;
+ }
+ 
+ /**
+@@ -666,6 +668,27 @@ export class SaveSystem {
+     return this.currentSave;
+   }
+ 
++  /**
++   * Erase Save: a brand-new save, and nothing of the old one left on this device. On top of
++   * `resetToFreshSave` it takes away the two copies kept of a save this version could not read
++   * and of a version-1 save (H02): an erase that leaves a copy of the old progress behind is not
++   * an erase. The copies go first, so the fresh save is announced with nothing old still stored.
++   */
++  eraseSaveAndKeptCopies(nowEpochMs = Date.now()): MouthLifeSaveV2 {
++    for (const key of [SAVE_UNREADABLE_COPY_KEY, SAVE_V1_COPY_KEY]) {
++      this.memoryStore.delete(key);
++      try {
++        const storage = this.getStorage();
++        if (storage.removeItem) storage.removeItem(key);
++        // A store that cannot remove a key at least gives up the old save's bytes.
++        else if (storage.getItem(key) !== null) storage.setItem(key, '');
++      } catch {
++        // Storage refused (private browsing, blocked site data): nothing more can be done here.
++      }
++    }
++    return this.resetToFreshSave(nowEpochMs);
++  }
++
+   private persistInternal(nowEpochMs: number): void {
+     this.currentSave.lastSavedEpochMs = nowEpochMs;
+     // A save from a newer version stays untouched until the player imports or erases (H02).
+diff --git a/src/i18n/locales/de.json b/src/i18n/locales/de.json
+index 1bced60..ba7f3c0 100644
+--- a/src/i18n/locales/de.json
++++ b/src/i18n/locales/de.json
+@@ -40,7 +40,7 @@
+  "← Back": "← Zurück",
+  "↻ Replay Stage": "↻ Nochmal spielen",
+  "↻ Restart Dive": "↻ Abtauchen neu starten",
+- "⇄ Swap {0}{1}": "⇄ Tausche {0}{1}",
++ "⇄ Swap {0}": "⇄ Tausche {0}",
+  "+{0} Surge": "+{0} Schub",
+  "≈{0}% mineral": "≈{0}% Mineral",
+  "⌚ Brushed on Apple Watch!": "⌚ Auf der Apple Watch geputzt!",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "Blechblasinstrumentenbauer",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "Breite, meißelförmige Krone mit einer einzelnen kegelförmigen Wurzel; bricht mit 3 kleinen Zacken (Mamelonen) durch, die sich mit der Zeit glatt abnutzen.",
+  "Broad Sweeps Between Sweet Sips": "Breite Schwünge zwischen süßen Schlucken",
++ "BRUSH": "BÜRSTE",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "Putz die Innenseite der hinteren Zähne. Halte die Bürste hinter den Vorderzähnen senkrecht.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "Putz die ganzen 2 Minuten, dann gibt es einen Routine-Stempel.",
+  "Brush Thumbstick": "Bürsten-Joystick",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "Sattes Bernsteinbraun",
+  "Right": "Rechts",
+  "Rinse": "Ausspülen",
++ "RINSE": "SPÜLUNG",
+  "Rinse duration": "Spüldauer",
+  "Rinse washes acid off nearby enamel.": "Spülen wäscht Säure vom Zahnschmelz in der Nähe ab.",
+  "Root Cover & Tooth Cushion": "Wurzelschutz & Zahnpolster",
+diff --git a/src/i18n/locales/es.json b/src/i18n/locales/es.json
+index ccc0a03..2a6346a 100644
+--- a/src/i18n/locales/es.json
++++ b/src/i18n/locales/es.json
+@@ -40,7 +40,7 @@
+  "← Back": "← Atrás",
+  "↻ Replay Stage": "↻ Repetir nivel",
+  "↻ Restart Dive": "↻ Reiniciar Inmersión",
+- "⇄ Swap {0}{1}": "⇄ Cambiar {0}{1}",
++ "⇄ Swap {0}": "⇄ Cambiar {0}",
+  "+{0} Surge": "+{0} Impulso",
+  "≈{0}% mineral": "≈{0}% mineral",
+  "⌚ Brushed on Apple Watch!": "⌚ ¡Cepillado con el Apple Watch!",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "Fabricantes de instrumentos de metal",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "Corona ancha en forma de cincel con una sola raíz cónica; sale con 3 piquitos (mamelones) que se alisan con el tiempo.",
+  "Broad Sweeps Between Sweet Sips": "Barridos amplios entre sorbos dulces",
++ "BRUSH": "CEPILLO",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "Cepilla por dentro los dientes de atrás. Pon el cepillo vertical detrás de los dientes frontales.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "Cepíllate los 2 minutos completos para ganar un sello de hábito.",
+  "Brush Thumbstick": "Joystick de cepillo",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "Ámbar tierra intenso",
+  "Right": "Derecha",
+  "Rinse": "Enjuague",
++ "RINSE": "ENJUAGUE",
+  "Rinse duration": "Duración del enjuague",
+  "Rinse washes acid off nearby enamel.": "El enjuague limpia el ácido del esmalte cercano.",
+  "Root Cover & Tooth Cushion": "Cubierta de raíz y cojín del diente",
+diff --git a/src/i18n/locales/fr.json b/src/i18n/locales/fr.json
+index c8a53f0..d20569c 100644
+--- a/src/i18n/locales/fr.json
++++ b/src/i18n/locales/fr.json
+@@ -40,7 +40,7 @@
+  "← Back": "← Retour",
+  "↻ Replay Stage": "↻ Rejouer le niveau",
+  "↻ Restart Dive": "↻ Recommencer à plonger",
+- "⇄ Swap {0}{1}": "⇄ Changer {0}{1}",
++ "⇄ Swap {0}": "⇄ Changer {0}",
+  "+{0} Surge": "+{0} Vague",
+  "≈{0}% mineral": "≈{0}% minéral",
+  "⌚ Brushed on Apple Watch!": "⌚ Brossage fait sur l'Apple Watch !",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "Fabricants d'instruments en cuivre",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "Couronne large en biseau avec une seule racine conique ; sort avec 3 petites bosses (mamelons) qui deviennent lisses avec le temps.",
+  "Broad Sweeps Between Sweet Sips": "Grands coups de brosse entre deux gorgées sucrées",
++ "BRUSH": "BROSSE",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "Brosse l'intérieur des dents du fond. Tiens la brosse à la verticale derrière les dents de devant.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "Brosse-toi les dents pendant les 2 minutes entières pour gagner un tampon routine.",
+  "Brush Thumbstick": "Joystick de brosse",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "Terre d’ombre ambrée",
+  "Right": "Droite",
+  "Rinse": "Rincer",
++ "RINSE": "RINÇAGE",
+  "Rinse duration": "Durée du rinçage",
+  "Rinse washes acid off nearby enamel.": "Le rinçage chasse l’acide de l’émail tout proche.",
+  "Root Cover & Tooth Cushion": "Enveloppe de la racine et coussin de la dent",
+diff --git a/src/i18n/locales/ja.json b/src/i18n/locales/ja.json
+index 2254b17..eeec60e 100644
+--- a/src/i18n/locales/ja.json
++++ b/src/i18n/locales/ja.json
+@@ -40,7 +40,7 @@
+  "← Back": "← もどる",
+  "↻ Replay Stage": "↻ ステージをもう一回",
+  "↻ Restart Dive": "↻ ダイブをやりなおす",
+- "⇄ Swap {0}{1}": "⇄ きりかえ {0}{1}",
++ "⇄ Swap {0}": "⇄ きりかえ {0}",
+  "+{0} Surge": "+{0} サージ",
+  "≈{0}% mineral": "≈{0}% ミネラル",
+  "⌚ Brushed on Apple Watch!": "⌚ Apple Watchでみがいたよ！",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "金管楽器を作る人たち",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "頭の部分は平たくて広く、根っこは1本でとがった形です。はえたばかりのときは先に3つの小さなでこぼこ（マメロン）があり、使ううちにすりへってつるつるになります。",
+  "Broad Sweeps Between Sweet Sips": "あまい飲み物の合間に大きくブラッシング",
++ "BRUSH": "ブラシ",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "おく歯の内側をみがきましょう。前歯のうらは、ブラシをたてにもってみがきます。",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "2分間ぜんぶみがくと、しゅうかんスタンプがもらえるよ。",
+  "Brush Thumbstick": "ブラシ用スティック",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "こいアンバーブラウン",
+  "Right": "右",
+  "Rinse": "うがい",
++ "RINSE": "うがい",
+  "Rinse duration": "うがいの時間",
+  "Rinse washes acid off nearby enamel.": "うがいで近くのエナメルしつからさんをあらい流します。",
+  "Root Cover & Tooth Cushion": "根のカバー＆歯のクッション",
+diff --git a/src/i18n/locales/ko.json b/src/i18n/locales/ko.json
+index af4298a..2d4105f 100644
+--- a/src/i18n/locales/ko.json
++++ b/src/i18n/locales/ko.json
+@@ -40,7 +40,7 @@
+  "← Back": "← 뒤로",
+  "↻ Replay Stage": "↻ 스테이지 다시 하기",
+  "↻ Restart Dive": "↻ 다이브 다시 시작",
+- "⇄ Swap {0}{1}": "⇄ {0}{1} 바꾸기",
++ "⇄ Swap {0}": "⇄ {0} 바꾸기",
+  "+{0} Surge": "+{0} 파동",
+  "≈{0}% mineral": "≈{0}% 미네랄",
+  "⌚ Brushed on Apple Watch!": "⌚ Apple Watch로 양치했어요!",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "금관악기 제작자들",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "원뿔 모양 뿌리 1개와 넓은 끌 모양 머리를 가졌어요. 처음 날 때는 작은 돌기 3개가 있지만 시간이 지나면 매끈하게 닳아요.",
+  "Broad Sweeps Between Sweet Sips": "달콤한 음료 사이사이 넓게 닦기",
++ "BRUSH": "칫솔",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "뒤쪽 치아의 안쪽 면도 닦아요. 앞니 뒤쪽을 닦을 때는 칫솔을 세로로 세워 잡아요.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "2분 동안 끝까지 닦으면 습관 도장을 받아요.",
+  "Brush Thumbstick": "칫솔 조이스틱",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "진한 호박빛 갈색",
+  "Right": "오른쪽",
+  "Rinse": "헹구기",
++ "RINSE": "헹구기",
+  "Rinse duration": "헹굼 시간",
+  "Rinse washes acid off nearby enamel.": "헹구면 주변 법랑질에 묻은 산이 씻겨 나가요.",
+  "Root Cover & Tooth Cushion": "뿌리 덮개 & 치아 쿠션",
+diff --git a/src/i18n/locales/pt.json b/src/i18n/locales/pt.json
+index 422a82b..3b5c920 100644
+--- a/src/i18n/locales/pt.json
++++ b/src/i18n/locales/pt.json
+@@ -40,7 +40,7 @@
+  "← Back": "← Voltar",
+  "↻ Replay Stage": "↻ Repetir Fase",
+  "↻ Restart Dive": "↻ Reiniciar Mergulho",
+- "⇄ Swap {0}{1}": "⇄ Trocar {0}{1}",
++ "⇄ Swap {0}": "⇄ Trocar {0}",
+  "+{0} Surge": "+{0} Pulso",
+  "≈{0}% mineral": "≈{0}% mineral",
+  "⌚ Brushed on Apple Watch!": "⌚ Escovação feita no Apple Watch!",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "Fabricantes de Instrumentos de Metal",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "Coroa larga em forma de cinzel com uma única raiz cônica; nasce com 3 montinhos (mamelões) que ficam lisos com o tempo.",
+  "Broad Sweeps Between Sweet Sips": "Varreduras Amplas Entre Goles Doces",
++ "BRUSH": "ESCOVA",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "Escove a parte de dentro dos dentes de trás. Segure a escova em pé atrás dos dentes da frente.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "Escove os dentes por 2 minutos inteiros para ganhar um selo de hábito.",
+  "Brush Thumbstick": "Joystick da Escova",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "Âmbar Terroso Intenso",
+  "Right": "Direita",
+  "Rinse": "Enxágue",
++ "RINSE": "ENXÁGUE",
+  "Rinse duration": "Tempo de enxágue",
+  "Rinse washes acid off nearby enamel.": "O enxágue limpa o ácido do esmalte por perto.",
+  "Root Cover & Tooth Cushion": "Capa da Raiz e Almofada do Dente",
+diff --git a/src/i18n/locales/zh.json b/src/i18n/locales/zh.json
+index 161e7f6..8be27fc 100644
+--- a/src/i18n/locales/zh.json
++++ b/src/i18n/locales/zh.json
+@@ -40,7 +40,7 @@
+  "← Back": "← 返回",
+  "↻ Replay Stage": "↻ 重玩本关",
+  "↻ Restart Dive": "↻ 重新潜入",
+- "⇄ Swap {0}{1}": "⇄ 切换 {0}{1}",
++ "⇄ Swap {0}": "⇄ 切换 {0}",
+  "+{0} Surge": "+{0} 爆发",
+  "≈{0}% mineral": "≈{0}% 矿物质",
+  "⌚ Brushed on Apple Watch!": "⌚ 用 Apple Watch 刷好牙啦！",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers": "铜管乐器工匠",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.": "宽宽的凿子形牙冠，只有一条圆锥形牙根；刚长出来时边缘有 3 个小凸起，用久了就会磨平。",
+  "Broad Sweeps Between Sweet Sips": "两口甜饮之间大范围刷一刷",
++ "BRUSH": "牙刷",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.": "刷刷后牙的内侧。刷前牙背面时，把牙刷竖起来上下刷。",
+  "Brush the whole 2 minutes to earn a Habit Stamp.": "刷满整整 2 分钟，就能获得习惯印章。",
+  "Brush Thumbstick": "刷牙摇杆",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber": "浓郁琥珀棕",
+  "Right": "右",
+  "Rinse": "漱口",
++ "RINSE": "漱口",
+  "Rinse duration": "漱口时长",
+  "Rinse washes acid off nearby enamel.": "漱口能冲掉附近牙釉质上的酸。",
+  "Root Cover & Tooth Cushion": "牙根保护层与牙齿缓冲垫",
+diff --git a/src/i18n/strings.en.json b/src/i18n/strings.en.json
+index b129390..3378fda 100644
+--- a/src/i18n/strings.en.json
++++ b/src/i18n/strings.en.json
+@@ -40,7 +40,7 @@
+  "← Back",
+  "↻ Replay Stage",
+  "↻ Restart Dive",
+- "⇄ Swap {0}{1}",
++ "⇄ Swap {0}",
+  "+{0} Surge",
+  "≈{0}% mineral",
+  "⌚ Brushed on Apple Watch!",
+@@ -360,6 +360,7 @@
+  "Brass Instrument Makers",
+  "Broad chisel-shaped crown with a single conical root; erupts with 3 tiny bumps (mamelons) that wear smooth over time.",
+  "Broad Sweeps Between Sweet Sips",
++ "BRUSH",
+  "Brush the inside of the back teeth. Hold the brush up and down behind the front teeth.",
+  "Brush the whole 2 minutes to earn a Habit Stamp.",
+  "Brush Thumbstick",
+@@ -837,6 +838,7 @@
+  "Rich Amber Umber",
+  "Right",
+  "Rinse",
++ "RINSE",
+  "Rinse duration",
+  "Rinse washes acid off nearby enamel.",
+  "Root Cover & Tooth Cushion",
+diff --git a/src/ui/CompanionHubOverlay.ts b/src/ui/CompanionHubOverlay.ts
+index 4433bc6..6ee7ff2 100644
+--- a/src/ui/CompanionHubOverlay.ts
++++ b/src/ui/CompanionHubOverlay.ts
+@@ -6,6 +6,8 @@ import {
+   getToothByUniversal,
+   QUADRANT_NUMBERING_META,
+   TOOTH_SURFACES_GUIDE,
++  toothNameParts,
++  type AdultToothInfo,
+   type ToothNumberingSystem,
+   buildSpotQuizQuestion,
+   getToothLayer,
+@@ -45,7 +47,8 @@ import {
+ } from '../config/brushDays';
+ import { truncateDisplayName, type SaveSystem } from '../engine/persistence/SaveSystem';
+ import type { HubCameraFocus } from '../engine/render/SceneManager';
+-import type { OverlayView } from '../engine/types';
++import type { ActuatorKind, OverlayView } from '../engine/types';
++import { uiTranslator } from '../i18n/uiTranslator';
+ import { getCartridgeById, isPlayableWorld } from '../worlds/worldRegistry';
+ import {
+   bindBottomSheetSwipeClose,
+@@ -54,6 +57,7 @@ import {
+   isCompactViewport,
+   pickRecommendedDiveWorld,
+   campaignStageNumber,
++  saveSeenHints,
+   shortCityName,
+ } from './hudHelpers';
+ import { TutorialOverlay } from './TutorialOverlay';
+@@ -77,6 +81,130 @@ function escapeHtml(raw: string): string {
+     .replace(/'/g, '&#39;');
+ }
+ 
++/** A tooth's full name in the player's language: each part is translated, then they are joined. */
++export function toothNameText(tooth: AdultToothInfo): string {
++  return toothNameParts(tooth)
++    .map((part) => uiTranslator.t(part))
++    .join(' ');
++}
++
++/**
++ * The words of a name as separate pieces of text ("Upper", "Right", "1st Molar"). The page is
++ * translated piece by piece, and the language files hold these words, not the joined names.
++ */
++function wordsHtml(words: readonly string[]): string {
++  return words.map((word) => `<span>${escapeHtml(word)}</span>`).join(' ');
++}
++
++/**
++ * What to say when a Sync Code or backup is refused: why, then that nothing was changed. The two
++ * sentences are translated one by one; joined first, they would match nothing in the language files.
++ */
++export function importRefusedText(err: unknown): string {
++  const why = err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.';
++  return `${uiTranslator.t(why)} ${uiTranslator.t('Your current progress was not changed.')}`;
++}
++
++/** The Lab's word for each upgrade slot, spelled the way the language files hold it. */
++const SLOT_LABEL: Record<ActuatorKind, string> = { brush: 'BRUSH', floss: 'FLOSS', rinse: 'RINSE' };
++
++export const ERASE_SAVE_LABEL = '🔄 Erase Save';
++export const ERASE_CONFIRM_LABEL = '⚠️ Tap Again to Erase';
++/** "Tap Again to Erase" waits this long for the second tap, then the button goes back. */
++export const ERASE_CONFIRM_MS = 6000;
++/**
++ * A tap this soon after the grown-up's answer is not a second tap: it is the same double tap, or
++ * the same key still held down, that answered the question and now lands on the button.
++ */
++export const ERASE_SETTLE_MS = 600;
++
++/**
++ * The steps of the Erase Save button, kept apart from the page so tests can walk through them:
++ *   tap → the grown-up question → (right answer) "Tap Again to Erase" → tap → erase.
++ * A wrong answer or "Not now" changes nothing. A few seconds without the second tap, or closing
++ * the sheet, puts the button back, and the next tap starts again from the grown-up question.
++ */
++export class EraseSaveSteps {
++  private armed = false;
++  private settleUntilMs = 0;
++  private timer: ReturnType<typeof setTimeout> | null = null;
++
++  constructor(
++    private readonly hooks: {
++      /** Shows the grown-up question; calls `onPass` only after the right answer. */
++      askGrownUp: (onPass: () => void) => void;
++      /** Erases everything. Runs on the second tap and never before. */
++      erase: () => void;
++      /** The words on the button changed. */
++      onLabelChanged: () => void;
++    }
++  ) {}
++
++  /** True while the button reads "Tap Again to Erase". */
++  isArmed(): boolean {
++    return this.armed;
++  }
++
++  /** The words on the button right now. */
++  label(): string {
++    return this.armed ? ERASE_CONFIRM_LABEL : ERASE_SAVE_LABEL;
++  }
++
++  /** A tap on the button. */
++  tap(): void {
++    if (!this.armed) {
++      this.hooks.askGrownUp(() => this.arm());
++      return;
++    }
++    const now = Date.now();
++    if (now < this.settleUntilMs) {
++      // Too soon to be a separate tap. Wait again, so a key held down never gets through.
++      this.settleUntilMs = now + ERASE_SETTLE_MS;
++      return;
++    }
++    this.putBack();
++    this.hooks.erase();
++  }
++
++  /** Back to "Erase Save": the wait ran out, the sheet closed, or the erase is starting. */
++  putBack(): void {
++    if (this.timer !== null) clearTimeout(this.timer);
++    this.timer = null;
++    if (!this.armed) return;
++    this.armed = false;
++    this.hooks.onLabelChanged();
++  }
++
++  private arm(): void {
++    if (this.timer !== null) clearTimeout(this.timer);
++    this.armed = true;
++    this.settleUntilMs = Date.now() + ERASE_SETTLE_MS;
++    this.timer = setTimeout(() => this.putBack(), ERASE_CONFIRM_MS);
++    this.hooks.onLabelChanged();
++  }
++}
++
++/**
++ * What Erase Save erases: everything that shows this device has been played on, so the game is
++ * back to how a first launch finds it. Comfort settings stay as they are (sound, language and
++ * voice, Less Camera Shake). The save goes last: when the rest of the game hears that a fresh
++ * save has arrived, nothing of the old player is left.
++ */
++export function eraseBackToFirstLaunch(
++  saveSys: Pick<SaveSystem, 'eraseSaveAndKeptCopies'>,
++  tutorialGate?: Pick<TutorialGate, 'reset'>
++): void {
++  // What the game remembers, outside the save, about having been played before.
++  clearHasSeenBrushIntro(); // the "Time Your Real Brush" card shows again
++  saveSeenHints(new Set()); // the one-time hints and the first city's coach come back
++  tutorialGate?.reset(); // How to Play is offered again, and opens before the first Dive
++  // A grown-up's choices are not handed on to the next player: both go back to off.
++  writeIncludeRinse(false);
++  writeReminders({ ...readReminders(), on: false });
++  // The save itself, with the copies kept of an unreadable or version-1 save.
++  saveSys.eraseSaveAndKeptCopies();
++}
++
+ export class CompanionHubOverlay implements OverlayView {
+   private disposers = new DisposerBag();
+   private container: HTMLElement | null = null;
+@@ -97,7 +225,15 @@ export class CompanionHubOverlay implements OverlayView {
+   private selectedLayer: ToothLayerInfo['id'] = 'enamel';
+   private selectedUniversalTooth = 3;
+   private lastTouchedCrownIdx: number | null = null;
+-  private confirmResetPending = false;
++  /** The Erase Save button in the Sync sheet: the grown-up question first, then a second tap. */
++  private readonly eraseSteps = new EraseSaveSteps({
++    askGrownUp: (onPass) =>
++      askGrownUp(() => {
++        if (this.activeModal === 'sync') onPass();
++      }, ERASE_SAVE_LABEL),
++    erase: () => this.eraseEverything(),
++    onLabelChanged: () => this.syncEraseButton(),
++  });
+   private mobileDrawerOpen = false;
+   private root: HTMLElement | null = null;
+   private tutorial: TutorialOverlay | null = null;
+@@ -163,6 +299,8 @@ export class CompanionHubOverlay implements OverlayView {
+       onPlayTutorialDemo?: (pageId: TutorialPageId) => void;
+       /** Plays the ending again (offered once all five pieces of the Golden Molar are in). */
+       onWatchEnding?: () => void;
++      /** Erase Save just ran: drop what is held outside this screen (sugar splats on the 3D teeth). */
++      onSaveErased?: () => void;
+     }
+   ) {}
+ 
+@@ -306,7 +444,7 @@ export class CompanionHubOverlay implements OverlayView {
+     const opener = this.modalOpenerSelector;
+     this.modalOpenerSelector = null;
+     this.activeModal = 'none';
+-    this.confirmResetPending = false;
++    this.eraseSteps.putBack();
+     if (closingModal === 'chart') {
+       const sel = getToothByUniversal(this.selectedUniversalTooth);
+       if (sel.companionArchIndex !== null) {
+@@ -318,6 +456,38 @@ export class CompanionHubOverlay implements OverlayView {
+     if (opener) this.container?.querySelector<HTMLElement>(opener)?.focus();
+   }
+ 
++  /**
++   * Writes the Erase Save button's words and colour in place. The sheet is not redrawn for this:
++   * a redraw would move the button under the finger and wipe a code being pasted beside it.
++   */
++  private syncEraseButton(): void {
++    const btn = this.container?.querySelector<HTMLButtonElement>('#btn-reset-save');
++    if (!btn) return;
++    const armed = this.eraseSteps.isArmed();
++    btn.textContent = this.eraseSteps.label();
++    btn.style.borderColor = armed ? '#fb7185' : '';
++    btn.style.color = armed ? '#fecdd3' : '';
++  }
++
++  /** The second tap on Erase Save: erase, then show Home as a first launch would, with no reload. */
++  private eraseEverything(): void {
++    eraseBackToFirstLaunch(this.saveSys, this.actions.tutorialGate);
++    // What this screen still holds in memory from the old player.
++    this.selectedCityId = 'toronto';
++    this.lastTouchedCrownIdx = null;
++    this.selectedUniversalTooth = 3;
++    this.quizTarget = null;
++    this.quizStreak = 0;
++    this.quizBest = 0;
++    this.quizFeedback = null;
++    this.actions.onSaveErased?.();
++    this.bus.emit('companion:updated', { state: this.saveSys.getSave().companion });
++    // A first launch offers How to Play on Home, so a fresh start does too.
++    this.actions.tutorialGate?.enterHome();
++    this.statusBanner = 'Save erased. You are starting fresh!';
++    this.closeActiveModal();
++  }
++
+   private refreshLabUpgrade(upgradeId: string): void {
+     const scrollTop = this.container?.querySelector('.modal-sheet')?.scrollTop ?? 0;
+     this.render();
+@@ -420,6 +590,8 @@ export class CompanionHubOverlay implements OverlayView {
+       : '';
+     if (this.lastTouchedCrownIdx === null) return resetBtn;
+     const s = getCompanionCrownSummary(this.lastTouchedCrownIdx);
++    // The crown's name is its side and its kind of tooth (the upper and lower tooth share both).
++    const sideAndKind = toothNameParts(s.upperTooth).slice(1);
+     return `${resetBtn}
+       <div style="margin-top:6px;">
+         <button
+@@ -428,7 +600,7 @@ export class CompanionHubOverlay implements OverlayView {
+           class="btn btn-sm tooth-readout-pill ui-interactive"
+           title="Open the tooth chart at this tooth"
+         >
+-          <span>🦷 <strong>${escapeHtml(s.toothTypeLabel)}</strong> • US #${s.upperTooth.universal}/#${s.lowerTooth.universal} • FDI ${s.upperTooth.fdi}/${s.lowerTooth.fdi}</span>
++          <span>🦷 <strong>${wordsHtml(sideAndKind)}</strong> • US #${s.upperTooth.universal}/#${s.lowerTooth.universal} • FDI ${s.upperTooth.fdi}/${s.lowerTooth.fdi}</span>
+           <span style="color:#fde68a;font-weight:700;">Chart →</span>
+         </button>
+       </div>
+@@ -736,6 +908,7 @@ export class CompanionHubOverlay implements OverlayView {
+     const save = this.saveSys.getSave();
+     const city = getHostCityById(cityId);
+     const rec = save.worlds[city.worldId];
++    // (the note's date gets its own <span> below, apart from the colon, so the page can translate it)
+     const hist = getHistoryNoteById(city.historyNoteId);
+     const stampUnlocked = save.totalBrushStamps >= city.unlockStampsRequired;
+ 
+@@ -798,7 +971,7 @@ export class CompanionHubOverlay implements OverlayView {
+         ${
+           hist
+             ? `<div style="font-size:0.72rem;color:#5eead4;">
+-                📜 <strong>${escapeHtml(hist.yearLabel)}:</strong> ${escapeHtml(hist.title)}
++                📜 <strong><span>${escapeHtml(hist.yearLabel)}</span>:</strong> ${escapeHtml(hist.title)}
+               </div>`
+             : ''
+         }
+@@ -1015,17 +1188,22 @@ export class CompanionHubOverlay implements OverlayView {
+                 const otherEquippedInSlot = Boolean(save.equippedUpgrades[u.slot]) && !equipped;
+                 const sharedSlot = UPGRADE_CATALOG.filter((x) => x.slot === u.slot).length > 1;
+                 const canAfford = save.fluorideIons >= u.ionCost;
++                // The word for the slot and the note beside it are translated one by one: joined
++                // into one piece of text first, they would match nothing in the language files.
++                const slotPill = uiTranslator.t(SLOT_LABEL[u.slot]) + (sharedSlot ? uiTranslator.t(' • 1 ACTIVE') : '');
++                // The city to clear goes by its own name, which the page can translate.
++                const clearCityTitle = u.worldClearUnlockId ? getCartridgeById(u.worldClearUnlockId).title : '';
+                 return `
+                   <div style="background:rgba(4,16,28,0.8);border:1px solid ${equipped ? '#2dd4bf' : 'rgba(148,184,204,0.22)'};border-radius:12px;padding:10px;">
+                     <div class="row-between">
+                       <div>
+                         <strong style="font-size:0.88rem;color:#fff;">${escapeHtml(u.name)}</strong>
+-                        <span class="pill-badge" style="margin-left:5px;">${u.slot.toUpperCase()}${sharedSlot ? ' • 1 ACTIVE' : ''}</span>
++                        <span class="pill-badge" style="margin-left:5px;">${escapeHtml(slotPill)}</span>
+                       </div>
+                       ${
+                         unlocked
+                           ? `<button type="button" class="btn btn-sm ${equipped ? 'btn-primary' : ''}" aria-pressed="${equipped ? 'true' : 'false'}" data-equip-id="${u.id}">
+-                              ${equipped ? '✓ Equipped' : otherEquippedInSlot ? `⇄ Swap ${u.slot[0].toUpperCase()}${u.slot.slice(1)}` : 'Equip'}
++                              ${equipped ? '✓ Equipped' : otherEquippedInSlot ? `⇄ Swap ${SLOT_LABEL[u.slot]}` : 'Equip'}
+                             </button>`
+                           : `<button type="button" class="btn btn-sm ${canAfford ? 'btn-gold' : ''}" data-buy-id="${u.id}" ${!canAfford ? 'disabled style="opacity:0.45;"' : ''}>
+                               ${otherEquippedInSlot ? `Unlock & Equip (${u.ionCost} Ions)` : `Unlock (${u.ionCost} Ions)`}
+@@ -1035,7 +1213,7 @@ export class CompanionHubOverlay implements OverlayView {
+                     <div style="font-size:0.78rem;color:#bae6fd;margin-top:4px;">${escapeHtml(u.tagline)}</div>
+                     <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">${escapeHtml(u.scientificNote)}</div>
+                     <div style="font-size:0.69rem;color:#5eead4;margin-top:4px;">
+-                      Free Auto-Unlock: ${u.stampUnlockThreshold} Habit Stamps or Clear ${u.worldClearUnlockId?.replace('_', ' ').toUpperCase()}
++                      Free Auto-Unlock: ${u.stampUnlockThreshold} Habit Stamps or Clear ${escapeHtml(clearCityTitle)}
+                     </div>
+                   </div>
+                 `;
+@@ -1057,10 +1235,12 @@ export class CompanionHubOverlay implements OverlayView {
+             <div style="display:flex;flex-direction:column;gap:10px;">
+               ${HISTORICAL_FIELD_NOTES.map((n) => {
+                 const unlocked = save.unlockedHistoryNotes.includes(n.id);
++                // When and where each sit in their own <span>: the page translates text piece by
++                // piece, and the two joined by a dot are in none of the language files.
+                 return `
+                   <div style="background:rgba(4,16,28,0.82);border:1px solid ${unlocked ? 'rgba(45,212,191,0.4)' : 'rgba(148,184,204,0.18)'};border-radius:12px;padding:10px;">
+                     <div class="row-between">
+-                      <span style="font-size:0.72rem;font-weight:700;color:#38bdf8;">${escapeHtml(n.yearLabel)} • ${escapeHtml(n.locationLabel)}</span>
++                      <span style="font-size:0.72rem;font-weight:700;color:#38bdf8;"><span>${escapeHtml(n.yearLabel)}</span> • <span>${escapeHtml(n.locationLabel)}</span></span>
+                       <span class="pill-badge">${unlocked ? '✓ Discovered' : 'Preview Archive'}</span>
+                     </div>
+                     <div style="font-weight:700;font-size:0.88rem;margin:4px 0;color:#fff;">${escapeHtml(n.title)}</div>
+@@ -1282,9 +1462,7 @@ export class CompanionHubOverlay implements OverlayView {
+           <div class="row-between" style="margin-top:10px;flex-wrap:wrap;gap:8px;border-top:1px solid rgba(94,234,212,0.16);padding-top:10px;">
+             <div class="row-wrap" style="gap:6px;">
+               ${privacyNoticeButtonHtml()}
+-              <button type="button" id="btn-reset-save" class="btn btn-sm" style="${this.confirmResetPending ? 'border-color:#fb7185;color:#fecdd3;' : ''}">
+-                ${this.confirmResetPending ? '⚠️ Tap Again to Erase' : '🔄 Erase Save'}
+-              </button>
++              <button type="button" id="btn-reset-save" class="btn btn-sm" style="${this.eraseSteps.isArmed() ? 'border-color:#fb7185;color:#fecdd3;' : ''}">${this.eraseSteps.label()}</button>
+             </div>
+             <div class="row-wrap" style="gap:6px;">
+               <button type="button" id="btn-paste-sync" class="btn btn-sm">📋 Paste</button>
+@@ -1297,7 +1475,7 @@ export class CompanionHubOverlay implements OverlayView {
+   }
+ 
+   private buildQuizCardHtml(): string {
+-    if (!this.quizTarget) this.quizTarget = buildSpotQuizQuestion();
++    if (!this.quizTarget) this.quizTarget = buildSpotQuizQuestion(Math.random, undefined, toothNameText);
+     const fb = this.quizFeedback;
+     return `
+       <div id="chart-quiz-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(251,191,36,0.5);border-radius:12px;padding:10px 12px;margin-bottom:10px;">
+@@ -1389,14 +1567,16 @@ export class CompanionHubOverlay implements OverlayView {
+                 const t = getToothByUniversal(uNum);
+                 const isSel = t.universal === sel.universal;
+                 const badge = formatToothBadge(t, this.chartSystem);
++                // A label is one piece of text, so the name goes in already translated.
++                const name = toothNameText(t);
+                 return `
+                   <button
+                     type="button"
+                     class="tooth-cell cat-${t.category} ${t.isWisdomTooth ? 'is-wisdom' : ''} ${isSel ? 'selected' : ''}"
+                     data-tooth-num="${t.universal}"
+                     aria-pressed="${isSel ? 'true' : 'false'}"
+-                    aria-label="${escapeHtml(t.clinicalName)} — US #${t.universal}, FDI ${t.fdi}, Palmer ${t.palmer}"
+-                    title="${escapeHtml(t.clinicalName)} (${escapeHtml(t.commonNickname)})"
++                    aria-label="${escapeHtml(name)} — US #${t.universal}, FDI ${t.fdi}, Palmer ${t.palmer}"
++                    title="${escapeHtml(name)} (${escapeHtml(uiTranslator.t(t.commonNickname))})"
+                   >
+                     <span class="tooth-cell-code">${escapeHtml(badge)}</span>
+                     <span class="tooth-cell-role">${shortPosTag[t.positionFromMidline]}</span>
+@@ -1490,7 +1670,7 @@ export class CompanionHubOverlay implements OverlayView {
+           <div id="chart-selected-card" style="background:rgba(4,16,28,0.88);border:1px solid rgba(45,212,191,0.45);border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+             <div class="row-between" style="flex-wrap:wrap;margin-bottom:5px;">
+               <div>
+-                <strong id="chart-tooth-name" style="font-size:0.92rem;color:#fff;">${escapeHtml(sel.clinicalName)}</strong>
++                <strong id="chart-tooth-name" style="font-size:0.92rem;color:#fff;">${wordsHtml(toothNameParts(sel))}</strong>
+                 <span style="font-size:0.75rem;color:#5eead4;margin-left:6px;">• ${escapeHtml(sel.commonNickname)}</span>
+               </div>
+               <span class="pill-badge">${escapeHtml(catLabel[sel.category])}</span>
+@@ -1730,7 +1910,7 @@ export class CompanionHubOverlay implements OverlayView {
+       });
+     });
+     this.container.querySelector('#btn-quiz-next')?.addEventListener('click', () => {
+-      this.quizTarget = buildSpotQuizQuestion(Math.random, this.quizTarget?.targetUniversal);
++      this.quizTarget = buildSpotQuizQuestion(Math.random, this.quizTarget?.targetUniversal, toothNameText);
+       this.quizFeedback = null;
+       this.actions.onPlayUiTap();
+       this.rerenderModalKeepingScroll('#btn-quiz-next');
+@@ -1742,7 +1922,7 @@ export class CompanionHubOverlay implements OverlayView {
+         const t = getToothByUniversal(num);
+         const step = (8 - t.positionFromMidline) + (t.arch === 'upper' ? 4 : 0);
+         if (this.chartTab === 'quiz' && this.quizTarget) {
+-          const res = judgeSpotQuizAnswer(this.quizTarget.targetUniversal, num, this.quizStreak, this.quizBest);
++          const res = judgeSpotQuizAnswer(this.quizTarget.targetUniversal, num, this.quizStreak, this.quizBest, toothNameText);
+           this.quizStreak = res.nextStreak;
+           this.quizBest = res.bestStreak;
+           this.quizFeedback = { ok: res.correct, text: res.message };
+@@ -1750,7 +1930,7 @@ export class CompanionHubOverlay implements OverlayView {
+             this.actions.onPlayToothChime?.(step);
+             this.actions.onPlayToothChime?.(step + 2);
+             if (t.companionArchIndex !== null) this.actions.onHighlightCrown?.(t.companionArchIndex);
+-            this.quizTarget = buildSpotQuizQuestion(Math.random, num);
++            this.quizTarget = buildSpotQuizQuestion(Math.random, num, toothNameText);
+           } else {
+             this.actions.onPlayUiTap();
+           }
+@@ -1863,6 +2043,9 @@ export class CompanionHubOverlay implements OverlayView {
+       if (isCoachLanguage(value)) {
+         this.actions.setLanguage?.(value);
+         this.actions.onPlayUiTap();
++        // a quiz question already written has its tooth name in the old language: ask a new one
++        this.quizTarget = null;
++        this.quizFeedback = null;
+         // the weekday letters in "This week" come in the new language
+         this.rerenderModalKeepingScroll('#sel-app-language');
+       }
+@@ -1990,11 +2173,7 @@ export class CompanionHubOverlay implements OverlayView {
+       const file = backupInput.files?.[0];
+       if (!file) return;
+       const fail = (err: unknown) => {
+-        showSyncInlineFeedback(
+-          (err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.') +
+-            ' Your current progress was not changed.',
+-          false
+-        );
++        showSyncInlineFeedback(importRefusedText(err), false);
+       };
+       if (file.size > 262144) {
+         fail(new Error('This code is damaged and can’t be read.'));
+@@ -2010,19 +2189,11 @@ export class CompanionHubOverlay implements OverlayView {
+         .catch(fail);
+     });
+ 
++    // Erasing is for grown-ups: the first tap asks the grown-up question, the right answer turns
++    // the button into "Tap Again to Erase", and only that second tap erases (see EraseSaveSteps).
+     this.container.querySelector('#btn-reset-save')?.addEventListener('click', () => {
+-      if (!this.confirmResetPending) {
+-        this.confirmResetPending = true;
+-        this.actions.onPlayUiTap();
+-        this.render();
+-        return;
+-      }
+-      this.confirmResetPending = false;
+-      this.saveSys.resetToFreshSave();
+-      clearHasSeenBrushIntro(); // a fresh start sees the "Time Your Real Brush" card again
+-      this.selectedCityId = 'toronto';
+-      this.statusBanner = 'Save erased. You are starting fresh!';
+-      this.closeActiveModal();
++      if (!this.eraseSteps.isArmed()) this.actions.onPlayUiTap();
++      this.eraseSteps.tap();
+     });
+ 
+     this.container.querySelector('#btn-apply-sync')?.addEventListener('click', () => {
+@@ -2035,17 +2206,14 @@ export class CompanionHubOverlay implements OverlayView {
+       } catch (err) {
+         // Keep the sheet open with the pasted text so the player can fix the code; progress is untouched.
+         const status = this.container?.querySelector<HTMLElement>('#sync-import-status');
+-        if (status) {
+-          status.textContent =
+-            (err instanceof Error && err.message ? err.message : 'That Sync Code could not be read.') +
+-            ' Your current progress was not changed.';
+-        }
++        if (status) status.textContent = importRefusedText(err);
+         txt?.focus();
+       }
+     });
+   }
+ 
+   dispose(): void {
++    this.eraseSteps.putBack();
+     this.tutorial?.dispose();
+     this.tutorial = null;
+     this.root = null;
+diff --git a/src/ui/MissionReportOverlay.ts b/src/ui/MissionReportOverlay.ts
+index f69317a..13ac37f 100644
+--- a/src/ui/MissionReportOverlay.ts
++++ b/src/ui/MissionReportOverlay.ts
+@@ -147,6 +147,9 @@ export class MissionReportOverlay implements OverlayView {
+       : undefined;
+     const dentalLesson = getWorldDentalLesson(this.report.worldId, mode);
+ 
++    // In the card below, a word that sits beside numbers or beside another line gets its own
++    // <span> ("Par", "95% Clean", the field note's date). The page is translated piece by piece,
++    // and a piece such as "Par 1:23/3:00" or "(95% Clean)" matches nothing in the language files.
+     const headline = esc(buildReportHeadline(this.report));
+     const upgrades = this.report.unlockedUpgradeNames ?? [];
+     const nextDive =
+@@ -217,7 +220,7 @@ export class MissionReportOverlay implements OverlayView {
+             <div class="mini-meter">
+               <div class="mini-meter-label"><span>${
+                 this.report.parTimeSec && this.report.parTimeSec > 0
+-                  ? `${mode === 'PULP_RESCUE' ? 'Time' : 'Par'} ${formatClock(breakdown.elapsedSec)}/${formatClock(this.report.parTimeSec)}`
++                  ? `<span>${mode === 'PULP_RESCUE' ? 'Time' : 'Par'}</span> ${formatClock(breakdown.elapsedSec)}/${formatClock(this.report.parTimeSec)}`
+                   : 'Par Time'
+               }</span></div>
+               <strong id="report-pts-partime" class="report-num" style="font-size:0.84rem;color:#fbbf24;">${sampleScoreReveal(breakdown.parTimePts, 0, reduced)}</strong>
+@@ -225,7 +228,7 @@ export class MissionReportOverlay implements OverlayView {
+           </div>
+ 
+           <div class="row-between" style="font-size:0.8rem;margin-bottom:8px;">
+-            <span>Total Score: <strong id="report-total-score" class="report-num">${sampleScoreReveal(breakdown.totalScore, 0, reduced)}</strong> (${breakdown.cleanlinessPct}% Clean)</span>
++            <span>Total Score: <strong id="report-total-score" class="report-num">${sampleScoreReveal(breakdown.totalScore, 0, reduced)}</strong> (<span>${breakdown.cleanlinessPct}% Clean</span>)</span>
+             <span style="color:#99f6e4;font-weight:700;">
+               ✦ +${mode === 'PULP_RESCUE' ? this.report.bonusRescueIons : breakdown.ionsEarned} Fluoride Ions
+             </span>
+@@ -236,7 +239,7 @@ export class MissionReportOverlay implements OverlayView {
+               ? `<details id="report-field-note" class="report-lesson">
+                   <summary>📜 Field note unlocked: ${esc(note.title)}</summary>
+                   <div class="report-lesson-body">
+-                    <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;">${esc(note.yearLabel)} • ${esc(dentalLesson.focusTeethBadge)}</div>
++                    <div style="font-size:0.7rem;color:#38bdf8;font-weight:700;"><span>${esc(note.yearLabel)}</span> • <span>${esc(dentalLesson.focusTeethBadge)}</span></div>
+                     <div style="font-size:0.76rem;color:#cbd5e1;margin-top:3px;">${esc(note.enamelLesson)}</div>
+                   </div>
+                 </details>`
+diff --git a/src/ui/TelemetryHudOverlay.ts b/src/ui/TelemetryHudOverlay.ts
+index a79f91a..ca18248 100644
+--- a/src/ui/TelemetryHudOverlay.ts
++++ b/src/ui/TelemetryHudOverlay.ts
+@@ -348,10 +348,12 @@ export class TelemetryHudOverlay implements OverlayView {
+     this.container.className = 'hub-shell';
+     root.appendChild(this.container);
+ 
++    // The city's name is translated first and put in capitals after: the language files hold the
++    // name as it is written ("Plaque City"), so the page would find no match for the capitals.
+     const titleLabel =
+       this.mode === 'PULP_RESCUE'
+         ? '🚨 PULP RESCUE SCRAMBLE'
+-        : `🦷 ${this.session.cartridge.title.toUpperCase()}`;
++        : `🦷 ${uiTranslator.t(this.session.cartridge.title).toUpperCase()}`;
+ 
+     // A city stage shows one bar segment per zone, as wide as its zone, left to right.
+     const zones = this.mode === 'PULP_RESCUE' ? [] : this.session.cartridge.districts;
+@@ -548,7 +550,9 @@ export class TelemetryHudOverlay implements OverlayView {
+     const blurb = this.session.cartridge.challengeBlurb;
+     const world1Done = Boolean(this.saveSys.getSave().worlds.world_1?.completed);
+     if (blurb && shouldShowDiveIntroToast(this.mode, this.session.cartridge.id, world1Done)) {
+-      this.showToast(`🎯 ${blurb}`, 4.2);
++      // Translated before the icon is put in front: a line that starts with a number
++      // ("90 seconds: ...") is not recognised behind an icon.
++      this.showToast(`🎯 ${uiTranslator.t(blurb)}`, 4.2);
+     }
+   }
+ 
+@@ -1484,6 +1488,8 @@ export class TelemetryHudOverlay implements OverlayView {
+         ? 'Clean the pulp room to 85% before time runs out. If time runs out, the tooth gets a safe patch. You never lose it.'
+         : this.session.cartridge.challengeBlurb ??
+           'Scrub the enamel to 100%, bring back all the helper germs, and seal each zone with fluoride.';
++    // The lesson's heading and its teeth are translated one by one in the summary line below:
++    // joined into one line first, they would match nothing in the language files.
+     const dentalLesson = getWorldDentalLesson(this.session.cartridge.id, this.mode);
+     const escTxt = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+     const muted = a.isMuted();
+@@ -1524,7 +1530,7 @@ export class TelemetryHudOverlay implements OverlayView {
+           <button type="button" id="btn-pause-quality" class="btn btn-sm" hidden style="display:none" aria-label="Change Graphics Quality">${this.formatQualityLabel()}</button>
+         </div>
+         <details id="pause-dental-lesson" class="report-lesson"${openLessonAttr}>
+-          <summary>🦷 ${escTxt(dentalLesson.headline)} • ${escTxt(dentalLesson.focusTeethBadge)}</summary>
++          <summary>🦷 ${escTxt(uiTranslator.t(dentalLesson.headline))} • ${escTxt(uiTranslator.t(dentalLesson.focusTeethBadge))}</summary>
+           <div class="report-lesson-body">
+             <div id="pause-tip" style="font-size:0.73rem;color:#99f6e4;margin-bottom:4px;">🎯 ${escTxt(tip)}</div>
+             <div style="font-size:0.73rem;color:#cbd5e1;line-height:1.36;">${escTxt(dentalLesson.lesson)}</div>
+diff --git a/tests/dentalChart.test.ts b/tests/dentalChart.test.ts
+index f9ec9a3..486f824 100644
+--- a/tests/dentalChart.test.ts
++++ b/tests/dentalChart.test.ts
+@@ -9,6 +9,7 @@ import {
+   QUADRANT_NUMBERING_META,
+   TOOTH_SURFACES_GUIDE,
+ } from '../src/config/dentalChart';
++import { quadrantToothRange } from '../src/engine/render/PacerPropRig';
+ 
+ describe('Clinical 32-tooth numbering & dental education reference', () => {
+   it('defines all 32 permanent teeth with unique Universal, FDI, and Palmer codes', () => {
+@@ -68,26 +69,46 @@ describe('Clinical 32-tooth numbering & dental education reference', () => {
+     expect(formatToothBadge(urFirstMolar, 'palmer')).toBe('6┘');
+   });
+ 
+-  it('maps all 14 sculpted 3D Companion Arch crowns (0..13) from Right 2nd Molar to Left 2nd Molar', () => {
+-    const rightM2 = getCompanionCrownSummary(0);
+-    expect(rightM2.toothTypeLabel).toBe('Right 2nd Molar');
+-    expect(rightM2.upperTooth.universal).toBe(2);
+-    expect(rightM2.lowerTooth.universal).toBe(31);
++  // The mouth on screen is a mirror: crown 0, the leftmost on screen, is the player's own left.
++  it('maps all 14 sculpted 3D Companion Arch crowns (0..13) from Left 2nd Molar to Right 2nd Molar', () => {
++    const leftM2 = getCompanionCrownSummary(0);
++    expect(leftM2.toothTypeLabel).toBe('Left 2nd Molar');
++    expect(leftM2.upperTooth.universal).toBe(15);
++    expect(leftM2.lowerTooth.universal).toBe(18);
+ 
+-    const rightC1 = getCompanionCrownSummary(6);
++    const leftC1 = getCompanionCrownSummary(6);
++    expect(leftC1.toothTypeLabel).toBe('Left Central Incisor');
++    expect(leftC1.upperTooth.universal).toBe(9);
++    expect(leftC1.lowerTooth.universal).toBe(24);
++
++    const rightC1 = getCompanionCrownSummary(7);
+     expect(rightC1.toothTypeLabel).toBe('Right Central Incisor');
+     expect(rightC1.upperTooth.universal).toBe(8);
+     expect(rightC1.lowerTooth.universal).toBe(25);
+ 
+-    const leftC1 = getCompanionCrownSummary(7);
+-    expect(leftC1.toothTypeLabel).toBe('Left Central Incisor');
+-    expect(leftC1.upperTooth.universal).toBe(9);
+-    expect(leftC1.lowerTooth.universal).toBe(24);
++    const rightM2 = getCompanionCrownSummary(13);
++    expect(rightM2.toothTypeLabel).toBe('Right 2nd Molar');
++    expect(rightM2.upperTooth.universal).toBe(2);
++    expect(rightM2.lowerTooth.universal).toBe(31);
++  });
+ 
+-    const leftM2 = getCompanionCrownSummary(13);
+-    expect(leftM2.toothTypeLabel).toBe('Left 2nd Molar');
+-    expect(leftM2.upperTooth.universal).toBe(15);
+-    expect(leftM2.lowerTooth.universal).toBe(18);
++  it('names every crown by the side the 2-minute brush lights for it', () => {
++    // The brush lights crowns 7..13 for the player's right quadrants (upper-right 0, lower-right 3)
++    // and crowns 0..6 for the left ones. Home must call the same crowns Right and Left.
++    for (const [quadrant, side, fdiUpper, fdiLower] of [
++      [0, 'Right', '1', '4'],
++      [3, 'Right', '1', '4'],
++      [1, 'Left', '2', '3'],
++      [2, 'Left', '2', '3'],
++    ] as const) {
++      const { from, to } = quadrantToothRange(quadrant);
++      for (let crown = from; crown <= to; crown++) {
++        const s = getCompanionCrownSummary(crown);
++        expect(s.sideLabel, `crown ${crown}`).toBe(side);
++        expect(s.upperTooth.fdi[0], `crown ${crown} upper`).toBe(fdiUpper);
++        expect(s.lowerTooth.fdi[0], `crown ${crown} lower`).toBe(fdiLower);
++      }
++    }
+   });
+ 
+   it('covers all 4 quadrants, 5 tooth surfaces, and tailored per-world dentistry lessons', () => {
+@@ -108,6 +129,7 @@ import {
+   judgeSpotQuizAnswer,
+   TOOTH_CROSS_SECTION_LAYERS,
+   getToothLayer,
++  toothNameParts,
+ } from '../src/config/dentalChart';
+ 
+ describe('Spot That Tooth! quiz & cross-section', () => {
+@@ -137,6 +159,35 @@ describe('Spot That Tooth! quiz & cross-section', () => {
+     expect(miss.bestStreak).toBe(3);
+   });
+ 
++  it('gives a tooth name as its three parts, the words the language files hold', () => {
++    expect(toothNameParts(getToothByUniversal(3))).toEqual(['Upper', 'Right', '1st Molar']);
++    expect(toothNameParts(getToothByUniversal(24))).toEqual(['Lower', 'Left', 'Central Incisor']);
++    // joined, the parts are the full name of every tooth
++    for (const t of ADULT_TEETH_BY_UNIVERSAL) expect(toothNameParts(t).join(' ')).toBe(t.clinicalName);
++    // twelve words in all: two arches, two sides, eight kinds of tooth
++    expect(new Set(ADULT_TEETH_BY_UNIVERSAL.flatMap((t) => [...toothNameParts(t)])).size).toBe(12);
++  });
++
++  it('writes the tooth name in quiz lines the way the screen asks, and in English otherwise', () => {
++    const inCapitals = (t: { clinicalName: string }) => t.clinicalName.toUpperCase();
++    // rand gives tooth #3, then the style of the question (0: name, nickname and numbers; 1: name only)
++    const pick = (style: number) => {
++      const seq = [0.07, style / 4];
++      return () => seq.shift() ?? 0;
++    };
++    expect(buildSpotQuizQuestion(pick(0), undefined, inCapitals).prompt).toBe(
++      'Can you tap the UPPER RIGHT 1ST MOLAR (Six-Year Molar) — #3 / FDI 16?'
++    );
++    expect(buildSpotQuizQuestion(pick(1), undefined, inCapitals).prompt).toBe('Find the UPPER RIGHT 1ST MOLAR!');
++    expect(buildSpotQuizQuestion(pick(1)).prompt).toBe('Find the Upper Right 1st Molar!');
++
++    expect(judgeSpotQuizAnswer(3, 3, 0, 0, inCapitals).message).toBe('Yes! UPPER RIGHT 1ST MOLAR = #3 • FDI 16 • Palmer 6┘');
++    expect(judgeSpotQuizAnswer(3, 4, 0, 0, inCapitals).message).toBe(
++      'Close! That one is UPPER RIGHT 2ND PREMOLAR (#4). Try again — you’ve got this!'
++    );
++    expect(judgeSpotQuizAnswer(3, 3, 0, 0).message).toBe('Yes! Upper Right 1st Molar = #3 • FDI 16 • Palmer 6┘');
++  });
++
+   it('describes four cross-section layers with the documented mineral levels', () => {
+     expect(TOOTH_CROSS_SECTION_LAYERS.map((l) => l.id)).toEqual(['enamel', 'dentin', 'pulp', 'ligament']);
+     expect(getToothLayer('enamel').mineralPercent).toBe(96);
+diff --git a/tests/eraseSave.test.ts b/tests/eraseSave.test.ts
+new file mode 100644
+index 0000000..8588b1c
+--- /dev/null
++++ b/tests/eraseSave.test.ts
+@@ -0,0 +1,649 @@
++import { readFileSync, readdirSync, statSync } from 'node:fs';
++import { join } from 'node:path';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { COACH_DONE_HINT_KEY, coachApplies } from '../src/config/firstCityCoach';
++import { TutorialGate, loadTutorialProgress } from '../src/config/tutorial';
++import { AUDIO_PREFS_KEY } from '../src/engine/audio/musicTheory';
++import { EventBus } from '../src/engine/EventBus';
++import {
++  markHasSeenBrushIntro,
++  readHasSeenBrushIntro,
++  readIncludeRinse,
++  readReminders,
++  writeIncludeRinse,
++  writeReminders,
++} from '../src/engine/persistence/pacerPrefs';
++import {
++  SAVE_GENERATION_KEY,
++  SAVE_STORAGE_KEY,
++  SAVE_UNREADABLE_COPY_KEY,
++  SAVE_V1_COPY_KEY,
++  SaveSystem,
++  type StorageLike,
++} from '../src/engine/persistence/SaveSystem';
++import {
++  CompanionHubOverlay,
++  ERASE_CONFIRM_LABEL,
++  ERASE_CONFIRM_MS,
++  ERASE_SAVE_LABEL,
++  ERASE_SETTLE_MS,
++  EraseSaveSteps,
++  eraseBackToFirstLaunch,
++} from '../src/ui/CompanionHubOverlay';
++import { loadSeenHints, saveSeenHints } from '../src/ui/hudHelpers';
++import { askGrownUp } from '../src/ui/parentGate';
++
++// The grown-up question draws on the page. Here it is a stand-in the tests answer themselves.
++vi.mock('../src/ui/parentGate', () => ({ askGrownUp: vi.fn(), installParentGate: vi.fn() }));
++
++const ROOT = join(__dirname, '..');
++const T0 = 1_700_000_000_000;
++/** A save cut off in the middle, as the save system keeps it under its "unreadable" key. */
++const DAMAGED = '{"schemaVersion":2,"totalBrushStamps":73,"fluori';
++const V1_COPY = JSON.stringify({ schemaVersion: 1, totalBrushStamps: 12, fluorideCrystals: 300 });
++
++/** A stand-in for the browser's localStorage (the test environment has no page). */
++function browserStorage(refuse = false): Storage {
++  const data = new Map<string, string>();
++  const guard = (): void => {
++    if (refuse) throw new Error('blocked');
++  };
++  return {
++    get length() {
++      return data.size;
++    },
++    clear: () => data.clear(),
++    key: (i) => [...data.keys()][i] ?? null,
++    getItem: (k) => (guard(), data.get(k) ?? null),
++    setItem: (k, v) => (guard(), void data.set(k, String(v))),
++    removeItem: (k) => (guard(), void data.delete(k)),
++  };
++}
++
++/** A store that can read and write but not remove, as `StorageLike` allows. */
++function storageWithoutRemove(initial: Record<string, string> = {}): StorageLike & { all(): string } {
++  const data = new Map(Object.entries(initial));
++  return {
++    getItem: (k) => data.get(k) ?? null,
++    setItem: (k, v) => void data.set(k, v),
++    all: () => [...data.values()].join('\n'),
++  };
++}
++
++function storedSave(storage: Pick<Storage, 'getItem'>) {
++  return JSON.parse(storage.getItem(SAVE_STORAGE_KEY) ?? 'null');
++}
++
++describe('Erase Save: the save and the copies kept of older saves', () => {
++  it('removes both kept copies and leaves a brand-new save', () => {
++    const storage = browserStorage();
++    storage.setItem(SAVE_STORAGE_KEY, DAMAGED);
++    storage.setItem(SAVE_V1_COPY_KEY, V1_COPY);
++    const sys = new SaveSystem(new EventBus(), storage);
++    const save = sys.load(T0);
++    // the save system kept the damaged bytes, and the version-1 copy is still there
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBe(DAMAGED);
++    save.totalBrushStamps = 9;
++    save.fluorideIons = 500;
++    sys.save(save, T0 + 1);
++
++    const fresh = sys.eraseSaveAndKeptCopies(T0 + 100);
++
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBeNull();
++    expect(storage.getItem(SAVE_V1_COPY_KEY)).toBeNull();
++    expect(fresh).toBe(sys.getSave());
++    expect(fresh.totalBrushStamps).toBe(0);
++    expect(fresh.fluorideIons).toBe(0);
++    expect(fresh.hasSeenCosmicIntro).toBe(false);
++    expect(storedSave(storage).totalBrushStamps).toBe(0);
++    expect(storedSave(storage).fluorideIons).toBe(0);
++    // a later launch finds a new save, with nothing to recover
++    const later = new SaveSystem(new EventBus(), storage);
++    expect(later.load(T0 + 200).fluorideIons).toBe(0);
++    expect(later.getLoadOutcome()).toBe('loaded');
++  });
++
++  it('gives up the old bytes even in a store that cannot remove a key', () => {
++    const storage = storageWithoutRemove({ [SAVE_STORAGE_KEY]: DAMAGED, [SAVE_V1_COPY_KEY]: V1_COPY });
++    const sys = new SaveSystem(new EventBus(), storage);
++    sys.load(T0);
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBe(DAMAGED);
++
++    sys.eraseSaveAndKeptCopies(T0 + 100);
++
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBe('');
++    expect(storage.getItem(SAVE_V1_COPY_KEY)).toBe('');
++    expect(storage.all()).not.toContain('"totalBrushStamps":73');
++    expect(storage.all()).not.toContain('fluorideCrystals');
++  });
++
++  it('replaces a save from a newer version and takes its copy away too', () => {
++    const newer = JSON.stringify({ schemaVersion: 3, totalBrushStamps: 73, fluorideIons: 421 });
++    const storage = browserStorage();
++    storage.setItem(SAVE_STORAGE_KEY, newer);
++    const sys = new SaveSystem(new EventBus(), storage);
++    sys.load(T0);
++    expect(sys.isPersistenceSuspended()).toBe(true);
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBe(newer);
++
++    sys.eraseSaveAndKeptCopies(T0 + 1);
++
++    expect(sys.isPersistenceSuspended()).toBe(false);
++    expect(storedSave(storage).schemaVersion).toBe(2);
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBeNull();
++  });
++
++  it('announces the fresh save once, after the copies are gone', () => {
++    const storage = browserStorage();
++    storage.setItem(SAVE_STORAGE_KEY, DAMAGED);
++    const bus = new EventBus();
++    const sys = new SaveSystem(bus, storage);
++    sys.load(T0);
++    const copyAtAnnouncement: Array<string | null> = [];
++    bus.on('save:updated', () => copyAtAnnouncement.push(storage.getItem(SAVE_UNREADABLE_COPY_KEY)));
++
++    sys.eraseSaveAndKeptCopies(T0 + 1);
++
++    expect(copyAtAnnouncement).toEqual([null]);
++  });
++
++  it('still tells other open tabs to take the fresh save, so none writes old progress back', () => {
++    const storage = browserStorage();
++    const tab = new SaveSystem(new EventBus(), storage);
++    const save = tab.load(T0);
++    save.fluorideIons = 300;
++    tab.save(save, T0 + 1);
++    const stale = new SaveSystem(new EventBus(), storage);
++    stale.load(T0 + 2);
++    stale.getSave().companion.lastEvaluatedEpochMs = T0 + 3; // its tooth kept ticking
++    const generation = storage.getItem(SAVE_GENERATION_KEY);
++    const revision = tab.getSave().saveRevision;
++
++    tab.eraseSaveAndKeptCopies(T0 + 10);
++    stale.flushIfChanged(T0 + 20); // the old tab is closed
++
++    expect(storage.getItem(SAVE_GENERATION_KEY)).not.toBe(generation);
++    expect(tab.getSave().saveRevision).toBeGreaterThan(revision);
++    expect(storedSave(storage).fluorideIons).toBe(0);
++  });
++});
++
++/** Every localStorage key the web edition uses, read from its own source. */
++function storageKeysInSource(): string[] {
++  const keys = new Set<string>();
++  const walk = (dir: string): void => {
++    for (const name of readdirSync(dir)) {
++      const path = join(dir, name);
++      if (statSync(path).isDirectory()) walk(path);
++      else if (name.endsWith('.ts')) {
++        for (const m of readFileSync(path, 'utf8').matchAll(/'(mouthlife[._][A-Za-z0-9._]+)'/g)) keys.add(m[1]);
++      }
++    }
++  };
++  walk(join(ROOT, 'src'));
++  return [...keys].sort();
++}
++
++/** Kept through an erase, and why. */
++const KEPT: Record<string, string> = {
++  'mouthlife.audioPrefs': 'sound: mute and the two volume sliders',
++  'mouthlife.voiceCoach.enabled': 'the spoken coach, on or off',
++  'mouthlife.voiceCoach.language': 'the language of the screens and the coach',
++  'mouthlife.reduceMotion': 'Less Camera Shake',
++  'mouthlife.pointerSteer': 'how the player steers: drag on the tooth or the thumb pad',
++  'mouthlife.pacer.flossToolStyle': 'which floss tool the brush timer draws',
++  'mouthlife.pacer.mouthwashDurationStyle': 'the rinse length, used only once a grown-up turns rinse on again',
++  'mouthlife.reminders.morning': 'a time of day, used only once a grown-up turns reminders on again',
++  'mouthlife.reminders.evening': 'a time of day, used only once a grown-up turns reminders on again',
++};
++
++/** Erased, and what erasing means for each. */
++const ERASED: Record<string, string> = {
++  mouthlife_save_v2: 'replaced by a brand-new save',
++  mouthlife_save_generation: 'a new mark, which tells other open tabs to take the fresh save',
++  mouthlife_save_v2_unreadable: 'removed: the copy kept of a save that could not be read',
++  mouthlife_save_v1_copy: 'removed: the copy kept of a version-1 save',
++  'mouthlife.pacer.hasSeenIntro': 'removed: the "Time Your Real Brush" card shows again',
++  'mouthlife.hintsSeen': 'emptied: the one-time hints and the first city coach come back',
++  'mouthlife.tutorial': 'back to the start: How to Play is offered again',
++  'mouthlife.pacer.includeRinse': 'off: a grown-up has to agree to the rinse step again',
++  'mouthlife.reminders.on': 'off',
++};
++
++/** A device a family has played on: progress, hints seen, grown-up choices made, settings changed. */
++function playedDevice(storage: Storage): { saveSys: SaveSystem; gate: TutorialGate } {
++  // comfort settings
++  storage.setItem(AUDIO_PREFS_KEY, JSON.stringify({ muted: true, musicVolume: 0.3, sfxVolume: 0.2, defaultsVersion: 2 }));
++  storage.setItem('mouthlife.voiceCoach.enabled', '0');
++  storage.setItem('mouthlife.voiceCoach.language', 'de');
++  storage.setItem('mouthlife.reduceMotion', '1');
++  storage.setItem('mouthlife.pointerSteer', '0');
++  storage.setItem('mouthlife.pacer.flossToolStyle', 'stringFloss');
++  storage.setItem('mouthlife.pacer.mouthwashDurationStyle', 'quick30s');
++  // a grown-up's choices
++  writeIncludeRinse(true);
++  writeReminders({ on: true, morning: 6 * 60 + 45, evening: 20 * 60 });
++  // traces of having played
++  markHasSeenBrushIntro();
++  saveSeenHints(new Set(['first_dive', 'first_colony', COACH_DONE_HINT_KEY]));
++  const gate = new TutorialGate();
++  gate.enterHome();
++  gate.markOpened();
++  // the save, the mark of an earlier erase, and copies the save system kept of older saves
++  storage.setItem(SAVE_GENERATION_KEY, 'an-earlier-erase');
++  storage.setItem(SAVE_UNREADABLE_COPY_KEY, DAMAGED);
++  storage.setItem(SAVE_V1_COPY_KEY, V1_COPY);
++  const saveSys = new SaveSystem(new EventBus());
++  const save = saveSys.load(T0);
++  save.hasSeenCosmicIntro = true;
++  save.playerProfile.displayName = 'Old Player';
++  save.playerProfile.homeCityId = 'tokyo';
++  save.totalBrushStamps = 21;
++  save.fluorideIons = 640;
++  save.worlds.world_1 = { ...save.worlds.world_1, completed: true, timesCleared: 2, bestScore: 8000, bestGrade: 'A' };
++  saveSys.save(save, T0 + 1);
++  return { saveSys, gate };
++}
++
++describe('Erase Save: back to how a first launch finds the game', () => {
++  let storage: Storage;
++
++  beforeEach(() => {
++    storage = browserStorage();
++    vi.stubGlobal('localStorage', storage);
++    vi.stubGlobal('window', { localStorage: storage });
++  });
++  afterEach(() => {
++    vi.unstubAllGlobals();
++  });
++
++  it('erases every key the game keeps in the browser, except the ones on the kept list', () => {
++    const { saveSys, gate } = playedDevice(storage);
++    const keys = storageKeysInSource();
++    // the two lists together are exactly the keys found in the source: a new key must join one
++    expect([...Object.keys(KEPT), ...Object.keys(ERASED)].sort()).toEqual(keys);
++    const before = new Map(keys.map((key) => [key, storage.getItem(key)]));
++    for (const key of keys) expect(before.get(key), `${key} holds something before the erase`).not.toBeNull();
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    for (const key of Object.keys(KEPT)) {
++      expect(storage.getItem(key), `${key} is kept (${KEPT[key]})`).toBe(before.get(key));
++    }
++    for (const key of Object.keys(ERASED)) {
++      expect(storage.getItem(key), `${key} is erased (${ERASED[key]})`).not.toBe(before.get(key));
++    }
++  });
++
++  it('leaves a brand-new save and no copy of the old one', () => {
++    const { saveSys, gate } = playedDevice(storage);
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    const save = saveSys.getSave();
++    expect(save.playerProfile).toEqual({ displayName: 'Explorer', skinToneIndex: 3, homeCityId: 'toronto' });
++    expect(save.totalBrushStamps).toBe(0);
++    expect(save.fluorideIons).toBe(0);
++    expect(save.worlds.world_1.completed).toBe(false);
++    expect(save.hasSeenCosmicIntro).toBe(false);
++    expect(storedSave(storage).playerProfile.displayName).toBe('Explorer');
++    expect(storage.getItem(SAVE_UNREADABLE_COPY_KEY)).toBeNull();
++    expect(storage.getItem(SAVE_V1_COPY_KEY)).toBeNull();
++    const everything = [...Array(storage.length).keys()].map((i) => storage.getItem(storage.key(i) ?? '')).join('\n');
++    expect(everything).not.toContain('Old Player');
++    expect(everything).not.toContain('"totalBrushStamps":73');
++  });
++
++  it('brings back the brush intro card, the one-time hints and the first city coach', () => {
++    const { saveSys, gate } = playedDevice(storage);
++    expect(readHasSeenBrushIntro()).toBe(true);
++    expect(coachApplies('world_1', 'ARCADE', false, loadSeenHints())).toBe(false);
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    expect(readHasSeenBrushIntro()).toBe(false);
++    expect(loadSeenHints().size).toBe(0);
++    expect(coachApplies('world_1', 'ARCADE', false, loadSeenHints())).toBe(true);
++  });
++
++  it('offers How to Play again at once, with no reload, and opens it before the first Dive', () => {
++    const { saveSys, gate } = playedDevice(storage);
++    expect(gate.getProgress().opened).toBe(true);
++    gate.enterHome();
++    expect(gate.isOfferVisible()).toBe(false);
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    expect(gate.getProgress()).toEqual({ offers: 0, opened: false }); // the first Dive opens the guide
++    expect(loadTutorialProgress()).toEqual({ offers: 0, opened: false });
++    gate.enterHome(); // what the Home screen does right after the erase
++    expect(gate.isOfferVisible()).toBe(true);
++  });
++
++  it('turns the rinse step and the reminders off, and leaves the reminder times alone', () => {
++    const { saveSys, gate } = playedDevice(storage);
++    expect(readIncludeRinse()).toBe(true);
++    expect(readReminders().on).toBe(true);
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    expect(readIncludeRinse()).toBe(false);
++    expect(readReminders()).toEqual({ on: false, morning: 6 * 60 + 45, evening: 20 * 60 });
++  });
++
++  it('erases the save last, when nothing else of the old player is left', () => {
++    const { gate } = playedDevice(storage);
++    const seenWhenTheSaveGoes: unknown[] = [];
++    const saveSys = {
++      eraseSaveAndKeptCopies: () => {
++        seenWhenTheSaveGoes.push({
++          intro: readHasSeenBrushIntro(),
++          hints: loadSeenHints().size,
++          guide: gate.getProgress(),
++          rinse: readIncludeRinse(),
++          reminders: readReminders().on,
++        });
++        return undefined as never;
++      },
++    };
++
++    eraseBackToFirstLaunch(saveSys, gate);
++
++    expect(seenWhenTheSaveGoes).toEqual([
++      { intro: false, hints: 0, guide: { offers: 0, opened: false }, rinse: false, reminders: false },
++    ]);
++  });
++
++  it('works for the rest of the visit where the browser refuses storage', () => {
++    const refusing = browserStorage(true);
++    vi.stubGlobal('localStorage', refusing);
++    vi.stubGlobal('window', { localStorage: refusing });
++    writeIncludeRinse(true);
++    writeReminders({ on: true, morning: 400, evening: 1200 });
++    markHasSeenBrushIntro();
++    const gate = new TutorialGate();
++    gate.enterHome();
++    gate.markOpened();
++    const saveSys = new SaveSystem(new EventBus());
++    saveSys.load(T0).fluorideIons = 77;
++
++    expect(() => eraseBackToFirstLaunch(saveSys, gate)).not.toThrow();
++
++    expect(saveSys.getSave().fluorideIons).toBe(0);
++    expect(readIncludeRinse()).toBe(false);
++    expect(readReminders().on).toBe(false);
++    expect(readHasSeenBrushIntro()).toBe(false);
++    expect(gate.getProgress()).toEqual({ offers: 0, opened: false });
++  });
++});
++
++describe('Erase Save: the steps of the button', () => {
++  let question: (() => void) | null;
++  let erased: number;
++  let labelChanges: number;
++  let steps: EraseSaveSteps;
++
++  beforeEach(() => {
++    vi.useFakeTimers();
++    vi.setSystemTime(T0);
++    question = null;
++    erased = 0;
++    labelChanges = 0;
++    steps = new EraseSaveSteps({
++      askGrownUp: (onPass) => {
++        question = onPass;
++      },
++      erase: () => {
++        erased += 1;
++      },
++      onLabelChanged: () => {
++        labelChanges += 1;
++      },
++    });
++  });
++  afterEach(() => {
++    vi.useRealTimers();
++  });
++
++  /** The grown-up gives the right answer to the question on screen. */
++  const answerRight = (): void => {
++    const pass = question;
++    question = null;
++    pass?.();
++  };
++
++  it('asks the grown-up question on the first tap, and erases nothing', () => {
++    steps.tap();
++    expect(question).not.toBeNull();
++    expect(erased).toBe(0);
++    expect(steps.isArmed()).toBe(false);
++    expect(steps.label()).toBe(ERASE_SAVE_LABEL);
++    expect(labelChanges).toBe(0);
++  });
++
++  it('changes nothing after a wrong answer or "Not now": the next tap asks again', () => {
++    steps.tap();
++    question = null; // the question closed without the right answer
++    vi.advanceTimersByTime(ERASE_CONFIRM_MS * 2);
++    expect(steps.label()).toBe(ERASE_SAVE_LABEL);
++
++    steps.tap();
++    expect(question).not.toBeNull();
++    expect(erased).toBe(0);
++  });
++
++  it('reads "Tap Again to Erase" only after the right answer, and erases on the second tap, once', () => {
++    steps.tap();
++    answerRight();
++    expect(steps.isArmed()).toBe(true);
++    expect(steps.label()).toBe(ERASE_CONFIRM_LABEL);
++    expect(labelChanges).toBe(1);
++    expect(erased).toBe(0);
++
++    vi.advanceTimersByTime(ERASE_SETTLE_MS);
++    steps.tap();
++    expect(erased).toBe(1);
++    expect(steps.label()).toBe(ERASE_SAVE_LABEL);
++
++    // the button is back at the start: one more tap asks the question, it does not erase again
++    steps.tap();
++    expect(erased).toBe(1);
++    expect(question).not.toBeNull();
++  });
++
++  it('never counts the tap that answered the question, or a key still held down, as the second tap', () => {
++    steps.tap();
++    answerRight();
++    steps.tap(); // the second half of a double tap, landing on the button
++    expect(erased).toBe(0);
++    // a key held down keeps "tapping" several times a second
++    for (let i = 0; i < 30; i++) {
++      vi.advanceTimersByTime(100);
++      steps.tap();
++    }
++    expect(erased).toBe(0);
++    expect(steps.isArmed()).toBe(true);
++    // let go, then a tap of its own
++    vi.advanceTimersByTime(ERASE_SETTLE_MS);
++    steps.tap();
++    expect(erased).toBe(1);
++  });
++
++  it('goes back by itself after a few seconds without the second tap', () => {
++    steps.tap();
++    answerRight();
++    vi.advanceTimersByTime(ERASE_CONFIRM_MS - 1);
++    expect(steps.isArmed()).toBe(true);
++    vi.advanceTimersByTime(1);
++    expect(steps.isArmed()).toBe(false);
++    expect(steps.label()).toBe(ERASE_SAVE_LABEL);
++    expect(labelChanges).toBe(2);
++
++    steps.tap(); // too late: this is a first tap again
++    expect(erased).toBe(0);
++    expect(question).not.toBeNull();
++  });
++
++  it('goes back at once when the sheet closes, and the wait is called off', () => {
++    steps.tap();
++    answerRight();
++    expect(vi.getTimerCount()).toBe(1);
++    steps.putBack();
++    expect(steps.isArmed()).toBe(false);
++    expect(labelChanges).toBe(2);
++    expect(vi.getTimerCount()).toBe(0); // nothing is left waiting once the sheet is gone
++    vi.advanceTimersByTime(ERASE_CONFIRM_MS * 2);
++    expect(labelChanges).toBe(2);
++    expect(erased).toBe(0);
++    // closing a sheet whose button was never armed changes nothing
++    steps.putBack();
++    expect(labelChanges).toBe(2);
++  });
++
++  it('waits a few seconds, and a little longer than the settle time', () => {
++    expect(ERASE_CONFIRM_MS).toBeGreaterThanOrEqual(3000);
++    expect(ERASE_CONFIRM_MS).toBeLessThanOrEqual(10000);
++    expect(ERASE_SETTLE_MS).toBeLessThan(ERASE_CONFIRM_MS / 4);
++  });
++});
++
++describe('Erase Save: what the privacy page says about it', () => {
++  it('says where the erase is in each edition, and that comfort settings stay', () => {
++    const page = readFileSync(join(ROOT, 'public/privacy.html'), 'utf8').replace(/\s+/g, ' ');
++    expect(page).toContain('A grown-up can erase the saved game at any time.');
++    expect(page).toContain(
++      'In the web game it is under <strong>☁️ Sync</strong> (Erase Save); in the app it is in <strong>Settings</strong>.'
++    );
++    expect(page).toContain('Comfort settings such as sound and language are kept.');
++    // the old sentence put it in a Sync menu in both editions, and promised more than is erased
++    expect(page).not.toContain('erase all local save data');
++    // the button the page names is the one in the Sync sheet
++    expect(ERASE_SAVE_LABEL).toBe('🔄 Erase Save');
++  });
++});
++
++/** The parts of the Home screen this file reaches without drawing it. */
++interface HubInside {
++  activeModal: string;
++  statusBanner: string;
++  selectedCityId: string;
++  lastTouchedCrownIdx: number | null;
++  quizBest: number;
++  eraseSteps: EraseSaveSteps;
++  closeActiveModal(): void;
++}
++
++describe('Erase Save: the button in the Sync sheet', () => {
++  let storage: Storage;
++  const gateMock = vi.mocked(askGrownUp);
++
++  beforeEach(() => {
++    vi.useFakeTimers();
++    vi.setSystemTime(T0);
++    storage = browserStorage();
++    vi.stubGlobal('localStorage', storage);
++    vi.stubGlobal('window', { localStorage: storage });
++    gateMock.mockReset();
++  });
++  afterEach(() => {
++    vi.useRealTimers();
++    vi.unstubAllGlobals();
++  });
++
++  /** The real Home screen object with the Sync sheet "open". It is never drawn: there is no page here. */
++  function hubWithSyncSheetOpen() {
++    const { saveSys, gate } = playedDevice(storage);
++    const bus = new EventBus();
++    const onSaveErased = vi.fn();
++    const companionUpdates: number[] = [];
++    bus.on('companion:updated', ({ state }) => companionUpdates.push(state.pulpIntegrity));
++    const actions = { tutorialGate: gate, onSaveErased, onPlayUiTap: () => undefined };
++    const hub = new CompanionHubOverlay(
++      bus,
++      saveSys,
++      actions as unknown as ConstructorParameters<typeof CompanionHubOverlay>[2]
++    ) as unknown as HubInside;
++    hub.activeModal = 'sync';
++    hub.selectedCityId = 'tokyo';
++    hub.lastTouchedCrownIdx = 4;
++    hub.quizBest = 7;
++    return { hub, saveSys, gate, onSaveErased, companionUpdates };
++  }
++
++  /** The grown-up gives the right answer to the question the first tap opened. */
++  const answerRight = (): void => gateMock.mock.calls[gateMock.mock.calls.length - 1][0]();
++
++  it('asks the grown-up question first, with the button\'s own words as the note', () => {
++    const { hub, saveSys } = hubWithSyncSheetOpen();
++    hub.eraseSteps.tap();
++    expect(gateMock).toHaveBeenCalledTimes(1);
++    expect(gateMock.mock.calls[0][1]).toBe('🔄 Erase Save');
++    expect(hub.eraseSteps.isArmed()).toBe(false);
++    expect(saveSys.getSave().fluorideIons).toBe(640);
++  });
++
++  it('erases on the second tap and shows Home as a first launch would, with no reload', () => {
++    const { hub, saveSys, gate, onSaveErased, companionUpdates } = hubWithSyncSheetOpen();
++    hub.eraseSteps.tap();
++    answerRight();
++    expect(hub.eraseSteps.label()).toBe('⚠️ Tap Again to Erase');
++    expect(saveSys.getSave().fluorideIons).toBe(640);
++
++    vi.advanceTimersByTime(ERASE_SETTLE_MS);
++    hub.eraseSteps.tap();
++
++    expect(saveSys.getSave().fluorideIons).toBe(0);
++    expect(saveSys.getSave().playerProfile.displayName).toBe('Explorer');
++    expect(hub.statusBanner).toBe('Save erased. You are starting fresh!');
++    expect(hub.activeModal).toBe('none');
++    expect(hub.eraseSteps.isArmed()).toBe(false);
++    // what the screen held in memory about the old player is gone
++    expect(hub.selectedCityId).toBe('toronto');
++    expect(hub.lastTouchedCrownIdx).toBeNull();
++    expect(hub.quizBest).toBe(0);
++    // the rest of the game is told, and the guide is offered as on a first launch
++    expect(onSaveErased).toHaveBeenCalledTimes(1);
++    expect(companionUpdates).toEqual([saveSys.getSave().companion.pulpIntegrity]);
++    expect(gate.isOfferVisible()).toBe(true);
++    expect(readIncludeRinse()).toBe(false);
++    expect(readReminders().on).toBe(false);
++  });
++
++  it('does not arm the button when the answer comes after the sheet has closed', () => {
++    const { hub, saveSys } = hubWithSyncSheetOpen();
++    hub.eraseSteps.tap();
++    hub.closeActiveModal();
++    answerRight();
++    expect(hub.eraseSteps.isArmed()).toBe(false);
++    expect(saveSys.getSave().fluorideIons).toBe(640);
++  });
++
++  it('puts the button back when the sheet closes, so reopening it starts from the question', () => {
++    const { hub, saveSys } = hubWithSyncSheetOpen();
++    hub.eraseSteps.tap();
++    answerRight();
++    expect(hub.eraseSteps.isArmed()).toBe(true);
++
++    hub.closeActiveModal();
++    hub.activeModal = 'sync'; // opened again
++    vi.advanceTimersByTime(ERASE_SETTLE_MS);
++    hub.eraseSteps.tap();
++
++    expect(gateMock).toHaveBeenCalledTimes(2);
++    expect(saveSys.getSave().fluorideIons).toBe(640);
++  });
++
++  it('is wired to the button on the page (by reading the source: the page itself is not drawn here)', () => {
++    const hub = readFileSync(join(ROOT, 'src/ui/CompanionHubOverlay.ts'), 'utf8');
++    // the click only ever goes through the steps above
++    const handler = hub.slice(hub.indexOf("querySelector('#btn-reset-save')?.addEventListener('click'"));
++    expect(handler.slice(0, handler.indexOf('});'))).toContain('this.eraseSteps.tap();');
++    // the button shows the steps' own words, and is repainted in place when they change
++    expect(hub).toContain('id="btn-reset-save"');
++    expect(hub).toContain('>${this.eraseSteps.label()}</button>');
++    expect(hub).toContain('btn.textContent = this.eraseSteps.label();');
++    // nothing else on the Home screen erases the save
++    expect(hub).not.toContain('resetToFreshSave');
++    expect(hub.match(/eraseBackToFirstLaunch\(/g)?.length).toBe(2); // its definition and the one call
++  });
++});
+diff --git a/tests/joinedText.test.ts b/tests/joinedText.test.ts
+new file mode 100644
+index 0000000..16a23b9
+--- /dev/null
++++ b/tests/joinedText.test.ts
+@@ -0,0 +1,496 @@
++/**
++ * Text glued together from parts ("Right" + " " + "2nd Molar") matches nothing in the language
++ * files, so it used to stay English in the other seven languages. These tests ask the real
++ * screens for what they build, pass it through the real page matcher with the real German and
++ * Japanese files, and look for English left over.
++ *
++ * There is no page in the test environment. The Home screen's HTML builders are plain string
++ * functions and are called as they are; the mission report and the stage HUD are mounted on a
++ * small stand-in page that only keeps the HTML they write.
++ */
++import { readFileSync } from 'node:fs';
++import { join } from 'node:path';
++import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
++import { getToothByUniversal, getWorldDentalLesson, judgeSpotQuizAnswer } from '../src/config/dentalChart';
++import { getHistoryNoteById, getHostCityById, HISTORICAL_FIELD_NOTES } from '../src/config/hostsAndHistory';
++import { UPGRADE_CATALOG } from '../src/config/upgrades';
++import { EventBus } from '../src/engine/EventBus';
++import { SaveSystem } from '../src/engine/persistence/SaveSystem';
++import { WorldSession } from '../src/engine/sim/WorldSession';
++import type { MouthLifeSaveV2 } from '../src/engine/types';
++import { CatalogMatcher, uiTranslator } from '../src/i18n/uiTranslator';
++import { CompanionHubOverlay, importRefusedText, toothNameText } from '../src/ui/CompanionHubOverlay';
++import { MissionReportOverlay, type MissionReportData } from '../src/ui/MissionReportOverlay';
++import { TelemetryHudOverlay } from '../src/ui/TelemetryHudOverlay';
++import { getCartridgeById } from '../src/worlds/worldRegistry';
++
++const ROOT = join(__dirname, '..');
++const T0 = 1_700_000_000_000;
++const HUB_SOURCE = readFileSync(join(ROOT, 'src/ui/CompanionHubOverlay.ts'), 'utf8');
++
++/** English words of a tooth's name, and of its nickname, that must not be left on screen. */
++const TOOTH_WORDS = ['Upper', 'Lower', 'Right', 'Left', 'Central', 'Lateral', 'Incisor', 'Canine', 'Premolar', 'Molar', 'Tooth', 'Cuspid', 'Bicuspid', 'Wisdom'];
++
++/** True when an English word or phrase is still there as a word of its own ("Par", not "Palmer"). */
++function hasWord(text: string, english: string): boolean {
++  const escaped = english.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++  return new RegExp(`(^|[^A-Za-z])${escaped}([^A-Za-z]|$)`).test(text);
++}
++
++const decode = (s: string): string =>
++  s
++    .replace(/&lt;/g, '<')
++    .replace(/&gt;/g, '>')
++    .replace(/&quot;/g, '"')
++    .replace(/&#39;/g, "'")
++    .replace(/&amp;/g, '&');
++
++const tidy = (s: string): string => s.replace(/\s+/g, ' ').trim();
++
++/**
++ * The words on screen for a piece of HTML after the page translator has been over it. Like the
++ * translator, it takes the text between tags one run at a time: a run it knows is swapped, a run
++ * it does not know stays as written.
++ */
++function shownText(html: string, matcher: CatalogMatcher): string {
++  let out = '';
++  let last = 0;
++  for (const tag of html.matchAll(/<[^>]*>/g)) {
++    const run = decode(html.slice(last, tag.index));
++    out += /[A-Za-z]/.test(run) ? matcher.translate(run) : run;
++    last = (tag.index ?? 0) + tag[0].length;
++  }
++  const tail = decode(html.slice(last));
++  return tidy(out + (/[A-Za-z]/.test(tail) ? matcher.translate(tail) : tail));
++}
++
++/** The aria-label and title values in a piece of HTML, as the page translator leaves them. */
++function shownLabels(html: string, matcher: CatalogMatcher): string[] {
++  const out: string[] = [];
++  for (const tag of html.matchAll(/<[^>]*>/g)) {
++    for (const attr of ['aria-label', 'title']) {
++      const value = new RegExp(`${attr}="([^"]*)"`).exec(tag[0])?.[1];
++      if (value !== undefined) out.push(tidy(matcher.translate(decode(value))));
++    }
++  }
++  return out;
++}
++
++// ---------------------------------------------------------------- the screens, without a page
++
++/** The parts of the Home screen these tests call. They only build HTML. */
++interface HubInside {
++  activeModal: string;
++  chartTab: string;
++  selectedUniversalTooth: number;
++  lastTouchedCrownIdx: number | null;
++  quizTarget: unknown;
++  buildTouchedCrownPillHtml(): string;
++  buildModalHtml(): string;
++  buildQuizCardHtml(): string;
++  buildGlobeCampaignDeckHtml(cityId: string): string;
++}
++
++function memorySave(prepare?: (save: MouthLifeSaveV2) => void): SaveSystem {
++  const data = new Map<string, string>();
++  const saveSys = new SaveSystem(new EventBus(), {
++    getItem: (k) => data.get(k) ?? null,
++    setItem: (k, v) => void data.set(k, v),
++  });
++  const save = saveSys.load(T0);
++  prepare?.(save);
++  return saveSys;
++}
++
++function hubOffPage(prepare?: (save: MouthLifeSaveV2) => void): HubInside {
++  const actions = { isMuted: () => false };
++  return new CompanionHubOverlay(
++    new EventBus(),
++    memorySave(prepare),
++    actions as unknown as ConstructorParameters<typeof CompanionHubOverlay>[2]
++  ) as unknown as HubInside;
++}
++
++/** A page element that does nothing but keep what a screen writes into it. */
++interface StandInElement {
++  innerHTML: string;
++  textContent: string;
++  querySelector(selector: string): StandInElement | null;
++  [other: string]: unknown;
++}
++
++function standInElement(): StandInElement {
++  const kept = new Map<string, StandInElement>();
++  const nothing = (): void => undefined;
++  return {
++    innerHTML: '',
++    textContent: '',
++    className: '',
++    id: '',
++    style: { setProperty: nothing, removeProperty: nothing },
++    classList: { add: nothing, remove: nothing, toggle: nothing, contains: () => false },
++    dataset: {},
++    firstChild: null,
++    firstElementChild: null,
++    isConnected: true,
++    offsetWidth: 0,
++    offsetHeight: 0,
++    setAttribute: nothing,
++    removeAttribute: nothing,
++    getAttribute: () => null,
++    addEventListener: nothing,
++    removeEventListener: nothing,
++    appendChild: (child: unknown) => child,
++    remove: nothing,
++    focus: nothing,
++    blur: nothing,
++    getBoundingClientRect: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }),
++    querySelectorAll: () => [],
++    // Only the toast is handed out (to read its words back); every other part is "not on the page".
++    querySelector(selector: string) {
++      if (selector !== '#hud-toast') return null;
++      if (!kept.has(selector)) kept.set(selector, standInElement());
++      return kept.get(selector) ?? null;
++    },
++  };
++}
++
++/** Puts a stand-in page in place and returns the elements screens create on it, in order. */
++function standInPage(): StandInElement[] {
++  const created: StandInElement[] = [];
++  const nothing = (): void => undefined;
++  const store = new Map<string, string>();
++  vi.stubGlobal('document', {
++    createElement: () => {
++      const el = standInElement();
++      created.push(el);
++      return el;
++    },
++    addEventListener: nothing,
++    removeEventListener: nothing,
++    visibilityState: 'visible',
++    activeElement: null,
++    documentElement: { lang: '', classList: { contains: () => false } },
++  });
++  vi.stubGlobal('window', {
++    addEventListener: nothing,
++    removeEventListener: nothing,
++    innerWidth: 1280,
++    innerHeight: 800,
++    matchMedia: () => ({ matches: false }),
++  });
++  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) });
++  vi.stubGlobal('requestAnimationFrame', () => 0);
++  vi.stubGlobal('cancelAnimationFrame', nothing);
++  return created;
++}
++
++function reportHtml(over: Partial<MissionReportData>): string {
++  const created = standInPage();
++  const report: MissionReportData = {
++    mode: 'ARCADE',
++    worldId: 'world_1',
++    won: true,
++    breakdown: {
++      restorationPts: 4000,
++      techniquePts: 2000,
++      ecologyPts: 1500,
++      parTimePts: 1000,
++      totalScore: 8500,
++      grade: 'A',
++      cleanlinessPct: 95,
++      sitesRestored: 10,
++      sitesTotal: 10,
++      elapsedSec: 83,
++      ionsEarned: 60,
++    },
++    unlockedHistoryNoteId: null,
++    bonusRescueIons: 0,
++    parTimeSec: 180,
++    worldTitle: 'Plaque City',
++    ...over,
++  };
++  const overlay = new MissionReportOverlay(report, {
++    onReturnToHub: () => undefined,
++    onReplay: () => undefined,
++    onNextDive: () => undefined,
++    isReducedMotion: () => true,
++  });
++  overlay.mount(standInElement() as unknown as HTMLElement);
++  const html = created[0].innerHTML;
++  overlay.dispose();
++  return html;
++}
++
++function hudOffPage(worldId: string, mode: 'ARCADE' | 'PULP_RESCUE'): { topBar: string; pauseHeading: string; toast: string } {
++  const created = standInPage();
++  const bus = new EventBus();
++  const saveSys = memorySave();
++  const session = new WorldSession(bus);
++  session.loadCartridge(getCartridgeById(worldId), saveSys.getSave(), mode);
++  const nothing = (): void => undefined;
++  const input = { isCoarsePointer: () => false, hasSeenTouch: () => false, isPointerSteerEnabled: () => false, setVirtualMove: nothing, setVirtualScrubHeld: nothing, setVirtualStick: nothing };
++  const scene = { isReducedMotion: () => false, getActiveQualityTier: () => 'medium' };
++  const audio = {
++    isMuted: () => false,
++    toggleMute: nothing,
++    getMusicVolume: () => 0.7,
++    setMusicVolume: nothing,
++    getSfxVolume: () => 0.64,
++    setSfxVolume: nothing,
++    setPaused: nothing,
++    isReducedMotion: () => false,
++    toggleReducedMotion: nothing,
++    restartDive: nothing,
++  };
++  type HudParts = ConstructorParameters<typeof TelemetryHudOverlay>;
++  const hud = new TelemetryHudOverlay(mode, bus, session, input as unknown as HudParts[3], scene as unknown as HudParts[4], saveSys, nothing, audio);
++  hud.mount(standInElement() as unknown as HTMLElement);
++  const top = created[0];
++  const pause = created.find((el) => el.innerHTML.includes('pause-sheet-title'));
++  const result = {
++    topBar: top.innerHTML,
++    pauseHeading: /<summary>([\s\S]*?)<\/summary>/.exec(pause?.innerHTML ?? '')?.[1] ?? '',
++    toast: top.querySelector('#hud-toast')?.textContent ?? '',
++  };
++  hud.dispose();
++  return result;
++}
++
++// ---------------------------------------------------------------- the tests
++
++describe.each(['de', 'ja'] as const)('text joined from parts is shown in the player’s language (%s)', (lang) => {
++  const matcher = new CatalogMatcher(JSON.parse(readFileSync(join(ROOT, `src/i18n/locales/${lang}.json`), 'utf8')));
++
++  /** The language file's words for one English part. It has to have some, and not the English. */
++  const tr = (english: string): string => {
++    const out = matcher.translate(english);
++    expect(out, `${lang}.json translates "${english}"`).not.toBe(english);
++    return out;
++  };
++  const shown = (html: string): string => shownText(html, matcher);
++
++  beforeAll(async () => {
++    await uiTranslator.setLanguage(lang);
++  });
++  afterAll(async () => {
++    await uiTranslator.setLanguage('en');
++  });
++  afterEach(() => {
++    vi.unstubAllGlobals();
++    vi.restoreAllMocks();
++  });
++
++  it('Home names a touched tooth: its side and its kind', () => {
++    const hub = hubOffPage();
++    hub.lastTouchedCrownIdx = 0;
++    const left = shown(hub.buildTouchedCrownPillHtml());
++    hub.lastTouchedCrownIdx = 13;
++    const right = shown(hub.buildTouchedCrownPillHtml());
++    expect(left).toContain(`${tr('Left')} ${tr('2nd Molar')} • US #15/#18 • FDI 27/37`);
++    expect(right).toContain(`${tr('Right')} ${tr('2nd Molar')} • US #2/#31 • FDI 17/47`);
++    for (const english of TOOTH_WORDS) expect(hasWord(`${left} ${right}`, english), english).toBe(false);
++  });
++
++  it('the tooth chart names the chosen tooth and labels all 32 cells', () => {
++    const hub = hubOffPage();
++    hub.activeModal = 'chart';
++    hub.chartTab = 'chart';
++    hub.selectedUniversalTooth = 3;
++    const html = hub.buildModalHtml();
++
++    const name = /<strong id="chart-tooth-name"[^>]*>([\s\S]*?)<\/strong>/.exec(html)?.[1] ?? '';
++    expect(shown(name)).toBe(`${tr('Upper')} ${tr('Right')} ${tr('1st Molar')}`);
++
++    const cells = [...html.matchAll(/<button[^>]*data-tooth-num="\d+"[^>]*>/g)].map((m) => m[0]);
++    expect(cells).toHaveLength(32);
++    const labels = shownLabels(cells.join(''), matcher);
++    expect(labels).toHaveLength(64); // a spoken label and a hover title for each cell
++    for (const english of TOOTH_WORDS) expect(hasWord(labels.join(' | '), english), english).toBe(false);
++    // one cell in full: lower left first molar
++    expect(labels).toContain(matcher.translate(`${tr('Lower')} ${tr('Left')} ${tr('1st Molar')} — US #19, FDI 36, Palmer ┌6`));
++    expect(labels).toContain(`${tr('Lower')} ${tr('Left')} ${tr('1st Molar')} (${tr('Six-Year Molar')})`);
++  });
++
++  it('the tooth quiz asks and answers with the tooth named', () => {
++    const hub = hubOffPage();
++    hub.activeModal = 'chart';
++    hub.chartTab = 'quiz';
++    const upperRightFirstMolar = `${tr('Upper')} ${tr('Right')} ${tr('1st Molar')}`;
++    // the two kinds of question that name the tooth (0: with nickname and numbers, 1: name only), both about tooth #3
++    for (const style of [0, 1]) {
++      vi.spyOn(Math, 'random').mockReturnValueOnce(0.07).mockReturnValueOnce(style / 4);
++      hub.quizTarget = null;
++      const prompt = /<div id="quiz-prompt"[^>]*>([\s\S]*?)<\/div>/.exec(hub.buildQuizCardHtml())?.[1] ?? '';
++      vi.restoreAllMocks();
++      const line = shown(prompt);
++      expect(line).toContain(upperRightFirstMolar);
++      for (const english of [...TOOTH_WORDS, 'Find', 'Can', 'tap']) expect(hasWord(line, english), `${english} in "${line}"`).toBe(false);
++    }
++    // the answer lines: right, then wrong (the screen writes them with the same naming function)
++    const yes = shown(judgeSpotQuizAnswer(3, 3, 0, 0, toothNameText).message);
++    const close = shown(judgeSpotQuizAnswer(3, 4, 0, 0, toothNameText).message);
++    expect(yes).toContain(upperRightFirstMolar);
++    expect(close).toContain(`${tr('Upper')} ${tr('Right')} ${tr('2nd Premolar')}`);
++    for (const english of [...TOOTH_WORDS, 'Yes', 'Close', 'Try']) expect(hasWord(`${yes} ${close}`, english), english).toBe(false);
++    expect(HUB_SOURCE).toContain(
++      'judgeSpotQuizAnswer(this.quizTarget.targetUniversal, num, this.quizStreak, this.quizBest, toothNameText)'
++    );
++  });
++
++  it('the Lab names each slot, the Swap button and the city to clear', () => {
++    const hub = hubOffPage((save) => {
++      // both brush upgrades owned, one in use: the other one offers "Swap"
++      save.unlockedUpgrades = ['angled_bass_array', 'hydro_sonic_pulse'];
++      save.equippedUpgrades.brush = 'angled_bass_array';
++    });
++    hub.activeModal = 'lab';
++    const lab = shown(hub.buildModalHtml());
++
++    expect(lab).toContain(`${tr('BRUSH')}${tr(' • 1 ACTIVE')}`);
++    expect(lab).toContain(tr('FLOSS'));
++    expect(lab).toContain(tr('RINSE'));
++    expect(tr('⇄ Swap BRUSH')).toContain(tr('BRUSH'));
++    expect(lab).toContain(tr('⇄ Swap BRUSH'));
++    for (const upgrade of UPGRADE_CATALOG) {
++      const city = getCartridgeById(upgrade.worldClearUnlockId ?? '').title;
++      const line = tr(`Free Auto-Unlock: ${upgrade.stampUnlockThreshold} Habit Stamps or Clear ${city}`);
++      expect(line).toContain(tr(city));
++      expect(lab).toContain(line);
++    }
++    for (const english of ['BRUSH', 'FLOSS', 'RINSE', 'ACTIVE', 'Swap', 'Brush', 'WORLD', 'Clear']) {
++      expect(hasWord(lab, english), english).toBe(false);
++    }
++  });
++
++  it('the history book shows when and where', () => {
++    const hub = hubOffPage();
++    hub.activeModal = 'history';
++    const book = shown(hub.buildModalHtml());
++    let translated = 0;
++    for (const note of HISTORICAL_FIELD_NOTES) {
++      for (const part of [note.yearLabel, note.locationLabel]) {
++        const want = matcher.translate(part);
++        expect(book).toContain(want);
++        if (want === part) continue; // a name that reads the same in this language ("1940 Chicago")
++        translated += 1;
++        expect(book).not.toContain(part);
++      }
++    }
++    expect(translated).toBeGreaterThanOrEqual(8);
++  });
++
++  it('the globe’s city card shows the date of its history note', () => {
++    const note = getHistoryNoteById(getHostCityById('toronto').historyNoteId);
++    const card = shown(hubOffPage().buildGlobeCampaignDeckHtml('toronto'));
++    expect(note).toBeDefined();
++    expect(card).toContain(`📜 ${tr(note?.yearLabel ?? '')}: ${tr(note?.title ?? '')}`);
++    expect(card).not.toContain(note?.yearLabel);
++  });
++
++  it('a refused Sync Code is explained, both sentences', () => {
++    const unchanged = tr('Your current progress was not changed.');
++    const saveSys = memorySave();
++    const refusals: string[] = [];
++    for (const bad of ['hello', 'ML2:!!!', '{"schemaVersion":3}', '{"schemaVersion":2,"totalBrush', '[1,2,3]']) {
++      try {
++        saveSys.importSyncCode(bad, T0);
++      } catch (err) {
++        refusals.push((err as Error).message);
++        const line = importRefusedText(err);
++        expect(line).toBe(`${tr((err as Error).message)} ${unchanged}`);
++        // the page translator, meeting the finished line, leaves it as it is
++        expect(matcher.translate(line)).toBe(line);
++      }
++    }
++    expect(refusals).toHaveLength(5);
++    expect(new Set(refusals).size).toBeGreaterThanOrEqual(3);
++    expect(importRefusedText('no reason given')).toBe(`${tr('That Sync Code could not be read.')} ${unchanged}`);
++  });
++
++  it('the mission report shows the time, how clean, and the field note line', () => {
++    const lesson = getWorldDentalLesson('world_1', 'ARCADE');
++    const note = getHistoryNoteById('1498_beijing_1683_delft');
++    const city = shown(reportHtml({ unlockedHistoryNoteId: '1498_beijing_1683_delft' }));
++    const rescue = shown(reportHtml({ mode: 'PULP_RESCUE', worldId: 'pulp_rescue', bonusRescueIons: 30 }));
++
++    expect(city).toContain(`${tr('Par')} 1:23/3:00`);
++    expect(rescue).toContain(`${tr('Time')} 1:23/3:00`);
++    expect(city).toContain(`${tr('Total Score:')} 8500 (${tr('95% Clean')})`);
++    expect(city).toContain(`${tr(note?.yearLabel ?? '')} • ${tr(lesson.focusTeethBadge)}`);
++    for (const english of ['Par 1:23', 'Time 1:23', '95% Clean', note?.yearLabel ?? '?', lesson.focusTeethBadge]) {
++      expect(`${city} ${rescue}`).not.toContain(english);
++    }
++  });
++
++  it('a stage shows its name, its opening tip and its lesson heading', () => {
++    const lesson = getWorldDentalLesson('world_2', 'ARCADE');
++    const city = hudOffPage('world_2', 'ARCADE');
++    const cityName = tr(getCartridgeById('world_2').title).toUpperCase();
++    expect(city.topBar).toContain(`<strong class="hud-world-title">🦷 ${cityName}</strong>`);
++    expect(decode(city.pauseHeading)).toBe(`🦷 ${tr(lesson.headline)} • ${tr(lesson.focusTeethBadge)}`);
++    expect(city.toast).toBe(`🎯 ${tr(getCartridgeById('world_2').challengeBlurb ?? '')}`);
++
++    // the rescue stage's tip starts with a number, which the page cannot match behind an icon
++    const rescue = hudOffPage('pulp_rescue', 'PULP_RESCUE');
++    const rescueTip = getCartridgeById('pulp_rescue').challengeBlurb ?? '';
++    expect(rescueTip).toMatch(/^\d/);
++    expect(rescue.toast).toBe(`🎯 ${tr(rescueTip)}`);
++
++    // the page translator, meeting these finished lines, leaves them as they are
++    for (const line of [`🦷 ${cityName}`, decode(city.pauseHeading), city.toast, rescue.toast]) {
++      expect(matcher.translate(line)).toBe(line);
++    }
++  });
++});
++
++describe('text joined from parts still reads the same in English', () => {
++  afterEach(() => {
++    vi.unstubAllGlobals();
++  });
++  const asWritten = new CatalogMatcher({});
++
++  it('keeps every line as it was, but for two Lab lines that now use words the language files hold', () => {
++    const hub = hubOffPage((save) => {
++      save.unlockedUpgrades = ['angled_bass_array', 'hydro_sonic_pulse'];
++      save.equippedUpgrades.brush = 'angled_bass_array';
++    });
++    hub.lastTouchedCrownIdx = 13;
++    expect(shownText(hub.buildTouchedCrownPillHtml(), asWritten)).toBe('🦷 Right 2nd Molar • US #2/#31 • FDI 17/47 Chart →');
++
++    hub.activeModal = 'lab';
++    const lab = shownText(hub.buildModalHtml(), asWritten);
++    expect(lab).toContain('BRUSH • 1 ACTIVE');
++    // was "⇄ Swap Brush": the slot's word is now the one on the pill above it
++    expect(lab).toContain('⇄ Swap BRUSH');
++    // was "... or Clear WORLD 1": the city now goes by its name
++    expect(lab).toContain('Free Auto-Unlock: 3 Habit Stamps or Clear Plaque City');
++
++    hub.activeModal = 'history';
++    expect(shownText(hub.buildModalHtml(), asWritten)).toContain('1498 Beijing & 1683 Delft • Ming Dynasty China & Delft, Netherlands');
++    expect(shownText(hub.buildGlobeCampaignDeckHtml('toronto'), asWritten)).toContain('📜 1498 Beijing & 1683 Delft: The First Bristle Brush');
++
++    hub.activeModal = 'chart';
++    hub.chartTab = 'chart';
++    hub.selectedUniversalTooth = 19;
++    const chart = hub.buildModalHtml();
++    expect(chart).toContain('aria-label="Lower Left 1st Molar — US #19, FDI 36, Palmer ┌6"');
++    expect(chart).toContain('title="Lower Left 1st Molar (Six-Year Molar)"');
++    expect(shownText(/<strong id="chart-tooth-name"[^>]*>([\s\S]*?)<\/strong>/.exec(chart)?.[1] ?? '', asWritten)).toBe('Lower Left 1st Molar');
++    expect(toothNameText(getToothByUniversal(19))).toBe('Lower Left 1st Molar');
++
++    expect(importRefusedText(new Error('This code is damaged and can’t be read.'))).toBe(
++      'This code is damaged and can’t be read. Your current progress was not changed.'
++    );
++
++    const report = shownText(reportHtml({ unlockedHistoryNoteId: '1498_beijing_1683_delft' }), asWritten);
++    expect(report).toContain('Par 1:23/3:00');
++    expect(report).toContain('Total Score: 8500 (95% Clean)');
++    expect(report).toContain('1498 Beijing & 1683 Delft • Teeth #8–#9, #4–#5 & #3 (FDI 11–21, 15–14 & 16)');
++
++    const stage = hudOffPage('world_2', 'ARCADE');
++    expect(stage.topBar).toContain('<strong class="hud-world-title">🦷 GUMLINE CRESCENT</strong>');
++    expect(decode(stage.pauseHeading)).toBe('🦷 Healthy Gums & the 45° Brush Tilt • Gumline • Teeth #21–#28 (FDI 34–44)');
++    expect(stage.toast).toMatch(/^🎯 Sweep gently along the pink gumline\./);
++  });
++});
+diff --git a/tests/tutorial.test.ts b/tests/tutorial.test.ts
+index 5fc828f..056db4b 100644
+--- a/tests/tutorial.test.ts
++++ b/tests/tutorial.test.ts
+@@ -300,6 +300,60 @@ describe('How to Play guide: when the Home screen offers it', () => {
+     gate.enterHome();
+     expect(gate.isOfferVisible()).toBe(true);
+   });
++
++  it('Erase Save puts the guide back to a first launch, in memory and in storage, with no reload', () => {
++    const storage = memoryStorage();
++    const gate = new TutorialGate(storage);
++    gate.enterHome(); // counted for this launch
++    gate.markOpened(); // the first Dive opened it
++    expect(gate.getProgress()).toEqual({ offers: 1, opened: true });
++
++    gate.reset();
++
++    // nothing is offered until Home appears again, and nothing of the old progress is stored
++    expect(gate.isOfferVisible()).toBe(false);
++    expect(gate.getProgress()).toEqual({ offers: 0, opened: false });
++    expect(loadTutorialProgress(storage)).toEqual({ offers: 0, opened: false });
++    // Home appears: the offer shows again in this same launch, and counts as the first one
++    gate.enterHome();
++    expect(gate.isOfferVisible()).toBe(true);
++    expect(gate.getProgress()).toEqual({ offers: 1, opened: false });
++    // the next real launch offers it too
++    const next = new TutorialGate(storage);
++    next.enterHome();
++    expect(next.isOfferVisible()).toBe(true);
++    expect(next.getProgress().offers).toBe(2);
++  });
++
++  it('Erase Save also starts the three offers over for a player who had used them up', () => {
++    const storage = memoryStorage({ [TUTORIAL_STORAGE_KEY]: `{"offers":3,"opened":false,"edition":${TUTORIAL_EDITION}}` });
++    const gate = new TutorialGate(storage);
++    gate.enterHome();
++    expect(gate.isOfferVisible()).toBe(false);
++
++    gate.reset();
++    gate.enterHome();
++
++    expect(gate.isOfferVisible()).toBe(true);
++  });
++
++  it('resets what it holds in memory even where storage is refused', () => {
++    const broken = {
++      getItem: () => {
++        throw new Error('blocked');
++      },
++      setItem: () => {
++        throw new Error('blocked');
++      },
++    };
++    const gate = new TutorialGate(broken);
++    gate.enterHome();
++    gate.markOpened();
++    expect(() => gate.reset()).not.toThrow();
++    expect(gate.getProgress()).toEqual({ offers: 0, opened: false });
++    gate.enterHome();
++    expect(gate.isOfferVisible()).toBe(true);
++  });
+ });
+ 
+ describe('How to Play guide: same words and pictures in the native app', () => {
