@@ -44,6 +44,8 @@
 	<string>1</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>MouthLife never reads your health data. It only saves each brushing session to Health as Toothbrushing.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>MouthLife saves each brushing session to Health as Toothbrushing. It never reads your health data.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
