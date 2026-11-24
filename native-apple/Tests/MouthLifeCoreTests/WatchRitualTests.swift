@@ -19,14 +19,20 @@ final class WatchRitualTests: XCTestCase {
     func testAFullRitualTapsAtEveryChangeAndEndsWithAFullBrush() {
         var r = WatchRitual(startedAt: t0, includeRinse: false)
         let brush = run(&r, seconds: 120)
-        // 8 surface changes, 3 quadrant changes, then floss starts
+        // 8 surface changes, 3 quadrant changes, then floss waits for its Start
         XCTAssertEqual(brush.filter { $0 == .surface }.count, 8)
         XCTAssertEqual(brush.filter { $0 == .quadrant }.count, 3)
         // 3-2-1 leads only into the quadrant changes and the end of brushing
         XCTAssertEqual(brush.filter { if case .countdown = $0 { return true } else { return false } }.count, 12)
-        XCTAssertEqual(brush.last, .stageStart(.floss))
+        XCTAssertEqual(brush.last, .awaitStart(.floss))
+        XCTAssertTrue(r.awaitingStart)
         XCTAssertTrue(r.fullBrush)
         XCTAssertEqual(r.brushedSec, 120, accuracy: 1e-6)
+        // time to put the brush down: nothing moves until Start
+        XCTAssertEqual(run(&r, seconds: 30), [])
+        XCTAssertEqual(r.stageElapsed, 0)
+        XCTAssertEqual(r.start(), .stageStart(.floss))
+        XCTAssertFalse(r.awaitingStart)
         let floss = run(&r, seconds: 45)
         XCTAssertTrue(floss.contains(.flossHalfway))
         XCTAssertEqual(floss.last, .done(fullBrush: true))
@@ -42,6 +48,11 @@ final class WatchRitualTests: XCTestCase {
         var r = WatchRitual(startedAt: t0, includeRinse: true, rinseSec: 30)
         var seconds: Set<Int> = []
         while r.stage != .done {
+            if r.awaitingStart {
+                XCTAssertNil(r.countdownDigit)
+                _ = r.start()
+                continue
+            }
             let stage = r.stage
             let cue = r.advance(by: 0.1, now: t0)
             if case let .countdown(n) = cue { XCTAssertEqual(r.countdownDigit, n, "\(stage) \(r.stageElapsed)") }
@@ -69,11 +80,13 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertEqual(ahead.phase.quadrant, .upperLeft)
         // looking ahead never changes the ritual itself
         XCTAssertEqual(r.stageElapsed, 10, accuracy: 1e-6)
-        // across the end of the brush into floss
+        // across the end of the brush: floss's Start card, which then stands still
         _ = run(&r, seconds: 108)
         let floss = r.projected(by: 5)
         XCTAssertEqual(floss.stage, .floss)
-        XCTAssertEqual(floss.stageElapsed, 3, accuracy: 1e-6)
+        XCTAssertTrue(floss.awaitingStart)
+        XCTAssertEqual(floss.stageElapsed, 0)
+        XCTAssertEqual(floss.projected(by: 30).stageElapsed, 0)
         // a paused ritual stays where it is, and nothing looks back in time
         _ = r.setPaused(true)
         XCTAssertEqual(r.projected(by: 30).stageElapsed, r.stageElapsed)
@@ -82,8 +95,13 @@ final class WatchRitualTests: XCTestCase {
 
     func testRinseRunsOnlyWhenTheGrownUpTurnedItOn() {
         var r = WatchRitual(startedAt: t0, includeRinse: true, rinseSec: 30)
-        _ = run(&r, seconds: 165)
+        _ = run(&r, seconds: 120)
+        _ = r.start()
+        XCTAssertEqual(run(&r, seconds: 45).last, .awaitStart(.rinse))
         XCTAssertEqual(r.stage, .rinse)
+        XCTAssertTrue(r.awaitingStart)
+        XCTAssertEqual(r.flossOutcome, .timed)
+        XCTAssertEqual(r.start(), .stageStart(.rinse))
         let rinse = run(&r, seconds: 30)
         XCTAssertEqual(rinse.filter { $0 == .rinseStep }.count, 2)
         XCTAssertEqual(rinse.last, .done(fullBrush: true))
@@ -115,6 +133,7 @@ final class WatchRitualTests: XCTestCase {
         var floss = WatchRitual(startedAt: t0, includeRinse: false)
         _ = run(&floss, seconds: 121)
         XCTAssertEqual(floss.stage, .floss)
+        XCTAssertTrue(floss.awaitingStart)
         XCTAssertEqual(floss.skip(now: t0), .done(fullBrush: true))
         XCTAssertEqual(floss.flossOutcome, .skipped)
     }
@@ -125,10 +144,11 @@ final class WatchRitualTests: XCTestCase {
         let cue = r.advance(by: 25, now: t0)
         XCTAssertNotNil(cue)
         XCTAssertEqual(r.stageElapsed, 25, accuracy: 1e-9)
-        // across the end of brushing: the rest carries into floss
-        _ = r.advance(by: 100, now: t0)
+        // across the end of brushing: floss waits for Start, and nothing carries into it
+        XCTAssertEqual(r.advance(by: 100, now: t0), .awaitStart(.floss))
         XCTAssertEqual(r.stage, .floss)
-        XCTAssertEqual(r.stageElapsed, 5, accuracy: 1e-9)
+        XCTAssertEqual(r.stageElapsed, 0)
+        XCTAssertEqual(r.brushedSec, 120, accuracy: 1e-9)
     }
 
     func testPauseStopsTheClockAndBadTicksAreIgnored() {
@@ -142,29 +162,104 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertEqual(r.setPaused(false), .resume)
     }
 
-    /// Done or Skip tapped while paused moves on to the next stage and runs it (the watch says
-    /// "Rinse" and taps for it, so the rinse must not sit frozen).
-    func testDoneOrSkipWhilePausedStartsTheNextStage() {
+    /// Done or Skip tapped while paused lands on the rinse's Start card, not a frozen rinse.
+    func testDoneOrSkipWhilePausedLandsOnTheNextStartCard() {
         var r = WatchRitual(startedAt: t0, includeRinse: true)
-        _ = run(&r, seconds: 130)
+        _ = run(&r, seconds: 120)
+        _ = r.start()
+        _ = run(&r, seconds: 10)
         _ = r.setPaused(true)
-        XCTAssertEqual(r.next(now: t0), .stageStart(.rinse))
+        XCTAssertEqual(r.next(now: t0), .awaitStart(.rinse))
         XCTAssertEqual(r.flossOutcome, .markedDone)
         XCTAssertFalse(r.paused)
+        XCTAssertTrue(r.awaitingStart)
+        XCTAssertNil(r.advance(by: 21, now: t0))
+        XCTAssertEqual(r.start(), .stageStart(.rinse))
         XCTAssertEqual(r.advance(by: 21, now: t0), .rinseStep)
         XCTAssertEqual(r.stageElapsed, 21, accuracy: 1e-9)
 
         var s = WatchRitual(startedAt: t0, includeRinse: true)
-        _ = run(&s, seconds: 130)
+        _ = run(&s, seconds: 120)
+        _ = s.start()
+        _ = run(&s, seconds: 10)
         _ = s.setPaused(true)
-        XCTAssertEqual(s.skip(now: t0), .stageStart(.rinse))
+        XCTAssertEqual(s.skip(now: t0), .awaitStart(.rinse))
         XCTAssertFalse(s.paused)
+    }
+
+    /// On a Start card nothing runs: no pause, no Done, no countdown; only Start, Skip or End.
+    func testAStartCardWaitsForItsTap() {
+        var r = WatchRitual(startedAt: t0, includeRinse: true)
+        XCTAssertNil(r.start(), "no Start while brushing")
+        _ = run(&r, seconds: 120)
+        XCTAssertTrue(r.awaitingStart)
+        XCTAssertNil(r.setPaused(true))
+        XCTAssertFalse(r.paused)
+        XCTAssertNil(r.next(now: t0))
+        XCTAssertNil(r.countdownDigit)
+        XCTAssertEqual(r.remainingSec, WatchRitual.flossSec)
+        // skipping floss from its card goes to the rinse's card
+        XCTAssertEqual(r.skip(now: t0), .awaitStart(.rinse))
+        XCTAssertEqual(r.flossOutcome, .skipped)
+        XCTAssertEqual(r.start(), .stageStart(.rinse))
+        XCTAssertEqual(r.stage, .rinse)
+        XCTAssertFalse(r.awaitingStart)
+    }
+
+    /// A Start card left up for 10 minutes finishes the brush (so it is still saved), dated when
+    /// the brushing ended, not when it was given up on.
+    func testAStartCardLeftTooLongFinishesTheBrush() {
+        var r = WatchRitual(startedAt: t0, includeRinse: true)
+        _ = run(&r, seconds: 120)
+        let ended = r.stageEndedAt!
+        XCTAssertEqual(ended.timeIntervalSince(t0), 0, accuracy: 0.2)
+        let wait = GameConfig.brushAlongStageWaitSec
+        XCTAssertNil(r.advance(by: 1, now: t0.addingTimeInterval(wait - 1)))
+        XCTAssertNil(r.expireWaitIfStale(now: t0.addingTimeInterval(wait - 1)))
+        XCTAssertEqual(r.advance(by: 1, now: t0.addingTimeInterval(wait + 1)), .done(fullBrush: true))
+        let rec = r.record!
+        XCTAssertEqual(rec.completedAt, ended)
+        XCTAssertEqual(rec.floss, .skipped)
+        XCTAssertEqual(rec.rinse, .skipped)
+        XCTAssertTrue(rec.rewardInputs.fullBrush)
+
+        // the same check when the watch app comes back or reads a checkpoint
+        var s = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&s, seconds: 120)
+        XCTAssertEqual(s.expireWaitIfStale(now: t0.addingTimeInterval(wait)), .done(fullBrush: true))
+        XCTAssertNil(s.expireWaitIfStale(now: t0.addingTimeInterval(wait)))
+
+        // a brush ended from a later Start card (by End) is dated from the floss's end
+        var e = WatchRitual(startedAt: t0, includeRinse: true)
+        _ = run(&e, seconds: 120)
+        _ = e.start()
+        _ = run(&e, seconds: 45)
+        let flossEnded = e.stageEndedAt!
+        XCTAssertEqual(e.end(now: t0.addingTimeInterval(300)), .done(fullBrush: true))
+        XCTAssertEqual(e.record?.completedAt, flossEnded)
+        XCTAssertEqual(e.record?.floss, .timed)
+    }
+
+    /// A checkpoint written on a Start card reads back the same; one from before Start cards
+    /// (no such fields) still reads.
+    func testAStartCardSurvivesACheckpoint() throws {
+        var r = WatchRitual(startedAt: t0, includeRinse: true)
+        _ = run(&r, seconds: 120)
+        let data = try JSONEncoder().encode(r)
+        XCTAssertEqual(try JSONDecoder().decode(WatchRitual.self, from: data), r)
+        var old = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        old["waitingSince"] = nil
+        old["stageEndedAt"] = nil
+        let oldData = try JSONSerialization.data(withJSONObject: old)
+        let read = try JSONDecoder().decode(WatchRitual.self, from: oldData)
+        XCTAssertFalse(read.awaitingStart)
+        XCTAssertNil(read.stageEndedAt)
     }
 
     func testSkipAndEndRecordWhatWasLeftOut() {
         var r = WatchRitual(startedAt: t0, includeRinse: true)
         _ = run(&r, seconds: 120)
-        XCTAssertEqual(r.skip(now: t0), .stageStart(.rinse))
+        XCTAssertEqual(r.skip(now: t0), .awaitStart(.rinse))
         XCTAssertEqual(r.flossOutcome, .skipped)
         XCTAssertEqual(r.end(now: t0), .done(fullBrush: true))
         XCTAssertEqual(r.rinseOutcome, .skipped)
@@ -188,7 +283,9 @@ final class WatchRitualTests: XCTestCase {
 
     func testRecordsSurviveTheTripAsADictionary() {
         var r = WatchRitual(startedAt: t0, includeRinse: false)
-        _ = run(&r, seconds: 165)
+        _ = run(&r, seconds: 120)
+        _ = r.start()
+        _ = run(&r, seconds: 45)
         let rec = r.record!
         XCTAssertEqual(WatchBrushRecord(dictionary: rec.dictionary), rec)
         XCTAssertNil(WatchBrushRecord(dictionary: ["kind": "brush"]))
@@ -203,7 +300,9 @@ final class WatchRitualTests: XCTestCase {
         _ = sys.load(nowEpochMs: 1_800_000_000_000)
         var ledger = WatchImportLedger()
         var r = WatchRitual(startedAt: t0, includeRinse: false)
-        _ = run(&r, seconds: 165)
+        _ = run(&r, seconds: 120)
+        _ = r.start()
+        _ = run(&r, seconds: 45)
         let rec = r.record!
         let first = ledger.apply(rec, to: sys, now: t0.addingTimeInterval(60))
         // with the rinse step off, a full brush and floss pay what floss and rinse would

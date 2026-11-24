@@ -1084,16 +1084,18 @@ struct StageCard: View {
 }
 
 /// The running face: brushing, flossing or rinsing. It takes no taps except the "…" button (and,
-/// while paused, a big Resume).
+/// while paused, a big Resume; on a Start card before floss or rinse, a big Start).
 public struct WatchActiveFace: View {
     let state: WatchFaceState
     let onMore: () -> Void
     let onResume: () -> Void
+    let onStart: () -> Void
 
-    public init(state: WatchFaceState, onMore: @escaping () -> Void, onResume: @escaping () -> Void = {}) {
+    public init(state: WatchFaceState, onMore: @escaping () -> Void, onResume: @escaping () -> Void = {}, onStart: @escaping () -> Void = {}) {
         self.state = state
         self.onMore = onMore
         self.onResume = onResume
+        self.onStart = onStart
     }
 
     public var body: some View {
@@ -1202,7 +1204,23 @@ public struct WatchActiveFace: View {
                     .padding(.bottom, h * 0.02)
                     .accessibilityHidden(true)
                     HStack(spacing: w * 0.03) {
-                        if ritual.paused {
+                        if ritual.awaitingStart {
+                            // floss or rinse waits for this tap (Skip and End are under the "…")
+                            Button(action: onStart) {
+                                Label(WatchCopy.word(ritual.stage == .rinse ? .rinse : .floss, lang), systemImage: "play.fill")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(WatchLook.font(w * 0.1))
+                                    .foregroundStyle(dim ? WatchLook.gold : WatchLook.purple)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.5)
+                                    .padding(.horizontal, w * 0.03)
+                                    .frame(maxWidth: .infinity, minHeight: button)
+                                    .background(RoundedRectangle(cornerRadius: w * 0.06, style: .continuous).fill(dim ? Color.clear : WatchLook.gold))
+                                    .overlay(RoundedRectangle(cornerRadius: w * 0.06, style: .continuous).strokeBorder(dim ? WatchLook.gold : Color.clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(WatchCopy.word(.start, lang) + ", " + WatchCopy.word(ritual.stage == .rinse ? .rinse : .floss, lang))
+                        } else if ritual.paused {
                             // paused: one big Resume (the "…" still holds End); an outline in Always On
                             Button(action: onResume) {
                                 Label(WatchCopy.word(.resume, lang), systemImage: "play.fill")
@@ -1387,12 +1405,18 @@ public struct WatchControlsFace: View {
         let lang = state.language
         let paused = state.ritual?.paused ?? false
         let stage = state.ritual?.stage ?? .brushing
+        // on a Start card nothing runs: no Pause, no Done (Start is on the face; Skip and End stay)
+        let waiting = state.ritual?.awaitingStart ?? false
         return VStack(spacing: 8) {
-                BigButton(title: WatchCopy.word(paused ? .resume : .pause, lang), style: .tile, action: onPause)
-                // Floss waits for the whole brush (the clock rolls into it), so Done and Skip are only
+                if !waiting {
+                    BigButton(title: WatchCopy.word(paused ? .resume : .pause, lang), style: .tile, action: onPause)
+                }
+                // Floss waits for the whole brush and then for its Start, so Done and Skip are only
                 // for floss and rinse; anyone without a floss pick just skips it.
                 if stage == .floss || stage == .rinse {
-                    BigButton(title: armed == "next" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.done, lang), action: onNext)
+                    if !waiting {
+                        BigButton(title: armed == "next" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.done, lang), action: onNext)
+                    }
                     BigButton(title: armed == "skip" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.skip, lang), style: .tile, action: onSkip)
                 }
                 BigButton(title: armed == "end" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.end, lang), style: .danger, action: onEnd)

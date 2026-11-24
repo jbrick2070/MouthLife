@@ -27,11 +27,17 @@ export class ClockController {
   private pacerMouthwashDurationSec = BRUSH_ALONG_MOUTHWASH_BONUS_SEC;
   /**
    * Cumulative session clock on real time: 0..120 brushing, 120..165 floss, 165.. rinse. It keeps
-   * running while the tab is hidden or the phone is locked (H04); only the player's Pause stops it.
-   * It may run past the current stage's end until the ritual moves on; that overflow carries into
-   * the next stage, so 20 s locked at 1:50 of brushing comes back 10 s into floss.
+   * running while the tab is hidden or the phone is locked (H04); only the player's Pause and the
+   * wait between stages stop it. It may run past the current stage's end until the ritual notices
+   * (the phone was locked); that overflow says how long ago the stage really ended, and is dropped
+   * when the clock holds for the next stage: every stage starts at its own 0:00, on a tap.
    */
   private pacerRawSec = 0;
+  /**
+   * Brushing or floss has run its time and the next stage waits for a tap ("Start Flossing",
+   * "Start Rinse"): the clock holds at the stage's end and the screen may dim, as when paused.
+   */
+  private pacerWaiting = false;
   /** Wall-clock time the tab was hidden, to count the time away when it comes back. */
   private hiddenAtWallMs: number | null = null;
   private lastEmittedDecisecond = -1;
@@ -95,14 +101,15 @@ export class ClockController {
 
   /**
    * Back in view: the time away counts on the session clock (never backwards, if the device clock
-   * was changed meanwhile), and the screen is kept awake again. The ritual then passes through any
-   * stages that ended while away and speaks only where it is now.
+   * was changed meanwhile), and the screen is kept awake again. A stage that ended while away then
+   * holds at its end for the tap that starts the next one (or finishes the brush, when the wait has
+   * already run out). Paused, or already waiting between stages, the time away counts for nothing.
    */
   noteVisible(wallNowMs: number, perfNowMs: number): void {
     this.lastNowMs = perfNowMs;
     const hiddenAt = this.hiddenAtWallMs;
     this.hiddenAtWallMs = null;
-    if (hiddenAt !== null && this.pacerActive && !this.pacerPausedManual) {
+    if (hiddenAt !== null && this.pacerActive && !this.pacerPausedManual && !this.pacerWaiting) {
       this.pacerRawSec += Math.max(0, wallNowMs - hiddenAt) / 1000;
       this.lastEmittedDecisecond = -1;
       this.requestScreenWakeLock();
@@ -121,7 +128,7 @@ export class ClockController {
     this.showAwake = on;
     if (on) {
       this.requestScreenWakeLock();
-    } else if (!this.pacerActive || this.pacerPausedManual) {
+    } else if (!this.pacerActive || this.pacerPausedManual || this.pacerWaiting) {
       this.releaseScreenWakeLock();
     }
   }
@@ -129,31 +136,53 @@ export class ClockController {
   startPacer(): void {
     this.pacerActive = true;
     this.pacerPausedManual = false;
+    this.pacerWaiting = false;
     this.pacerStage = 'brushing';
     this.pacerRawSec = 0;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
   }
 
-  /** Jump (or roll) into the 45s floss stage. */
+  /** Start the 45s floss stage (a tap on "Start Flossing"), at its 0:00. */
   enterFlossBonus(): void {
     this.enterPacerStage('flossBonus', BRUSH_ALONG_TOTAL_SEC);
   }
 
-  /** Jump (or roll) into the fluoride rinse stage. */
+  /** Start the fluoride rinse stage (a tap on "Start Rinse" or the rinse button during floss), at its 0:00. */
   enterMouthwashBonus(): void {
     this.enterPacerStage('mouthwashBonus', BRUSH_ALONG_TOTAL_SEC + BRUSH_ALONG_FLOSS_BONUS_SEC);
   }
 
   private enterPacerStage(stage: PacerStage, startSec: number): void {
-    // Time already past the stage that just ended (the phone was locked) carries over.
-    const carry = this.pacerActive ? this.getPacerOverflowSec() : 0;
+    // Nothing carries over: time past the stage before (the phone was locked) was dropped by the hold.
     this.pacerActive = true;
     this.pacerPausedManual = false;
+    this.pacerWaiting = false;
     this.pacerStage = stage;
-    this.pacerRawSec = startSec + carry;
+    this.pacerRawSec = startSec;
     this.lastEmittedDecisecond = -1;
     this.requestScreenWakeLock();
+  }
+
+  /**
+   * The current stage has run its time and the next waits for a tap. The clock stops at the stage's
+   * end and stays there; any time already past it (the phone was locked, H04) is dropped, so read
+   * `getPacerOverflowSec()` first to know when the stage really ended. The screen may dim meanwhile.
+   */
+  holdPacerForNextStage(): void {
+    if (!this.pacerActive) return;
+    this.pacerRawSec = this.getPacerStageEndSec();
+    this.pacerWaiting = true;
+    // A card has nothing to resume: a pause (floss skipped while paused) ends here. Quietly: the
+    // overlay brings the music back itself and lets go of speech left paused.
+    this.pacerPausedManual = false;
+    this.lastEmittedDecisecond = -1;
+    this.releaseScreenWakeLock();
+  }
+
+  /** Between stages: brushing or floss is over and the next stage has not been started yet. */
+  isPacerWaiting(): boolean {
+    return this.pacerActive && this.pacerWaiting;
   }
 
   /** Switching 60s/30s mid-rinse keeps the same fraction of the rinse done. */
@@ -177,10 +206,11 @@ export class ClockController {
     this.releaseScreenWakeLock();
     this.pacerActive = false;
     this.pacerPausedManual = false;
+    this.pacerWaiting = false;
     this.pacerStage = 'brushing';
   }
 
-  /** User-driven pause/resume: the only thing that stops the session clock. */
+  /** User-driven pause/resume: with the wait between stages, the only things that stop the session clock. */
   setPacerPaused(paused: boolean): void {
     this.setPacerPausedInternal(paused);
   }
@@ -188,7 +218,7 @@ export class ClockController {
   private setPacerPausedInternal(paused: boolean): void {
     const changed = this.pacerPausedManual !== paused;
     this.pacerPausedManual = paused;
-    if (!paused) {
+    if (!paused && !this.pacerWaiting) {
       this.requestScreenWakeLock();
     } else {
       this.releaseScreenWakeLock();
@@ -214,7 +244,7 @@ export class ClockController {
     return this.pacerStage === 'flossBonus';
   }
 
-  /** The session clock, held at the current stage's end until the ritual moves on. */
+  /** The session clock, held at the current stage's end until the next stage is started. */
   getPacerElapsedSec(): number {
     return Math.min(this.getPacerStageEndSec(), this.pacerRawSec);
   }
@@ -230,7 +260,8 @@ export class ClockController {
   }
 
   /**
-   * One screen wake lock, held while the pacer runs and let go when it pauses or stops. A city's
+   * One screen wake lock, held while the pacer runs and let go when it pauses, waits between stages
+   * or stops. A city's
    * finale holds the same lock for as long as it plays (`showAwake`).
    */
   private wakeLock: { release(): Promise<void>; addEventListener?: (type: 'release', cb: () => void) => void } | null = null;
@@ -294,7 +325,7 @@ export class ClockController {
 
     // Real-time Brush-Along pacer (brush, floss, rinse on one cumulative clock). A slow frame or a
     // stall counts in full: the ritual follows the clock on the wall, not the frame rate.
-    if (this.pacerActive && !this.pacerPausedManual) {
+    if (this.pacerActive && !this.pacerPausedManual && !this.pacerWaiting) {
       this.pacerRawSec += rawDeltaSec;
       const elapsedSec = this.getPacerElapsedSec();
       const decisecond = Math.floor(elapsedSec * 10);

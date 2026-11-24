@@ -15,13 +15,15 @@ import { BrushAlongOverlay } from '../src/ui/BrushAlongOverlay';
  * was in front) is paid on the day it really ended, not the day the page was opened again.
  *
  * The real brush screen, clock, bank and save run here against a made-up calendar clock and a
- * stand-in page with nothing on it. Frames are fed by hand, 60 a second.
+ * stand-in page with nothing on it. Frames are fed by hand, 60 a second. Floss and the rinse each
+ * wait for a tap, made here by calling what the screen's buttons call.
  *
  * The last section (W16) uses the same stand-in page to read the summary the brush screen draws.
  */
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
+  // The waiting card between stages checks its wait once a second; those checks run on this clock too.
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
 });
 
 afterEach(() => {
@@ -61,7 +63,14 @@ const quietCallbacks = {
   onExitToHub: () => {},
 };
 
-type BrushScreen = { mount(root: HTMLElement): void; dispose(): void };
+type BrushScreen = {
+  mount(root: HTMLElement): void;
+  dispose(): void;
+  // What the buttons on the card between stages call.
+  startFloss(): void;
+  startRinse(): void;
+  skipStageWait(): void;
+};
 const BrushScreenClass = BrushAlongOverlay as unknown as new (...args: unknown[]) => BrushScreen;
 
 /** Where a test's save is kept instead of the browser's storage. */
@@ -84,12 +93,21 @@ function bathroom(start: Date, options: { rinse?: boolean } = {}) {
   // The brush screen builds itself inside one element of its own; the newest one is kept so a test
   // can read what the screen last drew into it.
   let screenBox = blankElement();
-  vi.stubGlobal('document', {
+  const visibilityListeners = new Set<() => void>();
+  const page = {
+    visibilityState: 'visible' as 'visible' | 'hidden',
     createElement: () => {
       screenBox = blankElement();
       return screenBox;
     },
-  });
+    addEventListener: (type: string, cb: () => void) => {
+      if (type === 'visibilitychange') visibilityListeners.add(cb);
+    },
+    removeEventListener: (type: string, cb: () => void) => {
+      if (type === 'visibilitychange') visibilityListeners.delete(cb);
+    },
+  };
+  vi.stubGlobal('document', page);
   vi.stubGlobal('window', {
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -124,11 +142,28 @@ function bathroom(start: Date, options: { rinse?: boolean } = {}) {
 
   /** The page hidden (phone locked) until `when`, then back in view. No frames run meanwhile. */
   const hiddenUntil = (when: Date): void => {
+    page.visibilityState = 'hidden';
     clock.noteHidden(Date.now());
     perfMs += when.getTime() - wallMs;
     wallMs = when.getTime();
     vi.setSystemTime(when);
+    page.visibilityState = 'visible';
     clock.noteVisible(Date.now(), perfMs);
+    for (const cb of [...visibilityListeners]) cb();
+  };
+
+  /**
+   * The page in view for this many whole seconds with a waiting card up: the clock holds, and the
+   * card checks its wait each second.
+   */
+  const cardUp = (sec: number): void => {
+    for (let i = 0; i < sec; i++) {
+      perfMs += 1000;
+      wallMs += 1000;
+      vi.advanceTimersByTime(1000);
+      vi.setSystemTime(Math.round(wallMs));
+      clock.tickFrame(perfMs);
+    }
   };
 
   /** The page left in view until `when`, with no brush running. */
@@ -152,7 +187,34 @@ function bathroom(start: Date, options: { rinse?: boolean } = {}) {
     (screen as unknown as { completeSession(floss: boolean, rinse: boolean): void }).completeSession(withFloss, withRinse);
   };
 
-  return { clock, saveSys, paid, frames, hiddenUntil, waitUntil, startBrush, tapFinish, screenHtml: () => screenBox.innerHTML };
+  /** Taps a button on the card between stages. */
+  const tap = (button: 'Start Flossing' | 'Start Rinse' | 'Skip'): void => {
+    if (button === 'Start Flossing') screen?.startFloss();
+    else if (button === 'Start Rinse') screen?.startRinse();
+    else screen?.skipStageWait();
+  };
+
+  /** The whole 2 minutes and a second on the floss card, a tap, then the whole floss: 2:46 in all. */
+  const brushAndFloss = (): void => {
+    frames(121);
+    tap('Start Flossing');
+    frames(46);
+  };
+
+  return {
+    clock,
+    saveSys,
+    paid,
+    frames,
+    hiddenUntil,
+    waitUntil,
+    cardUp,
+    startBrush,
+    tap,
+    brushAndFloss,
+    tapFinish,
+    screenHtml: () => screenBox.innerHTML,
+  };
 }
 
 describe('a brush that ended while the page was hidden', () => {
@@ -161,24 +223,27 @@ describe('a brush that ended while the page was hidden', () => {
     room.startBrush();
     room.frames(30);
     room.hiddenUntil(at(2026, 11, 21, 6, 50));
-    room.frames(1); // back in view: the ritual passes through the steps that ended meanwhile
+    // Back in view: brushing ended last night, and its floss card's wait ran out long ago, so the
+    // brush finishes at once with what was done. Floss was never started, so it earns nothing.
+    room.frames(1);
     expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: false, withMouthwashBonus: false });
     const save = room.saveSys.getSave();
     expect(save.dailySlotsByDate['2026-11-20']).toEqual({ fullRewards: 1, tips: 0 });
     expect(save.dailySlotsByDate['2026-11-21']).toBeUndefined();
     // The tooth is polished as of the morning it was found, as before.
     expect(save.companion.lastEvaluatedEpochMs).toBe(room.paid[0].paidAt.getTime());
 
-    // The real morning brush and the real bedtime brush, neither ever hidden.
+    // The real morning brush and the real bedtime brush, neither ever hidden, floss started on the tap.
     room.waitUntil(at(2026, 11, 21, 7, 30));
     room.startBrush();
-    room.frames(166);
+    room.brushAndFloss();
     room.waitUntil(at(2026, 11, 21, 19, 30));
     room.startBrush();
-    room.frames(166);
+    room.brushAndFloss();
 
     expect(room.paid.map((p) => p.stampAwarded)).toEqual([true, true, true]);
-    expect(room.paid.map((p) => p.ionsAwarded)).toEqual([100, 100, 100]);
+    expect(room.paid.map((p) => p.ionsAwarded)).toEqual([50, 100, 100]);
     expect(save.dailySlotsByDate).toEqual({
       '2026-11-20': { fullRewards: 1, tips: 0 },
       '2026-11-21': { fullRewards: 2, tips: 0 },
@@ -187,11 +252,15 @@ describe('a brush that ended while the page was hidden', () => {
   });
 
   it('is dated from the end of its last step: the rinse, when the rinse step is on', () => {
-    // Started at 23:57:30 on the 20th: brushing ends 23:59:30, floss 00:00:15, the 60 s rinse
-    // 00:01:15 on the 21st. Opened again on the 22nd, it belongs to the 21st.
-    const room = bathroom(at(2026, 11, 20, 23, 57, 30), { rinse: true });
+    // Started at 23:57:00 on the 20th: brushing ends 23:59:00, floss is started a second later and
+    // ends 23:59:46, the 60 s rinse is started a second after that and ends 00:00:47 on the 21st.
+    // The phone is locked 10 s into the rinse and opened again on the 22nd: it belongs to the 21st.
+    const room = bathroom(at(2026, 11, 20, 23, 57, 0), { rinse: true });
     room.startBrush();
-    room.frames(30);
+    room.brushAndFloss();
+    expect(room.paid).toHaveLength(0); // the rinse waits for its tap
+    room.tap('Start Rinse');
+    room.frames(10);
     room.hiddenUntil(at(2026, 11, 22, 6, 50));
     room.frames(1);
     expect(room.paid).toHaveLength(1);
@@ -228,7 +297,7 @@ describe('a brush that ended while the page was hidden', () => {
     room.hiddenUntil(at(2026, 11, 23, 6, 50));
     room.frames(1);
     expect(room.paid).toHaveLength(1);
-    expect(room.paid[0]).toMatchObject({ ionsAwarded: 100, stampAwarded: true });
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: false, ionsAwarded: 50, stampAwarded: true });
     expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-23': { fullRewards: 1, tips: 0 } });
   });
 });
@@ -238,7 +307,7 @@ describe('a brush that was never hidden', () => {
     const start = at(2026, 11, 20, 20, 0);
     const room = bathroom(start);
     room.startBrush();
-    room.frames(166);
+    room.brushAndFloss();
     expect(room.paid).toHaveLength(1);
     expect(room.paid[0]).toMatchObject({ withFlossBonus: true, withMouthwashBonus: false, ionsAwarded: 100, stampAwarded: true });
 
@@ -253,10 +322,10 @@ describe('a brush that was never hidden', () => {
   });
 
   it('ending just after midnight, it is paid on the new day', () => {
-    // 2:45 of brushing and floss from 23:57:30 ends at 00:00:15.
+    // From 23:57:30: brushing ends 23:59:30, floss is started at 23:59:31 and ends at 00:00:16.
     const room = bathroom(at(2026, 11, 20, 23, 57, 30));
     room.startBrush();
-    room.frames(166);
+    room.brushAndFloss();
     expect(room.paid).toHaveLength(1);
     expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-21': { fullRewards: 1, tips: 0 } });
   });
@@ -268,9 +337,77 @@ describe('a brush that was never hidden', () => {
     room.clock.setPacerPaused(true);
     room.hiddenUntil(at(2026, 11, 21, 6, 50));
     room.clock.setPacerPaused(false);
-    room.frames(136);
+    room.frames(91);
+    room.tap('Start Flossing');
+    room.frames(46);
     expect(room.paid).toHaveLength(1);
     expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-21': { fullRewards: 1, tips: 0 } });
+  });
+});
+
+describe('a brush finished from the card between stages', () => {
+  it('Skip after midnight is dated when brushing ended, not at the tap', () => {
+    // Brushing ends at 23:59:00; the floss card stays up five minutes, past midnight.
+    const room = bathroom(at(2026, 11, 20, 23, 57, 0));
+    room.startBrush();
+    room.frames(121);
+    room.cardUp(300);
+    expect(room.paid).toHaveLength(0);
+    room.tap('Skip');
+    expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: false, withMouthwashBonus: false, ionsAwarded: 50, stampAwarded: true });
+    expect(room.paid[0].paidAt.getDate()).toBe(21);
+    expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-20': { fullRewards: 1, tips: 0 } });
+  });
+
+  it('the rinse card’s Skip is dated when the floss ended, with the floss counted', () => {
+    // Floss ends at 23:59:46; the rinse card waits until after midnight.
+    const room = bathroom(at(2026, 11, 20, 23, 57, 0), { rinse: true });
+    room.startBrush();
+    room.brushAndFloss();
+    room.cardUp(120);
+    room.tap('Skip');
+    expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: true, withMouthwashBonus: false, ionsAwarded: 75, stampAwarded: true });
+    expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-20': { fullRewards: 1, tips: 0 } });
+  });
+
+  it('left up for ten minutes, it finishes by itself, dated when brushing ended', () => {
+    const room = bathroom(at(2026, 11, 20, 23, 55, 0));
+    room.startBrush();
+    room.frames(120); // brushing ends at 23:57:00
+    room.cardUp(599);
+    expect(room.paid).toHaveLength(0);
+    room.cardUp(1);
+    expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: false, withMouthwashBonus: false, ionsAwarded: 50 });
+    // ten minutes after brushing ended, to within a frame or two
+    expect(Math.abs(room.paid[0].paidAt.getTime() - at(2026, 11, 21, 0, 7, 0).getTime())).toBeLessThan(100);
+    expect(room.saveSys.getSave().dailySlotsByDate).toEqual({ '2026-11-20': { fullRewards: 1, tips: 0 } });
+  });
+
+  it('left up and the phone locked, it finishes as soon as the page is back in view', () => {
+    const room = bathroom(at(2026, 11, 20, 20, 0), { rinse: true });
+    room.startBrush();
+    room.brushAndFloss(); // the rinse card goes up at 20:02:47
+    room.cardUp(60);
+    room.hiddenUntil(at(2026, 11, 20, 20, 15)); // no frame runs: the check on coming back does it
+    expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: true, withMouthwashBonus: false, ionsAwarded: 75 });
+  });
+
+  it('locked for less than ten minutes, the card is still there, and the rinse still waits', () => {
+    const room = bathroom(at(2026, 11, 20, 20, 0), { rinse: true });
+    room.startBrush();
+    room.brushAndFloss();
+    room.hiddenUntil(at(2026, 11, 20, 20, 10));
+    room.frames(5);
+    expect(room.paid).toHaveLength(0);
+    expect(room.clock.isPacerWaiting()).toBe(true);
+    room.tap('Start Rinse');
+    room.frames(61);
+    expect(room.paid).toHaveLength(1);
+    expect(room.paid[0]).toMatchObject({ withFlossBonus: true, withMouthwashBonus: true, ionsAwarded: 100 });
   });
 });
 
@@ -332,12 +469,18 @@ describe('W16: the bonus badge on the brush summary follows the page language', 
     const room = bathroom(at(2026, 11, 20, 20, 0), { rinse: badge !== 'Floss Bonus' });
     room.startBrush();
     if (badge === 'Bonus Step') {
-      // the whole 2 minutes, then Done on the floss step: one extra step of the two
-      room.frames(130);
+      // the whole 2 minutes, floss started, then Done on the floss step: one extra step of the two
+      room.frames(121);
+      room.tap('Start Flossing');
+      room.frames(10);
       room.tapFinish(true, false);
     } else {
-      // hands-free to the end: floss alone (rinse step off), or floss and the 60 s rinse
-      room.frames(badge === 'Floss Bonus' ? 166 : 226);
+      // floss to its end (rinse step off), or floss and the 60 s rinse, each started on its tap
+      room.brushAndFloss();
+      if (badge === 'Floss + Rinse') {
+        room.tap('Start Rinse');
+        room.frames(61);
+      }
     }
     expect(room.paid).toHaveLength(1);
     return room.screenHtml();

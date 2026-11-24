@@ -95,6 +95,17 @@ final class WatchController: NSObject {
     func resume() {
         guard var r = resumable else { return }
         resumable = nil
+        if r.awaitingStart {
+            // a brush kept on a Start card comes back to that card (nothing runs until Start), or
+            // is finished and sent if the card has been up too long
+            if r.expireWaitIfStale() != nil, let record = r.record {
+                keep(record)
+                ritual = r
+                return
+            }
+            set(r)
+            return
+        }
         _ = r.setPaused(false)
         set(r)
         play(.stageStart(.brushing))
@@ -102,7 +113,7 @@ final class WatchController: NSObject {
     }
 
     func togglePause() {
-        guard var r = engine else { return }
+        guard var r = engine, !r.awaitingStart else { return }
         let cue = r.setPaused(!r.paused)
         set(r)
         if let cue { play(cue) }
@@ -117,6 +128,22 @@ final class WatchController: NSObject {
             run()
         }
         showControls = false
+    }
+
+    /// Start on a Start card: one tap (it only begins floss or rinse; nothing is lost by it).
+    func tapStart() {
+        guard var r = engine else { return }
+        // a card left in front past the wait has already finished the brush
+        if let cue = r.expireWaitIfStale() {
+            set(r)
+            handle(cue)
+            return
+        }
+        guard let cue = r.start() else { return }
+        set(r)
+        showControls = false
+        handle(cue)
+        run()
     }
 
     /// Next, Skip and End ask for a second tap within a few seconds.
@@ -144,13 +171,23 @@ final class WatchController: NSObject {
 
     /// The app came to the front: anything still waiting for the iPhone goes again.
     func cameForward() {
+        // a Start card left up too long while the app was away finishes the brush now
+        if var r = engine, let cue = r.expireWaitIfStale() {
+            set(r)
+            handle(cue)
+        }
+        // also one waiting to be resumed after a relaunch: sent, not offered again
+        if var r = resumable, r.expireWaitIfStale() != nil, let record = r.record {
+            resumable = nil
+            keep(record)
+        }
         flushOutbox()
     }
 
     /// The app left the front. With the self-care runtime the brush carries on with the wrist down;
     /// without it (it could not start, or was lost) the clock would stop mid-brush, so pause and keep it.
     func wentBackground() {
-        guard runtime?.state != .running, var r = engine, r.stage != .done, !r.paused else { return }
+        guard runtime?.state != .running, var r = engine, r.stage != .done, !r.paused, !r.awaitingStart else { return }
         WatchLog.note("background without runtime: pausing")
         _ = r.setPaused(true)
         set(r)
@@ -177,7 +214,7 @@ final class WatchController: NSObject {
         set(r)
         showControls = false
         handle(cue)
-        if r.stage != .done && !r.paused { run() }
+        if r.stage != .done && !r.paused && !r.awaitingStart { run() }
     }
 
     private func run() {
@@ -232,7 +269,18 @@ final class WatchController: NSObject {
         play(cue)
         speak(cue)
         if case .stageStart = cue { checkpoint(force: true) }
+        if case .awaitStart = cue { waitForStart() }
         if case .done = cue { finish() }
+    }
+
+    /// A Start card: the clock stops and the wrist runtime is let go (as for Pause), so a long hunt
+    /// for the floss costs no battery. Start brings both back; an old card ends with the next look.
+    private func waitForStart() {
+        stopClock()
+        voice.stop()
+        // let go a moment later, so the tap on the wrist and the song's fade finish (Start cancels it)
+        endRuntimeSoon()
+        checkpoint(force: true)
     }
 
     private func finish() {
@@ -240,8 +288,12 @@ final class WatchController: NSObject {
         endRuntimeSoon()
         ritual = engine
         guard let record = engine?.record else { return clearCheckpoint() }
-        // saved for the iPhone first, then the checkpoint cleared: a crash in between loses nothing
-        // (and `load()` drops a checkpoint whose brush is already in the outbox)
+        keep(record)
+    }
+
+    /// Saves a finished brush for the iPhone, then clears the checkpoint and sends it: a crash in
+    /// between loses nothing (and `load()` drops a checkpoint whose brush is already in the outbox).
+    private func keep(_ record: WatchBrushRecord) {
         if !outbox.contains(where: { $0.sessionId == record.sessionId }) {
             outbox.append(record)
             trimOutbox()
@@ -263,6 +315,7 @@ final class WatchController: NSObject {
         let device = WKInterfaceDevice.current()
         switch cue {
         case .stageStart, .resume: device.play(.start)
+        case .awaitStart: device.play(.notification)
         case .surface, .rinseStep, .countdown: device.play(.click)
         case .quadrant: device.play(.directionUp)
         case .flossHalfway: device.play(.directionDown)
@@ -384,6 +437,14 @@ final class WatchController: NSObject {
             let savedAt = defaults.object(forKey: Self.savedAtKey) as? Double
             let since = savedAt.map { Date().timeIntervalSince1970 - $0 } ?? Date().timeIntervalSince(r.startedAt)
             let alreadyFinished = outbox.contains { $0.sessionId == r.sessionId.uuidString }
+            // a brush left on a Start card too long is finished and sent, not dropped
+            if !alreadyFinished, r.expireWaitIfStale() != nil, let record = r.record {
+                outbox.append(record)
+                trimOutbox()
+                saveOutbox()
+                clearCheckpoint()
+                return
+            }
             if r.stage != .done && since < Self.resumeWindow && !alreadyFinished {
                 _ = r.setPaused(true)
                 resumable = r

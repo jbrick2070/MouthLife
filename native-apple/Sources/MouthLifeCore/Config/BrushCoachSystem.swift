@@ -441,6 +441,21 @@ public enum BrushCoachCopy {
         }
     }
 
+    /// The Start cards between stages: floss and rinse begin only when tapped. Web twin:
+    /// `BrushCoachCopy.stageStartLabels`.
+    public static func stageStartLabels(lang: CoachLanguage) -> (startFloss: String, startRinse: String, readyFloss: String, readyRinse: String) {
+        switch lang {
+        case .english: return ("Start Flossing", "Start Rinse", "READY TO FLOSS?", "READY TO RINSE?")
+        case .spanish: return ("Empezar Hilo", "Empezar Enjuague", "¿LISTO PARA EL HILO?", "¿LISTO PARA ENJUAGAR?")
+        case .french: return ("Commencer le Fil", "Commencer le Rinçage", "PRÊT POUR LE FIL ?", "PRÊT À RINCER ?")
+        case .japanese: return ("フロス開始", "洗口開始", "フロスの準備OK？", "洗口の準備OK？")
+        case .chinese: return ("开始用牙线", "开始漱口", "准备好用牙线了吗？", "准备好漱口了吗？")
+        case .korean: return ("치실 시작", "가글 시작", "치실 준비됐나요?", "가글 준비됐나요?")
+        case .portuguese: return ("Começar Fio Dental", "Começar Enxágue", "PRONTO PARA O FIO?", "PRONTO PARA ENXAGUAR?")
+        case .german: return ("Stick starten", "Spülung starten", "BEREIT FÜR DEN STICK?", "BEREIT ZUM SPÜLEN?")
+        }
+    }
+
     /// "Done (+75 F⁻)" → "Done": after an early tap-through the promised amounts no longer apply.
     public static func withoutIonAmount(_ label: String) -> String {
         guard label.hasSuffix(" F⁻)"), let open = label.range(of: " (+", options: .backwards) else { return label }

@@ -1,6 +1,8 @@
 /**
  * Hands-free Brush-Along coach: 3-stage timeline (2:00 brush → 0:45 floss → 1:00/0:30 fluoride rinse),
  * glanceable headlines, a minimal spoken script (numbers and single words) in 8 languages, and the tilt-slosh model for the rinse stage.
+ * Each stage runs by itself once started; floss and the rinse each wait for a tap ("Start Flossing",
+ * "Start Rinse"), so there is time to put the brush down, and nobody is rushed without floss or rinse to hand.
  *
  * This is the web twin of `native-apple/Sources/MouthLifeCore/Config/BrushCoachSystem.swift`.
  * Keep the two in lockstep: same timings, same indices, same copy.
@@ -363,6 +365,18 @@ const BUTTON_WORDS: PerLang<{ flossJump: string; done: string; skip: string; rin
   de: { flossJump: 'Stick-Runde', done: 'Fertig', skip: 'Weiter', rinseJump: 'Fluorid-Spülung' },
 };
 
+/** The card between stages: its headline, and the button that starts the next stage. */
+const STAGE_START_LABELS: PerLang<{ startFloss: string; startRinse: string; readyFloss: string; readyRinse: string }> = {
+  en: { startFloss: 'Start Flossing', startRinse: 'Start Rinse', readyFloss: 'READY TO FLOSS?', readyRinse: 'READY TO RINSE?' },
+  es: { startFloss: 'Empezar Hilo', startRinse: 'Empezar Enjuague', readyFloss: '¿LISTO PARA EL HILO?', readyRinse: '¿LISTO PARA ENJUAGAR?' },
+  fr: { startFloss: 'Commencer le Fil', startRinse: 'Commencer le Rinçage', readyFloss: 'PRÊT POUR LE FIL ?', readyRinse: 'PRÊT À RINCER ?' },
+  ja: { startFloss: 'フロス開始', startRinse: '洗口開始', readyFloss: 'フロスの準備OK？', readyRinse: '洗口の準備OK？' },
+  zh: { startFloss: '开始用牙线', startRinse: '开始漱口', readyFloss: '准备好用牙线了吗？', readyRinse: '准备好漱口了吗？' },
+  ko: { startFloss: '치실 시작', startRinse: '가글 시작', readyFloss: '치실 준비됐나요?', readyRinse: '가글 준비됐나요?' },
+  pt: { startFloss: 'Começar Fio Dental', startRinse: 'Começar Enxágue', readyFloss: 'PRONTO PARA O FIO?', readyRinse: 'PRONTO PARA ENXAGUAR?' },
+  de: { startFloss: 'Stick starten', startRinse: 'Spülung starten', readyFloss: 'BEREIT FÜR DEN STICK?', readyRinse: 'BEREIT ZUM SPÜLEN?' },
+};
+
 type RinseStep = { actionBadge: string; ruleTag: string };
 const MOUTHWASH_HEADLINES: PerLang<{ title: string; steps: readonly [RinseStep, RinseStep, RinseStep] }> = {
   en: {
@@ -538,6 +552,11 @@ export const BrushCoachCopy = {
       doneRinse: `${w.done} (+${fullIons} F⁻)`,
       skipRinse: `${w.skip} (+${skipIons} F⁻)`,
     };
+  },
+
+  /** The waiting card after brushing or floss: "READY TO FLOSS?" over "Start Flossing", and the same for the rinse. */
+  stageStartLabels(lang: CoachLanguage): { startFloss: string; startRinse: string; readyFloss: string; readyRinse: string } {
+    return STAGE_START_LABELS[lang];
   },
 
   mouthwashHeadline(

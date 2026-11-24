@@ -140,6 +140,8 @@ export const BRUSH_ALONG_TIP_IONS = 5;
  * end. Tapping ahead to floss earlier still earns a small "good try" reward, never the full one.
  */
 export const BRUSH_ALONG_FULL_BRUSH_GRACE_SEC = 2;
+/** A "Ready to floss?" / "Ready to rinse?" card left this long (wall clock) finishes the brush with what was done. */
+export const BRUSH_ALONG_STAGE_WAIT_SEC = 600;
 export const MAX_SUPPLY_BEACONS = 4;
 export const MAX_OVERDRIVE_RUNS = 4;
 

@@ -354,6 +354,14 @@ public struct BrushAlongView: View {
     public let onEnterMouthwashBonusNow: (Bool) -> Void
     public let onCompleteSession: (Bool, Bool) -> Void
     public let onCancelToHub: () -> Void
+    /// The stage whose Start card is up (floss or rinse wait for a tap), nil while a stage runs.
+    public let awaitingStage: PacerStage?
+    public let onStartAwaitingStage: () -> Void
+    /// Skip floss, from its Start card or while flossing (on to the rinse's Start card, or finish).
+    public let onSkipFloss: () -> Void
+    /// The small heart while Apple Health is off (after the first ask): opens the Health card.
+    public let showsHealthHeart: Bool
+    public let onOpenHealth: () -> Void
     /// On the iPhone Duo's inner screen: how it is held. The whole mouth is on the other page, so
     /// the compass is left out; in Tabletop the words that are only read (not tapped) move to the flat
     /// page too (`BrushCueRows`), leaving the upright page for the 3D tooth, the timer and the buttons.
@@ -383,9 +391,19 @@ public struct BrushAlongView: View {
         onEnterMouthwashBonusNow: @escaping (Bool) -> Void = { _ in },
         onCompleteSession: @escaping (Bool, Bool) -> Void,
         onCancelToHub: @escaping () -> Void,
+        awaitingStage: PacerStage? = nil,
+        onStartAwaitingStage: @escaping () -> Void = {},
+        onSkipFloss: @escaping () -> Void = {},
+        showsHealthHeart: Bool = false,
+        onOpenHealth: @escaping () -> Void = {},
         duoPose: DuoSplit.Axis? = nil
     ) {
         self.duoPose = duoPose
+        self.awaitingStage = awaitingStage
+        self.onStartAwaitingStage = onStartAwaitingStage
+        self.onSkipFloss = onSkipFloss
+        self.showsHealthHeart = showsHealthHeart
+        self.onOpenHealth = onOpenHealth
         self.elapsedSec = elapsedSec
         self.isPaused = isPaused
         self.pacerStage = pacerStage
@@ -421,7 +439,8 @@ public struct BrushAlongView: View {
             case .mouthwashBonus: return flossEnd + mwDur
             }
         }()
-        let remaining = max(0, totalTarget - elapsedSec)
+        // A Start card reads 0:00: the stage that ran is over, the next has not begun.
+        let remaining = awaitingStage != nil ? 0 : max(0, totalTarget - elapsedSec)
         let phase = BrushPhaseState.evaluate(
             elapsedSec: elapsedSec,
             stage: pacerStage,
@@ -448,6 +467,9 @@ public struct BrushAlongView: View {
                     onCancelToHub()
                 } label: {
                     Label(L10n.t("Hub"), systemImage: "house.fill")
+                        // never wrapped ("Hu / b"): the station pill gives way instead
+                        .lineLimit(1)
+                        .fixedSize()
                 }
                 .buttonStyle(MLHomeButtonStyle(compact: true))
                 .accessibilityLabel(L10n.t("Exit to Hub"))
@@ -511,13 +533,29 @@ public struct BrushAlongView: View {
                     .overlay(Capsule().strokeBorder(MLTheme.cyanAccent.opacity(0.42), lineWidth: 1))
                 }
 
-                Button {
-                    onTogglePause()
-                } label: {
-                    Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 12, weight: .bold))
+                if showsHealthHeart {
+                    // A quiet reminder that Apple Health is off: it only explains when tapped.
+                    Button {
+                        onOpenHealth()
+                    } label: {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.red)
+                    }
+                    .buttonStyle(MLGlassPillButtonStyle(tint: Color.red))
+                    .accessibilityLabel(L10n.t("Save brushes to Apple Health?"))
                 }
-                .buttonStyle(MLGlassPillButtonStyle(tint: isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent))
+
+                // Nothing runs on a Start card, so there is nothing to pause.
+                if awaitingStage == nil {
+                    Button {
+                        onTogglePause()
+                    } label: {
+                        Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .buttonStyle(MLGlassPillButtonStyle(tint: isPaused ? MLTheme.fluorapatiteGold : MLTheme.cyanAccent))
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 6)
@@ -554,6 +592,9 @@ public struct BrushAlongView: View {
                                 .font(.system(.caption2, design: .rounded, weight: .heavy))
                         }
                         .buttonStyle(MLPrimaryButtonStyle(accent: MLTheme.fluorapatiteGold, darkText: true))
+                    } else if awaitingStage != nil {
+                        // A Start card: no countdown and no progress bar until the next stage starts.
+                        EmptyView()
                     } else if let pip = phase.countdownPip {
                         // Final 3-second musical anticipation indicator ("3 • 2 • 1")
                         HStack(spacing: 6) {
@@ -599,6 +640,9 @@ public struct BrushAlongView: View {
 
             // Glanceable 3-Foot Bottom Action Banner (Zero Instructional Paragraphs!)
             VStack(alignment: .leading, spacing: 9) {
+                if let next = awaitingStage {
+                    startCard(next: next, skipFlossLabel: buttons.skipFloss, skipRinseLabel: mwButtons.skipRinse)
+                } else {
                 switch pacerStage {
                 case .mouthwashBonus:
                     let mwHl = BrushCoachCopy.mouthwashHeadline(
@@ -683,11 +727,8 @@ public struct BrushAlongView: View {
                         }
 
                         Button(L10n.t(buttons.skipFloss)) {
-                            if includeRinse {
-                                onEnterMouthwashBonusNow(false)
-                            } else {
-                                onCompleteSession(false, false)
-                            }
+                            // With the rinse on, its own Start card comes next.
+                            onSkipFloss()
                         }
                         .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
                     }
@@ -695,13 +736,56 @@ public struct BrushAlongView: View {
                 case .brushing:
                     BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage, reducedMotion: reducedMotion)
                 }
+                }
             }
             .mlGlassCard(cornerRadius: 22)
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
             // Tabletop while brushing: nothing to tap here, and the words are on the flat page
-            .opacity(duoPose == .stacked && pacerStage == .brushing ? 0 : 1)
-            .accessibilityHidden(duoPose == .stacked && pacerStage == .brushing)
+            .opacity(duoPose == .stacked && pacerStage == .brushing && awaitingStage == nil ? 0 : 1)
+            .accessibilityHidden(duoPose == .stacked && pacerStage == .brushing && awaitingStage == nil)
+            // VoiceOver hears the Start card come up (the screen may be out of sight).
+            .onChange(of: awaitingStage) { _, next in
+                guard let next else { return }
+                let copy = BrushCoachCopy.stageStartLabels(lang: coachLanguage)
+                AccessibilityNotification.Announcement(L10n.t(next == .flossBonus ? copy.readyFloss : copy.readyRinse)).post()
+            }
+        }
+    }
+
+    /// Between stages: floss or rinse starts only when tapped (time to put the brush down; the floss
+    /// or mouthwash may not be at hand). Skip moves on without it.
+    @ViewBuilder
+    private func startCard(next: PacerStage, skipFlossLabel: String, skipRinseLabel: String) -> some View {
+        let copy = BrushCoachCopy.stageStartLabels(lang: coachLanguage)
+        let isFloss = next == .flossBonus
+        let accent = isFloss ? MLTheme.fluorapatiteGold : totalCareLavender
+        HStack(alignment: .center, spacing: 8) {
+            Text(L10n.t(isFloss ? copy.readyFloss : copy.readyRinse))
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundStyle(accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer(minLength: 4)
+            if isFloss { flossToolPicker } else { mouthwashDurationPicker }
+        }
+        HStack(spacing: 8) {
+            Button {
+                onStartAwaitingStage()
+            } label: {
+                Label(L10n.t(isFloss ? copy.startFloss : copy.startRinse), systemImage: isFloss ? "play.fill" : "drop.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(MLPrimaryButtonStyle(accent: accent, darkText: true))
+
+            Button(L10n.t(isFloss ? skipFlossLabel : skipRinseLabel)) {
+                if isFloss {
+                    onSkipFloss()
+                } else {
+                    onCompleteSession(didCompleteFloss, false)
+                }
+            }
+            .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
         }
     }
 

@@ -727,6 +727,22 @@ final class MouthLifeCoreTests: XCTestCase {
         XCTAssertEqual(BrushCoachCopy.actionButtonLabels(for: .english, rinseStepOff: true).doneFloss, "Done (+100 F⁻)")
     }
 
+    /// The Start cards before floss and rinse are written in all 8 coach languages, each its own.
+    func testStartCardsAreWrittenInEveryLanguage() {
+        XCTAssertEqual(BrushCoachCopy.stageStartLabels(lang: .english).startFloss, "Start Flossing")
+        var seen: Set<String> = []
+        for lang in CoachLanguage.allCases {
+            let c = BrushCoachCopy.stageStartLabels(lang: lang)
+            for text in [c.startFloss, c.startRinse, c.readyFloss, c.readyRinse] {
+                XCTAssertFalse(text.isEmpty, "\(lang)")
+            }
+            XCTAssertNotEqual(c.startFloss, c.startRinse, "\(lang)")
+            XCTAssertNotEqual(c.readyFloss, c.readyRinse, "\(lang)")
+            seen.insert(c.startFloss)
+        }
+        XCTAssertEqual(seen.count, CoachLanguage.allCases.count)
+    }
+
     func testEarlyTapThroughLabelsDropThePromisedAmounts() {
         XCTAssertEqual(BrushCoachCopy.withoutIonAmount("Done (+75 F⁻)"), "Done")
         XCTAssertEqual(BrushCoachCopy.withoutIonAmount("スキップ (+50 F⁻)"), "スキップ")

@@ -13,11 +13,17 @@ final class WatchFaceRenderTests: XCTestCase {
         ("40mm", CGSize(width: 162, height: 197)), ("41mm", CGSize(width: 176, height: 215)), ("49mm", CGSize(width: 205, height: 251)),
     ]
 
-    func ritual(at t: Double, includeRinse: Bool = false, nextTaps: Int = 0) -> WatchRitual {
+    /// The ritual `t` seconds in; floss and rinse are started as soon as their Start card is up,
+    /// unless `tapStart` is false (then it stops on the first card).
+    func ritual(at t: Double, includeRinse: Bool = false, nextTaps: Int = 0, tapStart: Bool = true) -> WatchRitual {
         var r = WatchRitual(sessionId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, startedAt: Date(timeIntervalSince1970: 0), includeRinse: includeRinse)
         for _ in 0..<nextTaps { _ = r.next(now: Date(timeIntervalSince1970: 0)) }
         var left = t
         while left > 0 {
+            if r.awaitingStart {
+                guard tapStart else { break }
+                _ = r.start()
+            }
             let step = min(0.25, left)
             _ = r.advance(by: step, now: Date(timeIntervalSince1970: 0))
             left -= step
@@ -68,6 +74,16 @@ final class WatchFaceRenderTests: XCTestCase {
             try render("floss-start-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 121)), onMore: {}))
             try render("floss-start-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 121), dimmed: true), onMore: {}))
             try render("rinse-start-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: ritual(at: 166, includeRinse: true)), onMore: {}))
+            // the Start cards before floss and rinse, bright and dimmed, and their "…" controls
+            let flossCard = ritual(at: 125, tapStart: false)
+            XCTAssertTrue(flossCard.awaitingStart)
+            try render("floss-card-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: flossCard), onMore: {}))
+            try render("floss-card-dimmed-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: flossCard, dimmed: true), onMore: {}))
+            try render("controls-card-\(label)", size: size, WatchControlsFace(state: WatchFaceState(ritual: flossCard), armed: nil, onPause: {}, onNext: {}, onSkip: {}, onEnd: {}, onClose: {}, scrollable: false))
+            var rinseCard = ritual(at: 120, includeRinse: true, tapStart: false)
+            _ = rinseCard.skip(now: Date(timeIntervalSince1970: 0))
+            XCTAssertTrue(rinseCard.awaitingStart)
+            try render("rinse-card-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: rinseCard), onMore: {}))
             var paused = ritual(at: 40)
             _ = paused.setPaused(true)
             try render("brush-paused-\(label)", size: size, WatchActiveFace(state: WatchFaceState(ritual: paused), onMore: {}))

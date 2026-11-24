@@ -25,7 +25,6 @@ public struct ProfileAndSettingsSheet: View {
     @State private var showReminderGate = false
     @State private var healthLogOn: Bool
     @State private var healthBlocked = false
-    @State private var showHealthGate = false
     @State private var showEraseGate = false
     /// Erase Save: a grown-up answered the question, and the button now waits for its second tap.
     @State private var eraseArmed = false
@@ -282,13 +281,16 @@ public struct ProfileAndSettingsSheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(MLTheme.textSecondary)
 
-                        // Apple Health: a grown-up turns it on; Apple's Health sheet asks once
+                        // Apple Health: Apple's own Health sheet asks (once ever); no extra question
                         if healthAvailable {
                             Toggle(L10n.t("❤️ Apple Health"), isOn: Binding(
                                 get: { healthLogOn },
                                 set: { on in
                                     if on {
-                                        showHealthGate = true
+                                        onSetHealthLog(true) { allowed in
+                                            healthLogOn = allowed
+                                            healthBlocked = !allowed
+                                        }
                                     } else {
                                         healthLogOn = false
                                         healthBlocked = false
@@ -299,15 +301,6 @@ public struct ProfileAndSettingsSheet: View {
                                 .font(.system(.subheadline, design: .rounded, weight: .medium))
                                 .tint(MLTheme.mintClean)
                                 .padding(.top, 6)
-                                .sheet(isPresented: $showHealthGate) {
-                                    ParentGateView(note: L10n.t("Saves each brush to Apple Health. Set by a grown-up.")) {
-                                        onSetHealthLog(true) { allowed in
-                                            healthLogOn = allowed
-                                            healthBlocked = !allowed
-                                        }
-                                    }
-                                    .presentationDetents([.medium])
-                                }
 
                             Text(healthBlocked
                                 ? L10n.t("Health access is off. A grown-up can allow it in the Health app.")
@@ -610,3 +603,4 @@ struct PrivacyPolicyView: View {
         .preferredColorScheme(.dark)
     }
 }
+

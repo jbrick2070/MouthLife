@@ -149,10 +149,31 @@ public struct RootContentView: View {
                 .id(coordinator.coachLanguage)
         }
         .preferredColorScheme(.dark)
-        .sheet(item: $coordinator.activeSheet) { sheet in
+        .sheet(item: $coordinator.activeSheet, onDismiss: { coordinator.healthAskMayShow() }) { sheet in
             sheetContent(sheet)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        // "Save brushes to Apple Health?": a plain Yes / Not now; Yes brings up Apple's Health sheet.
+        .alert(
+            L10n.t("Save brushes to Apple Health?"),
+            isPresented: Binding(
+                get: { coordinator.healthPrompt != nil },
+                set: { shown in if !shown { coordinator.healthPrompt = nil } }
+            ),
+            presenting: coordinator.healthPrompt
+        ) { prompt in
+            switch prompt {
+            case .ask:
+                Button(L10n.t("Yes, Save to Health")) { coordinator.answerHealthPrompt(true) }
+                Button(L10n.t("Not now"), role: .cancel) { coordinator.answerHealthPrompt(false) }
+            case .denied:
+                Button(L10n.t("Done"), role: .cancel) { coordinator.answerHealthPrompt(false) }
+            }
+        } message: { prompt in
+            Text(L10n.t(prompt == .ask
+                ? "MouthLife can save each brush to Apple Health as Toothbrushing. It only adds brushes and never reads anything from Health."
+                : "Health access is off. A grown-up can turn it on in Settings → Privacy & Security → Health → MouthLife."))
         }
         // Follow the system's Reduce Motion: on at launch if it is on, and live when it changes.
         // Neither is stored, and the system switching off leaves a "Less Camera Motion" chosen in
@@ -240,6 +261,11 @@ public struct RootContentView: View {
                         )
                     },
                     onCancelToHub: { coordinator.returnToHub() },
+                    awaitingStage: coordinator.pacerAwaitingStage,
+                    onStartAwaitingStage: { coordinator.startAwaitingStage() },
+                    onSkipFloss: { coordinator.skipFloss() },
+                    showsHealthHeart: coordinator.showsHealthHeart,
+                    onOpenHealth: { coordinator.openHealthCard() },
                     duoPose: split?.axis
                 )
                 .modifier(PagePlacement(rect: split?.firstRect, trailingInset: trailingInset))

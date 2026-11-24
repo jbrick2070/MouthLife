@@ -35,29 +35,74 @@ function ritualClock() {
 }
 
 describe('H04: the ritual follows the clock on the wall through a locked phone', () => {
-  it('20 s locked at 1:50 of brushing comes back 10 s into floss', () => {
+  it('20 s locked at 1:50 of brushing comes back held at 2:00: the 10 s past it are dropped, and floss starts at 0:00', () => {
     const { clock, frames, lock } = ritualClock();
     clock.startPacer();
     frames(110);
     lock(20);
     expect(clock.getPacerElapsedSec()).toBe(120);
-    expect(clock.getPacerOverflowSec()).toBeCloseTo(10, 1);
-    clock.enterFlossBonus(); // what BrushAlongOverlay does on the next tick
+    expect(clock.getPacerOverflowSec()).toBeCloseTo(10, 1); // how long ago brushing really ended
+    clock.holdPacerForNextStage(); // what BrushAlongOverlay does on the next tick
+    expect(clock.isPacerWaiting()).toBe(true);
+    expect(clock.getPacerOverflowSec()).toBe(0);
+    frames(30);
+    expect(clock.getPacerElapsedSec()).toBe(120);
+    clock.enterFlossBonus(); // the tap on "Start Flossing"
+    expect(clock.isPacerWaiting()).toBe(false);
     expect(clock.getPacerStage()).toBe('flossBonus');
-    expect(clock.getPacerElapsedSec()).toBeCloseTo(130, 1);
+    expect(clock.getPacerElapsedSec()).toBe(120);
+    frames(5);
+    expect(clock.getPacerElapsedSec()).toBeCloseTo(125, 1);
   });
 
-  it('115 s to 180 s passes floss and lands 15 s into the rinse', () => {
+  it('a long lock never runs on into floss or the rinse: each waits at 0:00 for its tap', () => {
     const { clock, frames, lock } = ritualClock();
     clock.setPacerMouthwashDurationSec(60);
     clock.startPacer();
     frames(115);
     lock(65);
+    expect(clock.getPacerStage()).toBe('brushing');
+    expect(clock.getPacerOverflowSec()).toBeCloseTo(60, 1);
+    clock.holdPacerForNextStage();
     clock.enterFlossBonus();
-    expect(clock.getPacerOverflowSec()).toBeCloseTo(15, 1); // floss ended while locked too
+    expect(clock.getPacerElapsedSec()).toBe(120);
+    frames(30);
+    lock(40); // floss ends while locked
+    expect(clock.getPacerElapsedSec()).toBe(165);
+    expect(clock.getPacerOverflowSec()).toBeCloseTo(25, 1);
+    clock.holdPacerForNextStage();
     clock.enterMouthwashBonus();
-    expect(clock.getPacerElapsedSec()).toBeCloseTo(180, 1);
+    expect(clock.getPacerElapsedSec()).toBe(165);
     expect(clock.getPacerOverflowSec()).toBe(0);
+  });
+
+  it('holds still between stages: no ticks, and time away while waiting counts for nothing', () => {
+    const bus = new EventBus();
+    const clock = new ClockController(bus);
+    let ticks = 0;
+    bus.on('pacer:tick', () => ticks++);
+    let perfMs = 0;
+    clock.tickFrame(perfMs);
+    clock.startPacer();
+    for (let i = 0; i < 121 * 60; i++) clock.tickFrame((perfMs += 1000 / 60));
+    clock.holdPacerForNextStage();
+    const ticksAtHold = ticks;
+    for (let i = 0; i < 60 * 60; i++) clock.tickFrame((perfMs += 1000 / 60));
+    clock.noteHidden(1_800_000_000_000);
+    perfMs += 300_000;
+    clock.noteVisible(1_800_000_300_000, perfMs);
+    clock.tickFrame((perfMs += 1000 / 60));
+    expect(ticks).toBe(ticksAtHold);
+    expect(clock.getPacerElapsedSec()).toBe(120);
+    expect(clock.getPacerOverflowSec()).toBe(0);
+    // Pause has nothing to pause meanwhile, and resuming does not start the clock either.
+    clock.setPacerPaused(true);
+    clock.setPacerPaused(false);
+    clock.tickFrame((perfMs += 1000));
+    expect(clock.getPacerElapsedSec()).toBe(120);
+    expect(clock.isPacerWaiting()).toBe(true);
+    clock.stopPacer();
+    expect(clock.isPacerWaiting()).toBe(false);
   });
 
   it('finishes exactly at 165, 195 or 225 seconds', () => {
@@ -70,9 +115,11 @@ describe('H04: the ritual follows the clock on the wall through a locked phone',
       if (rinse) clock.setPacerMouthwashDurationSec(rinse);
       clock.startPacer();
       frames(121);
+      clock.holdPacerForNextStage();
       clock.enterFlossBonus();
       frames(46);
       if (rinse) {
+        clock.holdPacerForNextStage();
         clock.enterMouthwashBonus();
         frames(rinse + 1);
       }
@@ -373,6 +420,31 @@ describe('W14: a city finale keeps the screen awake', () => {
     clock.setShowAwake(false);
     await settle();
     expect(wake.held()).toBe(0);
+  });
+
+  it('the wait between brush stages lets the screen go, like Pause, and the next stage takes it back', async () => {
+    const wake = fakeWakeLock();
+    const clock = new ClockController(new EventBus());
+    clock.startPacer();
+    await settle();
+    expect(wake.held()).toBe(1);
+    clock.holdPacerForNextStage();
+    await settle();
+    expect(wake.held()).toBe(0);
+    // back into view while waiting: nothing to keep awake for
+    clock.noteHidden(1_800_000_000_000);
+    clock.noteVisible(1_800_000_020_000, 20_000);
+    await settle();
+    expect(wake.held()).toBe(0);
+    // a finale ending meanwhile leaves the screen free too
+    clock.setShowAwake(true);
+    await settle();
+    clock.setShowAwake(false);
+    await settle();
+    expect(wake.held()).toBe(0);
+    clock.enterFlossBonus();
+    await settle();
+    expect(wake.held()).toBe(1);
   });
 
   it('the game turns it on when a finale starts and off on both ways out of one', () => {

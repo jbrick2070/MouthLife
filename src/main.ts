@@ -876,7 +876,11 @@ function bootstrapMouthLife(): void {
         onPlayCue: (kind) => sound.playPacerCue(kind),
         onPlayPip: (secondsLeft, isUpper) => sound.playPacerAnticipationPip(secondsLeft, isUpper),
         onPlaySwish: (pan, intensity) => sound.playMouthwashSwish(pan, intensity),
-        onExitToHub: () => switchMode('HUB'),
+        onExitToHub: (hubNote) => {
+          switchMode('HUB');
+          // A brush saved on the way out (Exit from a card between stages) says what it earned.
+          if (hubNote) activeHub?.setStatusBanner(hubNote);
+        },
         isMuted: () => sound.isMuted(),
         onToggleMute: () => sound.setMuted(!sound.isMuted()),
         onPauseChanged: (p) => sound.setPaused(p),
@@ -995,7 +999,8 @@ function bootstrapMouthLife(): void {
                   clock.getPacerStage(),
                   clock.getPacerMouthwashDurationSec()
                 ),
-                paused: clock.isPacerPaused(),
+                // Between stages the brush or floss pick rests, as when paused.
+                paused: clock.isPacerPaused() || clock.isPacerWaiting(),
               }
             : null,
       });

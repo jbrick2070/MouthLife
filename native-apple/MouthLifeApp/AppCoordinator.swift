@@ -91,6 +91,20 @@ public final class AppCoordinator {
     // Apple Health (a grown-up's choice): each brush saved as a Toothbrushing entry.
     private static let healthLogDefaultsKey = "mouthlife.health.brushLog"
     public private(set) var healthLogOn = false
+    /// Set once the "Save brushes to Apple Health?" card has been shown after a brush. From then on,
+    /// while Health is off, a small heart on the brush screen offers it again, only when tapped.
+    private static let healthAskedDefaultsKey = "mouthlife.health.asked"
+    public private(set) var healthAsked = false
+    /// The last brush, so the one saying yes to Health right after it gets it saved too.
+    @ObservationIgnored private var lastBrushForHealth: (sec: Double, endedAt: Date, sessionId: String)?
+    /// The one-time question is due but something else was up: it shows once that is closed.
+    @ObservationIgnored private var healthAskDue = false
+    /// "Save brushes to Apple Health?" on screen: the question, or (Health already said no) where
+    /// to turn it on.
+    public enum HealthPrompt: Equatable { case ask, denied }
+    public var healthPrompt: HealthPrompt?
+    /// Only a brush this recent is saved along with a yes (not one from days ago).
+    private static let healthCatchUpSec: TimeInterval = 60 * 60
     /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
     public private(set) var pacerBrushedFullTime: Bool = false
     /// How long this session brushed and when brushing (not floss or rinse) ended, for Health.
@@ -100,6 +114,28 @@ public final class AppCoordinator {
     public var pacerInFlossBonus: Bool = false
     public var pacerStage: PacerStage = .brushing
     public var pacerCompletedFlossStage: Bool = false
+    /// The stage whose Start card is up (floss or rinse), nil while a stage runs. Floss and rinse
+    /// start only when tapped: time to put the brush down, and the floss or mouthwash may not be
+    /// at hand. The clock waits at the end of the stage that ran.
+    public private(set) var pacerAwaitingStage: PacerStage?
+    /// When the last stage that ran ended: a brush finished from a Start card ended then.
+    @ObservationIgnored private var pacerStageEndedAt: Date?
+    /// When the Start card came up, for `GameConfig.brushAlongStageWaitSec`.
+    @ObservationIgnored private var pacerAwaitingSince: Date?
+    /// A brush whose brushing is done, kept on the device from the first Start card until the
+    /// session finishes, so one the system closes meanwhile (the screen may sleep on a Start card)
+    /// is still paid at the next launch, with what was finished.
+    private struct PendingBrush: Codable {
+        var sessionId: String
+        var brushedSec: Double
+        var brushingEndedAt: Date
+        var stageEndedAt: Date
+        var fullBrush: Bool
+        var flossDone: Bool
+        var rinseStepOff: Bool
+    }
+    private static let pendingBrushDefaultsKey = "mouthlife.pacer.pendingBrush"
+    @ObservationIgnored private var pacerSessionId = UUID().uuidString
     public var flossToolStyle: FlossToolStyle = .flossPick
     public var mouthwashDurationStyle: MouthwashDurationStyle = .totalCare60s
     public var mouthwashGyro: GyroSloshSnapshot = .idle
@@ -219,6 +255,7 @@ public final class AppCoordinator {
         self.remindersOn = UserDefaults.standard.bool(forKey: Self.remindersOnDefaultsKey)
         // Off if Health access was taken away in the Health app since it was turned on.
         self.healthLogOn = UserDefaults.standard.bool(forKey: Self.healthLogDefaultsKey) && HealthBrushLog.isAllowed
+        self.healthAsked = UserDefaults.standard.bool(forKey: Self.healthAskedDefaultsKey)
         self.reminderMorning = Self.storedMinutes(Self.reminderMorningDefaultsKey) ?? BrushDays.defaultMorning
         self.reminderEvening = Self.storedMinutes(Self.reminderEveningDefaultsKey) ?? BrushDays.defaultEvening
         self.tutorialGate = TutorialGate(
@@ -233,6 +270,8 @@ public final class AppCoordinator {
         // One language for the screens and the spoken coach.
         L10n.setLanguage(self.coachLanguage.rawValue)
 
+        // A brush the system closed on a Start card is paid now (before the sound listens: quietly).
+        finishPendingBrush()
         setupSceneAndAudioBridges()
         NativeSoundEngine.shared.setHubRadioStation(self.hubRadioStation)
         applyLaunchArgumentsIfPresent()
@@ -280,6 +319,49 @@ public final class AppCoordinator {
         }
         advance(Self.lastBrushDefaultsKey)
         if full { advance(Self.lastFullBrushDefaultsKey) }
+    }
+
+    private func storePendingBrush() {
+        guard let brushing = pacerBrushing, let stageEnd = pacerStageEndedAt else { return }
+        let pending = PendingBrush(
+            sessionId: pacerSessionId,
+            brushedSec: brushing.sec,
+            brushingEndedAt: brushing.endedAt,
+            stageEndedAt: stageEnd,
+            fullBrush: pacerBrushedFullTime,
+            flossDone: pacerCompletedFlossStage,
+            rinseStepOff: !includeRinse
+        )
+        if let data = try? JSONEncoder().encode(pending) {
+            UserDefaults.standard.set(data, forKey: Self.pendingBrushDefaultsKey)
+        }
+    }
+
+    private func clearPendingBrush() {
+        UserDefaults.standard.removeObject(forKey: Self.pendingBrushDefaultsKey)
+    }
+
+    /// Pays a brush left on a Start card when the app was closed: brushing (and floss, if it was
+    /// finished) counts, dated when the last finished stage ended. Its Health entry, if Health is
+    /// on, carries the session's sync id, so it can never be saved twice.
+    private func finishPendingBrush() {
+        guard let data = UserDefaults.standard.data(forKey: Self.pendingBrushDefaultsKey) else { return }
+        clearPendingBrush()
+        guard let p = try? JSONDecoder().decode(PendingBrush.self, from: data) else { return }
+        let now = Date()
+        _ = saveSystem.recordBrushAlongCompletion(
+            withFlossBonus: p.flossDone,
+            withMouthwashBonus: false,
+            fullBrush: p.fullBrush,
+            rinseStepOff: p.rinseStepOff,
+            date: now,
+            rewardDay: BrushEndTime.rewardDay(endedAt: p.stageEndedAt, now: now)
+        )
+        noteBrushEnded(at: p.stageEndedAt, full: p.fullBrush)
+        if healthLogOn {
+            HealthBrushLog.save(brushedSec: p.brushedSec, endedAt: p.brushingEndedAt, sessionId: p.sessionId)
+        }
+        save = saveSystem.getSave()
     }
 
     /// A widget was tapped. `mouthlife://brush` (Today, the Lock Screen tooth) starts the 2-Minute
@@ -346,6 +428,11 @@ public final class AppCoordinator {
     /// shows the first time) or off. `done` gets whether it is on.
     public func setHealthLog(_ on: Bool, done: @escaping (Bool) -> Void) {
         NativeSoundEngine.shared.playUiTap()
+        // A grown-up has chosen: the one-time card after a brush is not needed any more.
+        if !healthAsked {
+            healthAsked = true
+            UserDefaults.standard.set(true, forKey: Self.healthAskedDefaultsKey)
+        }
         guard on else {
             healthLogOn = false
             UserDefaults.standard.set(false, forKey: Self.healthLogDefaultsKey)
@@ -356,8 +443,78 @@ public final class AppCoordinator {
             let allowed = await HealthBrushLog.requestPermission()
             self.healthLogOn = allowed
             UserDefaults.standard.set(allowed, forKey: Self.healthLogDefaultsKey)
+            // The brush that prompted the yes goes to Health too (its sync id keeps it single).
+            if allowed, let b = self.lastBrushForHealth, Date().timeIntervalSince(b.endedAt) < Self.healthCatchUpSec {
+                HealthBrushLog.save(brushedSec: b.sec, endedAt: b.endedAt, sessionId: b.sessionId)
+            }
+            self.lastBrushForHealth = nil
             done(allowed)
         }
+    }
+
+    /// When a brush's 2 minutes are done (on the phone: as the floss Start card comes up; from the
+    /// watch: when its brush arrives): remembers it for Health and, the first time, opens the "Save
+    /// brushes to Apple Health?" card. Only for a real brush, only where Health exists, never while
+    /// Health is already on, and never during the game.
+    private func offerHealthAfterBrush(sec: Double, endedAt: Date, sessionId: String) {
+        guard HealthBrushLog.isAvailable, !healthLogOn, sec >= HealthBrushLog.minimumBrushSec else { return }
+        lastBrushForHealth = (sec, endedAt, sessionId)
+        guard !healthAsked else { return }
+        healthAskDue = true
+        // A moment later: after the chime, once the floss card (or Home's reward message) is up.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            self?.showHealthAskIfFree()
+        }
+    }
+
+    /// A sheet closed or the app came back: a card that was due shows now, if Home is clear.
+    public func healthAskMayShow() {
+        guard healthAskDue else { return }
+        showHealthAskIfFree()
+    }
+
+    /// The one-time card: over the floss Start card right after brushing, or on Home (a watch brush),
+    /// with nothing else up (no sheet, How to Play, finale or brush intro) and the app in front;
+    /// otherwise it waits until then.
+    private func showHealthAskIfFree() {
+        if healthAsked || healthLogOn { healthAskDue = false }
+        let onStartCard = mode == .brushAlong && pacerAwaitingStage != nil
+        guard !healthAsked, !healthLogOn, mode == .hub || onStartCard, activeSheet == nil, healthPrompt == nil, finale == nil,
+              !isTutorialVisible, !isBrushIntroVisible else { return }
+        #if os(iOS)
+        guard UIApplication.shared.applicationState == .active else { return }
+        #endif
+        healthAsked = true
+        healthAskDue = false
+        UserDefaults.standard.set(true, forKey: Self.healthAskedDefaultsKey)
+        healthPrompt = HealthBrushLog.isDenied ? .denied : .ask
+    }
+
+    /// The question's answer. Yes brings up Apple's Health sheet a moment later, once the question
+    /// has gone, so the two never overlap.
+    public func answerHealthPrompt(_ yes: Bool) {
+        healthPrompt = nil
+        guard yes else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(450))
+            self?.setHealthLog(true) { _ in }
+        }
+    }
+
+    /// The brush screen's small heart, shown whenever Health is off (iPhone and iPad): it only
+    /// explains when tapped.
+    public var showsHealthHeart: Bool {
+        HealthBrushLog.isAvailable && !healthLogOn
+    }
+
+    public func openHealthCard() {
+        NativeSoundEngine.shared.playUiTap()
+        // The brush waits while the question is up (Play carries on).
+        if mode == .brushAlong, pacerAwaitingStage == nil, !pacerIsPaused {
+            togglePacerPause()
+        }
+        healthPrompt = HealthBrushLog.isDenied ? .denied : .ask
     }
 
     public func setReminderTimes(morning: Int, evening: Int) {
@@ -432,6 +589,8 @@ public final class AppCoordinator {
         noteBrushEnded(at: record.completedAt, full: record.rewardInputs.fullBrush)
         if healthLogOn {
             HealthBrushLog.save(brushedSec: record.brushedSec, endedAt: record.completedAt, sessionId: record.sessionId)
+        } else {
+            offerHealthAfterBrush(sec: record.brushedSec, endedAt: record.completedAt, sessionId: record.sessionId)
         }
         save = saveSystem.getSave()
         sceneController.companionSmoothness = save.companion.smoothnessIndex
@@ -990,7 +1149,16 @@ public final class AppCoordinator {
     }
 
     public func returnToHub() {
+        // Home once the 2 minutes of brushing are done (from a Start card, or during floss or the
+        // rinse): the brush is saved with what was finished rather than thrown away (completing goes
+        // Home itself, without the spoken "Done").
+        if mode == .brushAlong, pacerAwaitingStage != nil || pacerBrushing != nil {
+            completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: false, announce: false)
+            return
+        }
         stopPacerTimer()
+        pacerAwaitingStage = nil
+        clearPendingBrush()
         pacerIsPaused = false
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
@@ -1170,6 +1338,11 @@ public final class AppCoordinator {
         pacerSuspendedBySystem = false
         pacerInFlossBonus = false
         pacerStage = .brushing
+        pacerAwaitingStage = nil
+        pacerStageEndedAt = nil
+        pacerAwaitingSince = nil
+        pacerSessionId = UUID().uuidString
+        clearPendingBrush()
         pacerCompletedFlossStage = false
         pacerBrushedFullTime = false
         pacerBrushing = nil
@@ -1225,6 +1398,8 @@ public final class AppCoordinator {
 
     /// Re-speaks the one-word cue for wherever the timeline is now (after a voice or language change).
     private func speakCurrentPacerPhaseCue() {
+        // A Start card is quiet: its stage's word comes with the tap.
+        guard pacerAwaitingStage == nil else { return }
         let cue: String
         switch pacerStage {
         case .mouthwashBonus:
@@ -1272,6 +1447,8 @@ public final class AppCoordinator {
     }
 
     public func togglePacerPause() {
+        // Nothing runs on a Start card, so there is nothing to pause.
+        guard pacerAwaitingStage == nil else { return }
         pacerIsPaused.toggle()
         pacerPausedByUser = pacerIsPaused
         pacerSuspendedBySystem = false
@@ -1291,6 +1468,74 @@ public final class AppCoordinator {
         pacerBrushing = (min(pacerElapsedSec, GameConfig.brushAlongTotalSec), BrushEndTime.endedAt(now: Date(), overflowSec: overrun))
     }
 
+    /// A stage has ended (by time, or floss skipped): the next one waits for its Start tap. Time the
+    /// phone spent locked past the end is dropped (the next stage starts from 0 when tapped), and the
+    /// brush is dated from when the stage ended, not from the tap. One chime when time ran out; a
+    /// card reached by Skip comes up quietly (the tap was the signal). Web twin: `holdAfterStage`.
+    private func holdForStart(_ next: PacerStage, chime: Bool = true) {
+        let mwDur = mouthwashDurationStyle.durationSec
+        if pacerAwaitingStage == nil {
+            let overrun = pacerClock.overflowSec(in: pacerStage, mouthwashDurationSec: mwDur)
+            if pacerStage == .brushing {
+                noteBrushingStageEnded()
+                pacerBrushedFullTime = pacerElapsedSec >= GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec
+            }
+            let endedAt = BrushEndTime.endedAt(now: Date(), overflowSec: overrun)
+            pacerStageEndedAt = endedAt
+            pacerAwaitingSince = endedAt
+            // Hold at the stage's end (the clock reads 0:00); nothing carries into the next one.
+            pacerClock = PacerSessionClock(rawSec: PacerSessionClock.stageEndSec(pacerStage, mouthwashDurationSec: mwDur))
+        } else {
+            pacerAwaitingSince = Date()
+        }
+        pacerAwaitingStage = next
+        storePendingBrush()
+        // Back from a lock that outlasted the wait as well: finish now, without a card or a chime.
+        if let since = pacerAwaitingSince, Date().timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec {
+            completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: false)
+            return
+        }
+        // Brushing is done and the brush is down: the moment to ask about Apple Health (once).
+        if next == .flossBonus, !healthLogOn, let b = pacerBrushing {
+            offerHealthAfterBrush(sec: b.sec, endedAt: b.endedAt, sessionId: pacerSessionId)
+        }
+        pacerIsPaused = false
+        pacerPausedByUser = false
+        pacerSuspendedBySystem = false
+        lastCountdownPipKey = ""
+        pacerElapsedSec = pacerClock.elapsedSec(in: pacerStage, mouthwashDurationSec: mwDur)
+        sceneController.pacerElapsedSec = pacerElapsedSec
+        NativeSoundEngine.shared.setPaused(false)
+        // One chime says the stage is over; the next stage's word comes with its Start.
+        if chime {
+            NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .upperRight, surface: .outerCheek, isNewQuadrant: true)
+        }
+        updateIdleTimerPolicy()
+    }
+
+    /// The Start card's Start: floss or rinse begins now, from 0.
+    public func startAwaitingStage() {
+        guard mode == .brushAlong, let next = pacerAwaitingStage else { return }
+        switch next {
+        case .flossBonus: enterFlossBonusNow()
+        case .mouthwashBonus: enterMouthwashBonusNow(completedFloss: pacerCompletedFlossStage)
+        case .brushing: break
+        }
+    }
+
+    /// Skip floss (from its Start card or while flossing): on to the rinse's Start card when a
+    /// grown-up included the rinse, else the brush is finished without floss.
+    public func skipFloss() {
+        guard mode == .brushAlong else { return }
+        guard pacerAwaitingStage == .flossBonus || (pacerAwaitingStage == nil && pacerStage == .flossBonus) else { return }
+        pacerCompletedFlossStage = false
+        if includeRinse {
+            holdForStart(.mouthwashBonus, chime: false)
+        } else {
+            completeBrushAlongSession(withFlossBonus: false, withMouthwashBonus: false)
+        }
+    }
+
     public func enterFlossBonusNow() {
         noteBrushingStageEnded()
         if pacerStage == .brushing {
@@ -1301,6 +1546,8 @@ public final class AppCoordinator {
         pacerClock.enter(.flossBonus, from: pacerStage, mouthwashDurationSec: mwDur)
         let passingThrough = pacerClock.overflowSec(in: .flossBonus, mouthwashDurationSec: mwDur) > 0
         pacerStage = .flossBonus
+        pacerAwaitingStage = nil
+        pacerAwaitingSince = nil
         pacerInFlossBonus = true
         pacerIsPaused = false
         pacerPausedByUser = false
@@ -1334,6 +1581,8 @@ public final class AppCoordinator {
         pacerClock.enter(.mouthwashBonus, from: pacerStage, mouthwashDurationSec: mwDur)
         let passingThrough = pacerClock.overflowSec(in: .mouthwashBonus, mouthwashDurationSec: mwDur) > 0
         pacerStage = .mouthwashBonus
+        pacerAwaitingStage = nil
+        pacerAwaitingSince = nil
         pacerInFlossBonus = false
         pacerIsPaused = false
         pacerPausedByUser = false
@@ -1359,7 +1608,8 @@ public final class AppCoordinator {
         updateIdleTimerPolicy()
     }
 
-    public func completeBrushAlongSession(withFlossBonus: Bool, withMouthwashBonus: Bool = false) {
+    /// `announce`: the spoken "Done" (left out when the player chose Home).
+    public func completeBrushAlongSession(withFlossBonus: Bool, withMouthwashBonus: Bool = false, announce: Bool = true) {
         // Done or Skip held down while the timer ends the session, and let go during the fade to
         // Home, must not complete it a second time (two rewards, two Health entries).
         guard mode == .brushAlong else { return }
@@ -1367,10 +1617,16 @@ public final class AppCoordinator {
         // The timer may have run out while the app was away (H04): the brush ended then, not now.
         // It is paid for the day it ended, by the rule for a late Apple Watch brush.
         let now = Date()
-        let endedAt = BrushEndTime.endedAt(
-            now: now,
-            overflowSec: pacerClock.overflowSec(in: pacerStage, mouthwashDurationSec: mouthwashDurationStyle.durationSec)
-        )
+        // Finished from a Start card: the brush ended when the last stage stopped, not at the tap.
+        let endedAt = pacerAwaitingStage != nil
+            ? (pacerStageEndedAt ?? now)
+            : BrushEndTime.endedAt(
+                now: now,
+                overflowSec: pacerClock.overflowSec(in: pacerStage, mouthwashDurationSec: mouthwashDurationStyle.durationSec)
+            )
+        pacerAwaitingStage = nil
+        pacerAwaitingSince = nil
+        clearPendingBrush()
         stopPacerTimer()
         pacerIsPaused = false
         pacerPausedByUser = false
@@ -1386,8 +1642,9 @@ public final class AppCoordinator {
             rewardDay: BrushEndTime.rewardDay(endedAt: endedAt, now: now)
         )
         noteBrushEnded(at: endedAt, full: fullBrush)
-        if healthLogOn, let brushing = pacerBrushing {
-            HealthBrushLog.save(brushedSec: brushing.sec, endedAt: brushing.endedAt, sessionId: UUID().uuidString)
+        let healthBrush = pacerBrushing.map { (sec: $0.sec, endedAt: $0.endedAt, sessionId: pacerSessionId) }
+        if healthLogOn, let b = healthBrush {
+            HealthBrushLog.save(brushedSec: b.sec, endedAt: b.endedAt, sessionId: b.sessionId)
         }
         save = saveSystem.getSave()
         refreshReminders()
@@ -1396,9 +1653,14 @@ public final class AppCoordinator {
         // The completion fanfare and its haptic come from the pacerComplete event the save emits
         // (NativeSoundEngine and HapticsEngine listen), so they play once.
         transition(to: .hub)
-        NativeSoundEngine.shared.speakCoachingPhrase(
-            BrushCoachCopy.spokenStageWord(.done, lang: coachLanguage)
-        )
+        if announce {
+            NativeSoundEngine.shared.speakCoachingPhrase(
+                BrushCoachCopy.spokenStageWord(.done, lang: coachLanguage)
+            )
+        }
+        if !healthLogOn, let b = healthBrush {
+            offerHealthAfterBrush(sec: b.sec, endedAt: b.endedAt, sessionId: b.sessionId)
+        }
         if !fullBrush {
             // Tapped ahead before the 2 minutes were up: a kind word and a small tip, never a scolding.
             if outcome.ionsAwarded > 0 {
@@ -1432,7 +1694,17 @@ public final class AppCoordinator {
     }
 
     private func tickPacer() {
-        guard mode == .brushAlong, !pacerIsPaused else { return }
+        guard mode == .brushAlong else { return }
+        if pacerAwaitingStage != nil {
+            // A Start card: the clock waits. One left up too long finishes the brush with what was
+            // done, so a brush walked away from is still saved.
+            lastPacerTickUptime = Self.pacerClockSec()
+            if let since = pacerAwaitingSince, Date().timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec {
+                completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: false)
+            }
+            return
+        }
+        guard !pacerIsPaused else { return }
         ensureIdleTimerDisabledIfNeeded()
         // Real time in full, including any time the phone spent locked since the last tick (H04).
         let now = Self.pacerClockSec()
@@ -1468,8 +1740,8 @@ public final class AppCoordinator {
         switch pacerStage {
         case .brushing:
             if pacerElapsedSec >= GameConfig.brushAlongTotalSec - 0.04 {
-                // Seamlessly chime & roll hands-free into Stage 2: 45s Floss Pick Bonus Round!
-                enterFlossBonusNow()
+                // Brushing done: floss waits for its Start tap.
+                holdForStart(.flossBonus)
                 return
             }
             let qIdx = phase.quadrant.rawValue
@@ -1495,9 +1767,10 @@ public final class AppCoordinator {
                 NativeSoundEngine.shared.playPacerSurfaceMotif(quadrant: .lowerRight, surface: .outerCheek, isNewQuadrant: true)
             }
             if pacerElapsedSec >= flossEnd - 0.05 {
-                // Roll hands-free into Stage 3, the fluoride rinse, or finish when a grown-up left it out.
+                // Floss done: the rinse waits for its Start tap, or finish when a grown-up left it out.
                 if includeRinse {
-                    enterMouthwashBonusNow(completedFloss: true)
+                    pacerCompletedFlossStage = true
+                    holdForStart(.mouthwashBonus)
                 } else {
                     completeBrushAlongSession(withFlossBonus: true, withMouthwashBonus: false)
                 }
@@ -1521,6 +1794,9 @@ public final class AppCoordinator {
         case .active:
             NativeSoundEngine.shared.resumeFromForeground()
             refreshReminders()
+            // Health access taken away in Settings meanwhile: show it as off (the heart comes back).
+            if healthLogOn && !HealthBrushLog.isAllowed { healthLogOn = false }
+            healthAskMayShow()
             #if os(iOS)
             // the 14 days kept move on with the date; also rewrites a file removed while away
             let dayKey = HabitBank.localDateKey()
@@ -1564,13 +1840,14 @@ public final class AppCoordinator {
     private func updateIdleTimerPolicy() {
         // Awake for the hands-free brush, and for a city finale or the ending: neither needs a
         // touch, so the screen would dim and lock. (The web edition's wake lock is in `ClockController`.)
-        let keepAwake = (mode == .brushAlong && !pacerIsPaused) || finale != nil
+        // A Start card may wait a while for the floss or mouthwash: the screen may sleep meanwhile.
+        let keepAwake = (mode == .brushAlong && !pacerIsPaused && pacerAwaitingStage == nil) || finale != nil
         setIdleTimerDisabled(keepAwake)
     }
 
     private func ensureIdleTimerDisabledIfNeeded() {
         #if os(iOS)
-        if mode == .brushAlong && !pacerIsPaused && !UIApplication.shared.isIdleTimerDisabled {
+        if mode == .brushAlong && !pacerIsPaused && pacerAwaitingStage == nil && !UIApplication.shared.isIdleTimerDisabled {
             UIApplication.shared.isIdleTimerDisabled = true
         }
         #endif
@@ -1639,7 +1916,7 @@ public final class AppCoordinator {
         hintsStorageKey,
         includeRinseDefaultsKey, mouthwashDurationDefaultsKey, flossToolDefaultsKey,
         remindersOnDefaultsKey, reminderMorningDefaultsKey, reminderEveningDefaultsKey,
-        healthLogDefaultsKey,
+        healthLogDefaultsKey, healthAskedDefaultsKey, pendingBrushDefaultsKey,
     ]
 
     /// Settings' "Erase Save", after a grown-up's question and a second tap: the app is as it was
@@ -1672,6 +1949,9 @@ public final class AppCoordinator {
         reminderMorning = BrushDays.defaultMorning
         reminderEvening = BrushDays.defaultEvening
         healthLogOn = false
+        healthAsked = false
+        healthAskDue = false
+        lastBrushForHealth = nil
 
         // The save and every copy of it. Taking the fresh save rewrites the widgets' snapshot from
         // it (the last-brush times are already gone); forgetting the last one written makes sure

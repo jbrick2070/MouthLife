@@ -2666,6 +2666,15 @@ textarea:focus-visible {
   color: #d9b3ff;
   font-size: 1.15rem;
 }
+/* The card between stages ("READY TO FLOSS?"), coloured for the stage it offers to start. */
+.pacer-card[data-wait="floss"] .pacer-title {
+  color: var(--gold);
+  font-size: 1.2rem;
+}
+.pacer-card[data-wait="rinse"] .pacer-title {
+  color: #d9b3ff;
+  font-size: 1.2rem;
+}
 .pacer-tag {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -2742,6 +2751,20 @@ textarea:focus-visible {
   background: #d9b3ff;
   border-color: #d9b3ff;
   color: #1f0b33;
+}
+/* The card between stages: Start in the colour of the stage it starts, however the card was reached. */
+.pacer-card[data-wait="floss"] .pacer-actions .btn-primary {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1c1300;
+}
+.pacer-card[data-wait="rinse"] .pacer-actions .btn-primary {
+  background: #d9b3ff;
+  border-color: #d9b3ff;
+  color: #1f0b33;
+}
+.pacer-card[data-wait] #pacer-clock {
+  cursor: default;
 }
 
 .pacer-level {

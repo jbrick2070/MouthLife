@@ -3,9 +3,10 @@ import Foundation
 import HealthKit
 #endif
 
-/// Saves each brush to Apple Health as a Toothbrushing entry, once a grown-up turns it on in
-/// Settings. MouthLife only writes, and only toothbrushing: it never reads anything from Health.
-/// Health keeps the entries on the device (and in the owner's iCloud, if they chose that).
+/// Saves each brush to Apple Health as a Toothbrushing entry, once a grown-up turns it on (in
+/// Settings, on the card after the first brush, or from the brush screen's heart). MouthLife only
+/// writes, and only toothbrushing: it never reads anything from Health. Health keeps the
+/// entries on the device (and in the owner's iCloud, if they chose that).
 @MainActor
 enum HealthBrushLog {
     /// A brush shorter than this was a mistaken start, not a brush, so Health never gets it.
@@ -29,8 +30,15 @@ enum HealthBrushLog {
     static var isAllowed: Bool {
         isAvailable && store.authorizationStatus(for: brushType) == .sharingAuthorized
     }
+
+    /// Whether Health was already asked and said no: Apple's sheet will not show again, so only the
+    /// owner can turn it on, in Settings.
+    static var isDenied: Bool {
+        isAvailable && store.authorizationStatus(for: brushType) == .sharingDenied
+    }
     #else
     static var isAllowed: Bool { false }
+    static var isDenied: Bool { false }
     #endif
 
     /// Shows Apple's Health sheet the first time; after that the system remembers the answer and

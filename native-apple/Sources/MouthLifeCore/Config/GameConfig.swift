@@ -153,6 +153,10 @@ public enum GameConfig {
     /// The brushing stage counts as the full 2 minutes when it ran to within this many seconds of the
     /// end. Tapping ahead to floss earlier still earns a small "good try" reward, never the full one.
     public static let brushAlongFullBrushGraceSec: Double = 2.0
+    /// Floss and rinse wait for their own Start tap (time to put the brush down; the floss or the
+    /// mouthwash may not be at hand). A Start card left this long finishes the brush with what was
+    /// done, so a brush walked away from is still saved. Web twin: `BRUSH_ALONG_STAGE_WAIT_SEC`.
+    public static let brushAlongStageWaitSec: Double = 600.0
     public static let maxSupplyBeacons: Int = 4
     public static let maxOverdriveRuns: Int = 4
 

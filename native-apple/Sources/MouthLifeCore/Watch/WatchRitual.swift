@@ -1,7 +1,8 @@
 import Foundation
 
 // The Apple Watch brushing ritual as a pure state machine: brush 2:00, floss 0:45, then the
-// fluoride rinse when a grown-up has turned it on (on the iPhone). The watch app feeds it time
+// fluoride rinse when a grown-up has turned it on (on the iPhone). Floss and rinse each wait for a
+// Start tap (time to put the brush down; the floss or mouthwash may not be at hand), as on the phone. The watch app feeds it time
 // from a monotonic clock and turns its cues into taps on the wrist; the iPhone turns the finished
 // record into the reward, with the same fair rules as a brush on the phone (HabitBank).
 //
@@ -34,6 +35,8 @@ public enum WatchStageOutcome: String, Codable, Sendable {
 
 /// What the wrist should feel (and the screen may mark) right now.
 public enum WatchCue: Equatable, Sendable {
+    /// A stage ended and the next one (floss or rinse) waits for its Start tap.
+    case awaitStart(WatchRitualStage)
     case stageStart(WatchRitualStage)
     case surface
     case quadrant
@@ -64,6 +67,14 @@ public struct WatchRitual: Codable, Equatable, Sendable {
     public let rinseSec: Double
     public private(set) var paused: Bool
     public private(set) var completedAt: Date?
+    /// Set while `stage` (floss or rinse) waits for its Start tap: when that wait began. Optional,
+    /// so a checkpoint saved before this existed still reads.
+    public private(set) var waitingSince: Date?
+    /// When the last stage that ran ended: a ritual finished from a Start card ended then.
+    public private(set) var stageEndedAt: Date?
+
+    /// Whether floss or rinse is waiting for its Start tap (nothing runs meanwhile).
+    public var awaitingStart: Bool { waitingSince != nil }
 
     public init(sessionId: UUID = UUID(), startedAt: Date = Date(), includeRinse: Bool, rinseSec: Double = GameConfig.brushAlongMouthwashBonusSec) {
         self.sessionId = sessionId
@@ -96,7 +107,7 @@ public struct WatchRitual: Codable, Equatable, Sendable {
     /// new quarter, including the roll into floss, the floss halfway and end, and the rinse end),
     /// and never while paused. Surface changes get their own tap and no countdown.
     public var countdownDigit: Int? {
-        guard !paused else { return nil }
+        guard !paused, !awaitingStart else { return nil }
         let next: Double
         switch stage {
         case .brushing:
@@ -144,10 +155,15 @@ public struct WatchRitual: Codable, Equatable, Sendable {
     /// Moves the ritual on by `dt` seconds of real time and returns at most one cue: the newest.
     public mutating func advance(by dt: Double, now: Date = Date()) -> WatchCue? {
         guard stage != .done, !paused, dt.isFinite, dt > 0 else { return nil }
+        if let since = waitingSince {
+            // A Start card left up too long finishes the brush with what was done, so a brush
+            // walked away from is still saved (on the wall clock: the watch may sleep meanwhile).
+            return now.timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec ? end(now: now) : nil
+        }
         var remaining = dt
         var last: WatchCue?
-        // A tick can cross a stage end; carry the rest into the next stage (bounded loop).
-        for _ in 0..<4 where remaining > 0 && stage != .done {
+        // A tick can cross a stage end; the next stage then waits for its Start (bounded loop).
+        for _ in 0..<4 where remaining > 0 && stage != .done && !awaitingStart {
             let before = stageElapsed
             let step = min(remaining, stageLength - stageElapsed)
             stageElapsed += step
@@ -155,10 +171,19 @@ public struct WatchRitual: Codable, Equatable, Sendable {
             if stage == .brushing { brushedSec = min(Self.brushSec, brushedSec + step) }
             if let cue = crossing(from: before, to: stageElapsed) { last = cue }
             if stageElapsed >= stageLength - 1e-9 {
-                last = finishStage(.timed, now: now)
+                // the stage ended part-way through this tick
+                last = finishStage(.timed, now: now.addingTimeInterval(-remaining))
             }
         }
         return last
+    }
+
+    /// Re-checks a Start card against the wall clock (the watch app coming back, or a checkpoint
+    /// read on launch): one left up too long finishes the brush.
+    public mutating func expireWaitIfStale(now: Date = Date()) -> WatchCue? {
+        guard let since = waitingSince, stage != .done,
+              now.timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec else { return nil }
+        return end(now: now)
     }
 
     /// The cue for a move within the current stage from `a` to `b` seconds (the newest crossed).
@@ -196,8 +221,17 @@ public struct WatchRitual: Codable, Equatable, Sendable {
     /// "Done": floss marked done → rinse or done, rinse marked done → done. Flossing waits for the
     /// whole brush: the brushing clock rolls into floss by itself, and there is no tapping ahead.
     public mutating func next(now: Date = Date()) -> WatchCue? {
-        guard stage == .floss || stage == .rinse else { return nil }
+        guard stage == .floss || stage == .rinse, !awaitingStart else { return nil }
         return finishStage(.markedDone, now: now)
+    }
+
+    /// "Start" on a Start card: floss or rinse begins now, from 0.
+    public mutating func start() -> WatchCue? {
+        guard awaitingStart, stage == .floss || stage == .rinse else { return nil }
+        waitingSince = nil
+        stageElapsed = 0
+        paused = false
+        return .stageStart(stage)
     }
 
     /// "Skip": floss or rinse left out (no bonus for it). Brushing can only be ended, not skipped.
@@ -216,7 +250,8 @@ public struct WatchRitual: Codable, Equatable, Sendable {
     }
 
     public mutating func setPaused(_ on: Bool) -> WatchCue? {
-        guard stage != .done, paused != on else { return nil }
+        // nothing runs on a Start card, so there is nothing to pause
+        guard stage != .done, paused != on, !awaitingStart else { return nil }
         paused = on
         return on ? .pause : .resume
     }
@@ -225,23 +260,17 @@ public struct WatchRitual: Codable, Equatable, Sendable {
         fullBrush = brushedSec >= Self.brushSec - GameConfig.brushAlongFullBrushGraceSec
     }
 
-    /// Moves on to the next stage. A new stage always runs: "Done" or "Skip" tapped while paused
-    /// starts it (its card, tap and word announce it), rather than leaving it frozen.
+    /// Moves on: floss and rinse wait for their Start tap ("Done" or "Skip" tapped while paused
+    /// also lands on the Start card, never on a frozen stage).
     private mutating func finishStage(_ how: WatchStageOutcome, now: Date) -> WatchCue? {
         switch stage {
         case .brushing:
             latchBrush()
-            stage = .floss
-            stageElapsed = 0
-            paused = false
-            return .stageStart(.floss)
+            return awaitStart(.floss, now: now)
         case .floss:
             flossOutcome = how
             if includeRinse {
-                stage = .rinse
-                stageElapsed = 0
-                paused = false
-                return .stageStart(.rinse)
+                return awaitStart(.rinse, now: now)
             }
             return complete(now: now)
         case .rinse:
@@ -252,11 +281,25 @@ public struct WatchRitual: Codable, Equatable, Sendable {
         }
     }
 
+    /// The next stage's Start card. The stage that just ended is remembered (a brush finished from
+    /// the card ended then); skipping floss from its card keeps that time for the rinse's card.
+    private mutating func awaitStart(_ next: WatchRitualStage, now: Date) -> WatchCue {
+        if !awaitingStart { stageEndedAt = now }
+        stage = next
+        stageElapsed = 0
+        paused = false
+        waitingSince = now
+        return .awaitStart(next)
+    }
+
     private mutating func complete(now: Date) -> WatchCue {
+        // finished from a Start card: the brush ended when the last stage stopped, not at the tap
+        let endedAt = awaitingStart ? (stageEndedAt ?? now) : now
         stage = .done
         stageElapsed = 0
         paused = false
-        completedAt = now
+        waitingSince = nil
+        completedAt = endedAt
         return .done(fullBrush: fullBrush)
     }
 

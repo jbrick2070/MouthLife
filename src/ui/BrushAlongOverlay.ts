@@ -24,6 +24,7 @@ import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   BRUSH_ALONG_FLOSS_BONUS_SEC,
   BRUSH_ALONG_FULL_BRUSH_GRACE_SEC,
+  BRUSH_ALONG_STAGE_WAIT_SEC,
   BRUSH_ALONG_TOTAL_SEC,
   DAILY_FULL_REWARD_CAP,
 } from '../config/gameConfig';
@@ -92,6 +93,9 @@ function quadrantArcPath(q: number, scale = 1): string {
 const SURFACE_COLORS = ['var(--cyan)', 'var(--gold)', 'var(--mint)'] as const;
 const SURFACE_ICONS = ['〰️', '▦', '↕️'] as const;
 
+/** The stage a waiting card offers to start: floss after brushing, the rinse after floss. */
+type StageWait = 'floss' | 'rinse';
+
 export interface BrushAlongCallbacks {
   /** Active quadrant for the 3D arch highlight; -1 when none. */
   onActiveQuadrantChanged: (quadrantIdx: number) => void;
@@ -100,7 +104,12 @@ export interface BrushAlongCallbacks {
   onPlayPip?: (secondsLeft: number, isUpper: boolean) => void;
   /** Rinse sloshed across the mouth (tilt-driven, phones only). */
   onPlaySwish?: (pan: number, intensity01: number) => void;
-  onExitToHub: () => void;
+  /**
+   * Back to the hub. `hubNote`: what a brush saved on the way out (Exit after the 2 minutes of
+   * brushing: from a card, or during floss or the rinse) earned, for the hub's status banner; the
+   * summary is skipped then, so this says it was kept.
+   */
+  onExitToHub: (hubNote?: string) => void;
   isMuted?: () => boolean;
   onToggleMute?: () => void;
   onPauseChanged?: (paused: boolean) => void;
@@ -118,6 +127,17 @@ export class BrushAlongOverlay implements OverlayView {
   private includeRinse = false;
   private flossToolStyle: FlossToolStyle = 'flossPick';
   private mouthwashStyle: MouthwashDurationStyle = 'totalCare60s';
+
+  /**
+   * Between stages: brushing (or floss) is over and the card waits for "Start Flossing" (or
+   * "Start Rinse"), with the clock held. Null while a stage runs.
+   */
+  private stageWait: StageWait | null = null;
+  /** Wall-clock ms the last stage that ran ended: a brush finished from a waiting card is dated from it. */
+  private lastStageEndedAtMs = 0;
+  /** Wall-clock ms this card's wait began, for the safety finish after BRUSH_ALONG_STAGE_WAIT_SEC. */
+  private stageWaitSinceMs = 0;
+  private stageWaitTimer: ReturnType<typeof setInterval> | null = null;
 
   private lastAnnouncedQuadrant = -1;
   private lastAnnouncedSurface = -1;
@@ -158,6 +178,11 @@ export class BrushAlongOverlay implements OverlayView {
       e.preventDefault();
       this.togglePause();
     }
+  };
+
+  /** Back in view: a waiting card that has been up long enough finishes the brush (wall clock). */
+  private readonly visibilityHandler = (): void => {
+    if (document.visibilityState !== 'hidden') this.checkStageWait();
   };
 
   private readonly motionHandler = (e: DeviceMotionEvent): void => {
@@ -212,9 +237,13 @@ export class BrushAlongOverlay implements OverlayView {
     return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  /** Whether today still has a full reward left, so Done / Skip may show their Ion amounts (L01). */
-  private fullRewardLeftToday(): boolean {
-    const slot = this.saveSys.getSave().dailySlotsByDate[formatLocalDateKey()];
+  /**
+   * Whether the day the brush will be paid on still has a full reward left, so Done / Skip may show
+   * their Ion amounts (L01). That is today, or `day`: from a card between stages the brush is paid
+   * on the day its last stage ended, which may be yesterday.
+   */
+  private fullRewardLeftToday(day = new Date()): boolean {
+    const slot = this.saveSys.getSave().dailySlotsByDate[formatLocalDateKey(day)];
     return (slot?.fullRewards ?? 0) < DAILY_FULL_REWARD_CAP;
   }
 
@@ -231,6 +260,9 @@ export class BrushAlongOverlay implements OverlayView {
     this.fullBrush = false;
     this.includeRinse = readIncludeRinse();
     this.rewardResult = null;
+    this.stopStageWait();
+    this.lastStageEndedAtMs = 0;
+    this.stageWaitSinceMs = 0;
     this.lastAnnouncedQuadrant = -1;
     this.lastAnnouncedSurface = -1;
     this.announcedFlossLowerHalf = false;
@@ -262,6 +294,9 @@ export class BrushAlongOverlay implements OverlayView {
     );
     this.disposers.add(this.bus.on('pacer:tick', ({ elapsedSec, stage }) => this.onTick(elapsedSec, stage)));
     window.addEventListener('keydown', this.keyHandler);
+    if (typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', this.visibilityHandler);
+    }
 
     this.render();
     this.lastAnnouncedQuadrant = 0;
@@ -272,6 +307,10 @@ export class BrushAlongOverlay implements OverlayView {
 
   dispose(): void {
     window.removeEventListener('keydown', this.keyHandler);
+    if (typeof document.removeEventListener === 'function') {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+    }
+    this.stopStageWait();
     this.unbindMotion();
     this.voice.stop();
     this.clock.stopPacer();
@@ -283,6 +322,18 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private exitToHub(): void {
+    // Once the 2 minutes of brushing are done, leaving keeps the brush: from a card between stages,
+    // or during floss or the rinse, it is saved with what was finished (floss only if it ran to its
+    // end or was marked done, never the rinse; from a card, dated from when the last stage that ran
+    // ended), then the hub opens as it does from the summary. Leaving while brushing saves nothing.
+    const brushingDone = this.stageWait !== null || this.clock.getPacerStage() !== 'brushing';
+    if (brushingDone && this.view === 'running') {
+      this.completeSession(this.completedFloss, false, true);
+      this.voice.stop();
+      this.callbacks.onExitToHub(this.hubNoteForSavedBrush());
+      return;
+    }
+    this.stopStageWait();
     this.voice.stop();
     this.clock.stopPacer();
     this.callbacks.onPauseChanged?.(false);
@@ -291,6 +342,8 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private togglePause(): void {
+    // Nothing to pause between stages: the clock is already holding for the tap.
+    if (this.stageWait !== null) return;
     this.clock.setPacerPaused(!this.clock.isPacerPaused());
   }
 
@@ -322,7 +375,7 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   private onTick(elapsedSec: number, stage: PacerStage): void {
-    if (this.view !== 'running') return;
+    if (this.view !== 'running' || this.stageWait !== null) return;
     if (this.renderedStage !== stage) this.renderRunning();
     const mwDur = this.clock.getPacerMouthwashDurationSec();
     const phase = evaluateBrushPhase(elapsedSec, stage, mwDur);
@@ -340,8 +393,8 @@ export class BrushAlongOverlay implements OverlayView {
 
     if (stage === 'brushing') {
       if (elapsedSec >= BRUSH_ALONG_TOTAL_SEC - 0.04) {
-        // Roll hands-free into the floss stage.
-        this.enterFlossBonus();
+        // Brushing is done. Floss waits for a tap: time to put the brush down and pick up the floss.
+        this.holdAfterStage('floss');
         return;
       }
       const nearEnd = elapsedSec >= BRUSH_ALONG_TOTAL_SEC - 0.2;
@@ -364,11 +417,16 @@ export class BrushAlongOverlay implements OverlayView {
       }
       this.callbacks.onActiveQuadrantChanged(phase.quadrant);
       if (elapsedSec >= flossEnd - 0.05) {
-        // Roll hands-free into the fluoride rinse stage, or finish when a grown-up left it out.
-        // Asked again now: a grown-up may have turned rinse off in another tab meanwhile (M06).
+        // Floss is done. The fluoride rinse waits for a tap, or the brush finishes when a grown-up
+        // left the rinse out. Asked again now: a grown-up may have turned rinse off in another tab
+        // meanwhile (M06).
         this.includeRinse = readIncludeRinse();
-        if (this.includeRinse) this.enterMouthwashBonus(true);
-        else this.completeSession(true, false);
+        if (this.includeRinse) {
+          this.completedFloss = true;
+          this.holdAfterStage('rinse');
+        } else {
+          this.completeSession(true, false);
+        }
         return;
       }
     } else {
@@ -390,23 +448,109 @@ export class BrushAlongOverlay implements OverlayView {
     this.updateLive(phase);
   }
 
-  private enterFlossBonus(): void {
+  // ------------------------------------------------------------- between stages
+
+  /**
+   * Brushing or floss has run its time (or floss was skipped with the rinse still to come): the
+   * clock holds at the stage's end and a card waits for the tap that starts the next stage. `chime`:
+   * one short earcon when the time ran out, since nobody may be looking; nothing is spoken.
+   */
+  private holdAfterStage(next: StageWait, chime = true): void {
     if (this.clock.getPacerStage() === 'brushing') {
       this.fullBrush = this.clock.getPacerElapsedSec() >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
     }
+    // When the stage really ended: now, or earlier if the page was hidden past its end (H04). The
+    // time past it is dropped by the hold, so the next stage always starts at its own 0:00.
+    this.lastStageEndedAtMs = Date.now() - this.clock.getPacerOverflowSec() * 1000;
+    // Floss skipped while paused: the hold ends the pause (a card has nothing to resume), so the
+    // music comes back up and speech left paused is let go.
+    const wasPaused = this.clock.isPacerPaused();
+    this.clock.holdPacerForNextStage();
+    this.callbacks.onPauseChanged?.(false);
+    if (wasPaused) this.voice.stop();
+    this.showStageWait(next, this.lastStageEndedAtMs, chime);
+  }
+
+  /** Puts up the waiting card for `next`, whose wait counts from `sinceMs` (wall clock). */
+  private showStageWait(next: StageWait, sinceMs: number, chime: boolean): void {
+    this.stageWait = next;
+    this.stageWaitSinceMs = sinceMs;
+    this.lastPipKey = '';
+    this.callbacks.onActiveQuadrantChanged(-1);
+    // Back from a phone locked past the end of the wait too: finish now, with what was done.
+    if (this.checkStageWait()) return;
+    if (chime) this.callbacks.onPlayCue('quadrant');
+    if (this.stageWaitTimer === null) this.stageWaitTimer = setInterval(() => this.checkStageWait(), 1000);
+    this.render();
+    // The card's one job: its Start button takes the focus (only here, not on a language redraw).
+    this.$<HTMLButtonElement>(next === 'floss' ? '#btn-pacer-start-floss' : '#btn-pacer-start-rinse')?.focus({
+      preventScroll: true,
+    });
+  }
+
+  /** Leaves the waiting card (a stage starts, or the brush finishes or is left). */
+  private stopStageWait(): void {
+    this.stageWait = null;
+    if (this.stageWaitTimer !== null) {
+      clearInterval(this.stageWaitTimer);
+      this.stageWaitTimer = null;
+    }
+  }
+
+  /**
+   * The safety finish: a waiting card up for BRUSH_ALONG_STAGE_WAIT_SEC (wall clock, so time with the
+   * page hidden counts) finishes the brush with what was done; the stage never started earns
+   * nothing. Checked every second, when the page comes back into view, and as the card goes up.
+   */
+  private checkStageWait(nowMs = Date.now()): boolean {
+    if (this.stageWait === null || this.view !== 'running') return false;
+    if (nowMs - this.stageWaitSinceMs < BRUSH_ALONG_STAGE_WAIT_SEC * 1000) return false;
+    this.completeSession(this.completedFloss, false);
+    return true;
+  }
+
+  /** "Start Flossing": floss from 0:00, with the same chime and spoken word as always. */
+  private startFloss(): void {
+    if (this.stageWait !== 'floss') return;
+    this.stopStageWait();
+    this.enterFlossBonus();
+  }
+
+  /** "Start Rinse": the fluoride rinse from 0:00. */
+  private startRinse(): void {
+    if (this.stageWait !== 'rinse') return;
+    this.stopStageWait();
+    this.enterMouthwashBonus(this.completedFloss);
+  }
+
+  /**
+   * Skip on a waiting card. On the floss card: on to the rinse card when the rinse step is on (asked
+   * again now, M06), otherwise finish with the brush alone. On the rinse card: finish, with the
+   * floss counted if it was done.
+   */
+  private skipStageWait(): void {
+    if (this.stageWait === 'floss') {
+      this.includeRinse = readIncludeRinse();
+      if (this.includeRinse) {
+        this.showStageWait('rinse', Date.now(), false);
+        return;
+      }
+    }
+    if (this.stageWait !== null) this.completeSession(this.completedFloss, false);
+  }
+
+  private enterFlossBonus(): void {
     this.announcedFlossLowerHalf = false;
     this.lastPipKey = '';
     this.clock.enterFlossBonus();
     this.callbacks.onPauseChanged?.(false);
-    // Back from a locked phone past the end of floss too: pass through quietly (H04).
-    if (this.clock.getPacerOverflowSec() <= 0) {
-      this.callbacks.onPlayCue('quadrant');
-      this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
-    }
+    this.callbacks.onPlayCue('quadrant');
+    this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
     this.render();
   }
 
   private enterMouthwashBonus(completedFloss: boolean): void {
+    this.stopStageWait();
     this.completedFloss = completedFloss;
     this.lastAnnouncedMouthwashStep = 0;
     this.lastPipKey = '';
@@ -416,19 +560,26 @@ export class BrushAlongOverlay implements OverlayView {
     this.clock.enterMouthwashBonus();
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
-    if (this.clock.getPacerOverflowSec() <= 0) {
-      this.callbacks.onPlayCue('quadrant');
-      this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
-    }
+    this.callbacks.onPlayCue('quadrant');
+    this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
     this.bindMotion();
     this.render();
   }
 
-  private completeSession(withFlossBonus: boolean, withMouthwashBonus: boolean): void {
-    // How long ago the last step really ended. Normally no time at all, but the session clock keeps
-    // going behind a hidden page or a locked phone (H04), so a brush left overnight ended hours ago.
-    // Read before stopPacer(), which forgets the step this is measured from.
-    const endedSecAgo = this.clock.getPacerOverflowSec();
+  /**
+   * Saves the brush and shows the summary. `exiting`: Exit to Hub after the 2 minutes of brushing;
+   * the hub opens straight away, so the summary is not drawn and "Done" (which leaving would cut
+   * off) is not spoken.
+   */
+  private completeSession(withFlossBonus: boolean, withMouthwashBonus: boolean, exiting = false): void {
+    const nowMs = Date.now();
+    // When the last stage that ran really ended. Normally just now, but the session clock keeps
+    // going behind a hidden page or a locked phone (H04), so a brush left overnight ended hours ago;
+    // and one finished from a waiting card (Skip, or the safety finish) ended when that stage did,
+    // not at the tap. Read before stopPacer(), which forgets the step this is measured from.
+    const endedAtMs =
+      this.stageWait !== null ? this.lastStageEndedAtMs : nowMs - this.clock.getPacerOverflowSec() * 1000;
+    this.stopStageWait();
     this.unbindMotion();
     this.clock.stopPacer();
     this.callbacks.onPauseChanged?.(false);
@@ -443,8 +594,8 @@ export class BrushAlongOverlay implements OverlayView {
     };
     // Paid on the day it really ended, so a brush found finished the next morning does not use up
     // one of today's two full rewards.
-    const now = new Date();
-    const endedAt = new Date(now.getTime() - endedSecAgo * 1000);
+    const now = new Date(nowMs);
+    const endedAt = new Date(endedAtMs);
     const outcome = HabitBank.completeBrushAlong(save, {
       ...rewardOptions,
       date: now,
@@ -463,15 +614,29 @@ export class BrushAlongOverlay implements OverlayView {
       stampAwarded: outcome.stampAwarded,
     });
 
-    this.callbacks.onPlayCue('complete');
-    this.voice.speak(BrushCoachCopy.spokenStageWord('done', this.lang));
+    // Saved all the same, but silent from a hidden page (the safety finish can run in a background
+    // tab): no chime or "Done" from nowhere.
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (!hidden) this.callbacks.onPlayCue('complete');
+    if (!hidden && !exiting) this.voice.speak(BrushCoachCopy.spokenStageWord('done', this.lang));
     this.view = 'summary';
-    this.render();
+    if (!exiting) this.render();
+  }
+
+  /**
+   * The hub's banner after Exit to Hub saved the brush, as the native app words its toast. Leaving
+   * saves only once the brushing ran its 2 minutes, and never counts the rinse.
+   */
+  private hubNoteForSavedBrush(): string | undefined {
+    const r = this.rewardResult;
+    if (!r) return undefined;
+    return `🦷 Fresh Mint Smooth Bask! +${r.ionsAwarded} F⁻${r.stampAwarded ? ' & +1 Habit Stamp!' : ''}`;
   }
 
   /** Re-speak the cue for wherever the timeline is now (after a language or voice change). */
   private speakCurrentCue(): void {
-    if (this.view !== 'running' || this.clock.isPacerPaused()) return;
+    // Between stages there is nothing to say: the card waits for a tap.
+    if (this.view !== 'running' || this.clock.isPacerPaused() || this.stageWait !== null) return;
     const stage = this.clock.getPacerStage();
     if (stage === 'mouthwashBonus') {
       this.voice.speak(BrushCoachCopy.spokenStageWord('rinse', this.lang));
@@ -498,15 +663,16 @@ export class BrushAlongOverlay implements OverlayView {
   private updateLive(phase: BrushPhaseState): void {
     if (!this.container || this.view !== 'running') return;
     const paused = this.clock.isPacerPaused();
+    const waiting = this.stageWait !== null;
     const elapsed = this.clock.getPacerElapsedSec();
     this.setText('#pacer-clock', this.formatClock(this.clock.getPacerStageEndSec() - elapsed));
 
-    // 3-2-1 dots replace the sub-phase bar in the last three seconds.
+    // 3-2-1 dots replace the sub-phase bar in the last three seconds. Neither shows between stages.
     const pips = this.$('#pacer-pips');
     const subbar = this.$('#pacer-subbar');
-    const showPips = !paused && phase.countdownPip !== null;
+    const showPips = !paused && !waiting && phase.countdownPip !== null;
     if (pips) pips.hidden = !showPips;
-    if (subbar) subbar.hidden = paused || showPips;
+    if (subbar) subbar.hidden = paused || waiting || showPips;
     if (showPips && pips) {
       pips.querySelectorAll<HTMLElement>('[data-pip]').forEach((dot) => {
         const step = Number(dot.dataset.pip);
@@ -524,7 +690,12 @@ export class BrushAlongOverlay implements OverlayView {
     this.updateCompass(phase);
 
     let liveText: string;
-    if (phase.stage === 'mouthwashBonus') {
+    if (this.stageWait !== null) {
+      const start = BrushCoachCopy.stageStartLabels(this.lang);
+      const ready = this.stageWait === 'floss' ? start.readyFloss : start.readyRinse;
+      this.setText('#pacer-title', ready);
+      liveText = ready;
+    } else if (phase.stage === 'mouthwashBonus') {
       const hl = BrushCoachCopy.mouthwashHeadline(phase.mouthwashStepIndex, this.lang);
       this.setText('#pacer-title', hl.archTitle);
       this.setText('#pacer-action', hl.actionBadge);
@@ -722,21 +893,56 @@ export class BrushAlongOverlay implements OverlayView {
       </div>`;
   }
 
+  /** Pick | String: on the floss stage, and on the card before it. */
+  private flossToolChipsHtml(): string {
+    return `
+          <span class="pacer-chips" role="group" aria-label="Floss tool">
+            <button type="button" class="pacer-chip" data-floss="flossPick" aria-pressed="${this.flossToolStyle === 'flossPick'}">Pick</button>
+            <button type="button" class="pacer-chip" data-floss="stringFloss" aria-pressed="${this.flossToolStyle === 'stringFloss'}">String</button>
+          </span>`;
+  }
+
+  /** 60s | 30s: on the rinse stage, and on the card before it. */
+  private rinseLengthChipsHtml(): string {
+    return `
+          <span class="pacer-chips" role="group" aria-label="Rinse duration">
+            <button type="button" class="pacer-chip" data-rinse="totalCare60s" aria-pressed="${this.mouthwashStyle === 'totalCare60s'}">60s</button>
+            <button type="button" class="pacer-chip" data-rinse="quick30s" aria-pressed="${this.mouthwashStyle === 'quick30s'}">30s</button>
+          </span>`;
+  }
+
   private bannerHtml(stage: PacerStage): string {
     const buttons = BrushCoachCopy.actionButtonLabels(this.lang, !this.includeRinse);
     // The Ion amounts on Done / Skip are for the full 2-minute brush; after an early tap, or once
     // today's two full rewards are collected, they are left off (L01).
-    const showAmounts = this.fullBrush && this.fullRewardLeftToday();
+    const rewardDay =
+      this.stageWait !== null ? brushRewardDay(new Date(this.lastStageEndedAtMs), new Date()) : new Date();
+    const showAmounts = this.fullBrush && this.fullRewardLeftToday(rewardDay);
     const amount = (label: string): string => (showAmounts ? label : BrushCoachCopy.withoutIonAmount(label));
+    if (this.stageWait !== null) {
+      // Between stages: the headline, the button that starts the next stage, and that stage's own Skip.
+      const start = BrushCoachCopy.stageStartLabels(this.lang);
+      const floss = this.stageWait === 'floss';
+      const skip = floss
+        ? buttons.skipFloss
+        : BrushCoachCopy.mouthwashButtonLabels(this.completedFloss, this.lang).skipRinse;
+      return `
+        <div class="pacer-row">
+          <strong id="pacer-title" class="pacer-title"></strong>
+          ${floss ? this.flossToolChipsHtml() : this.rinseLengthChipsHtml()}
+        </div>
+        <div class="pacer-actions">
+          <button type="button" id="${floss ? 'btn-pacer-start-floss' : 'btn-pacer-start-rinse'}" class="btn btn-primary"></button>
+          <button type="button" id="btn-pacer-skip-wait" class="btn"></button>
+        </div>
+        <template id="tpl-labels" data-start="${encodeURIComponent(floss ? start.startFloss : start.startRinse)}" data-skip="${encodeURIComponent(amount(skip))}"></template>`;
+    }
     if (stage === 'mouthwashBonus') {
       const mw = BrushCoachCopy.mouthwashButtonLabels(this.completedFloss, this.lang);
       return `
         <div class="pacer-row">
           <strong id="pacer-title" class="pacer-title"></strong>
-          <span class="pacer-chips" role="group" aria-label="Rinse duration">
-            <button type="button" class="pacer-chip" data-rinse="totalCare60s" aria-pressed="${this.mouthwashStyle === 'totalCare60s'}">60s</button>
-            <button type="button" class="pacer-chip" data-rinse="quick30s" aria-pressed="${this.mouthwashStyle === 'quick30s'}">30s</button>
-          </span>
+          ${this.rinseLengthChipsHtml()}
         </div>
         <div class="pacer-row">
           <span class="pacer-action-wrap"><span aria-hidden="true">💧</span> <span id="pacer-action" class="pacer-action"></span></span>
@@ -764,10 +970,7 @@ export class BrushAlongOverlay implements OverlayView {
       return `
         <div class="pacer-row">
           <strong id="pacer-title" class="pacer-title"></strong>
-          <span class="pacer-chips" role="group" aria-label="Floss tool">
-            <button type="button" class="pacer-chip" data-floss="flossPick" aria-pressed="${this.flossToolStyle === 'flossPick'}">Pick</button>
-            <button type="button" class="pacer-chip" data-floss="stringFloss" aria-pressed="${this.flossToolStyle === 'stringFloss'}">String</button>
-          </span>
+          ${this.flossToolChipsHtml()}
         </div>
         <div class="pacer-row">
           <span class="pacer-action-wrap"><span aria-hidden="true">✨</span> <span id="pacer-action" class="pacer-action"></span></span>
@@ -779,7 +982,7 @@ export class BrushAlongOverlay implements OverlayView {
         </div>
         <template id="tpl-labels" data-rinse="${encodeURIComponent(mw.rinseJump)}" data-done="${encodeURIComponent(amount(buttons.doneFloss))}" data-skip="${encodeURIComponent(amount(buttons.skipFloss))}"></template>`;
     }
-    // No tapping ahead while brushing: floss waits for the whole 2 minutes (the clock rolls into it).
+    // No tapping ahead while brushing: floss waits for the whole 2 minutes, then for "Start Flossing".
     return `
       <div class="pacer-row">
         <strong id="pacer-title" class="pacer-title"></strong>
@@ -794,6 +997,7 @@ export class BrushAlongOverlay implements OverlayView {
     if (!this.container) return;
     const stage = this.clock.getPacerStage();
     this.renderedStage = stage;
+    const waiting = this.stageWait !== null;
     const sides = BrushCoachCopy.mirrorSideLabels(this.lang);
     const langOptions = COACH_LANGUAGES.map((code) => {
       const info = COACH_LANGUAGE_INFO[code];
@@ -808,13 +1012,13 @@ export class BrushAlongOverlay implements OverlayView {
           <button type="button" id="btn-pacer-voice" class="btn btn-sm btn-icon" title="Voice coach on / off"></button>
           <select id="sel-pacer-lang" class="pacer-lang-select" aria-label="Coach language">${langOptions}</select>
           ${this.buildMuteBtnHtml()}
-          <button type="button" id="btn-pacer-pause" class="btn btn-sm btn-icon" title="Pause / Resume (Space)"></button>
+          ${waiting ? '' : '<button type="button" id="btn-pacer-pause" class="btn btn-sm btn-icon" title="Pause / Resume (Space)"></button>'}
         </div>
       </div>
 
       <div class="hub-center-callout"></div>
 
-      <div id="pacer-card" class="cosmic-card glass-card ui-interactive pacer-card" data-stage="${stage}">
+      <div id="pacer-card" class="cosmic-card glass-card ui-interactive pacer-card" data-stage="${stage}"${waiting ? ` data-wait="${this.stageWait}"` : ''}>
         <div class="pacer-head">
           ${this.compassHtml()}
           <div class="pacer-clock-col">
@@ -833,6 +1037,8 @@ export class BrushAlongOverlay implements OverlayView {
       </div>
     `;
 
+    // Between stages the clock is not a pause button.
+    if (waiting) this.$('#pacer-clock')?.removeAttribute('title');
     this.setText('#pacer-side-left', sides.left);
     this.setText('#pacer-side-right', sides.right);
     this.setText('#pacer-cheek-left', sides.left);
@@ -846,6 +1052,9 @@ export class BrushAlongOverlay implements OverlayView {
     this.setText('#btn-pacer-skip-floss', label('skip'));
     this.setText('#btn-pacer-done-rinse', `✔ ${label('done')}`);
     this.setText('#btn-pacer-skip-rinse', label('skip'));
+    this.setText('#btn-pacer-start-floss', label('start'));
+    this.setText('#btn-pacer-start-rinse', label('start'));
+    this.setText('#btn-pacer-skip-wait', label('skip'));
 
     this.bindMuteBtn();
     this.$('#btn-pacer-exit')?.addEventListener('click', () => this.exitToHub());
@@ -871,9 +1080,19 @@ export class BrushAlongOverlay implements OverlayView {
     this.$('#btn-pacer-to-rinse')?.addEventListener('click', () => this.enterMouthwashBonus(true));
     this.$('#btn-pacer-done-floss')?.addEventListener('click', () => this.completeSession(true, false));
     this.$('#btn-pacer-skip-floss')?.addEventListener('click', () => {
-      if (this.includeRinse) this.enterMouthwashBonus(false);
-      else this.completeSession(false, false);
+      // With the rinse step on, the rinse still waits for its own tap ("Start Rinse"). Asked again
+      // now: a grown-up may have turned rinse off in another tab meanwhile (M06).
+      this.includeRinse = readIncludeRinse();
+      if (this.includeRinse) {
+        this.completedFloss = false;
+        this.holdAfterStage('rinse', false);
+      } else {
+        this.completeSession(false, false);
+      }
     });
+    this.$('#btn-pacer-start-floss')?.addEventListener('click', () => this.startFloss());
+    this.$('#btn-pacer-start-rinse')?.addEventListener('click', () => this.startRinse());
+    this.$('#btn-pacer-skip-wait')?.addEventListener('click', () => this.skipStageWait());
     this.$('#btn-pacer-done-rinse')?.addEventListener('click', () => this.completeSession(this.completedFloss, true));
     this.$('#btn-pacer-skip-rinse')?.addEventListener('click', () => this.completeSession(this.completedFloss, false));
 

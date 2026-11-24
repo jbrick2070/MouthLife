@@ -61,10 +61,11 @@ struct WatchRootView: View {
                 } else {
                     // A timeline that ticks every second keeps the face moving in Always On. With the
                     // wrist down watchOS draws the coming seconds ahead of time, so each frame shows
-                    // the ritual as it will be at that frame's own date. A paused face stands still,
-                    // so its timeline does not tick (the same kind of timeline, so the face is kept).
-                    TimelineView(.periodic(from: ritual.startedAt, by: ritual.paused ? 86_400 : 1)) { context in
-                        WatchActiveFace(state: state(at: context.date), onMore: { controller.openControls() }, onResume: { controller.togglePause() })
+                    // the ritual as it will be at that frame's own date. A paused face (or a Start
+                    // card) stands still, so its timeline does not tick (the same kind of timeline,
+                    // so the face is kept).
+                    TimelineView(.periodic(from: ritual.startedAt, by: ritual.paused || ritual.awaitingStart ? 86_400 : 1)) { context in
+                        WatchActiveFace(state: state(at: context.date), onMore: { controller.openControls() }, onResume: { controller.togglePause() }, onStart: { controller.tapStart() })
                             .onChange(of: context.cadence, initial: true) { _, cadence in WatchLog.note("cadence \(cadence)") }
                     }
                 }

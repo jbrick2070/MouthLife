@@ -133,20 +133,31 @@ describe('ClockController pacer stages', () => {
     return { clock, ticks, advance };
   }
 
-  it('keeps one cumulative clock and stops at each stage end until told to move on', () => {
+  it('keeps one cumulative clock, stops at each stage end, and holds there until the next stage is started', () => {
     const { clock, ticks, advance } = runClock();
     clock.startPacer();
     advance(125);
     expect(clock.getPacerElapsedSec()).toBe(120);
     expect(clock.getPacerStage()).toBe('brushing');
 
+    // The overlay holds for "Start Flossing": the 5 s past the end of brushing are dropped.
+    clock.holdPacerForNextStage();
+    expect(clock.isPacerWaiting()).toBe(true);
+    expect(clock.getPacerOverflowSec()).toBe(0);
+    const ticksWhileWaiting = ticks.length;
+    advance(30);
+    expect(ticks.length).toBe(ticksWhileWaiting);
+    expect(clock.getPacerElapsedSec()).toBe(120);
+
     clock.enterFlossBonus();
-    // the 5 s past the end of brushing carry into floss (H04)
-    expect(clock.getPacerElapsedSec()).toBeCloseTo(125, 6);
+    expect(clock.isPacerWaiting()).toBe(false);
+    expect(clock.getPacerElapsedSec()).toBe(120); // floss starts at its own 0:00
     advance(50);
     expect(clock.getPacerElapsedSec()).toBe(165);
 
+    clock.holdPacerForNextStage();
     clock.enterMouthwashBonus();
+    expect(clock.getPacerElapsedSec()).toBe(165);
     advance(70);
     expect(clock.getPacerElapsedSec()).toBe(225);
     expect(ticks.at(-1)).toEqual({ elapsedSec: 225, stage: 'mouthwashBonus' });
@@ -256,6 +267,30 @@ describe('8-language coach copy', () => {
       }
       expect(BrushCoachCopy.hubStartBrushLabel(lang).length).toBeGreaterThan(0);
       expect(BrushCoachCopy.gyroSwishStatusLabel(true, lang)).not.toBe(BrushCoachCopy.gyroSwishStatusLabel(false, lang));
+    }
+  });
+
+  it('has the card between stages in every language, exactly as the native app words it', () => {
+    expect(BrushCoachCopy.stageStartLabels('en')).toEqual({
+      startFloss: 'Start Flossing',
+      startRinse: 'Start Rinse',
+      readyFloss: 'READY TO FLOSS?',
+      readyRinse: 'READY TO RINSE?',
+    });
+    const expected: Record<string, [string, string, string, string]> = {
+      en: ['Start Flossing', 'Start Rinse', 'READY TO FLOSS?', 'READY TO RINSE?'],
+      es: ['Empezar Hilo', 'Empezar Enjuague', '¿LISTO PARA EL HILO?', '¿LISTO PARA ENJUAGAR?'],
+      fr: ['Commencer le Fil', 'Commencer le Rinçage', 'PRÊT POUR LE FIL ?', 'PRÊT À RINCER ?'],
+      ja: ['フロス開始', '洗口開始', 'フロスの準備OK？', '洗口の準備OK？'],
+      zh: ['开始用牙线', '开始漱口', '准备好用牙线了吗？', '准备好漱口了吗？'],
+      ko: ['치실 시작', '가글 시작', '치실 준비됐나요?', '가글 준비됐나요?'],
+      pt: ['Começar Fio Dental', 'Começar Enxágue', 'PRONTO PARA O FIO?', 'PRONTO PARA ENXAGUAR?'],
+      de: ['Stick starten', 'Spülung starten', 'BEREIT FÜR DEN STICK?', 'BEREIT ZUM SPÜLEN?'],
+    };
+    expect(Object.keys(expected).sort()).toEqual([...COACH_LANGUAGES].sort());
+    for (const lang of COACH_LANGUAGES) {
+      const labels = BrushCoachCopy.stageStartLabels(lang);
+      expect([labels.startFloss, labels.startRinse, labels.readyFloss, labels.readyRinse], lang).toEqual(expected[lang]);
     }
   });
 

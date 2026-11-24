@@ -55,8 +55,8 @@ final class WatchMusic {
             switchTo(r.stage, name: name, at: r.stageElapsed)
         }
         guard let player else { return }
-        if r.paused {
-            // quiet while paused, and the watch's audio let go until it carries on
+        if r.paused || r.awaitingStart {
+            // quiet while paused or on a Start card, and the watch's audio let go until it carries on
             if player.isPlaying { player.pause() }
             release()
             return
