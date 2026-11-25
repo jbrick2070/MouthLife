@@ -2735,6 +2735,19 @@ textarea:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 1px;
 }
+/* The low-key two-tap "Floss ›" on the brushing card; gold once armed ("Tap again"). */
+.pacer-skip-floss {
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+.pacer-skip-floss.armed {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.pacer-skip-floss[hidden] {
+  display: none;
+}
 .pacer-actions {
   display: flex;
   flex-wrap: wrap;

@@ -148,7 +148,7 @@ afterEach(() => {
 
 /** Taps 2-Min Brush on a fresh device: the brush screen, its clock and a save, at `start` (20:00 on 20 November). */
 function brushScreen(options: { rinse?: boolean; lang?: CoachLanguage; start?: Date } = {}) {
-  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
   vi.setSystemTime(options.start ?? new Date(2026, 10, 20, 20, 0, 0));
   let box = new FakeScreenBox();
   focusedId = null;
@@ -232,7 +232,7 @@ function brushScreen(options: { rinse?: boolean; lang?: CoachLanguage; start?: D
       clock.tickFrame(perfMs);
     }
   };
-  /** The page in view for whole seconds with a card up: the card checks its wait each second. */
+  /** The page in view for whole seconds (a card up, or the skip button armed): timers run each second. */
   const cardUp = (sec: number): void => {
     for (let i = 0; i < sec; i++) {
       perfMs += 1000;
@@ -760,6 +760,125 @@ describe('the floss tool and rinse length can be chosen on the cards', () => {
     expect(s.clock.getPacerStageEndSec()).toBe(195);
     s.frames(31);
     expect(s.paid).toEqual([{ withFlossBonus: false, withMouthwashBonus: true, ionsAwarded: 75, stampAwarded: true }]);
+  });
+});
+
+describe('skip to floss: the small two-tap button while brushing', () => {
+  const SKIP = 'btn-pacer-skip-to-floss';
+  /** Not on the screen, or there but hidden. */
+  const notShown = (b: FakeElement | null): boolean => b === null || b.hidden;
+
+  it('shows "Floss ›", named "Floss" for screen readers, while brushing', () => {
+    const s = brushScreen();
+    s.frames(5);
+    expect(s.text(SKIP)).toBe('Floss ›');
+    expect(s.el(SKIP)?.getAttribute('aria-label')).toBe('Floss');
+    expect(s.el(SKIP)?.hidden).toBe(false);
+  });
+
+  it('one tap only arms it: "Tap again", and brushing goes on', () => {
+    const s = brushScreen();
+    s.frames(30);
+    s.hush();
+    s.tap(SKIP);
+    expect(s.text(SKIP)).toBe('Tap again');
+    expect(s.el(SKIP)?.getAttribute('aria-label')).toBe('Tap again');
+    expect(s.clock.getPacerStage()).toBe('brushing');
+    expect(s.spoken).toEqual([]);
+    s.frames(1);
+    expect(s.clock.getPacerElapsedSec()).toBeCloseTo(31, 1);
+  });
+
+  it('a second tap within 3 s goes straight into floss at 0:00, a good try rather than a full brush', () => {
+    const s = brushScreen({ rinse: true });
+    s.frames(30);
+    s.tap(SKIP);
+    s.frames(2);
+    s.hush();
+    s.tap(SKIP);
+    expect(s.clock.getPacerStage()).toBe('flossBonus');
+    expect(s.clock.isPacerWaiting()).toBe(false); // the tap is the start: no card
+    expect(s.clock.getPacerElapsedSec()).toBe(120);
+    expect(s.sounds).toEqual(['quadrant']);
+    expect(s.spoken).toEqual(['Floss']);
+    expect(s.el(SKIP)).toBeNull();
+    // not the full 2 minutes: the floss buttons promise no amounts, and the brush pays a good-try tip
+    expect(s.text('btn-pacer-skip-floss')).toBe('Skip');
+    s.frames(46);
+    s.tap('btn-pacer-start-rinse');
+    s.frames(61);
+    expect(s.paid).toEqual([{ withFlossBonus: true, withMouthwashBonus: true, ionsAwarded: 5, stampAwarded: false }]);
+  });
+
+  it('the arm runs out after 3 s: back to "Floss ›", and the next tap only arms it again', () => {
+    const s = brushScreen();
+    s.frames(30);
+    s.tap(SKIP);
+    s.cardUp(2);
+    expect(s.text(SKIP)).toBe('Tap again');
+    s.cardUp(2);
+    expect(s.text(SKIP)).toBe('Floss ›');
+    expect(s.el(SKIP)?.getAttribute('aria-label')).toBe('Floss');
+    s.tap(SKIP);
+    expect(s.clock.getPacerStage()).toBe('brushing');
+    expect(s.text(SKIP)).toBe('Tap again');
+  });
+
+  it('hidden while paused, and pausing lets go of a first tap', () => {
+    const s = brushScreen();
+    s.frames(30);
+    s.tap(SKIP);
+    s.pressSpace();
+    expect(notShown(s.el(SKIP))).toBe(true);
+    s.pressSpace();
+    expect(s.el(SKIP)?.hidden).toBe(false);
+    expect(s.text(SKIP)).toBe('Floss ›');
+    s.tap(SKIP);
+    expect(s.clock.getPacerStage()).toBe('brushing'); // that was a fresh first tap
+  });
+
+  it('not on the waiting cards, during floss, or during the rinse', () => {
+    const s = brushScreen({ rinse: true });
+    s.frames(121);
+    expect(notShown(s.el(SKIP))).toBe(true);
+    s.tap('btn-pacer-start-floss');
+    s.frames(5);
+    expect(notShown(s.el(SKIP))).toBe(true);
+    s.frames(41);
+    expect(notShown(s.el(SKIP))).toBe(true);
+    s.tap('btn-pacer-start-rinse');
+    s.frames(5);
+    expect(notShown(s.el(SKIP))).toBe(true);
+  });
+
+  it('a first tap left armed as brushing runs out does not carry onto the card', () => {
+    const s = brushScreen();
+    s.frames(119);
+    s.tap(SKIP);
+    s.frames(2);
+    expect(s.clock.isPacerWaiting()).toBe(true);
+    expect(s.text('pacer-title')).toBe('READY TO FLOSS?');
+  });
+
+  it('follows the coach language', () => {
+    const s = brushScreen({ lang: 'de' });
+    s.frames(5);
+    expect(s.text(SKIP)).toBe('Zahnseide ›');
+    s.tap(SKIP);
+    expect(s.text(SKIP)).toBe('Nochmal tippen');
+    s.pickLanguage('ja');
+    expect(s.text(SKIP)).toBe('もういちどタップ'); // still armed after the redraw
+  });
+
+  it('Exit during floss after skipping ahead saves the good try, and the hub says so', () => {
+    const s = brushScreen();
+    s.frames(60);
+    s.tap(SKIP);
+    s.tap(SKIP);
+    s.frames(10);
+    s.tap('btn-pacer-exit');
+    expect(s.paid).toEqual([{ withFlossBonus: false, withMouthwashBonus: false, ionsAwarded: 5, stampAwarded: false }]);
+    expect(s.hubNote()).toBe('🌱 Good try! +5 F⁻ • Brush the whole 2 minutes to earn a Habit Stamp.');
   });
 });
 

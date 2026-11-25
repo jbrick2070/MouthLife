@@ -266,6 +266,7 @@ public struct RootContentView: View {
                     onSkipFloss: { coordinator.skipFloss() },
                     showsHealthHeart: coordinator.showsHealthHeart,
                     onOpenHealth: { coordinator.openHealthCard() },
+                    onSkipToFloss: { coordinator.skipToFlossNow() },
                     duoPose: split?.axis
                 )
                 .modifier(PagePlacement(rect: split?.firstRect, trailingInset: trailingInset))

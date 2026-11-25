@@ -1534,6 +1534,16 @@ public final class AppCoordinator {
         updateIdleTimerPolicy()
     }
 
+    /// The brush screen's two-tap "Floss ›": brushing ends now and floss starts (the tap is its
+    /// start). A brush stopped before the 2 minutes is a "good try", as always.
+    public func skipToFlossNow() {
+        guard mode == .brushAlong, pacerStage == .brushing, pacerAwaitingStage == nil, !pacerIsPaused else { return }
+        enterFlossBonusNow()
+        // Kept on the device like a Start card's brush, so a closed app still pays it.
+        pacerStageEndedAt = pacerBrushing?.endedAt
+        storePendingBrush()
+    }
+
     /// The Start card's Start: floss or rinse begins now, from 0.
     public func startAwaitingStage() {
         guard mode == .brushAlong, let next = pacerAwaitingStage else { return }

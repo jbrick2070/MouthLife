@@ -294,6 +294,24 @@ describe('8-language coach copy', () => {
     }
   });
 
+  it('has the skip-to-floss button’s words in every language, exactly as the native app words them', () => {
+    const expected: Record<string, [string, string]> = {
+      en: ['Floss', 'Tap again'],
+      es: ['Hilo', 'Toca otra vez'],
+      fr: ['Fil', 'Touche encore'],
+      ja: ['フロス', 'もういちどタップ'],
+      zh: ['牙线', '再点一下'],
+      ko: ['치실', '한 번 더 탭'],
+      pt: ['Fio', 'Toque de novo'],
+      de: ['Zahnseide', 'Nochmal tippen'],
+    };
+    expect(Object.keys(expected).sort()).toEqual([...COACH_LANGUAGES].sort());
+    for (const lang of COACH_LANGUAGES) {
+      const labels = BrushCoachCopy.skipToFlossLabels(lang);
+      expect([labels.floss, labels.tapAgain], lang).toEqual(expected[lang]);
+    }
+  });
+
   it('keeps mirror sides right: quadrant names agree with the left/right labels', () => {
     expect(BrushCoachCopy.quadrantLabel(BrushQuadrant.upperRight, 'en')).toBe('TOP RIGHT');
     expect(BrushCoachCopy.quadrantLabel(BrushQuadrant.lowerLeft, 'en')).toBe('BOTTOM LEFT');

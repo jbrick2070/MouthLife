@@ -218,11 +218,25 @@ public struct WatchRitual: Codable, Equatable, Sendable {
 
     // MARK: - Taps
 
-    /// "Done": floss marked done → rinse or done, rinse marked done → done. Flossing waits for the
-    /// whole brush: the brushing clock rolls into floss by itself, and there is no tapping ahead.
+    /// "Done": floss marked done → rinse or done, rinse marked done → done. Brushing is not "Done"
+    /// tapped ahead; the only early way into floss is the deliberate two-tap `skipToFloss`.
     public mutating func next(now: Date = Date()) -> WatchCue? {
         guard stage == .floss || stage == .rinse, !awaitingStart else { return nil }
         return finishStage(.markedDone, now: now)
+    }
+
+    /// "Floss" under "…" while brushing (tapped twice): brushing ends now and floss starts at once,
+    /// the tap being its start. Brushing stopped early is not a full brush. Phone twin:
+    /// `AppCoordinator.skipToFlossNow`.
+    public mutating func skipToFloss(now: Date = Date()) -> WatchCue? {
+        guard stage == .brushing else { return nil }
+        latchBrush()
+        stageEndedAt = now
+        stage = .floss
+        stageElapsed = 0
+        paused = false
+        waitingSince = nil
+        return .stageStart(.floss)
     }
 
     /// "Start" on a Start card: floss or rinse begins now, from 0.

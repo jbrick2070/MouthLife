@@ -56,7 +56,8 @@ struct WatchRootView: View {
                         onNext: { controller.tapNext() },
                         onSkip: { controller.tapSkip() },
                         onEnd: { controller.tapEnd() },
-                        onClose: { controller.closeControls() }
+                        onClose: { controller.closeControls() },
+                        onFloss: { controller.tapFloss() }
                     )
                 } else {
                     // A timeline that ticks every second keeps the face moving in Always On. With the

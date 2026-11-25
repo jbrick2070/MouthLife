@@ -362,6 +362,8 @@ public struct BrushAlongView: View {
     /// The small heart while Apple Health is off (after the first ask): opens the Health card.
     public let showsHealthHeart: Bool
     public let onOpenHealth: () -> Void
+    /// The quiet two-tap "Floss ›" while brushing: floss now, without waiting for the 2 minutes.
+    public let onSkipToFloss: () -> Void
     /// On the iPhone Duo's inner screen: how it is held. The whole mouth is on the other page, so
     /// the compass is left out; in Tabletop the words that are only read (not tapped) move to the flat
     /// page too (`BrushCueRows`), leaving the upright page for the 3D tooth, the timer and the buttons.
@@ -396,8 +398,10 @@ public struct BrushAlongView: View {
         onSkipFloss: @escaping () -> Void = {},
         showsHealthHeart: Bool = false,
         onOpenHealth: @escaping () -> Void = {},
+        onSkipToFloss: @escaping () -> Void = {},
         duoPose: DuoSplit.Axis? = nil
     ) {
+        self.onSkipToFloss = onSkipToFloss
         self.duoPose = duoPose
         self.awaitingStage = awaitingStage
         self.onStartAwaitingStage = onStartAwaitingStage
@@ -735,6 +739,12 @@ public struct BrushAlongView: View {
 
                 case .brushing:
                     BrushCueRows(phase: phase, stage: pacerStage, flossToolStyle: flossToolStyle, gyro: mouthwashGyro, elapsedSec: elapsedSec, language: coachLanguage, reducedMotion: reducedMotion)
+                    if !isPaused {
+                        HStack {
+                            Spacer(minLength: 0)
+                            SkipToFlossPill(language: coachLanguage, onSkip: onSkipToFloss)
+                        }
+                    }
                 }
                 }
             }
@@ -983,5 +993,39 @@ struct BrushCueRows: View {
         case .chewingGrooves: return MLTheme.fluorapatiteGold
         case .innerTongue: return MLTheme.mintClean
         }
+    }
+}
+
+/// The brush screen's quiet way to floss early: the first tap asks for a second one (for 3 seconds),
+/// so a stray touch never ends the brush. Web twin: `btn-pacer-skip-to-floss`.
+private struct SkipToFlossPill: View {
+    let language: CoachLanguage
+    let onSkip: () -> Void
+    @State private var armed = false
+    @State private var disarm: Task<Void, Never>?
+
+    var body: some View {
+        let label = armed ? WatchCopy.word(.tapAgain, language) : WatchCopy.word(.floss, language) + " ›"
+        Button {
+            if armed {
+                disarm?.cancel()
+                armed = false
+                onSkip()
+            } else {
+                armed = true
+                disarm?.cancel()
+                disarm = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(3))
+                    if !Task.isCancelled { armed = false }
+                }
+            }
+        } label: {
+            Text(label)
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .lineLimit(1)
+        }
+        .buttonStyle(MLGlassPillButtonStyle(tint: armed ? MLTheme.fluorapatiteGold : MLTheme.textMuted))
+        .accessibilityLabel(label)
+        .onDisappear { disarm?.cancel() }
     }
 }

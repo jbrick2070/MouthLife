@@ -187,6 +187,26 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertFalse(s.paused)
     }
 
+    /// The deliberate "Floss" under "…" moves on early: floss starts at once, and a short brush is
+    /// not a full one. It is for brushing only.
+    func testFlossCanBeStartedEarlyWhileBrushing() {
+        var r = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&r, seconds: 70)
+        XCTAssertEqual(r.skipToFloss(now: t0), .stageStart(.floss))
+        XCTAssertEqual(r.stage, .floss)
+        XCTAssertFalse(r.awaitingStart)
+        XCTAssertFalse(r.fullBrush)
+        XCTAssertEqual(r.brushedSec, 70, accuracy: 1e-6)
+        XCTAssertNil(r.skipToFloss(now: t0), "only while brushing")
+        XCTAssertEqual(run(&r, seconds: 45).last, .done(fullBrush: false))
+        XCTAssertEqual(r.record?.floss, .timed)
+        XCTAssertFalse(r.record!.rewardInputs.fullBrush)
+        // after a full 2 minutes it is the Start card, not this
+        var full = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&full, seconds: 120)
+        XCTAssertNil(full.skipToFloss(now: t0))
+    }
+
     /// On a Start card nothing runs: no pause, no Done, no countdown; only Start, Skip or End.
     func testAStartCardWaitsForItsTap() {
         var r = WatchRitual(startedAt: t0, includeRinse: true)

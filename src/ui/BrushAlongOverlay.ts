@@ -96,6 +96,9 @@ const SURFACE_ICONS = ['〰️', '▦', '↕️'] as const;
 /** The stage a waiting card offers to start: floss after brushing, the rinse after floss. */
 type StageWait = 'floss' | 'rinse';
 
+/** How long the skip-to-floss button stays armed ("Tap again") after its first tap. */
+const SKIP_TO_FLOSS_ARM_MS = 3000;
+
 export interface BrushAlongCallbacks {
   /** Active quadrant for the 3D arch highlight; -1 when none. */
   onActiveQuadrantChanged: (quadrantIdx: number) => void;
@@ -138,6 +141,9 @@ export class BrushAlongOverlay implements OverlayView {
   /** Wall-clock ms this card's wait began, for the safety finish after BRUSH_ALONG_STAGE_WAIT_SEC. */
   private stageWaitSinceMs = 0;
   private stageWaitTimer: ReturnType<typeof setInterval> | null = null;
+  /** When the skip-to-floss button was first tapped (wall clock), while it waits for the second tap. */
+  private skipToFlossArmedAtMs: number | null = null;
+  private skipToFlossTimer: ReturnType<typeof setTimeout> | null = null;
 
   private lastAnnouncedQuadrant = -1;
   private lastAnnouncedSurface = -1;
@@ -261,6 +267,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.includeRinse = readIncludeRinse();
     this.rewardResult = null;
     this.stopStageWait();
+    this.disarmSkipToFloss();
     this.lastStageEndedAtMs = 0;
     this.stageWaitSinceMs = 0;
     this.lastAnnouncedQuadrant = -1;
@@ -311,6 +318,7 @@ export class BrushAlongOverlay implements OverlayView {
       document.removeEventListener('visibilitychange', this.visibilityHandler);
     }
     this.stopStageWait();
+    this.disarmSkipToFloss();
     this.unbindMotion();
     this.voice.stop();
     this.clock.stopPacer();
@@ -465,6 +473,7 @@ export class BrushAlongOverlay implements OverlayView {
     // Floss skipped while paused: the hold ends the pause (a card has nothing to resume), so the
     // music comes back up and speech left paused is let go.
     const wasPaused = this.clock.isPacerPaused();
+    this.disarmSkipToFloss();
     this.clock.holdPacerForNextStage();
     this.callbacks.onPauseChanged?.(false);
     if (wasPaused) this.voice.stop();
@@ -539,7 +548,54 @@ export class BrushAlongOverlay implements OverlayView {
     if (this.stageWait !== null) this.completeSession(this.completedFloss, false);
   }
 
+  /**
+   * The small "Floss ›" button on the brushing card: the first tap arms it ("Tap again", for 3 s),
+   * the second skips straight into floss, which starts now at 0:00 (the tap is the start, so no
+   * waiting card). Brushing stopped early is a good try, not the full 2 minutes.
+   */
+  private tapSkipToFloss(): void {
+    if (this.view !== 'running' || this.stageWait !== null || this.clock.isPacerPaused()) return;
+    if (this.clock.getPacerStage() !== 'brushing') return;
+    const nowMs = Date.now();
+    if (this.skipToFlossArmedAtMs === null || nowMs - this.skipToFlossArmedAtMs > SKIP_TO_FLOSS_ARM_MS) {
+      this.disarmSkipToFloss();
+      this.skipToFlossArmedAtMs = nowMs;
+      this.skipToFlossTimer = setTimeout(() => this.disarmSkipToFloss(), SKIP_TO_FLOSS_ARM_MS);
+      this.syncSkipToFlossUi();
+      return;
+    }
+    this.disarmSkipToFloss();
+    this.fullBrush = this.clock.getPacerElapsedSec() >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
+    // Brushing ends here, as any stage does (now, less any time it ran on behind a hidden page).
+    this.lastStageEndedAtMs = nowMs - this.clock.getPacerOverflowSec() * 1000;
+    this.enterFlossBonus();
+  }
+
+  /** Back to "Floss ›": the 3 s ran out, the brush paused, or brushing is over. */
+  private disarmSkipToFloss(): void {
+    if (this.skipToFlossTimer !== null) {
+      clearTimeout(this.skipToFlossTimer);
+      this.skipToFlossTimer = null;
+    }
+    if (this.skipToFlossArmedAtMs === null) return;
+    this.skipToFlossArmedAtMs = null;
+    this.syncSkipToFlossUi();
+  }
+
+  /** The button's words (and its name for screen readers), and hidden while paused. */
+  private syncSkipToFlossUi(): void {
+    const button = this.$<HTMLButtonElement>('#btn-pacer-skip-to-floss');
+    if (!button) return;
+    const words = BrushCoachCopy.skipToFlossLabels(this.lang);
+    const armed = this.skipToFlossArmedAtMs !== null;
+    this.setText('#btn-pacer-skip-to-floss', armed ? words.tapAgain : `${words.floss} ›`);
+    button.setAttribute('aria-label', armed ? words.tapAgain : words.floss);
+    button.classList.toggle('armed', armed);
+    button.hidden = this.clock.isPacerPaused();
+  }
+
   private enterFlossBonus(): void {
+    this.disarmSkipToFloss();
     this.announcedFlossLowerHalf = false;
     this.lastPipKey = '';
     this.clock.enterFlossBonus();
@@ -625,11 +681,17 @@ export class BrushAlongOverlay implements OverlayView {
 
   /**
    * The hub's banner after Exit to Hub saved the brush, as the native app words its toast. Leaving
-   * saves only once the brushing ran its 2 minutes, and never counts the rinse.
+   * saves only once brushing is over (its 2 minutes, or skipped ahead to floss: a good try), and
+   * never counts the rinse.
    */
   private hubNoteForSavedBrush(): string | undefined {
     const r = this.rewardResult;
     if (!r) return undefined;
+    if (!r.fullBrush) {
+      return r.ionsAwarded > 0
+        ? `🌱 Good try! +${r.ionsAwarded} F⁻ • Brush the whole 2 minutes to earn a Habit Stamp.`
+        : '🌱 Good try! Brush the whole 2 minutes to earn a Habit Stamp.';
+    }
     return `🦷 Fresh Mint Smooth Bask! +${r.ionsAwarded} F⁻${r.stampAwarded ? ' & +1 Habit Stamp!' : ''}`;
   }
 
@@ -847,6 +909,9 @@ export class BrushAlongOverlay implements OverlayView {
     }
     const resume = this.$('#btn-pacer-resume');
     if (resume) resume.hidden = !paused;
+    // Pausing lets go of a half-made skip to floss; the button hides until Resume.
+    if (paused) this.disarmSkipToFloss();
+    this.syncSkipToFlossUi();
     this.$('#pacer-card')?.classList.toggle('paused', paused);
     if (this.view === 'running') this.updateLive(this.currentPhase());
   }
@@ -982,7 +1047,8 @@ export class BrushAlongOverlay implements OverlayView {
         </div>
         <template id="tpl-labels" data-rinse="${encodeURIComponent(mw.rinseJump)}" data-done="${encodeURIComponent(amount(buttons.doneFloss))}" data-skip="${encodeURIComponent(amount(buttons.skipFloss))}"></template>`;
     }
-    // No tapping ahead while brushing: floss waits for the whole 2 minutes, then for "Start Flossing".
+    // Floss waits for the whole 2 minutes, then for "Start Flossing". The one way ahead is the small
+    // two-tap "Floss ›" button, which a stray touch cannot set off.
     return `
       <div class="pacer-row">
         <strong id="pacer-title" class="pacer-title"></strong>
@@ -990,6 +1056,7 @@ export class BrushAlongOverlay implements OverlayView {
       </div>
       <div class="pacer-row">
         <span class="pacer-action-wrap"><span id="pacer-action-icon" aria-hidden="true"></span> <span id="pacer-action" class="pacer-action"></span></span>
+        <button type="button" id="btn-pacer-skip-to-floss" class="pacer-chip pacer-skip-floss"></button>
       </div>`;
   }
 
@@ -1090,6 +1157,7 @@ export class BrushAlongOverlay implements OverlayView {
         this.completeSession(false, false);
       }
     });
+    this.$('#btn-pacer-skip-to-floss')?.addEventListener('click', () => this.tapSkipToFloss());
     this.$('#btn-pacer-start-floss')?.addEventListener('click', () => this.startFloss());
     this.$('#btn-pacer-start-rinse')?.addEventListener('click', () => this.startRinse());
     this.$('#btn-pacer-skip-wait')?.addEventListener('click', () => this.skipStageWait());

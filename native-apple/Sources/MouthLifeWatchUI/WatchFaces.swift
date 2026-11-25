@@ -1378,11 +1378,13 @@ public struct WatchControlsFace: View {
     let onNext: () -> Void
     let onSkip: () -> Void
     let onEnd: () -> Void
+    let onFloss: () -> Void
     let onClose: () -> Void
     /// Off only for rendering checks (a Mac snapshot cannot draw a scrolling view).
     let scrollable: Bool
 
-    public init(state: WatchFaceState, armed: String?, onPause: @escaping () -> Void, onNext: @escaping () -> Void, onSkip: @escaping () -> Void, onEnd: @escaping () -> Void, onClose: @escaping () -> Void, scrollable: Bool = true) {
+    public init(state: WatchFaceState, armed: String?, onPause: @escaping () -> Void, onNext: @escaping () -> Void, onSkip: @escaping () -> Void, onEnd: @escaping () -> Void, onClose: @escaping () -> Void, onFloss: @escaping () -> Void = {}, scrollable: Bool = true) {
+        self.onFloss = onFloss
         self.state = state
         self.armed = armed
         self.onPause = onPause
@@ -1411,8 +1413,11 @@ public struct WatchControlsFace: View {
                 if !waiting {
                     BigButton(title: WatchCopy.word(paused ? .resume : .pause, lang), style: .tile, action: onPause)
                 }
-                // Floss waits for the whole brush and then for its Start, so Done and Skip are only
+                // While brushing, a deliberate two-tap "Floss" moves on early. Done and Skip are only
                 // for floss and rinse; anyone without a floss pick just skips it.
+                if stage == .brushing && !paused {
+                    BigButton(title: armed == "floss" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.floss, lang), style: .tile, action: onFloss)
+                }
                 if stage == .floss || stage == .rinse {
                     if !waiting {
                         BigButton(title: armed == "next" ? WatchCopy.word(.tapAgain, lang) : WatchCopy.word(.done, lang), action: onNext)

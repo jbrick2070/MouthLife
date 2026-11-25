@@ -377,6 +377,18 @@ const STAGE_START_LABELS: PerLang<{ startFloss: string; startRinse: string; read
   de: { startFloss: 'Stick starten', startRinse: 'Spülung starten', readyFloss: 'BEREIT FÜR DEN STICK?', readyRinse: 'BEREIT ZUM SPÜLEN?' },
 };
 
+/** The small two-tap button on the brushing card that skips ahead to floss: its word, and its second-tap prompt. */
+const SKIP_TO_FLOSS_LABELS: PerLang<{ floss: string; tapAgain: string }> = {
+  en: { floss: 'Floss', tapAgain: 'Tap again' },
+  es: { floss: 'Hilo', tapAgain: 'Toca otra vez' },
+  fr: { floss: 'Fil', tapAgain: 'Touche encore' },
+  ja: { floss: 'フロス', tapAgain: 'もういちどタップ' },
+  zh: { floss: '牙线', tapAgain: '再点一下' },
+  ko: { floss: '치실', tapAgain: '한 번 더 탭' },
+  pt: { floss: 'Fio', tapAgain: 'Toque de novo' },
+  de: { floss: 'Zahnseide', tapAgain: 'Nochmal tippen' },
+};
+
 type RinseStep = { actionBadge: string; ruleTag: string };
 const MOUTHWASH_HEADLINES: PerLang<{ title: string; steps: readonly [RinseStep, RinseStep, RinseStep] }> = {
   en: {
@@ -557,6 +569,11 @@ export const BrushCoachCopy = {
   /** The waiting card after brushing or floss: "READY TO FLOSS?" over "Start Flossing", and the same for the rinse. */
   stageStartLabels(lang: CoachLanguage): { startFloss: string; startRinse: string; readyFloss: string; readyRinse: string } {
     return STAGE_START_LABELS[lang];
+  },
+
+  /** "Floss ›" on the brushing card, then "Tap again" for the second tap that skips to floss. */
+  skipToFlossLabels(lang: CoachLanguage): { floss: string; tapAgain: string } {
+    return SKIP_TO_FLOSS_LABELS[lang];
   },
 
   mouthwashHeadline(

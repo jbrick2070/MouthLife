@@ -148,6 +148,8 @@ final class WatchController: NSObject {
 
     /// Next, Skip and End ask for a second tap within a few seconds.
     func tapNext() { confirm("next") { r in r.next() } }
+    /// Floss early, while brushing (asks for a second tap like the others).
+    func tapFloss() { confirm("floss") { r in r.skipToFloss() } }
     func tapSkip() { confirm("skip") { r in r.skip() } }
     func tapEnd() { confirm("end") { r in r.end() } }
 
