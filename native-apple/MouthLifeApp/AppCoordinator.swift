@@ -103,6 +103,8 @@ public final class AppCoordinator {
     /// to turn it on.
     public enum HealthPrompt: Equatable { case ask, denied }
     public var healthPrompt: HealthPrompt?
+    /// The first brush is waiting for the Health question to be answered before its timer starts.
+    @ObservationIgnored private var brushAfterHealthAnswer = false
     /// Only a brush this recent is saved along with a yes (not one from days ago).
     private static let healthCatchUpSec: TimeInterval = 60 * 60
     /// Whether this session's brushing stage ran its full 2 minutes (not tapped ahead to floss early).
@@ -452,10 +454,10 @@ public final class AppCoordinator {
         }
     }
 
-    /// When a brush's 2 minutes are done (on the phone: as the floss Start card comes up; from the
-    /// watch: when its brush arrives): remembers it for Health and, the first time, opens the "Save
-    /// brushes to Apple Health?" card. Only for a real brush, only where Health exists, never while
-    /// Health is already on, and never during the game.
+    /// After a finished brush (a watch brush arriving, or a phone brush that somehow began without
+    /// the question): remembers it for Health and, if the question was never asked, asks it on Home.
+    /// The phone normally asks before its first brush starts (`startBrushAskingHealthFirst`). Only for
+    /// a real brush, only where Health exists, never while Health is already on, never in the game.
     private func offerHealthAfterBrush(sec: Double, endedAt: Date, sessionId: String) {
         guard HealthBrushLog.isAvailable, !healthLogOn, sec >= HealthBrushLog.minimumBrushSec else { return }
         lastBrushForHealth = (sec, endedAt, sessionId)
@@ -493,12 +495,21 @@ public final class AppCoordinator {
 
     /// The question's answer. Yes brings up Apple's Health sheet a moment later, once the question
     /// has gone, so the two never overlap.
+    /// A first brush waiting on the question starts once it is answered (after Apple's sheet, if yes).
     public func answerHealthPrompt(_ yes: Bool) {
         healthPrompt = nil
-        guard yes else { return }
+        let thenBrush = brushAfterHealthAnswer
+        brushAfterHealthAnswer = false
+        guard yes else {
+            if thenBrush, mode == .hub { startBrushAlong() }
+            return
+        }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(450))
-            self?.setHealthLog(true) { _ in }
+            self?.setHealthLog(true) { [weak self] _ in
+                guard let self, thenBrush, self.mode == .hub else { return }
+                self.startBrushAlong()
+            }
         }
     }
 
@@ -1310,10 +1321,24 @@ public final class AppCoordinator {
     /// says plainly that it times real brushing. The `--mode=brushAlong` test argument skips it.
     public func requestBrushAlong() {
         if UserDefaults.standard.bool(forKey: Self.brushIntroSeenDefaultsKey) {
-            startBrushAlong()
+            startBrushAskingHealthFirst()
         } else {
             isBrushIntroVisible = true
         }
+    }
+
+    /// The first 2-Minute Brush asks about Apple Health before its timer starts (eyes on the screen,
+    /// hands still free); the brush begins as soon as it is answered, and a yes covers that brush.
+    private func startBrushAskingHealthFirst() {
+        guard HealthBrushLog.isAvailable, !healthAsked, !healthLogOn, healthPrompt == nil else {
+            startBrushAlong()
+            return
+        }
+        healthAsked = true
+        healthAskDue = false
+        UserDefaults.standard.set(true, forKey: Self.healthAskedDefaultsKey)
+        brushAfterHealthAnswer = true
+        healthPrompt = HealthBrushLog.isDenied ? .denied : .ask
     }
 
     /// The card's Start: the ritual begins exactly as from Home. Device-local, outside the save.
@@ -1321,7 +1346,7 @@ public final class AppCoordinator {
         guard isBrushIntroVisible else { return }
         isBrushIntroVisible = false
         UserDefaults.standard.set(true, forKey: Self.brushIntroSeenDefaultsKey)
-        startBrushAlong()
+        startBrushAskingHealthFirst()
     }
 
     public func dismissBrushIntro() {
@@ -1494,10 +1519,6 @@ public final class AppCoordinator {
         if let since = pacerAwaitingSince, Date().timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec {
             completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: false)
             return
-        }
-        // Brushing is done and the brush is down: the moment to ask about Apple Health (once).
-        if next == .flossBonus, !healthLogOn, let b = pacerBrushing {
-            offerHealthAfterBrush(sec: b.sec, endedAt: b.endedAt, sessionId: pacerSessionId)
         }
         pacerIsPaused = false
         pacerPausedByUser = false
