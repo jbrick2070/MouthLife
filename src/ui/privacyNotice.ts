@@ -66,6 +66,19 @@ export function buildPrivacyNoticeHtml(): string {
 }
 
 let openShade: HTMLElement | null = null;
+let closeActiveNotice: (() => void) | null = null;
+
+/** True while the in-app privacy notice sheet is open. */
+export function isPrivacyNoticeOpen(): boolean {
+  return openShade !== null;
+}
+
+/** Closes the in-app privacy notice if open (used by Android's Back button). */
+export function closePrivacyNotice(): boolean {
+  if (!closeActiveNotice) return false;
+  closeActiveNotice();
+  return true;
+}
 
 /** Shows the notice above everything; Done, Escape, a tap outside or a swipe down closes it. */
 export function openPrivacyNotice(opener?: HTMLElement | null): void {
@@ -81,6 +94,7 @@ export function openPrivacyNotice(opener?: HTMLElement | null): void {
   const close = (): void => {
     if (openShade !== shade) return;
     openShade = null;
+    if (closeActiveNotice === close) closeActiveNotice = null;
     window.removeEventListener('keydown', onKey, true);
     shade.remove();
     if (opener?.isConnected) opener.focus({ preventScroll: true });
@@ -116,6 +130,7 @@ export function openPrivacyNotice(opener?: HTMLElement | null): void {
   window.addEventListener('keydown', onKey, true);
   document.body.appendChild(shade);
   openShade = shade;
+  closeActiveNotice = close;
   done?.focus({ preventScroll: true });
 }
 

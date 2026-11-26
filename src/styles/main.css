@@ -13,6 +13,11 @@
   --radius-lg: 18px;
   --radius-md: 12px;
   --radius-pill: 999px;
+  /* Combines CSS env() safe areas with Capacitor SystemBars' native WindowInsetsCompat variables. */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
 }
 
 *,
@@ -197,10 +202,10 @@ textarea {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: max(10px, env(safe-area-inset-top))
-    max(12px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom))
-    max(12px, env(safe-area-inset-left));
+  padding: max(10px, var(--safe-top))
+    max(12px, var(--safe-right))
+    max(12px, var(--safe-bottom))
+    max(12px, var(--safe-left));
   z-index: 10;
 }
 
@@ -1540,10 +1545,10 @@ textarea:focus-visible {
    a low-profile thumb-zone pill cluster. */
 @media (max-width: 700px), (orientation: landscape) and (max-height: 520px) {
   #ui-root {
-    padding: max(6px, env(safe-area-inset-top))
-      max(8px, env(safe-area-inset-right))
-      max(8px, env(safe-area-inset-bottom))
-      max(8px, env(safe-area-inset-left));
+    padding: max(6px, var(--safe-top))
+      max(8px, var(--safe-right))
+      max(8px, var(--safe-bottom))
+      max(8px, var(--safe-left));
   }
 
   .mob-hide {
@@ -2028,7 +2033,7 @@ textarea:focus-visible {
     max-height: 58dvh;
     border-radius: 18px 18px 0 0;
     border-bottom: none;
-    padding: 0 12px max(12px, env(safe-area-inset-bottom)) 12px;
+    padding: 0 12px max(12px, var(--safe-bottom)) 12px;
     background: rgba(5, 19, 31, 0.95);
   }
   .modal-sheet.modal-sheet-wide {
@@ -2928,10 +2933,10 @@ textarea:focus-visible {
   padding: 0 16px;
 }
 .finale-top {
-  top: max(6vh, env(safe-area-inset-top, 0px) + 12px);
+  top: max(6vh, calc(var(--safe-top) + 12px));
 }
 .finale-bottom {
-  bottom: max(7vh, env(safe-area-inset-bottom, 0px) + 16px);
+  bottom: max(7vh, calc(var(--safe-bottom) + 16px));
 }
 .finale-line {
   opacity: 0;
@@ -3046,8 +3051,8 @@ textarea:focus-visible {
 }
 .finale-skip {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top, 0px) + 8px);
-  right: max(14px, env(safe-area-inset-right, 0px) + 8px);
+  top: max(14px, calc(var(--safe-top) + 8px));
+  right: max(14px, calc(var(--safe-right) + 8px));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;

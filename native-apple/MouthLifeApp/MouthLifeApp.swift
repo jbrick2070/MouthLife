@@ -25,7 +25,7 @@ struct MouthLifeApp: App {
 
     private var root: some View {
         RootContentView(coordinator: coordinator)
-            .onChange(of: scenePhase) { _, newPhase in
+            .onChange(of: scenePhase, initial: true) { _, newPhase in
                 coordinator.handleScenePhase(newPhase)
             }
     }

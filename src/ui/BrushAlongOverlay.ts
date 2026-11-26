@@ -349,6 +349,21 @@ export class BrushAlongOverlay implements OverlayView {
     this.callbacks.onExitToHub();
   }
 
+  /** Android Back button: pauses a running brush rather than ending it; exits from summary. */
+  handleBackPress(): boolean {
+    if (this.view === 'summary') {
+      this.voice.stop();
+      this.callbacks.onExitToHub();
+      return true;
+    }
+    if (this.stageWait !== null) {
+      // Hold on the Start Flossing / Start Rinse card rather than leaving mid-ritual.
+      return true;
+    }
+    this.togglePause();
+    return true;
+  }
+
   private togglePause(): void {
     // Nothing to pause between stages: the clock is already holding for the tap.
     if (this.stageWait !== null) return;

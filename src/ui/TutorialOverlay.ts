@@ -217,6 +217,11 @@ export class TutorialOverlay {
     this.backdrop = null;
   }
 
+  /** Closes the guide and runs its onClose callback (used by Android's Back button). */
+  requestClose(): void {
+    this.close();
+  }
+
   private close(): void {
     if (this.closed) return;
     this.closed = true;

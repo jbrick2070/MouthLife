@@ -72,6 +72,19 @@ export class MissionReportOverlay implements OverlayView {
   private container: HTMLElement | null = null;
   private revealRafId: number | null = null;
 
+  /** Android Back button: closes an expanded lesson card first, otherwise returns to Hub. */
+  handleBackPress(): boolean {
+    if (!this.container) return false;
+    const openLesson = this.container.querySelector<HTMLDetailsElement>('details.report-lesson[open]');
+    if (openLesson) {
+      openLesson.open = false;
+      openLesson.querySelector<HTMLElement>('summary')?.focus();
+    } else {
+      this.callbacks.onReturnToHub();
+    }
+    return true;
+  }
+
   private readonly keyHandler = (e: KeyboardEvent): void => {
     if (!this.container) return;
     if (e.key === 'Escape') {

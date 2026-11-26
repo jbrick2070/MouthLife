@@ -355,6 +355,14 @@ export class CityFinaleOverlay implements OverlayView {
   private h = 0;
   private dpr = 1;
 
+  /** Android Back button: skips the finale once Skip is available; otherwise consumes Back. */
+  handleBackPress(): boolean {
+    if (this.elapsed() >= this.skipAfter()) {
+      this.skip();
+    }
+    return true;
+  }
+
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' || e.key === ' ') {
       if (this.elapsed() < this.skipAfter()) return;

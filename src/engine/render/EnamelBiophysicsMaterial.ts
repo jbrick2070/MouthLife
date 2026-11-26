@@ -59,6 +59,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uGlobalFluorideGlow;
   uniform float uAcidStress;
   uniform int uActiveQuadrant;
+  // Opposite-jaw dimming in Brush-Along (1.0 = full clarity, ~0.38 = soft context ghost)
+  uniform float uJawDim;
   // Tapped / inspected Companion crown (0..13), or < 0 for none; uHighlightPulse eases 0..1
   uniform float uHighlightedTooth;
   uniform float uHighlightPulse;
@@ -178,12 +180,17 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Subsurface hydroxyapatite wrap illumination
     float wrapDiff = max(0.0, (dot(N, L1) + 0.45) / 1.45);
     float fillDiff = max(0.0, (dot(N, L2) + 0.35) / 1.35) * 0.42;
+    // Soft sink/mirror bounce light from below-front so the inverted upper jaw gleams from underneath.
+    vec3 L3 = normalize(vec3(0.18, -0.78, 0.60));
+    float mirrorBounce = uGlobalSmoothnessOverride >= 0.0
+      ? max(0.0, (dot(N, L3) + 0.40) / 1.40) * 0.56
+      : 0.0;
     // A dive's sun is behind the teeth, so the fill carries the faces it cannot reach: the less sun
     // a face gets, the more fill, which keeps the teeth's near sides pearly instead of grey.
     if (uDiveLook > 0.5) fillDiff *= 1.0 + 0.9 * (1.0 - wrapDiff);
 
     // Clean pearlescent enamel base vs matte organic pellicle/biofilm
-    vec3 cleanEnamel = uEnamelBase * (0.34 + 0.6 * wrapDiff + fillDiff * 0.9);
+    vec3 cleanEnamel = uEnamelBase * (0.34 + 0.6 * wrapDiff + fillDiff * 0.9 + mirrorBounce * 0.85);
     // In a dive, clean enamel sits a little under full white, leaving room for its sheen, the
     // ship's lamp and the glow to read as brighter still instead of all clipping to one white.
     if (uDiveLook > 0.5) cleanEnamel *= 0.84;
@@ -313,11 +320,14 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Mirror-wet saliva dual-lobe specular on clean hydroxyapatite vs dull sheen on plaque
     float cleanSpec1 = pow(max(dot(N, H1), 0.0), 92.0) * 0.92;
     float cleanSpec2 = uDetail > 0 ? pow(max(dot(N, H2), 0.0), 34.0) * 0.32 : 0.0;
+    float cleanSpecBounce = uGlobalSmoothnessOverride >= 0.0
+      ? pow(max(dot(N, safeUnit(L3 + V)), 0.0), 64.0) * 0.45
+      : 0.0;
     float dullSpec = pow(max(dot(N, H1), 0.0), 9.0) * 0.14;
     // From the high arcade camera the tight highlight almost never lines up, so cleaned enamel
     // also gets a broad wet sheen there; otherwise freshly scrubbed tooth reads as matte.
     float cleanSheen = uGlobalSmoothnessOverride < 0.0 ? pow(max(dot(N, H1), 0.0), 10.0) * 0.26 : 0.0;
-    float spec = mix(cleanSpec1 + cleanSpec2 + cleanSheen, dullSpec, plaqueMask);
+    float spec = mix(cleanSpec1 + cleanSpec2 + cleanSpecBounce + cleanSheen, dullSpec, plaqueMask);
     baseColor += vec3(0.94, 0.99, 1.0) * spec;
 
     // Wet saliva meniscus glint pooled along the gingival collar (vVertColor.b near 0)
@@ -376,7 +386,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     }
 
     float recess = 1.0 - smoothstep(0.08, 0.55, hFrac);
-    float side = 1.0 - smoothstep(0.05, 0.78, N.y);
+    float upY = uGlobalSmoothnessOverride >= 0.0 ? abs(N.y) : N.y;
+    float side = 1.0 - smoothstep(0.05, 0.78, upY);
     float ao = clamp(vVertColor.r, 0.33, 1.0) * (1.0 - 0.24 * recess * side);
     // Real shadows from the ship, the germs, the teeth and the gum (dives only; off elsewhere).
     vec3 sunLit = sunShade(sunVisibility(vWorldPos, safeUnit(vWorldNormal)));
@@ -459,6 +470,10 @@ const FRAGMENT_SHADER = /* glsl */ `
       baseColor = mix(baseColor, selected, uHighlightPulse * (0.59 + 0.36 * rim));
     }
 
+    if (uJawDim < 0.999) {
+      baseColor = mix(vec3(0.025, 0.08, 0.14), baseColor * 0.82, clamp(uJawDim, 0.0, 1.0));
+    }
+
     gl_FragColor = vec4(filmTone(baseColor), 1.0);
   }
 `;
@@ -512,6 +527,7 @@ export class EnamelBiophysicsMaterial {
         uGlobalFluorideGlow: { value: 0 },
         uAcidStress: { value: 0 },
         uActiveQuadrant: { value: -1 },
+        uJawDim: { value: 1.0 },
         uHighlightedTooth: { value: -1 },
         uHighlightPulse: { value: 0 },
         uFoam: { value: Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, -99, 0)) },
@@ -528,6 +544,32 @@ export class EnamelBiophysicsMaterial {
       ...this.material.defaultAttributeValues,
       aToothId: [0],
     };
+  }
+
+  /**
+   * Builds a companion enamel material for the upper jaw that shares every live uniform object
+   * with the main enamel material except its own `uJawDim`, so each jaw can dim independently.
+   */
+  createUpperJawMaterial(): THREE.ShaderMaterial {
+    const mat = new THREE.ShaderMaterial({
+      vertexColors: true,
+      uniforms: {
+        ...this.material.uniforms,
+        uJawDim: { value: 1.0 },
+      },
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: FRAGMENT_SHADER,
+    });
+    mat.defaultAttributeValues = {
+      ...mat.defaultAttributeValues,
+      aToothId: [0],
+    };
+    return mat;
+  }
+
+  /** Softly dims the lower arch when it serves as the hinged-open opposite jaw in Brush-Along. */
+  setJawDim(dim01: number): void {
+    this.material.uniforms.uJawDim.value = Math.max(0, Math.min(1, dim01));
   }
 
   /** Softly illuminates one Companion crown (0..13); pass null to clear. */

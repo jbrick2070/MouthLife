@@ -26,6 +26,7 @@ import {
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
+import { isNativeApp } from '../engine/nativePlatform';
 import {
   clearHasSeenBrushIntro,
   readIncludeRinse,
@@ -281,6 +282,28 @@ export class CompanionHubOverlay implements OverlayView {
     const now = new Date();
     const today = this.saveSys.getSave().dailySlotsByDate[dateKeyOf(now)];
     return dueReminder(now, prefs, today?.fullRewards ?? 0);
+  }
+
+  /** True when pressing Back on Home has a guide, sheet or drawer to close before leaving the app. */
+  hasBackTarget(): boolean {
+    return this.tutorial !== null || this.activeModal !== 'none' || this.mobileDrawerOpen;
+  }
+
+  /** Android Back button: closes How to Play, the open sheet, or the bottom drawer. */
+  handleBackPress(): boolean {
+    if (this.tutorial) {
+      this.tutorial.requestClose();
+      return true;
+    }
+    if (this.activeModal !== 'none') {
+      this.closeActiveModal();
+      return true;
+    }
+    if (this.mobileDrawerOpen) {
+      this.collapseMobileDrawerInPlace();
+      return true;
+    }
+    return false;
   }
 
   private openModal(modal: Exclude<ActiveModal, 'none'>, openerSel: string): void {
@@ -1267,7 +1290,7 @@ export class CompanionHubOverlay implements OverlayView {
           >${escapeHtml(syncCode)}</textarea>
           <div class="row-wrap" style="margin:8px 0 12px 0;">
             <button type="button" id="btn-copy-sync" class="btn btn-primary btn-sm">📋 Copy ML2 Code</button>
-            <button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>
+            ${isNativeApp() ? '' : '<button type="button" id="btn-download-json" class="btn btn-sm">💾 Download .mouthlife.json</button>'}
             <button type="button" id="btn-open-backup" class="btn btn-sm">📂 Open Backup File</button>
             <input type="file" id="file-open-backup" accept=".json,application/json" hidden />
           </div>

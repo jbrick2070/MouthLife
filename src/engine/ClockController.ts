@@ -9,6 +9,7 @@ import {
   BRUSH_ALONG_TOTAL_SEC,
 } from '../config/gameConfig';
 import type { EventBus } from './EventBus';
+import { setNativeKeepScreenOn } from './nativePlatform';
 
 export const FIXED_DT = 1 / 60;
 const MAX_FRAME_DELTA_SEC = 0.1;
@@ -271,6 +272,7 @@ export class ClockController {
 
   private requestScreenWakeLock(): void {
     this.wakeWanted = true;
+    setNativeKeepScreenOn(true);
     if (this.wakeLock || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
     (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<NonNullable<ClockController['wakeLock']>> } })
       .wakeLock?.request('screen')
@@ -292,6 +294,7 @@ export class ClockController {
     // A finale still needs the screen: a brush pausing or ending must not take the lock from it.
     if (this.showAwake) return;
     this.wakeWanted = false;
+    setNativeKeepScreenOn(false);
     const lock = this.wakeLock;
     this.wakeLock = null;
     if (lock) void lock.release().catch(() => {});

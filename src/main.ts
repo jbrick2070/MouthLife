@@ -8,7 +8,7 @@ import { type CanvasPointerPhase, InputManager } from './engine/InputManager';
 import { sampleTerrainHeight } from './engine/physics/CollisionSystem';
 import { SAVE_GENERATION_KEY, SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
 import { markHasSeenBrushIntro, readHasSeenBrushIntro, readIncludeRinse } from './engine/persistence/pacerPrefs';
-import { showBrushIntroCard } from './ui/brushIntroCard';
+import { closeBrushIntroCard, isBrushIntroCardOpen, showBrushIntroCard } from './ui/brushIntroCard';
 import { requestMotionPermissionIfNeeded } from './engine/motionPermission';
 import { SceneManager } from './engine/render/SceneManager';
 import { WorldSession } from './engine/sim/WorldSession';
@@ -23,7 +23,15 @@ import { BrushAlongOverlay } from './ui/BrushAlongOverlay';
 import { VoiceCoach } from './engine/audio/VoiceCoach';
 import { uiTranslator, warmAllLanguagePacks } from './i18n/uiTranslator';
 import { allTutorialImageUrls } from './ui/TutorialOverlay';
-import { installParentGate } from './ui/parentGate';
+import { closeParentGate, installParentGate, isParentGateOpen } from './ui/parentGate';
+import { closePrivacyNotice, isPrivacyNoticeOpen } from './ui/privacyNotice';
+import {
+  isNativeApp,
+  moveNativeAppToBack,
+  onNativeBackPressed,
+  onNativeLifecycleChanged,
+  setNativeBackIntercept,
+} from './engine/nativePlatform';
 import { evaluateBrushPhase } from './config/brushCoach';
 import { CompanionHubOverlay } from './ui/CompanionHubOverlay';
 import { CosmicIntroOverlay } from './ui/CosmicIntroOverlay';
@@ -109,8 +117,7 @@ function bootstrapMouthLife(): void {
   sound.bindGlobalUnlockListeners();
   window.addEventListener('keydown', (ev) => {
     if (shouldHandleGlobalMuteKey(ev, ev.target)) {
-      sound.unlockOnGesture();
-      sound.setMuted(!sound.isMuted());
+      sound.toggleMute();
     }
   });
   const session = new WorldSession(bus);
@@ -156,6 +163,9 @@ function bootstrapMouthLife(): void {
   let currentMode: AppMode = saveSys.getSave().hasSeenCosmicIntro ? 'HUB' : 'COSMIC_INTRO';
   let activeOverlay: OverlayView | null = null;
   let activeTelemetryHud: TelemetryHudOverlay | null = null;
+  let activeBrushAlong: BrushAlongOverlay | null = null;
+  let activeCosmicIntro: CosmicIntroOverlay | null = null;
+  let activeMissionReport: MissionReportOverlay | null = null;
   let activePacerQuadrant = -1;
   let lastPlayedWorldId = 'world_1';
   let lastReport: MissionReportData | null = null;
@@ -189,6 +199,9 @@ function bootstrapMouthLife(): void {
       activeOverlay?.dispose();
       activeOverlay = null;
       activeTelemetryHud = null;
+      activeBrushAlong = null;
+      activeCosmicIntro = null;
+      activeMissionReport = null;
       touch.endTouch();
       uiRoot!.innerHTML = '';
     }
@@ -260,6 +273,18 @@ function bootstrapMouthLife(): void {
         return true;
       }
       return false;
+    }
+
+    if (currentMode === 'BRUSH_ALONG') {
+      if (phase === 'down') {
+        if (lastEmptyTapMs > 0 && performance.now() - lastEmptyTapMs < 350) {
+          sceneMgr.resetBrushOrbit();
+          lastEmptyTapMs = 0;
+        } else {
+          lastEmptyTapMs = performance.now();
+        }
+      }
+      return false; // allow drag-to-orbit around the 3D brushing model
     }
 
     const companionMode =
@@ -355,6 +380,10 @@ function bootstrapMouthLife(): void {
       if (currentMode === 'COSMIC_INTRO') {
         // the native app turns 0.005 rad per point; the drag arrives at 0.007 per pixel
         sceneMgr.nudgeCosmicOrbit(dYaw * (0.005 / 0.007));
+        return;
+      }
+      if (currentMode === 'BRUSH_ALONG') {
+        sceneMgr.nudgeBrushOrbit(dYaw, dPitch);
         return;
       }
       sceneMgr.nudgeCompanionOrbit(dYaw, dPitch);
@@ -724,6 +753,9 @@ function bootstrapMouthLife(): void {
     activeOverlay?.dispose();
     activeOverlay = null;
     activeTelemetryHud = null;
+    activeBrushAlong = null;
+    activeCosmicIntro = null;
+    activeMissionReport = null;
     activeHub = null;
     touch.endTouch();
     uiRoot!.innerHTML = '';
@@ -736,7 +768,7 @@ function bootstrapMouthLife(): void {
 
     if (next === 'COSMIC_INTRO') {
       sceneMgr.earthBackdrop.setMohsSelected(2);
-      activeOverlay = new CosmicIntroOverlay({
+      const intro = new CosmicIntroOverlay({
         onBeatChanged: (beatIdx) => {
           sceneMgr.setCosmicBeat(beatIdx);
           sound.setCosmicBeat(beatIdx);
@@ -756,7 +788,7 @@ function bootstrapMouthLife(): void {
           switchMode('HUB');
         },
         isMuted: () => sound.isMuted(),
-        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        onToggleMute: () => sound.toggleMute(),
         bus,
         // Only a brand-new save is offered this: a returning player already has their progress here.
         restoreSyncCode: saveSys.getSave().hasSeenCosmicIntro
@@ -777,6 +809,8 @@ function bootstrapMouthLife(): void {
               return null;
             },
       });
+      activeCosmicIntro = intro;
+      activeOverlay = intro;
     } else if (next === 'HUB') {
       // a finished Golden Molar can be replayed from here: have the ending's recording on the way
       if (molarFinishes().every((f) => f !== 'empty')) sound.preloadFinaleTrack(-1);
@@ -829,7 +863,7 @@ function bootstrapMouthLife(): void {
         getSplatCount: () => touch.activeSplatCount,
         onPlayUiTap: () => sound.playUiTap(),
         isMuted: () => sound.isMuted(),
-        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        onToggleMute: () => sound.toggleMute(),
         getMusicVolume: () => sound.getMusicVolume(),
         setMusicVolume: (v) => sound.setMusicVolume(v),
         getSfxVolume: () => sound.getSfxVolume(),
@@ -855,7 +889,7 @@ function bootstrapMouthLife(): void {
         () => switchMode('HUB'),
         {
           isMuted: () => sound.isMuted(),
-          toggleMute: () => sound.setMuted(!sound.isMuted()),
+          toggleMute: () => sound.toggleMute(),
           getMusicVolume: () => sound.getMusicVolume(),
           setMusicVolume: (v) => sound.setMusicVolume(v),
           getSfxVolume: () => sound.getSfxVolume(),
@@ -869,7 +903,7 @@ function bootstrapMouthLife(): void {
       activeTelemetryHud = hud;
       activeOverlay = hud;
     } else if (next === 'BRUSH_ALONG') {
-      activeOverlay = new BrushAlongOverlay(bus, clock, saveSys, voiceCoach, {
+      const brush = new BrushAlongOverlay(bus, clock, saveSys, voiceCoach, {
         onActiveQuadrantChanged: (q) => {
           activePacerQuadrant = q;
         },
@@ -882,20 +916,24 @@ function bootstrapMouthLife(): void {
           if (hubNote) activeHub?.setStatusBanner(hubNote);
         },
         isMuted: () => sound.isMuted(),
-        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        onToggleMute: () => sound.toggleMute(),
         onPauseChanged: (p) => sound.setPaused(p),
       });
+      activeBrushAlong = brush;
+      activeOverlay = brush;
     } else if (next === 'REPORT' && lastReport) {
       const repMode = lastReport.mode;
-      activeOverlay = new MissionReportOverlay(lastReport, {
+      const report = new MissionReportOverlay(lastReport, {
         onReturnToHub: () => switchMode('HUB'),
         onReplay: () => launchPlayableStage(lastPlayedWorldId, repMode),
         onNextDive: (id) => launchPlayableStage(id, 'ARCADE'),
         isMuted: () => sound.isMuted(),
-        onToggleMute: () => sound.setMuted(!sound.isMuted()),
+        onToggleMute: () => sound.toggleMute(),
         isReducedMotion: () => sceneMgr.isReducedMotion(),
         bus,
       });
+      activeMissionReport = report;
+      activeOverlay = report;
     }
 
     activeOverlay?.mount(uiRoot!);
@@ -1001,6 +1039,7 @@ function bootstrapMouthLife(): void {
                 ),
                 // Between stages the brush or floss pick rests, as when paused.
                 paused: clock.isPacerPaused() || clock.isPacerWaiting(),
+                reducedMotion: sceneMgr.isReducedMotion(),
               }
             : null,
       });
@@ -1025,6 +1064,75 @@ function bootstrapMouthLife(): void {
       saveSys.refreshFromStorage(Date.now());
     }
   });
+
+  // Native Android shell hooks: suspend audio on backgrounding and support Android 16 predictive back.
+  if (isNativeApp()) {
+    const shouldInterceptBack = (): boolean => {
+      if (isParentGateOpen() || isBrushIntroCardOpen() || isPrivacyNoticeOpen() || finaleActive) {
+        return true;
+      }
+      if (currentMode !== 'HUB') return true;
+      return Boolean(activeHub?.hasBackTarget());
+    };
+    const syncBackIntercept = (): void => {
+      setNativeBackIntercept(shouldInterceptBack());
+    };
+    const handleNativeBack = (): void => {
+      if (closeParentGate() || closeBrushIntroCard() || closePrivacyNotice()) {
+        syncBackIntercept();
+        return;
+      }
+      if (finaleOverlay?.handleBackPress()) {
+        syncBackIntercept();
+        return;
+      }
+      if (currentMode === 'BRUSH_ALONG' && activeBrushAlong?.handleBackPress()) {
+        syncBackIntercept();
+        return;
+      }
+      if ((currentMode === 'ARCADE' || currentMode === 'PULP_RESCUE') && activeTelemetryHud) {
+        activeTelemetryHud.setPaused(!activeTelemetryHud.isPaused());
+        syncBackIntercept();
+        return;
+      }
+      if (currentMode === 'REPORT' && activeMissionReport?.handleBackPress()) {
+        syncBackIntercept();
+        return;
+      }
+      if (currentMode === 'COSMIC_INTRO' && activeCosmicIntro?.handleBackPress()) {
+        syncBackIntercept();
+        return;
+      }
+      if (currentMode === 'HUB' && activeHub?.handleBackPress()) {
+        syncBackIntercept();
+        return;
+      }
+      // Home with nothing open: let the OS minimize the app.
+      setNativeBackIntercept(false);
+      moveNativeAppToBack();
+    };
+
+    onNativeBackPressed(handleNativeBack);
+    onNativeLifecycleChanged((active) => {
+      if (!active) {
+        flushSaveOnLifecycleExit();
+        voiceCoach.stop();
+        sound.setAppBackgrounded(true);
+      } else {
+        saveSys.refreshFromStorage(Date.now());
+        sound.setAppBackgrounded(false);
+        sound.startOnNativeLaunch();
+        syncBackIntercept();
+      }
+    });
+    sound.startOnNativeLaunch();
+    bus.on('mode:changed', () => syncBackIntercept());
+    if (typeof MutationObserver !== 'undefined') {
+      const obs = new MutationObserver(() => syncBackIntercept());
+      obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+    syncBackIntercept();
+  }
 
   // F toggles full screen (never while typing in a field).
   window.addEventListener('keydown', (e) => {
@@ -1069,9 +1177,11 @@ function bootstrapMouthLife(): void {
 installParentGate();
 bootstrapMouthLife();
 
-// Offline-capable PWA shell for mobile Home Screen & dead-zone bathroom play (production only)
+// Offline-capable PWA shell for mobile Home Screen & dead-zone bathroom play (production web only;
+// the Capacitor Android app bundles its files locally and never registers a service worker).
 if (
   import.meta.env.PROD &&
+  !isNativeApp() &&
   typeof window !== 'undefined' &&
   'serviceWorker' in navigator &&
   window.location.protocol.startsWith('http')

@@ -26,6 +26,7 @@ const GINGIVA_VERT = /* glsl */ `
 const GINGIVA_FRAG = /* glsl */ `
   ${ORAL_LIGHTING_GLSL}
   uniform vec3 uGingivaColor;
+  uniform float uJawDim;
   varying vec3 vWorldPos;
   varying vec3 vNormal;
   varying vec3 vColor;
@@ -69,14 +70,17 @@ const GINGIVA_FRAG = /* glsl */ `
     vec3 V = safeUnit(cameraPosition - vWorldPos);
     vec3 L = keyLightDir(normalize(vec3(0.35, 0.88, 0.35)));
     vec3 L2 = fillLightDir(normalize(vec3(-0.5, 0.55, -0.6)));
+    vec3 L3 = normalize(vec3(0.16, -0.82, 0.55));
     vec3 H = safeUnit(L + V);
     float wrap = max(0.0, (dot(N, L) + 0.55) / 1.55);
     float fill = max(0.0, (dot(N, L2) + 0.4) / 1.4) * 0.3;
+    // Soft underside bounce light so the inverted upper palatal gingiva stays rosy when viewed from below.
+    float underBounce = max(0.0, (dot(N, L3) + 0.35) / 1.35) * 0.46 * (1.0 - smoothstep(-0.1, 0.35, N.y));
 
     // Coral marginal gingiva vs slightly paler, stippled attached mucosa
     vec3 albedo = mix(uGingivaColor * vec3(1.03, 0.94, 0.96), uGingivaColor * vec3(1.08, 1.02, 1.0), attached * 0.6);
     albedo *= 0.9 + 0.18 * stipple;
-    vec3 col = albedo * (0.4 + 0.58 * wrap + fill) * clamp(vColor.r, 0.35, 1.0);
+    vec3 col = albedo * (0.4 + 0.58 * wrap + fill + underBounce) * clamp(vColor.r, 0.35, 1.0);
     // Healthy coral-pink mucosa: lift toward a softer, less saturated pink
     col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(1.22, 0.86, 0.9), 0.3);
 
@@ -99,6 +103,9 @@ const GINGIVA_FRAG = /* glsl */ `
     col *= (1.0 - 0.32 * sulcus) * (1.0 + headlamp(vWorldPos, N));
     // Real shadows from the teeth, the ship and the gum's own collar (dives only; off elsewhere).
     col *= sunShade(sunVisibility(vWorldPos, safeUnit(vNormal)));
+    if (uJawDim < 0.999) {
+      col = mix(vec3(0.025, 0.08, 0.14), col * 0.82, clamp(uJawDim, 0.0, 1.0));
+    }
     gl_FragColor = vec4(filmTone(attenuateOralLight(col, vWorldPos)), 1.0);
   }
 `;
@@ -108,6 +115,7 @@ export function createGingivaMaterial(hexColor = 0xe66c7e): THREE.ShaderMaterial
     vertexColors: true,
     uniforms: {
       uGingivaColor: { value: new THREE.Color(hexColor) },
+      uJawDim: { value: 1.0 },
       uMotionTime: { value: 0 },
       uHeadlamp: { value: new THREE.Vector4() },
       uDepthCue: { value: new THREE.Vector2(18, 0.085) },
@@ -491,19 +499,78 @@ export interface CompanionToothFrame {
   yaw: number;
 }
 
+/**
+ * Vertical mirror plane (arch-local Y) used to invert the lower arch into the upper maxillary arch,
+ * matching `CompanionArchNodes.upperMirrorY` in the native Apple renderer.
+ */
+export const COMPANION_UPPER_MIRROR_Y = 3.2;
+
+/** Base world origin of the Companion Arch (matches `ProceduralMeshBuilder` `rootOrigin`). */
+export const COMPANION_ARCH_ORIGIN = { x: 32, y: 0.4, z: 16 } as const;
+
 export interface CompanionArchBuild {
   group: THREE.Group;
-  /**
-   * Upper arch for the Brush-Along mirror view. It shares the lower arch's shape; the scene sets its
-   * matrix each frame to a reflection of the lower arch (see SceneManager.updateUpperArchMirror).
-   */
+  /** True 3D inverted maxillary upper arch for Brush-Along cutaway views & full-mouth orientation. */
   upperGroup: THREE.Group;
   /** World-space point the mouth "opens" around: just above and behind the lower molars. */
   jawHinge: THREE.Vector3;
+  /** Vertical jaw separation that clears the central incisal edges with a clean open-mouth gap. */
+  incisorClearanceY: number;
   teethMesh: THREE.Mesh;
   gingivaMaterial: THREE.ShaderMaterial;
+  upperEnamelMaterial: THREE.ShaderMaterial;
+  upperGingivaMaterial: THREE.ShaderMaterial;
   teeth: CompanionToothFrame[];
   dispose: () => void;
+}
+
+/**
+ * Mirrors a BufferGeometry vertically across `y = mirrorY`, flipping normal Y and reversing
+ * triangle winding so front faces remain outward-facing CCW for accurate 3D cutaway shading.
+ */
+function mirrorGeometryVertically(source: THREE.BufferGeometry, mirrorY: number): THREE.BufferGeometry {
+  const geo = source.clone();
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, mirrorY - pos.getY(i));
+  }
+  pos.needsUpdate = true;
+
+  const norm = geo.getAttribute('normal');
+  if (norm) {
+    for (let i = 0; i < norm.count; i++) {
+      norm.setY(i, -norm.getY(i));
+    }
+    norm.needsUpdate = true;
+  }
+
+  if (geo.index) {
+    const idx = geo.index;
+    for (let t = 0; t + 2 < idx.count; t += 3) {
+      const b = idx.getX(t + 1);
+      const c = idx.getX(t + 2);
+      idx.setX(t + 1, c);
+      idx.setX(t + 2, b);
+    }
+    idx.needsUpdate = true;
+  } else {
+    const attrs = Object.values(geo.attributes);
+    for (const attr of attrs) {
+      const itemSize = attr.itemSize;
+      const arr = attr.array as Float32Array;
+      for (let t = 0; t + 2 < attr.count; t += 3) {
+        const o1 = (t + 1) * itemSize;
+        const o2 = (t + 2) * itemSize;
+        for (let k = 0; k < itemSize; k++) {
+          const tmp = arr[o1 + k];
+          arr[o1 + k] = arr[o2 + k];
+          arr[o2 + k] = tmp;
+        }
+      }
+      attr.needsUpdate = true;
+    }
+  }
+  return geo;
 }
 
 const ARCH_RX = 9.6;
@@ -558,9 +625,12 @@ function tAtArcLength(table: ReturnType<typeof buildArcTable>, s: number): numbe
  * scalloped gingival collar with pointed interdental papillae.
  * 1 merged enamel draw call + 1 sculpted gingiva draw call.
  */
-export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): CompanionArchBuild {
+export function buildCompanionArchGroup(
+  enamelMaterial: THREE.ShaderMaterial,
+  upperEnamelMaterial?: THREE.ShaderMaterial
+): CompanionArchBuild {
   const group = new THREE.Group();
-  group.position.set(32, 0.4, 16);
+  group.position.set(COMPANION_ARCH_ORIGIN.x, COMPANION_ARCH_ORIGIN.y, COMPANION_ARCH_ORIGIN.z);
   group.updateMatrixWorld(true);
 
   // Relative real-world crown proportions (mm), from midline → distal on each side
@@ -642,8 +712,9 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
   const gumMat = createGingivaMaterial(0xe7858f);
   group.add(new THREE.Mesh(gumGeo, gumMat));
 
-  // Upper arch: same crowns with the quadrant codes swapped to upper-left (1) / upper-right (0).
-  const upperTeethGeo = mergedTeeth.clone();
+  // Upper arch: true 3D inverted crowns (mirrored across COMPANION_UPPER_MIRROR_Y) with
+  // quadrant codes swapped to upper-left (1) / upper-right (0), enabling full cutaway angles.
+  const upperTeethGeo = mirrorGeometryVertically(mergedTeeth, COMPANION_UPPER_MIRROR_Y);
   const upperColors = upperTeethGeo.getAttribute('color');
   for (let i = 0; i < upperColors.count; i++) {
     const lowerQuad = Math.floor(upperColors.getY(i) * 4.0 + 0.01);
@@ -651,28 +722,52 @@ export function buildCompanionArchGroup(enamelMaterial: THREE.ShaderMaterial): C
     else if (lowerQuad === 3) upperColors.setY(i, (0 + 0.5) / 4.0);
   }
   upperColors.needsUpdate = true;
+  const upperGumGeo = mirrorGeometryVertically(gumGeo, COMPANION_UPPER_MIRROR_Y);
+  const ownedUpperEnamel = !upperEnamelMaterial;
+  const upperEnamelMat =
+    upperEnamelMaterial ??
+    new THREE.ShaderMaterial({
+      vertexColors: true,
+      uniforms: { ...enamelMaterial.uniforms, uJawDim: { value: 1.0 } },
+      vertexShader: enamelMaterial.vertexShader,
+      fragmentShader: enamelMaterial.fragmentShader,
+    });
+  const upperGumMat = new THREE.ShaderMaterial({
+    vertexColors: true,
+    uniforms: { ...gumMat.uniforms, uJawDim: { value: 1.0 } },
+    vertexShader: GINGIVA_VERT,
+    fragmentShader: GINGIVA_FRAG,
+  });
+
   const upperGroup = new THREE.Group();
-  upperGroup.matrixAutoUpdate = false;
+  upperGroup.position.set(COMPANION_ARCH_ORIGIN.x, COMPANION_ARCH_ORIGIN.y, COMPANION_ARCH_ORIGIN.z);
   upperGroup.visible = false;
-  upperGroup.add(new THREE.Mesh(upperTeethGeo, enamelMaterial));
-  upperGroup.add(new THREE.Mesh(gumGeo, gumMat));
+  upperGroup.add(new THREE.Mesh(upperTeethGeo, upperEnamelMat));
+  upperGroup.add(new THREE.Mesh(upperGumGeo, upperGumMat));
 
   mergedTeeth.computeBoundingBox();
   const bb = mergedTeeth.boundingBox!;
   const jawHinge = new THREE.Vector3(0, bb.max.y, bb.min.z + 0.7).applyMatrix4(group.matrixWorld);
+  const incisorClearanceY = Math.max(3.9, 2 * bb.max.y - COMPANION_UPPER_MIRROR_Y + 0.75);
 
   return {
     group,
     upperGroup,
     jawHinge,
+    incisorClearanceY,
     teethMesh,
     gingivaMaterial: gumMat,
+    upperEnamelMaterial: upperEnamelMat,
+    upperGingivaMaterial: upperGumMat,
     teeth,
     dispose: () => {
       mergedTeeth.dispose();
       upperTeethGeo.dispose();
       gumGeo.dispose();
+      upperGumGeo.dispose();
       gumMat.dispose();
+      upperGumMat.dispose();
+      if (ownedUpperEnamel) upperEnamelMat.dispose();
     },
   };
 }

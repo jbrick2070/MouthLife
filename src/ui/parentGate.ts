@@ -13,6 +13,8 @@
  * rules.
  */
 
+import { openExternalUrl } from '../engine/nativePlatform';
+
 /** The sum is `a × b`, with `a` from 12 to 19 and `b` from 3 to 9. */
 export const GATE_FIRST_FACTOR_MIN = 12;
 export const GATE_FIRST_FACTOR_MAX = 19;
@@ -97,11 +99,24 @@ export function gateSecondsLeft(lockEndMs: number | null, nowMs: number): number
 }
 
 let open = false;
+let activeClose: (() => void) | null = null;
 /**
  * When the lock set by the last wrong answer ends, on the performance.now() clock. One lock for
  * every use of the question (links, rinse, reminders), kept in memory only.
  */
 let lockEndMs: number | null = null;
+
+/** True while the grown-up math gate dialog is on screen. */
+export function isParentGateOpen(): boolean {
+  return open;
+}
+
+/** Closes the grown-up math gate dialog if open (used by Android's Back button). */
+export function closeParentGate(): boolean {
+  if (!activeClose) return false;
+  activeClose();
+  return true;
+}
 
 function isOutside(a: HTMLAnchorElement): boolean {
   try {
@@ -119,7 +134,7 @@ function outsideLink(e: Event): HTMLAnchorElement | null {
 }
 
 function showGate(href: string): void {
-  askGrownUp(() => window.open(href, '_blank', 'noopener,noreferrer'));
+  askGrownUp(() => openExternalUrl(href));
 }
 
 /**
@@ -250,6 +265,7 @@ export function askGrownUp(onPass: () => void, note?: string): void {
     if (closed) return;
     closed = true;
     open = false;
+    if (activeClose === close) activeClose = null;
     if (countdown !== null) {
       clearInterval(countdown);
       countdown = null;
@@ -311,6 +327,7 @@ export function askGrownUp(onPass: () => void, note?: string): void {
   } else {
     showQuestion();
   }
+  activeClose = close;
   document.body.appendChild(shade);
   window.addEventListener('keydown', onKey, true);
   shade.addEventListener('click', onClick);

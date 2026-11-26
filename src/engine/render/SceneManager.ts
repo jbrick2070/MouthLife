@@ -23,6 +23,7 @@ import type { AppMode, CompanionState, QualityTier, WorldCartridge } from '../ty
 import {
   buildCartridgeStageGroup,
   buildCompanionArchGroup,
+  COMPANION_ARCH_ORIGIN,
   type CompanionArchBuild,
   type CompanionToothFrame,
 } from './CartridgeMeshBuilder';
@@ -32,15 +33,12 @@ import { GlowPass } from './GlowPass';
 import { NO_SUN_SHADOW, SunShadowPass } from './SunShadowPass';
 import { ContextLossWatchdog } from './contextLossWatchdog';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
-import { brushCameraAim } from './brushCamera';
+import { computeDetailedBrushCamera, type DetailedBrushCameraTarget } from './brushCamera';
 import { CitySkylineBackdrop } from './CitySkylineBackdrop';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 import { createQualityGovernor, governQuality } from './qualityGovernor';
 
 export type HubCameraFocus = 'companion' | 'globe';
-
-/** Brush-Along shows both arches (an open mouth), so the camera sits this much further back. */
-const PACER_MOUTH_DOLLY = 1.8;
 
 /** Half the width of the square of ground, centred ahead of the ship, that gets real shadows. */
 const SUN_SHADOW_HALF_EXTENT = 26;
@@ -135,9 +133,8 @@ export class SceneManager {
   private readonly sunFocus = new THREE.Vector3();
   private readonly pacerRig = new PacerPropRig();
   private rinseWash01 = 0;
-  private readonly mirrorRight = new THREE.Vector3();
-  private readonly mirrorNormal = new THREE.Vector3();
-  private readonly mirrorMatrix = new THREE.Matrix4();
+  private readonly brushCloseFocus = new THREE.Vector3();
+  private readonly brushOverviewFocus = new THREE.Vector3();
   private cartridgeStage: {
     group: THREE.Group;
     dispose: () => void;
@@ -168,11 +165,14 @@ export class SceneManager {
   private screenChanged = false;
   private cosmicBeat = 0;
 
-  // Companion orbit angles (draggable by touch/mouse!)
+  // Companion & Brush-Along orbit angles (draggable by touch/mouse!)
   private orbitYaw = 0;
   private cosmicYaw = 0;
   private orbitPitch = 0.42;
   private orbitResetActive = false;
+  private brushOrbitYaw = 0;
+  private brushOrbitPitch = 0;
+  private lastBrushStageKey = '';
   // Pixels the Companion image is lifted so the arch sits in the gap between hub chrome.
   private hubViewShiftPx = 0;
   private hubViewShiftTarget = 0;
@@ -347,7 +347,10 @@ export class SceneManager {
     this.renderer.shadowMap.enabled = false; // Strict modest-GPU discipline: zero shadow map passes!
 
     this.scene.add(this.earthBackdrop.rootGroup);
-    this.companionArch = buildCompanionArchGroup(this.enamelMat.material);
+    this.companionArch = buildCompanionArchGroup(
+      this.enamelMat.material,
+      this.enamelMat.createUpperJawMaterial()
+    );
     this.scene.add(this.companionArch.group);
     this.scene.add(this.companionArch.upperGroup);
     this.scene.add(this.pacerRig.group);
@@ -528,6 +531,11 @@ export class SceneManager {
 
   setMode(mode: AppMode): void {
     if (mode === 'COSMIC_INTRO' && this.currentMode !== 'COSMIC_INTRO') this.cosmicYaw = 0;
+    if (mode === 'BRUSH_ALONG' && this.currentMode !== 'BRUSH_ALONG') {
+      this.brushOrbitYaw = 0;
+      this.brushOrbitPitch = 0;
+      this.lastBrushStageKey = '';
+    }
     if (mode !== this.currentMode) this.screenChanged = true;
     this.currentMode = mode;
     this.hubInsetTimer = 0;
@@ -581,6 +589,17 @@ export class SceneManager {
     this.orbitPitch = Math.max(0.18, Math.min(1.05, this.orbitPitch + deltaPitch));
   }
 
+  /** Lets the player orbit around the active teeth at any moment during Brush-Along. */
+  nudgeBrushOrbit(deltaYaw: number, deltaPitch: number): void {
+    this.brushOrbitYaw = Math.max(-1.25, Math.min(1.25, this.brushOrbitYaw + deltaYaw));
+    this.brushOrbitPitch = Math.max(-0.85, Math.min(0.85, this.brushOrbitPitch + deltaPitch));
+  }
+
+  resetBrushOrbit(): void {
+    this.brushOrbitYaw = 0;
+    this.brushOrbitPitch = 0;
+  }
+
   isTransitioning(): boolean {
     return this.diveActive;
   }
@@ -630,6 +649,26 @@ export class SceneManager {
     // Modest-GPU: the orbital backdrop only renders where it can actually be seen
     this.earthBackdrop.rootGroup.visible = isCosmic || (this.currentMode === 'HUB' && this.hubFocus === 'globe');
     this.companionArch.group.visible = isCompanion;
+    if (this.currentMode !== 'BRUSH_ALONG') {
+      this.companionArch.group.position?.set(
+        COMPANION_ARCH_ORIGIN.x,
+        COMPANION_ARCH_ORIGIN.y,
+        COMPANION_ARCH_ORIGIN.z
+      );
+      if (this.companionArch.upperGroup) {
+        this.companionArch.upperGroup.visible = false;
+      }
+      this.enamelMat?.setJawDim(1);
+      if (this.companionArch.gingivaMaterial?.uniforms?.uJawDim) {
+        this.companionArch.gingivaMaterial.uniforms.uJawDim.value = 1;
+      }
+      if (this.companionArch.upperEnamelMaterial?.uniforms?.uJawDim) {
+        this.companionArch.upperEnamelMaterial.uniforms.uJawDim.value = 1;
+      }
+      if (this.companionArch.upperGingivaMaterial?.uniforms?.uJawDim) {
+        this.companionArch.upperGingivaMaterial.uniforms.uJawDim.value = 1;
+      }
+    }
     if (this.cartridgeStage) {
       this.cartridgeStage.group.visible = isArcade;
     }
@@ -763,6 +802,11 @@ export class SceneManager {
       });
     }
 
+    const pacer =
+      this.currentMode === 'BRUSH_ALONG' && !this.diveActive ? (params.pacer ?? null) : null;
+    // Update the 3D toothbrush/floss rig first so its live contact point can drive the cutaway camera.
+    this.pacerRig.update(frameDt, pacer, this.companionArch.teeth);
+
     this.entityBatch.update({
       dt: frameDt,
       nowSec,
@@ -771,7 +815,7 @@ export class SceneManager {
       scrubbingActive: params.scrubbingActive,
       companionSmoothness: companion.smoothnessIndex,
       reducedMotion: this.reducedMotion,
-      companionVisible: this.companionArch.group.visible,
+      companionVisible: this.companionArch.group.visible || this.companionArch.upperGroup.visible,
     });
     this.enamelMat.setContactShadows(
       this.entityBatch.contactShadows,
@@ -783,7 +827,7 @@ export class SceneManager {
       nowSec,
       session,
       params.activePacerQuadrant,
-      this.currentMode === 'BRUSH_ALONG' ? (params.pacer ?? null) : null
+      pacer
     );
     this.applyHubViewShift(frameDt);
     this.applyCameraJuice(frameDt, nowSec);
@@ -791,10 +835,6 @@ export class SceneManager {
 
     // The orbital leg of a dive never needs to render the arcade batches.
     this.entityBatch.arcadeEntitiesGroup.visible = isArcade && !!this.cartridgeStage?.group.visible;
-    this.updateUpperArchMirror();
-    const pacer =
-      this.currentMode === 'BRUSH_ALONG' && this.companionArch.group.visible ? (params.pacer ?? null) : null;
-    this.pacerRig.update(frameDt, pacer, this.companionArch.teeth, this.mirrorMatrix);
     // Ease the purple rinse wash in and out so stage changes never pop.
     const washTarget = pacer?.stage === 'mouthwashBonus' ? 1 : 0;
     this.rinseWash01 += (washTarget - this.rinseWash01) * (1 - Math.exp(-4 * frameDt));
@@ -965,35 +1005,32 @@ export class SceneManager {
   }
 
   /**
-   * Shows the upper arch in Brush-Along as a mirror image of the lower arch across a plane that
-   * passes through the camera and the jaw hinge. Because the plane contains the camera, the upper
-   * arch lands exactly above the lower one on screen (an open mouth seen in a mirror) and left/right
-   * stay matched: screen-left is the patient's left on both arches.
+   * Positions, shows/hides, and dims the true 3D lower and upper dental arches for Brush-Along
+   * cutaway views (and resets them cleanly in every other mode).
    */
-  private updateUpperArchMirror(): void {
-    const upper = this.companionArch.upperGroup;
-    const show = this.currentMode === 'BRUSH_ALONG' && this.companionArch.group.visible;
-    upper.visible = show;
-    if (!show) return;
+  private syncCompanionJaws(target: DetailedBrushCameraTarget | null): void {
+    const ox = COMPANION_ARCH_ORIGIN.x;
+    const oy = COMPANION_ARCH_ORIGIN.y;
+    const oz = COMPANION_ARCH_ORIGIN.z;
+    if (!target || this.currentMode !== 'BRUSH_ALONG' || this.diveActive) {
+      this.companionArch.group.position.set(ox, oy, oz);
+      this.companionArch.upperGroup.visible = false;
+      this.companionArch.upperGroup.position.set(ox, oy, oz);
+      this.enamelMat.setJawDim(1);
+      this.companionArch.gingivaMaterial.uniforms.uJawDim.value = 1;
+      this.companionArch.upperEnamelMaterial.uniforms.uJawDim.value = 1;
+      this.companionArch.upperGingivaMaterial.uniforms.uJawDim.value = 1;
+      return;
+    }
 
-    this.camera.updateMatrixWorld();
-    const cam = this.camera.position;
-    const right = this.mirrorRight.setFromMatrixColumn(this.camera.matrixWorld, 0);
-    const n = this.mirrorNormal
-      .copy(this.companionArch.jawHinge)
-      .sub(cam)
-      .cross(right)
-      .normalize();
-    const d = n.dot(cam);
-    // Householder reflection across the plane { p : n·p = d }.
-    this.mirrorMatrix.set(
-      1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.z, 2 * d * n.x,
-      -2 * n.y * n.x, 1 - 2 * n.y * n.y, -2 * n.y * n.z, 2 * d * n.y,
-      -2 * n.z * n.x, -2 * n.z * n.y, 1 - 2 * n.z * n.z, 2 * d * n.z,
-      0, 0, 0, 1
-    );
-    upper.matrix.multiplyMatrices(this.mirrorMatrix, this.companionArch.group.matrixWorld);
-    upper.matrixWorldNeedsUpdate = true;
+    this.companionArch.group.visible = target.showLowerJaw;
+    this.companionArch.group.position.set(ox, oy + target.lowerJawOffsetY, oz + target.lowerJawOffsetZ);
+    this.companionArch.upperGroup.visible = target.showUpperJaw;
+    this.companionArch.upperGroup.position.set(ox, oy + target.upperJawOffsetY, oz + target.upperJawOffsetZ);
+    this.enamelMat.setJawDim(target.lowerJawDim);
+    this.companionArch.gingivaMaterial.uniforms.uJawDim.value = target.lowerJawDim;
+    this.companionArch.upperEnamelMaterial.uniforms.uJawDim.value = target.upperJawDim;
+    this.companionArch.upperGingivaMaterial.uniforms.uJawDim.value = target.upperJawDim;
   }
 
   private updateCameraRig(
@@ -1130,35 +1167,70 @@ export class SceneManager {
       const bandDolly =
         1 +
         Math.min(
-          portraitView ? 0.28 : 0.7,
-          Math.max(0, 0.58 - this.hubBandFrac) * (portraitView ? 0.72 : 1.8)
+          portraitView ? 0.16 : 0.36,
+          Math.max(0, 0.56 - this.hubBandFrac) * (portraitView ? 0.42 : 0.95)
         );
-      const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.55 / (this.hubSideFrac * 0.92)) : 1;
-      const radius = (portraitView ? 36.8 : 22.4) * bandDolly * sideDolly;
-      const panScale = portraitView ? 1.1 : 2.2;
-      // Turn the teeth being brushed toward the viewer (cheek side, tops, or inside), like the
-      // native coaching camera. Mirror view: quadrants 0/3 are the patient's right (screen-right).
-      const aim = pacer
-        ? brushCameraAim(pacer, this.reducedMotion)
-        : brushCameraAim(
-            activeQuadrant < 0
-              ? null
-              : { stage: 'brushing', quadrant: activeQuadrant, surface: 0, flossIsUpper: true, flossContactIndex: 0 },
-            true
-          );
-      const pitch = (portraitView ? 0.54 : 0.56) + aim.pitchAdd;
-      const quadPanX = aim.side * panScale * 0.5;
-      // Pull back so the upper and lower arches both fit, and aim between them (the open mouth).
-      const mouthRadius = radius * PACER_MOUTH_DOLLY * aim.dolly;
-      desiredPos.set(
-        32 + quadPanX + Math.sin(aim.yaw) * Math.cos(pitch) * mouthRadius,
-        2.1 + Math.sin(pitch) * mouthRadius,
-        16 + Math.cos(aim.yaw) * Math.cos(pitch) * mouthRadius
+      const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.54 / (this.hubSideFrac * 0.92)) : 1;
+
+      const effectivePacer: PacerVisualState | null =
+        pacer ??
+        (activeQuadrant < 0
+          ? null
+          : {
+              stage: 'brushing',
+              quadrant: activeQuadrant,
+              surface: 0,
+              flossIsUpper: true,
+              flossContactIndex: 0,
+              flossStepIndex: 0,
+              mouthwashProgress01: 0,
+              paused: true,
+            });
+
+      // Reset manual drag-to-orbit smoothly whenever the quadrant, surface, or stage advances.
+      const stageKey = effectivePacer
+        ? `${effectivePacer.stage}:${effectivePacer.stage === 'flossBonus' ? (effectivePacer.flossIsUpper ? 'U' : 'L') : `${effectivePacer.quadrant}:${effectivePacer.surface}`}`
+        : 'idle';
+      if (stageKey !== this.lastBrushStageKey) {
+        this.lastBrushStageKey = stageKey;
+        this.brushOrbitYaw = 0;
+        this.brushOrbitPitch = 0;
+      }
+
+      const detail = computeDetailedBrushCamera(effectivePacer, nowSec, this.reducedMotion, {
+        outwardX: this.pacerRig.hasContact ? this.pacerRig.activeOutwardX : undefined,
+        outwardZ: this.pacerRig.hasContact ? this.pacerRig.activeOutwardZ : undefined,
+        incisorClearanceY: this.companionArch.incisorClearanceY,
+      });
+      this.syncCompanionJaws(detail);
+
+      const dist = (portraitView ? detail.distPortrait : detail.distLandscape) * bandDolly * sideDolly;
+      const yaw = detail.yaw + this.brushOrbitYaw;
+      const pitch = Math.max(-0.92, Math.min(0.92, detail.pitch + this.brushOrbitPitch));
+
+      this.brushOverviewFocus.set(
+        COMPANION_ARCH_ORIGIN.x + detail.overviewOffsetX,
+        COMPANION_ARCH_ORIGIN.y + detail.overviewOffsetY,
+        COMPANION_ARCH_ORIGIN.z + detail.overviewOffsetZ
       );
-      desiredLook.set(
-        32 + quadPanX * (portraitView ? 0.42 : 0.8),
-        3.8 + aim.lift * 0.7,
-        13.2 - aim.lift * 1.2
+
+      if (this.pacerRig.hasContact && detail.focusBiasToContact > 0) {
+        this.brushCloseFocus
+          .set(
+            COMPANION_ARCH_ORIGIN.x,
+            COMPANION_ARCH_ORIGIN.y + (detail.isUpper ? 1.9 : 1.3),
+            COMPANION_ARCH_ORIGIN.z + 0.9
+          )
+          .lerp(this.pacerRig.contactWorldPos, detail.focusBiasToContact);
+        desiredLook.lerpVectors(this.brushCloseFocus, this.brushOverviewFocus, detail.introBlend01);
+      } else {
+        desiredLook.copy(this.brushOverviewFocus);
+      }
+
+      desiredPos.set(
+        desiredLook.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+        desiredLook.y + Math.sin(pitch) * dist,
+        desiredLook.z + Math.cos(yaw) * Math.cos(pitch) * dist
       );
     } else if (this.currentMode === 'REPORT') {
       const celebYaw = motionTime * 0.42 + this.orbitYaw;
@@ -1180,9 +1252,13 @@ export class SceneManager {
       desiredLook.set(px + leadX, session.probeY + 0.4, pz + leadZ - 0.8);
     }
 
-    // Brush-Along glides slowly between views so the move reads as calm, not a jump cut.
+    // Brush-Along uses responsive tracking (matching native's 6.8 feel) so quadrant zoom-out ->
+    // zoom-in and surface cutaways glide smoothly; Reduce Motion keeps cameraGlide01's calm pace.
     const brushAlong = this.currentMode === 'BRUSH_ALONG';
-    const damp = cameraGlide01(dt, brushAlong, this.reducedMotion, this.screenChanged);
+    const damp =
+      brushAlong && !this.reducedMotion
+        ? 1 - Math.exp(-5.6 * dt)
+        : cameraGlide01(dt, brushAlong, this.reducedMotion, this.screenChanged);
     this.screenChanged = false;
     this.rigPos.lerp(desiredPos, damp);
     this.currentLookAt.lerp(desiredLook, damp);

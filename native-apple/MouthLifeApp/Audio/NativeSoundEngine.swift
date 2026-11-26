@@ -1276,6 +1276,9 @@ private final class SunoStreamDeck {
     private var latestGain: Float = 0
     private var latestMuted = false
     private var latestInterrupted = false
+    /// Last gain target handed to `activePlayer.setVolume`, so identical back-to-back mix syncs
+    /// at startup never cancel and restart an in-flight fade-in.
+    private var lastAppliedGain: Float = -1
     /// Songs being opened outside the lock by `sync` (guarded by `lock`).
     private var songsOpening = 0
 
@@ -1360,6 +1363,7 @@ private final class SunoStreamDeck {
         }
         activePlayer = nil
         activeURL = nextURL
+        lastAppliedGain = -1
         guard let url = nextURL else {
             lock.unlock()
             return
@@ -1379,17 +1383,35 @@ private final class SunoStreamDeck {
             opened = player
         }
 
+        var retryRequest: ReopenRequest?
         lock.lock()
-        defer { lock.unlock() }
         songsOpening -= 1
         // A newer sync may have chosen another song (or started this one) meanwhile: then this player
         // is dropped without ever playing.
-        guard let incoming = opened, activeURL == url, activePlayer == nil else { return }
-        activePlayer = incoming
-        // The latest mix wins, in case another sync or updateMix arrived while the file opened.
-        if !latestMuted && !latestInterrupted && latestGain > 0.0005 {
-            incoming.play()
-            incoming.setVolume(latestGain, fadeDuration: 0.85)
+        if let incoming = opened, activeURL == url, activePlayer == nil {
+            activePlayer = incoming
+            // The latest mix wins, in case another sync or updateMix arrived while the file opened.
+            if !latestMuted && !latestInterrupted && latestGain > 0.0005 {
+                if incoming.play() {
+                    incoming.setVolume(latestGain, fadeDuration: 0.85)
+                    lastAppliedGain = latestGain
+                } else {
+                    // Cold-launch iOS audio session race: retry opening once outside the lock.
+                    lastAppliedGain = -1
+                    retryRequest = ReopenRequest(
+                        stalled: incoming,
+                        url: url,
+                        resumeTime: 0,
+                        gain: latestGain,
+                        fadeSec: 0.85
+                    )
+                }
+            }
+        }
+        lock.unlock()
+
+        if let retryRequest {
+            reopenStalledPlayer(retryRequest)
         }
     }
 
@@ -1411,6 +1433,7 @@ private final class SunoStreamDeck {
         let fading = fadingOutPlayers
         activePlayer = nil
         activeURL = nil
+        lastAppliedGain = -1
         fadingOutPlayers.removeAll()
         lock.unlock()
 
@@ -1430,16 +1453,20 @@ private final class SunoStreamDeck {
         guard let player else { return nil }
         if interrupted {
             if player.isPlaying { player.pause() }
+            lastAppliedGain = -1
             return nil
         }
         if muted || gain <= 0.0005 {
-            player.setVolume(0, fadeDuration: min(0.18, fadeSec))
+            if lastAppliedGain != 0 {
+                player.setVolume(0, fadeDuration: min(0.18, fadeSec))
+                lastAppliedGain = 0
+            }
             return nil
         }
         if !player.isPlaying {
             player.prepareToPlay()
             if !player.play(), let url = activeURL {
-                player.setVolume(gain, fadeDuration: fadeSec)
+                lastAppliedGain = -1
                 return ReopenRequest(
                     stalled: player,
                     url: url,
@@ -1448,8 +1475,14 @@ private final class SunoStreamDeck {
                     fadeSec: fadeSec
                 )
             }
+            player.setVolume(gain, fadeDuration: fadeSec)
+            lastAppliedGain = gain
+            return nil
         }
-        player.setVolume(gain, fadeDuration: fadeSec)
+        if abs(lastAppliedGain - gain) >= 0.001 {
+            player.setVolume(gain, fadeDuration: fadeSec)
+            lastAppliedGain = gain
+        }
         return nil
     }
 
@@ -1465,9 +1498,13 @@ private final class SunoStreamDeck {
         lock.lock()
         defer { lock.unlock() }
         guard activePlayer === request.stalled else { return }
-        _ = fresh.play()
         activePlayer = fresh
-        fresh.setVolume(request.gain, fadeDuration: request.fadeSec)
+        if !latestMuted && !latestInterrupted && latestGain > 0.0005 && fresh.play() {
+            fresh.setVolume(latestGain, fadeDuration: request.fadeSec)
+            lastAppliedGain = latestGain
+        } else {
+            lastAppliedGain = -1
+        }
     }
 
     private func reapFinishedFadesLocked() {

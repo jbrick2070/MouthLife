@@ -32,6 +32,7 @@ import {
   type VoiceOut,
 } from './SynthVoices';
 import { resolveFinaleTrack, type FinaleNote } from '../../config/cityFinale';
+import { isNativeApp } from '../nativePlatform';
 import { scrubMayPlay } from './scrubGate';
 
 const MASTER_GAIN = 0.85;
@@ -78,6 +79,13 @@ export class SoundEngine {
   private ctx: AudioContext | null = null;
   private globalListenersBound = false;
   private gestureReceived = false;
+  /**
+   * True on web browsers before the first user gesture has unlocked Web Audio.
+   * Prevents tapping the speaker button on a silent page from unlocking on pointerdown
+   * and immediately muting on click (which used to force a second tap to hear music).
+   */
+  private awaitingFirstUserAudioStart = !isNativeApp();
+  private firstUnlockGestureMs = Number.NEGATIVE_INFINITY;
   private prefs: AudioPrefs;
   onPrefsChanged: ((prefs: AudioPrefs) => void) | null = null;
 
@@ -118,6 +126,7 @@ export class SoundEngine {
   /** Bumped on every start/stop, so a song that finishes loading late never starts out of turn. */
   private finaleToken = 0;
   private hidden = false;
+  private appBackgrounded = false;
   private urgency = false;
   private acidTension = false;
   private coda = false;
@@ -166,18 +175,37 @@ export class SoundEngine {
     window.addEventListener('click', unlock, { capture: true, passive: true });
     window.addEventListener('keydown', unlock, { capture: true, passive: true });
     if (typeof document !== 'undefined') {
-      this.hidden = document.visibilityState === 'hidden';
+      this.hidden = this.appBackgrounded || document.visibilityState === 'hidden';
       document.addEventListener('visibilitychange', () => {
-        this.hidden = document.visibilityState === 'hidden';
-        if (!this.hidden && this.gestureReceived && this.ctx && this.isContextSuspendedOrInterrupted(this.ctx)) {
-          this.ctx
-            .resume()
-            .then(() => this.applyPlaybackState())
-            .catch(() => {});
-        } else {
-          this.applyPlaybackState();
-        }
+        this.syncHiddenState();
       });
+    }
+  }
+
+  /** Suspend or resume audio when the native app moves to/from the background. */
+  setAppBackgrounded(backgrounded: boolean): void {
+    if (this.appBackgrounded === backgrounded) return;
+    this.appBackgrounded = backgrounded;
+    this.syncHiddenState();
+  }
+
+  private syncHiddenState(): void {
+    const docHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    this.hidden = this.appBackgrounded || docHidden;
+    if (this.hidden) {
+      this.applyPlaybackState();
+      if (this.ctx && this.ctx.state === 'running') {
+        void this.ctx.suspend?.().catch(() => {});
+      }
+      return;
+    }
+    if (this.gestureReceived && this.ctx && this.isContextSuspendedOrInterrupted(this.ctx)) {
+      this.ctx
+        .resume()
+        .then(() => this.applyPlaybackState())
+        .catch(() => {});
+    } else {
+      this.applyPlaybackState();
     }
   }
 
@@ -195,9 +223,26 @@ export class SoundEngine {
     return true;
   }
 
+  /**
+   * Starts audio immediately on native app launch (Android WebView sets
+   * mediaPlaybackRequiresUserGesture = false, so music does not need to wait for a first tap).
+   */
+  startOnNativeLaunch(): void {
+    if (!isNativeApp() || this.prefs.muted) return;
+    this.awaitingFirstUserAudioStart = false;
+    this.firstUnlockGestureMs = Number.NEGATIVE_INFINITY;
+    this.gestureReceived = true;
+    this.unlockOnGesture();
+  }
+
   unlockOnGesture(): void {
     if (typeof window === 'undefined') return;
     if (!this.hasUserActivation()) return;
+    const wasUninitializedOrSuspended = !this.ctx || this.isContextSuspendedOrInterrupted(this.ctx);
+    if (this.awaitingFirstUserAudioStart && wasUninitializedOrSuspended) {
+      this.awaitingFirstUserAudioStart = false;
+      this.firstUnlockGestureMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    }
     this.gestureReceived = true;
     if (!this.ctx) {
       const AudioCtx =
@@ -450,6 +495,29 @@ export class SoundEngine {
     this.onPrefsChanged?.({ ...this.prefs });
   }
 
+  /**
+   * Handles the speaker button (or M key): if the browser blocked autoplay so audio was still
+   * silent (or was just unlocked by this very tap's pointerdown), starts sound cleanly on the
+   * first tap instead of immediately muting it and forcing a second click.
+   */
+  toggleMute(): boolean {
+    const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const audioNotRunning = !this.ctx || this.isContextSuspendedOrInterrupted(this.ctx);
+    const unlockedByThisTap = nowMs - this.firstUnlockGestureMs < 450;
+    if (!this.prefs.muted && (audioNotRunning || unlockedByThisTap)) {
+      this.awaitingFirstUserAudioStart = false;
+      this.firstUnlockGestureMs = Number.NEGATIVE_INFINITY;
+      this.gestureReceived = true;
+      this.unlockOnGesture();
+      this.applyPlaybackState();
+      this.playUiTap();
+      return false;
+    }
+    this.firstUnlockGestureMs = Number.NEGATIVE_INFINITY;
+    this.setMuted(!this.prefs.muted);
+    return this.prefs.muted;
+  }
+
   setMuted(muted: boolean): void {
     this.prefs.muted = muted;
     this.persist();
@@ -691,9 +759,10 @@ export class SoundEngine {
     );
     this.trackBus?.gain.setTargetAtTime(trackTarget, now, 0.12);
     const trackLive = (this.trackDeck?.sync(track, wantMusic) ?? false) && wantMusic;
-    // The synth keeps playing until the recording is really sounding, so the first tap is never
-    // followed by seconds of silence while an 8 MB file downloads.
-    this.seq.notesMuted = trackLive && (this.trackDeck?.isAudible() ?? false);
+    // On the web, the synth keeps playing until the recording is really sounding so the first tap
+    // is never followed by silence while an 8 MB file downloads. On native Android the recordings
+    // live on local flash and start in milliseconds, so keep the synth quiet unless a track fails.
+    this.seq.notesMuted = trackLive && (isNativeApp() || (this.trackDeck?.isAudible() ?? false));
     if (wantMusic) {
       this.seq.start();
     } else if (silent) {

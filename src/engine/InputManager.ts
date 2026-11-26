@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { triggerNativeHaptic } from './nativePlatform';
 import type { SessionInputCommand } from './sim/WorldSession';
 import type { AppMode, Vec2 } from './types';
 
@@ -495,9 +496,10 @@ export class InputManager {
     return this.padState.connected;
   }
 
-  /** Controller rumble for hits and big moments (no-op without a controller). */
+  /** Controller rumble and subtle phone haptics for hits and big moments. */
   rumble(strength01: number, durationMs: number): void {
     this.gamepad.rumble(strength01, durationMs);
+    triggerNativeHaptic(strength01, durationMs);
   }
 
   isScrubInputActive(): boolean {

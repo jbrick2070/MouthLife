@@ -257,8 +257,8 @@ public final class CompanionArchNodes {
                 focusWorldPos: focusWorld,
                 camYaw: camYaw,
                 camPitch: 0.04,
-                camDistPortrait: 20.6,
-                camDistLandscape: 14.4
+                camDistPortrait: 21.4,
+                camDistLandscape: 16.0
             )
         }
 
@@ -274,13 +274,30 @@ public final class CompanionArchNodes {
             let norm = Float(min(0.999, max(0.0, flossElapsed / bonusTotal)))
             let isUpper = norm < 0.5
             let halfNorm = isUpper ? (norm * 2.0) : ((norm - 0.5) * 2.0)
+            let archElapsed = isUpper ? Float(flossElapsed) : Float(max(0.0, flossElapsed - bonusTotal * 0.5))
+            let flossIntro: Float = {
+                if reducedMotion { return 0 }
+                if archElapsed <= 0.55 { return 1 }
+                if archElapsed >= 1.75 { return 0 }
+                return 1.0 - simd_smoothstep(0.55, 1.75, archElapsed)
+            }()
 
-            upperJawNode.isHidden = !isUpper
-            upperJawNode.simdPosition = .zero
-            upperJawNode.opacity = 1.0
-            lowerJawNode.isHidden = isUpper
-            lowerJawNode.simdPosition = .zero
-            lowerJawNode.opacity = 1.0
+            let showFlossOpp = flossIntro > 0.04
+            if isUpper {
+                upperJawNode.isHidden = false
+                upperJawNode.simdPosition = .zero
+                upperJawNode.opacity = 1.0
+                lowerJawNode.isHidden = !showFlossOpp
+                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.8, -0.6)
+                lowerJawNode.opacity = CGFloat(0.18 + 0.56 * flossIntro)
+            } else {
+                lowerJawNode.isHidden = false
+                lowerJawNode.simdPosition = .zero
+                lowerJawNode.opacity = 1.0
+                upperJawNode.isHidden = !showFlossOpp
+                upperJawNode.simdPosition = SIMD3<Float>(0, 3.8, -0.6)
+                upperJawNode.opacity = CGFloat(0.18 + 0.56 * flossIntro)
+            }
 
             // Sweep Mirror-Right -> Mirror-Left (cIdx 12 -> 0) so Screen-Right = Your Right in the bathroom mirror!
             let contactCount = max(1, crownFrames.count - 1) // 13 interdental contacts (0..12) per arch
@@ -381,6 +398,12 @@ public final class CompanionArchNodes {
             let activeQuad = isUpper ? (cIdx >= 6 ? 0 : 1) : (cIdx >= 6 ? 3 : 2)
             let contactWorld = rootOrigin + contactLocal
             let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.85 : 1.35, 1.0)
+            let closeFocus = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.68))
+            let wideSide: Float = cIdx >= 6 ? 1.0 : -1.0
+            let wideFocus = rootOrigin + SIMD3<Float>(wideSide * 1.1, isUpper ? 1.8 : 1.4, 0.9)
+            let finalYaw = camYaw * (1.0 - flossIntro) + (wideSide * 0.18) * flossIntro
+            let closePitch: Float = isUpper ? -0.26 : 0.30
+            let widePitch: Float = isUpper ? -0.06 : 0.10
             return PacerCoachVisualState(
                 activeCrownIndex: spotlightCrown,
                 activeQuadrant: activeQuad,
@@ -389,11 +412,11 @@ public final class CompanionArchNodes {
                 preEcho01: phase.preEcho01,
                 upcomingQuadrant: -1,
                 contactWorldPos: contactWorld,
-                focusWorldPos: simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.68)),
-                camYaw: camYaw,
-                camPitch: isUpper ? -0.26 : 0.30,
-                camDistPortrait: 17.8,
-                camDistLandscape: 12.6
+                focusWorldPos: simd_mix(closeFocus, wideFocus, SIMD3<Float>(repeating: flossIntro)),
+                camYaw: finalYaw,
+                camPitch: closePitch * (1.0 - flossIntro) + widePitch * flossIntro,
+                camDistPortrait: 19.0 * (1.0 - flossIntro) + 27.0 * flossIntro,
+                camDistLandscape: 14.4 * (1.0 - flossIntro) + 20.6 * flossIntro
             )
         }
 
@@ -406,17 +429,30 @@ public final class CompanionArchNodes {
         let isUpper = phase.quadrant.isUpper
         let isRightSide = phase.quadrant.isPatientRight
         let sIdx = phase.surface.rawValue
+        let phaseElapsedF = Float(max(0.0, phase.phaseElapsedSec))
         let sFrac = Float(min(0.999, max(0.0, phase.phaseElapsedSec / 10.0)))
 
-        // Show active jaw at full clarity; on Outer Cheek (sIdx == 0) show opposite jaw hinged open for instant Top vs Bottom context!
+        // Quadrant establishing zoom-out -> zoom-in beat at the start of every quadrant (sIdx == 0):
+        // holds wide briefly so both jaws & the newly active quadrant read cleanly, then glides in!
+        let quadIntro: Float = {
+            if reducedMotion || sIdx != 0 { return 0 }
+            if phaseElapsedF <= 1.05 { return 1 }
+            if phaseElapsedF >= 2.75 { return 0 }
+            return 1.0 - simd_smoothstep(1.05, 2.75, phaseElapsedF)
+        }()
+
+        // Show active jaw at full clarity; on Outer Cheek (sIdx == 0) show opposite jaw hinged open for instant Top vs Bottom context
+        // (brighter during the full-mouth quadrant zoom-out, then softly dimmed to 0.38 as we zoom in close!).
+        let oppOpacity = CGFloat(0.38 + (0.86 - 0.38) * quadIntro)
+        let oppZ: Float = -0.7 + 0.25 * quadIntro
         if isUpper {
             upperJawNode.isHidden = false
             upperJawNode.simdPosition = .zero
             upperJawNode.opacity = 1.0
             if sIdx == 0 {
                 lowerJawNode.isHidden = false
-                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.8, -0.7)
-                lowerJawNode.opacity = 0.38
+                lowerJawNode.simdPosition = SIMD3<Float>(0, -3.8, oppZ)
+                lowerJawNode.opacity = oppOpacity
             } else {
                 lowerJawNode.isHidden = true
             }
@@ -426,8 +462,8 @@ public final class CompanionArchNodes {
             lowerJawNode.opacity = 1.0
             if sIdx == 0 {
                 upperJawNode.isHidden = false
-                upperJawNode.simdPosition = SIMD3<Float>(0, 3.8, -0.7)
-                upperJawNode.opacity = 0.38
+                upperJawNode.simdPosition = SIMD3<Float>(0, 3.8, oppZ)
+                upperJawNode.opacity = oppOpacity
             } else {
                 upperJawNode.isHidden = true
             }
@@ -514,38 +550,51 @@ public final class CompanionArchNodes {
             SIMD4<Float>(contactLocal.x, contactLocal.y, contactLocal.z, 1)
         )
 
-        // Settled, high-clarity 3-foot cutaway camera framing (Screen-Right = Mirror Right, Screen-Left = Mirror Left!)
+        // Settled, high-clarity 3-foot cutaway camera framing (slightly roomier on Mac landscape)
+        // plus a crisp zoom-out -> zoom-in establish beat at the start of every quadrant!
         let mirrorSideSign: Float = isRightSide ? 1.0 : -1.0
         let frontProg: Float = distFromBack / 6.0
-        let camYaw: Float
-        let camPitch: Float
-        let distP: Float
-        let distL: Float
+        let closeYaw: Float
+        let closePitch: Float
+        let closeDistP: Float
+        let closeDistL: Float
 
         switch sIdx {
         case 0:
             // OUTER ("Crescent"): Settled mirror-side cheek framing (never flips Left/Right!)
-            camYaw = mirrorSideSign * (0.78 - 0.48 * frontProg)
-            camPitch = isUpper ? -0.15 : 0.22
-            distP = 18.8
-            distL = 13.4
+            closeYaw = mirrorSideSign * (0.78 - 0.48 * frontProg)
+            closePitch = isUpper ? -0.15 : 0.22
+            closeDistP = 19.6
+            closeDistL = 14.8
         case 1:
             // CHEWING ("Grooves"): Steep overhead/underneath cutaway straight into biting fissures!
-            camYaw = mirrorSideSign * (0.36 - 0.20 * frontProg)
-            camPitch = isUpper ? -0.72 : 0.76
-            distP = 18.2
-            distL = 12.8
+            closeYaw = mirrorSideSign * (0.36 - 0.20 * frontProg)
+            closePitch = isUpper ? -0.72 : 0.76
+            closeDistP = 19.0
+            closeDistL = 14.2
         default:
             // INNER ("Portal"): Elevated cross-arch cutaway showing lingual/palatal wall & vertical front brush!
-            camYaw = -mirrorSideSign * (0.48 - 0.34 * frontProg)
-            camPitch = isUpper ? -0.58 : 0.62
-            distP = 18.6
-            distL = 13.2
+            closeYaw = -mirrorSideSign * (0.48 - 0.34 * frontProg)
+            closePitch = isUpper ? -0.58 : 0.62
+            closeDistP = 19.4
+            closeDistL = 14.6
         }
+
+        let wideYaw: Float = mirrorSideSign * 0.22
+        let widePitch: Float = isUpper ? -0.04 : 0.08
+        let wideDistP: Float = 29.8
+        let wideDistL: Float = 22.4
+
+        let camYaw = closeYaw * (1.0 - quadIntro) + wideYaw * quadIntro
+        let camPitch = closePitch * (1.0 - quadIntro) + widePitch * quadIntro
+        let distP = closeDistP * (1.0 - quadIntro) + wideDistP * quadIntro
+        let distL = closeDistL * (1.0 - quadIntro) + wideDistL * quadIntro
 
         let contactWorld = rootOrigin + contactLocal
         let archMidWorld = rootOrigin + SIMD3<Float>(0, isUpper ? 1.9 : 1.3, 0.9)
-        let focusWorld = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.62))
+        let closeFocus = simd_mix(archMidWorld, contactWorld, SIMD3<Float>(repeating: 0.62))
+        let wideFocus = rootOrigin + SIMD3<Float>(mirrorSideSign * 1.35, isUpper ? 0.25 : 3.05, 0.8)
+        let focusWorld = simd_mix(closeFocus, wideFocus, SIMD3<Float>(repeating: quadIntro))
 
         return PacerCoachVisualState(
             activeCrownIndex: activeCrownIdx,

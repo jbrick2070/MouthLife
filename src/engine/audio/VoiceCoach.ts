@@ -4,6 +4,14 @@ import {
   isCoachLanguage,
   type CoachLanguage,
 } from '../../config/brushCoach';
+import {
+  getNativeLocalTtsLanguages,
+  isNativeApp,
+  onNativeTtsReady,
+  onNativeTtsUtterance,
+  speakNativeTts,
+  stopNativeTts,
+} from '../nativePlatform';
 
 const ENABLED_KEY = 'mouthlife.voiceCoach.enabled';
 const LANGUAGE_KEY = 'mouthlife.voiceCoach.language';
@@ -75,6 +83,11 @@ export class VoiceCoach {
   private current: SpeechSynthesisUtterance | null = null;
   /** Brings the music back up if the end of the cue is never reported. */
   private releaseTimer: ReturnType<typeof setTimeout> | null = null;
+  /** On-device BCP-47 tags reported by Android TextToSpeech (strictly offline voices). */
+  private nativeLocalLanguages: string[] = [];
+  /** Currently playing native TTS utterance id (null when idle). */
+  private nativeUtteranceId: string | null = null;
+  private nativeUtteranceSeq = 0;
   /** Called with true while a cue is being spoken, so music can duck under it. */
   onSpeakingChanged: ((speaking: boolean) => void) | null = null;
   /** Called after the language changes. The whole game uses this one language setting. */
@@ -88,8 +101,20 @@ export class VoiceCoach {
     this.language = isCoachLanguage(stored)
       ? stored
       : detectCoachLanguage(typeof navigator !== 'undefined' ? navigator.languages ?? [navigator.language] : []);
-    // Voices load asynchronously in Chromium; touching the list early warms it up.
-    this.synth()?.getVoices();
+    if (isNativeApp()) {
+      onNativeTtsReady((languages) => {
+        this.nativeLocalLanguages = languages;
+      });
+      onNativeTtsUtterance(({ utteranceId }) => {
+        this.settleNative(utteranceId);
+      });
+      void getNativeLocalTtsLanguages().then(({ ready, languages }) => {
+        if (ready) this.nativeLocalLanguages = languages;
+      });
+    } else {
+      // Voices load asynchronously in Chromium; touching the list early warms it up.
+      this.synth()?.getVoices();
+    }
   }
 
   private synth(): SpeechSynthesis | null {
@@ -97,7 +122,7 @@ export class VoiceCoach {
   }
 
   isSupported(): boolean {
-    return this.synth() !== null;
+    return isNativeApp() || this.synth() !== null;
   }
 
   isEnabled(): boolean {
@@ -122,17 +147,48 @@ export class VoiceCoach {
 
   /** True when a voice on this device speaks the current language (false = the coach stays silent). */
   hasVoiceForLanguage(): boolean {
+    const bcp47 = COACH_LANGUAGE_INFO[this.language].bcp47VoiceCode;
+    if (isNativeApp()) {
+      return (
+        pickVoice(
+          this.nativeLocalLanguages.map((lang) => ({ lang, localService: true })),
+          bcp47
+        ) >= 0
+      );
+    }
     const synth = this.synth();
     if (!synth) return false;
-    return pickVoice(synth.getVoices(), COACH_LANGUAGE_INFO[this.language].bcp47VoiceCode) >= 0;
+    return pickVoice(synth.getVoices(), bcp47) >= 0;
   }
 
   /** Speak one cue now, replacing any cue still being spoken. */
   speak(text: string): void {
-    const synth = this.synth();
     const level = this.soundLevel ? this.soundLevel() : 1;
-    if (!synth || !this.enabled || !text || level <= 0.001) return;
+    if (!this.enabled || !text || level <= 0.001) return;
     const bcp47 = COACH_LANGUAGE_INFO[this.language].bcp47VoiceCode;
+
+    if (isNativeApp()) {
+      if (!this.hasVoiceForLanguage()) return;
+      const utteranceId = `ml_${++this.nativeUtteranceSeq}`;
+      this.clearReleaseTimer();
+      this.nativeUtteranceId = utteranceId;
+      this.releaseTimer = setTimeout(() => this.settleNative(utteranceId), VOICE_DUCK_RELEASE_MS);
+      this.onSpeakingChanged?.(true);
+      void speakNativeTts({
+        text,
+        lang: bcp47,
+        volume: Math.min(1, Math.max(0, level)),
+        rate: 1.0,
+        pitch: 1.03,
+        utteranceId,
+      }).then(({ spoken }) => {
+        if (!spoken) this.settleNative(utteranceId);
+      });
+      return;
+    }
+
+    const synth = this.synth();
+    if (!synth) return;
     const voices = synth.getVoices();
     const idx = pickVoice(voices, bcp47);
     // No voice on this device for the language: say nothing (the pacer's sounds still play). A cue
@@ -172,6 +228,13 @@ export class VoiceCoach {
     this.onSpeakingChanged?.(false);
   }
 
+  private settleNative(utteranceId: string): void {
+    if (this.nativeUtteranceId !== utteranceId) return;
+    this.nativeUtteranceId = null;
+    this.clearReleaseTimer();
+    this.onSpeakingChanged?.(false);
+  }
+
   private clearReleaseTimer(): void {
     if (this.releaseTimer === null) return;
     clearTimeout(this.releaseTimer);
@@ -179,14 +242,29 @@ export class VoiceCoach {
   }
 
   pause(): void {
+    if (isNativeApp()) {
+      stopNativeTts();
+      if (this.nativeUtteranceId !== null) this.settleNative(this.nativeUtteranceId);
+      return;
+    }
     this.synth()?.pause();
   }
 
   resume(): void {
+    if (isNativeApp()) return;
     this.synth()?.resume();
   }
 
   stop(): void {
+    if (isNativeApp()) {
+      stopNativeTts();
+      this.clearReleaseTimer();
+      if (this.nativeUtteranceId !== null) {
+        this.nativeUtteranceId = null;
+        this.onSpeakingChanged?.(false);
+      }
+      return;
+    }
     const synth = this.synth();
     synth?.cancel();
     // Leaving a paused ritual must not leave speech paused for the next one (M07).

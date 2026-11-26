@@ -149,6 +149,16 @@ export class CosmicIntroOverlay implements OverlayView {
     }
   };
 
+  /** Android Back button: closes the restore card if open, otherwise finishes/skips the intro. */
+  handleBackPress(): boolean {
+    if (this.restoreOpen) {
+      this.closeRestore();
+    } else {
+      this.callbacks.onFinishOrSkip();
+    }
+    return true;
+  }
+
   private syncMuteUi(): void {
     const btn = this.container?.querySelector<HTMLButtonElement>('#btn-cosmic-mute');
     if (!btn) return;

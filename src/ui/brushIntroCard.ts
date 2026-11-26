@@ -23,6 +23,19 @@ export interface BrushIntroCardOptions {
 }
 
 let open: HTMLElement | null = null;
+let activeBack: (() => void) | null = null;
+
+/** True while the one-time brush intro card is open. */
+export function isBrushIntroCardOpen(): boolean {
+  return open !== null;
+}
+
+/** Closes the brush intro card as Back if open (used by Android's Back button). */
+export function closeBrushIntroCard(): boolean {
+  if (!activeBack) return false;
+  activeBack();
+  return true;
+}
 
 export function brushIntroCardHtml(includeRinse: boolean): string {
   const tool = (src: string, label: string) =>
@@ -80,12 +93,14 @@ export function showBrushIntroCard(opts: BrushIntroCardOptions): void {
     for (const el of madeInert) el.inert = false;
     host.remove();
     if (open === host) open = null;
+    if (activeBack === back) activeBack = null;
   };
   const back = () => {
     close();
     if (returnFocus?.isConnected) returnFocus.focus();
     opts.onBack?.();
   };
+  activeBack = back;
   window.addEventListener('keydown', onKey, true);
   const start = host.querySelector<HTMLButtonElement>('.brush-intro-start');
   start?.addEventListener('click', () => {
@@ -102,4 +117,5 @@ export function showBrushIntroCard(opts: BrushIntroCardOptions): void {
 export function closeBrushIntroCardForTest(): void {
   open?.remove();
   open = null;
+  activeBack = null;
 }

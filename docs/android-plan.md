@@ -1,8 +1,9 @@
 # MouthLife on Android, including foldables (plan, 2026-11-19)
 
-The plan for the PC session. Nothing here is built yet. Read `AGENTS.md`, `docs/duo-plan.md` (the
-two-screen layouts built for the iPhone Duo) and `docs/widget-plan.md` first. Reviewed by agy
-("approve with changes"; its changes are folded in below and marked *agy*).
+The plan for this Mac mini (originally written for a PC session; updated 2026-11-25). Read
+`AGENTS.md`, `docs/duo-plan.md` (the two-screen layouts built for the iPhone Duo) and
+`docs/widget-plan.md` first. Reviewed by agy ("approve with changes"; its changes are folded in
+below and marked *agy*).
 
 ## 1. The decision
 
@@ -24,10 +25,10 @@ two-screen layouts built for the iPhone Duo) and `docs/widget-plan.md` first. Re
 
 ## 2. What the owner does (accounts and forms)
 
-**Status (2026-11-19):** the owner's personal Play Console account is created. It is waiting for
-the one-time check with a real Android phone (Play Console app, signed in as the account owner;
-an emulator does not count). The owner is getting a phone, which also serves as the real test
-device below. Phase 1 can be built meanwhile.
+**Status (2026-11-25):** the owner's personal Play Console account is created and the one-time
+real-phone check is verified on the Pixel 8a. Phase 1 is built and running on the Pixel 8a; next
+store steps are the listing forms, upload key (backed up off this Mac), and the 12-tester, 14-day
+closed test.
 
 1. **A Google Play developer account** (Play Console, personal account): a one-time fee, ID and
    phone checks. The Chrome Web Store developer account is separate and does not cover Play.
@@ -49,8 +50,9 @@ the 12-tester, 14-day closed test; the Families policy.
 
 ## 3. Phase 1: the Android app
 
-On the PC: Node 22, Android Studio with SDK 36, and emulators for a phone (Pixel), foldables
-(Pixel Fold, Galaxy Z Fold, open flat and half open) and a tablet.
+On this Mac mini: Node 26, OpenJDK 21 (for Gradle 8.14 / Capacitor 8), Android Studio 2026.2 with
+SDK 36, the Pixel 8a over USB, and emulators for a phone (Pixel), foldables (Pixel Fold, Galaxy Z
+Fold, open flat and half open) and a tablet.
 
 1. `npm i @capacitor/core @capacitor/android` and `npm i -D @capacitor/cli`; `npx cap init MouthLife
    org.mouthlife.plaque --web-dir dist`; `npx cap add android`. Each build: `npm run build && npx cap
