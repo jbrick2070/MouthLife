@@ -436,6 +436,25 @@ public struct ProfileAndSettingsSheet: View {
                         // The erase the privacy policy promises ("at any time in Settings")
                         eraseSaveButton
 
+                        // Test builds only (TestFlight, development): a tester sends the diary of
+                        // what the app was doing when something went wrong. Never in the App Store
+                        // build, so the words are not in the translations (raw strings: the text
+                        // extractor skips them).
+                        if AppDiagnostics.isTestBuild {
+                            ShareLink(
+                                item: TestDiaryFile(),
+                                preview: SharePreview(Text(verbatim: #"MouthLife test diary"#))
+                            ) {
+                                Label {
+                                    Text(verbatim: #"Share test diary"#)
+                                } icon: {
+                                    Image(systemName: "ladybug")
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.textSecondary))
+                        }
+
                         Text(L10n.t(CharityInfo.clinicalDisclaimer))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(MLTheme.textMuted)

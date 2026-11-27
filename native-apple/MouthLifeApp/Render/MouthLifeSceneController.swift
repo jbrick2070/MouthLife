@@ -2,6 +2,7 @@ import Foundation
 import Metal
 import ModelIO
 import MouthLifeCore
+import os
 import SceneKit
 import SceneKit.ModelIO
 import simd
@@ -11,6 +12,33 @@ import UIKit
 #elseif canImport(AppKit)
 import AppKit
 #endif
+
+/// What the player is telling a stage: the stick, a finger on the tooth, and floss, Surge or Scan
+/// waiting for the next step. Written by the main thread (touches, the HUD's buttons) and taken
+/// by SceneKit's render thread once per step, so it lives behind one lock (`stageInput`): a tap
+/// that lands while a step is being put together is kept for the next step, never lost.
+private struct StageInput: Sendable {
+    var stickMoveX: Double = 0
+    var stickMoveZ: Double = 0
+    var stickScrubHeld: Bool = false
+    var directTouchWorldPos: Vec2?
+    var pendingFlossFire: Bool = false
+    /// Floss toward this point (the Mac's right-click) ...
+    var pendingFlossAimPos: Vec2?
+    /// ... or this way from wherever HYDRA-1 is when the step runs (the HUD's direction pad).
+    var pendingFlossAimDir: Vec2?
+    var pendingRinseFire: Bool = false
+    var pendingDiscloseFire: Bool = false
+
+    /// Forgets the one-shot requests, once a step has taken them.
+    mutating func clearPending() {
+        pendingFlossFire = false
+        pendingFlossAimPos = nil
+        pendingFlossAimDir = nil
+        pendingRinseFire = false
+        pendingDiscloseFire = false
+    }
+}
 
 public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate {
     public let scene = SCNScene()
@@ -103,14 +131,17 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     private var brushUserDragging: Bool = false
     private var latestPacerCoachState: PacerCoachVisualState?
     private var hasRenderedFirstFrame: Bool = false
-    private var directTouchWorldPos: Vec2?
-    private var stickMoveX: Double = 0
-    private var stickMoveZ: Double = 0
-    private var stickScrubHeld: Bool = false
-    private var pendingFlossFire: Bool = false
-    private var pendingFlossAimPos: Vec2?
-    private var pendingRinseFire: Bool = false
-    private var pendingDiscloseFire: Bool = false
+    /// The stick, the finger on the tooth and the queued floss, Surge and Scan (see `StageInput`).
+    /// Created once; taking it never allocates.
+    private let stageInput = OSAllocatedUnfairLock(initialState: StageInput())
+    /// Held by the main thread for the whole of `mountStage`, and only ever *tried* by the render
+    /// thread around a stage's frame. Mounting swaps what that frame reads and writes (the
+    /// session, the stage's nodes, the germ and acid-pool tables, the foam trail), and it can
+    /// happen while a stage is on screen: the score screen's next city, a replay. The render
+    /// thread never waits for it: while a stage is being mounted it draws the frame it already
+    /// has. So the main thread may call SceneKit while holding it without any risk of the two
+    /// threads waiting for each other.
+    private let stageLock = NSLock()
     private var lastTapTimeSec: Double?
     private var lastTapPt: CGPoint = .zero
     /// Bumped by `resetStageInput` (mode changes, pause, finales, a new stage, a Duo fold). A finger or
@@ -424,6 +455,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     public func mountStage(for session: WorldSession) {
+        // The render thread may be in the middle of the old stage's frame (see `stageLock`): wait
+        // for that frame to end, then keep it out until the new stage is whole.
+        stageLock.lock()
+        defer { stageLock.unlock() }
         self.activeSession = session
         resetStageInput()
         let cart = session.cartridge
@@ -487,33 +522,40 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     // not fire on Resume (the web's pause card covers the buttons).
     public func requestSmartFloss() {
         guard !arcadePaused else { return }
-        pendingFlossFire = true
-        pendingFlossAimPos = nil
+        stageInput.withLock {
+            $0.pendingFlossFire = true
+            $0.pendingFlossAimPos = nil
+            $0.pendingFlossAimDir = nil
+        }
     }
 
+    /// The aim point is worked out by the step that fires it, from where HYDRA-1 is then: the
+    /// session belongs to the render thread and is not read from here.
     public func requestDirectionalFloss(dir: Vec2) {
-        guard !arcadePaused, let session = activeSession else { return }
-        pendingFlossFire = true
-        pendingFlossAimPos = Vec2(
-            x: session.probePos.x + dir.x * GameConfig.flossLength,
-            z: session.probePos.z + dir.z * GameConfig.flossLength
-        )
+        guard !arcadePaused, activeSession != nil else { return }
+        stageInput.withLock {
+            $0.pendingFlossFire = true
+            $0.pendingFlossAimPos = nil
+            $0.pendingFlossAimDir = dir
+        }
     }
 
     public func requestIonRinse() {
         guard !arcadePaused else { return }
-        pendingRinseFire = true
+        stageInput.withLock { $0.pendingRinseFire = true }
     }
 
     public func requestDiscloseScan() {
         guard !arcadePaused else { return }
-        pendingDiscloseFire = true
+        stageInput.withLock { $0.pendingDiscloseFire = true }
     }
 
     public func setVirtualStick(moveX: Double, moveZ: Double, held: Bool) {
-        self.stickMoveX = moveX
-        self.stickMoveZ = moveZ
-        self.stickScrubHeld = held
+        stageInput.withLock {
+            $0.stickMoveX = moveX
+            $0.stickMoveZ = moveZ
+            $0.stickScrubHeld = held
+        }
     }
 
     /// The Prologue's hardness chips pick a 3D crystal.
@@ -526,14 +568,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     /// finale starts and when a new stage mounts (web twin: `releaseThumbPad` + `setVirtualMove(0, 0,
     /// false)` in `TelemetryHudOverlay.setPaused`).
     public func resetStageInput() {
-        stickMoveX = 0
-        stickMoveZ = 0
-        stickScrubHeld = false
-        directTouchWorldPos = nil
-        pendingFlossFire = false
-        pendingFlossAimPos = nil
-        pendingRinseFire = false
-        pendingDiscloseFire = false
+        stageInput.withLock { $0 = StageInput() }
         lastTapTimeSec = nil
         pointerEpoch &+= 1
         touchSystem.endTouch()
@@ -543,8 +578,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     /// no ground under it falls back to the automatic aim).
     public func requestFlossToward(_ point: CGPoint, in scnView: SCNView) {
         guard !arcadePaused, appMode == .arcade || appMode == .pulpRescue else { return }
-        pendingFlossFire = true
-        pendingFlossAimPos = arcadeGroundPoint(at: point, in: scnView)
+        // The hit test is a SceneKit call: done before the lock is taken, never inside it.
+        let aim = arcadeGroundPoint(at: point, in: scnView)
+        stageInput.withLock {
+            $0.pendingFlossFire = true
+            $0.pendingFlossAimPos = aim
+            $0.pendingFlossAimDir = nil
+        }
     }
 
     public func spawnCompanionTreatSplats() {
@@ -627,7 +667,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     public func handlePointerUp() {
-        directTouchWorldPos = nil
+        stageInput.withLock { $0.directTouchWorldPos = nil }
         brushUserDragging = false
         if appMode == .hub {
             touchSystem.endTouch()
@@ -636,7 +676,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     private func updateArcadeGroundTarget(at point: CGPoint, in scnView: SCNView) {
         guard let target = arcadeGroundPoint(at: point, in: scnView) else { return }
-        directTouchWorldPos = target
+        stageInput.withLock { $0.directTouchWorldPos = target }
     }
 
     /// Where a screen point lands on the stage's tooth surface (kept inside the stage), or nil.
@@ -753,13 +793,20 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
             )
         }
 
-        if appMode == .hub || appMode == .brushAlong {
-            updateCompanionFrame(dt: dtFloat, motionTime: motionTime)
-        } else if appMode == .arcade || appMode == .pulpRescue || appMode == .report {
-            updateArcadeFrame(rawDt: rawDt, dtFloat: dtFloat, motionTime: motionTime)
+        if appMode == .arcade || appMode == .pulpRescue || appMode == .report {
+            // Tried, never waited for: while the main thread mounts a new stage, this frame is
+            // drawn as it stands (the stage's camera too: it reads the same state).
+            if stageLock.try() {
+                updateArcadeFrame(rawDt: rawDt, dtFloat: dtFloat, motionTime: motionTime)
+                updateCameraRig(dt: dtFloat)
+                stageLock.unlock()
+            }
+        } else {
+            if appMode == .hub || appMode == .brushAlong {
+                updateCompanionFrame(dt: dtFloat, motionTime: motionTime)
+            }
+            updateCameraRig(dt: dtFloat)
         }
-
-        updateCameraRig(dt: dtFloat)
         hasRenderedFirstFrame = true
     }
 
@@ -938,20 +985,30 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                     prevMutansPos[m.id] = m.pos
                 }
 
+                // Taken and cleared in one go, so a tap from the main thread is in this step or
+                // the next, never dropped between the two.
+                let held = stageInput.withLock { input -> StageInput in
+                    let taken = input
+                    input.clearPending()
+                    return taken
+                }
+                var aimWorldPos = held.pendingFlossAimPos
+                if aimWorldPos == nil, let dir = held.pendingFlossAimDir {
+                    aimWorldPos = Vec2(
+                        x: session.probePos.x + dir.x * GameConfig.flossLength,
+                        z: session.probePos.z + dir.z * GameConfig.flossLength
+                    )
+                }
                 let input = SessionInputCommand(
-                    moveX: stickMoveX,
-                    moveZ: stickMoveZ,
-                    directTargetWorldPos: directTouchWorldPos,
-                    scrubHeld: stickScrubHeld || (directTouchWorldPos != nil),
-                    aimWorldPos: pendingFlossAimPos,
-                    fireFlossRequested: pendingFlossFire,
-                    fireRinseRequested: pendingRinseFire,
-                    fireDiscloseRequested: pendingDiscloseFire
+                    moveX: held.stickMoveX,
+                    moveZ: held.stickMoveZ,
+                    directTargetWorldPos: held.directTouchWorldPos,
+                    scrubHeld: held.stickScrubHeld || (held.directTouchWorldPos != nil),
+                    aimWorldPos: aimWorldPos,
+                    fireFlossRequested: held.pendingFlossFire,
+                    fireRinseRequested: held.pendingRinseFire,
+                    fireDiscloseRequested: held.pendingDiscloseFire
                 )
-                pendingFlossFire = false
-                pendingFlossAimPos = nil
-                pendingRinseFire = false
-                pendingDiscloseFire = false
 
                 session.step(dt: fixedDt, input: input)
                 accumulator -= fixedDt

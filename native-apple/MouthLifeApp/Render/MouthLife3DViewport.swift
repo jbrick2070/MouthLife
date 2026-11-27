@@ -1,3 +1,4 @@
+import MouthLifeCore
 import SceneKit
 import SwiftUI
 
@@ -8,10 +9,13 @@ public struct MouthLife3DViewport: UIViewRepresentable {
     public let controller: MouthLifeSceneController
     /// True while something covers the whole screen (a finale): the game's scene stops drawing.
     public var paused: Bool
+    /// The picture quality in use. A value of this view, so a change of quality updates the view.
+    public var quality: QualityTier
 
-    public init(controller: MouthLifeSceneController, paused: Bool = false) {
+    public init(controller: MouthLifeSceneController, paused: Bool = false, quality: QualityTier = .ultra) {
         self.controller = controller
         self.paused = paused
+        self.quality = quality
     }
 
     public func makeUIView(context: Context) -> InteractiveMetalSCNView {
@@ -33,15 +37,19 @@ public struct MouthLife3DViewport: UIViewRepresentable {
     }
 
     public func updateUIView(_ uiView: InteractiveMetalSCNView, context: Context) {
-        uiView.preferredFramesPerSecond = 120
-        uiView.isPlaying = !paused
-        uiView.rendersContinuously = !paused
-        switch controller.qualityTier {
+        // SwiftUI calls this on every update of the screen around it. Each value is written only
+        // when it really changes: setting the anti-aliasing rebuilds the view's render targets.
+        if uiView.preferredFramesPerSecond != 120 { uiView.preferredFramesPerSecond = 120 }
+        if uiView.isPlaying == paused { uiView.isPlaying = !paused }
+        if uiView.rendersContinuously == paused { uiView.rendersContinuously = !paused }
+        let antialiasing: SCNAntialiasingMode
+        switch quality {
         case .ultra, .medium:
-            uiView.antialiasingMode = .multisampling4X
+            antialiasing = .multisampling4X
         case .low:
-            uiView.antialiasingMode = .multisampling2X
+            antialiasing = .multisampling2X
         }
+        if uiView.antialiasingMode != antialiasing { uiView.antialiasingMode = antialiasing }
     }
 }
 
@@ -108,10 +116,13 @@ public struct MouthLife3DViewport: NSViewRepresentable {
     public let controller: MouthLifeSceneController
     /// True while something covers the whole screen (a finale): the game's scene stops drawing.
     public var paused: Bool
+    /// The picture quality in use. A value of this view, so a change of quality updates the view.
+    public var quality: QualityTier
 
-    public init(controller: MouthLifeSceneController, paused: Bool = false) {
+    public init(controller: MouthLifeSceneController, paused: Bool = false, quality: QualityTier = .ultra) {
         self.controller = controller
         self.paused = paused
+        self.quality = quality
     }
 
     public func makeNSView(context: Context) -> InteractiveMetalSCNView {

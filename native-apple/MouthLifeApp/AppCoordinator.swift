@@ -150,6 +150,9 @@ public final class AppCoordinator {
     private var pacerTimer: Timer?
     /// The last pacer tick, on `pacerClockSec()` (a clock that keeps counting while the phone sleeps).
     private var lastPacerTickUptime: TimeInterval?
+    /// When this brush was last noted on the device mid-brushing, on `pacerClockSec()`
+    /// (`BrushCheckpoint`); nil until its first note.
+    @ObservationIgnored private var lastBrushCheckpointClockSec: TimeInterval?
     /// The ritual's session clock on real time, through a locked phone or the background (H04).
     @ObservationIgnored private var pacerClock = PacerSessionClock()
     private static let pacerClockOrigin = ContinuousClock.now
@@ -191,6 +194,9 @@ public final class AppCoordinator {
     private var lastDomeToastUptime: TimeInterval = -100
     private var arcadeToastClearTask: Task<Void, Never>?
     public var liveFps: Int = 120
+    /// The picture quality in use (`applyAutomaticQuality`). The 3D view is handed this value, so
+    /// SwiftUI updates the view, and with it the anti-aliasing, when the quality changes.
+    public private(set) var pictureQuality: QualityTier = .ultra
     /// The frame-rate pill is a developer readout; it is off and no longer offered in Settings.
     public var showProMotionBadge: Bool = false
     /// Settings' "Less Camera Motion", kept under the web's name (`mouthlife.reduceMotion`). Only
@@ -272,6 +278,10 @@ public final class AppCoordinator {
         // One language for the screens and the spoken coach.
         L10n.setLanguage(self.coachLanguage.rawValue)
 
+        // The test diary and the watchdog (`AppDiagnostics`), before anything that could stall.
+        // Diary lines in this file are raw strings (#"..."#): they are for testers, in English, and
+        // the text extractor (scripts/i18n-extract.mjs) leaves raw strings out of the translations.
+        AppDiagnostics.shared.start()
         // A brush the system closed on a Start card is paid now (before the sound listens: quietly).
         finishPendingBrush()
         setupSceneAndAudioBridges()
@@ -343,6 +353,35 @@ public final class AppCoordinator {
         UserDefaults.standard.removeObject(forKey: Self.pendingBrushDefaultsKey)
     }
 
+    /// Notes a brush still inside its 2 minutes, so one the app never finishes (closed, crashed or
+    /// frozen mid-brush) is paid at the next launch with the seconds really brushed: a "good try",
+    /// or a full brush if it was within the grace of the 2 minutes, as for a finished stage
+    /// (`BrushCheckpoint`). Every few seconds from the pacer's tick; `force` writes at once (the
+    /// app going away, Pause). It only writes the note: the session's own record of when brushing
+    /// ended (`pacerBrushing`, `pacerStageEndedAt`) stays empty until brushing really ends, so
+    /// Home mid-brush still leaves without a reward and the stage's end overwrites the note.
+    private func checkpointBrushing(force: Bool = false) {
+        guard mode == .brushAlong, pacerStage == .brushing, pacerAwaitingStage == nil, pacerBrushing == nil else { return }
+        guard BrushCheckpoint.isWorthKeeping(brushedSec: pacerElapsedSec) else { return }
+        let clockNow = Self.pacerClockSec()
+        guard force || BrushCheckpoint.isDue(lastWriteClockSec: lastBrushCheckpointClockSec, nowClockSec: clockNow) else { return }
+        lastBrushCheckpointClockSec = clockNow
+        let now = Date()
+        let brushedSec = min(pacerElapsedSec, GameConfig.brushAlongTotalSec)
+        let pending = PendingBrush(
+            sessionId: pacerSessionId,
+            brushedSec: brushedSec,
+            brushingEndedAt: now,
+            stageEndedAt: now,
+            fullBrush: BrushCheckpoint.countsAsFull(brushedSec: brushedSec),
+            flossDone: false,
+            rinseStepOff: !includeRinse
+        )
+        if let data = try? JSONEncoder().encode(pending) {
+            UserDefaults.standard.set(data, forKey: Self.pendingBrushDefaultsKey)
+        }
+    }
+
     /// Pays a brush left on a Start card when the app was closed: brushing (and floss, if it was
     /// finished) counts, dated when the last finished stage ended. Its Health entry, if Health is
     /// on, carries the session's sync id, so it can never be saved twice.
@@ -350,6 +389,7 @@ public final class AppCoordinator {
         guard let data = UserDefaults.standard.data(forKey: Self.pendingBrushDefaultsKey) else { return }
         clearPendingBrush()
         guard let p = try? JSONDecoder().decode(PendingBrush.self, from: data) else { return }
+        crumb(#"a brush the last run left unfinished is paid now: \#(Int(p.brushedSec)) s brushed, \#(p.fullBrush ? "full" : "good try")"#)
         let now = Date()
         _ = saveSystem.recordBrushAlongCompletion(
             withFlossBonus: p.flossDone,
@@ -721,7 +761,7 @@ public final class AppCoordinator {
 
     private func setupSceneAndAudioBridges() {
         HapticsEngine.shared.prepare()
-        NativeSoundEngine.shared.startEngineIfNeeded()
+        NativeSoundEngine.shared.startEngineIfNeeded(urgent: true)
 
         // Graphics quality is automatic. The manual picker was removed, so a fixed choice saved
         // earlier goes back to automatic.
@@ -729,13 +769,15 @@ public final class AppCoordinator {
             saveSystem.setQualityPreference(.auto)
             save = saveSystem.getSave()
         }
-        let initialTier = save.qualityPreference.explicitTier ?? .ultra
-        sceneController.qualityTier = initialTier
+        let launchTier = save.qualityPreference.explicitTier ?? automaticQualityTier()
+        sceneController.qualityTier = launchTier
+        pictureQuality = launchTier
         sceneController.companionSmoothness = save.companion.smoothnessIndex
 
         sceneController.onFpsUpdated = { [weak self] fps in
             guard let self else { return }
             self.liveFps = fps
+            AppDiagnostics.shared.noteFps(fps)
         }
 
         sceneController.onSessionStepped = { [weak self] snap in
@@ -1038,6 +1080,7 @@ public final class AppCoordinator {
         sceneController.resetStageInput()
         NativeSoundEngine.shared.setFinaleDucked(true)
         reportAfterFinale = thenReport
+        crumb(#"finale starts (\#(kind), city \#(worldIndex))"#)
         withAnimation(.easeOut(duration: 0.2)) {
             finale = CityFinaleRequest(kind: kind, worldIndex: worldIndex, finishes: finishes ?? molarFinishes, reducedMotion: reducedMotion)
         }
@@ -1055,6 +1098,7 @@ public final class AppCoordinator {
         NativeSoundEngine.shared.setFinaleDucked(false)
         let report = reportAfterFinale
         reportAfterFinale = false
+        crumb(#"finale over"#)
         withAnimation(.easeInOut(duration: 0.35)) {
             finale = nil
             if report { transition(to: .report) }
@@ -1187,6 +1231,10 @@ public final class AppCoordinator {
     private func transition(to next: AppMode) {
         let prev = mode
         mode = next
+        let stageId = next == .arcade || next == .pulpRescue ? activeCartridge.id : ""
+        crumb(#"screen \#(prev.rawValue) -> \#(next.rawValue) \#(stageId)"#)
+        // A change of screen is the one moment the picture may change quality unseen.
+        applyAutomaticQuality()
         syncSceneMode()
         updateIdleTimerPolicy()
         if next == .hub {
@@ -1368,6 +1416,8 @@ public final class AppCoordinator {
         pacerAwaitingSince = nil
         pacerSessionId = UUID().uuidString
         clearPendingBrush()
+        lastBrushCheckpointClockSec = nil
+        crumb(#"brush started"#)
         pacerCompletedFlossStage = false
         pacerBrushedFullTime = false
         pacerBrushing = nil
@@ -1477,7 +1527,10 @@ public final class AppCoordinator {
         pacerIsPaused.toggle()
         pacerPausedByUser = pacerIsPaused
         pacerSuspendedBySystem = false
+        // Paused, then the app closed from the switcher: the note has the seconds up to the pause.
+        if pacerIsPaused { checkpointBrushing(force: true) }
         lastPacerTickUptime = Self.pacerClockSec()
+        crumb(#"brush \#(pacerIsPaused ? "paused" : "resumed") at \#(Int(pacerElapsedSec)) s"#)
         NativeSoundEngine.shared.setPaused(pacerIsPaused)
         updateIdleTimerPolicy()
         eventBus.emit(.pacerPaused(paused: pacerIsPaused))
@@ -1514,6 +1567,7 @@ public final class AppCoordinator {
             pacerAwaitingSince = Date()
         }
         pacerAwaitingStage = next
+        crumb(#"brush: \#(pacerStage.rawValue) ended, Start card for \#(next.rawValue)"#)
         storePendingBrush()
         // Back from a lock that outlasted the wait as well: finish now, without a card or a chime.
         if let since = pacerAwaitingSince, Date().timeIntervalSince(since) >= GameConfig.brushAlongStageWaitSec {
@@ -1576,6 +1630,7 @@ public final class AppCoordinator {
         let mwDur = mouthwashDurationStyle.durationSec
         pacerClock.enter(.flossBonus, from: pacerStage, mouthwashDurationSec: mwDur)
         let passingThrough = pacerClock.overflowSec(in: .flossBonus, mouthwashDurationSec: mwDur) > 0
+        crumb(#"brush: floss starts"#)
         pacerStage = .flossBonus
         pacerAwaitingStage = nil
         pacerAwaitingSince = nil
@@ -1611,6 +1666,7 @@ public final class AppCoordinator {
         let mwDur = mouthwashDurationStyle.durationSec
         pacerClock.enter(.mouthwashBonus, from: pacerStage, mouthwashDurationSec: mwDur)
         let passingThrough = pacerClock.overflowSec(in: .mouthwashBonus, mouthwashDurationSec: mwDur) > 0
+        crumb(#"brush: rinse starts"#)
         pacerStage = .mouthwashBonus
         pacerAwaitingStage = nil
         pacerAwaitingSince = nil
@@ -1664,6 +1720,7 @@ public final class AppCoordinator {
         pacerSuspendedBySystem = false
         NativeSoundEngine.shared.setPaused(false)
         let fullBrush = pacerBrushedFullTime
+        crumb(#"brush finished: \#(fullBrush ? "full" : "good try")\#(withFlossBonus ? ", floss" : "")\#(withMouthwashBonus ? ", rinse" : "")"#)
         let outcome = saveSystem.recordBrushAlongCompletion(
             withFlossBonus: withFlossBonus,
             withMouthwashBonus: withMouthwashBonus,
@@ -1775,6 +1832,7 @@ public final class AppCoordinator {
                 holdForStart(.flossBonus)
                 return
             }
+            checkpointBrushing()
             let qIdx = phase.quadrant.rawValue
             let sIdx = phase.surface.rawValue
             if qIdx != lastAnnouncedQuadrant && pacerElapsedSec < GameConfig.brushAlongTotalSec - 0.2 {
@@ -1823,7 +1881,14 @@ public final class AppCoordinator {
     public func handleScenePhase(_ phase: ScenePhase) {
         switch phase {
         case .active:
+            // Noted before, and after when it was slow: bringing the sound back talks to the
+            // system's audio service and is the one step here that can take long.
+            crumb(#"app active"#)
+            AppDiagnostics.shared.sceneBecameActive()
+            let soundBegan = ProcessInfo.processInfo.systemUptime
             NativeSoundEngine.shared.resumeFromForeground()
+            let soundMs = Int((ProcessInfo.processInfo.systemUptime - soundBegan) * 1000)
+            if soundMs >= 100 { crumb(#"sound came back in \#(soundMs) ms"#) }
             refreshReminders()
             // Health access taken away in Settings meanwhile: show it as off (the heart comes back).
             if healthLogOn && !HealthBrushLog.isAllowed { healthLogOn = false }
@@ -1852,16 +1917,21 @@ public final class AppCoordinator {
 
         case .inactive:
             // Do NOT pause Brush-Along or drop wake-lock on momentary notification banners / Control Center peeks!
-            break
+            AppDiagnostics.shared.sceneBecameInactive()
 
         case .background:
+            crumb(#"app in background"#)
             if mode == .brushAlong && !pacerIsPaused {
                 // Locked or in the background, the ritual keeps its time (H04); only the sound and
                 // the stay-awake stop. Brushing goes on at the sink.
                 NativeSoundEngine.shared.setPaused(true)
             }
+            // The system may end the app while it is away: keep what was brushed so far.
+            checkpointBrushing(force: true)
             _ = saveSystem.save()
             setIdleTimerDisabled(false)
+            // Last: the app has left the screen in good order.
+            AppDiagnostics.shared.sceneWentToBackground()
 
         @unknown default:
             break
@@ -1914,7 +1984,32 @@ public final class AppCoordinator {
     public func updateQuality(_ pref: QualityPreference) {
         saveSystem.setQualityPreference(pref)
         save = saveSystem.getSave()
-        sceneController.qualityTier = pref.explicitTier ?? .ultra
+        applyAutomaticQuality()
+    }
+
+    /// Automatic quality, from how warm the device is and Low Power Mode (`QualityGovernor`).
+    private func automaticQualityTier() -> QualityTier {
+        let info = ProcessInfo.processInfo
+        let heat: QualityGovernor.Heat
+        switch info.thermalState {
+        case .nominal: heat = .nominal
+        case .fair: heat = .fair
+        case .serious: heat = .serious
+        case .critical: heat = .critical
+        @unknown default: heat = .fair
+        }
+        return QualityGovernor.tier(heat: heat, lowPowerMode: info.isLowPowerModeEnabled)
+    }
+
+    /// Sets the picture's quality for the screen about to show. Called at launch and on every
+    /// change of screen, never during play (see `QualityGovernor`).
+    private func applyAutomaticQuality() {
+        let tier = save.qualityPreference.explicitTier ?? automaticQualityTier()
+        if sceneController.qualityTier != tier {
+            crumb(#"picture quality \#(sceneController.qualityTier.rawValue) -> \#(tier.rawValue)"#)
+            sceneController.qualityTier = tier
+        }
+        if pictureQuality != tier { pictureQuality = tier }
     }
 
     public func updateAudio(muted: Bool, music: Float, sfx: Float) {
@@ -1967,6 +2062,8 @@ public final class AppCoordinator {
         for key in Self.erasedDefaultsKeys {
             UserDefaults.standard.removeObject(forKey: key)
         }
+        // A test build's diary of what the app was doing goes too ("erase all saved data").
+        AppDiagnostics.shared.eraseEverything()
         seenHints = []
         coach = nil
         tutorialGate = TutorialGate()

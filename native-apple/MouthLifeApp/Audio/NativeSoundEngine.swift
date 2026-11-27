@@ -1865,6 +1865,13 @@ public final class NativeSoundEngine {
     private var isEngineStarted: Bool = false
     private var isPaused: Bool = false
     private var isInterrupted: Bool = false
+    /// The earliest moment (`systemUptime`) the engine may be started again without an urgent
+    /// reason: see `startEngineIfNeeded`.
+    private var engineRetryNotBefore: TimeInterval = 0
+    /// The wait after a start that failed, and after one that worked (an engine that keeps
+    /// stopping is not restarted on every frame either). An urgent start waits for neither.
+    private static let engineRetryWaitSec: TimeInterval = 2.0
+    private static let engineRestartGapSec: TimeInterval = 0.5
     /// The app mode as the main thread last set it (`currentMode` follows on the sequencer queue).
     /// The brushing sound may only play in a stage: see `ScrubGate`.
     private var scrubMode: AppMode = .cosmicIntro
@@ -2016,19 +2023,37 @@ public final class NativeSoundEngine {
         engine.attach(srcNode)
         engine.connect(srcNode, to: engine.mainMixerNode, format: renderFormat)
         pushMixStateToKernel()
-        startEngineIfNeeded()
+        startEngineIfNeeded(urgent: true)
     }
 
-    public func startEngineIfNeeded() {
-        guard !isInterrupted else { return }
-        if !engine.isRunning {
-            do {
-                configureAudioSessionIfNeeded()
-                try engine.start()
-                isEngineStarted = true
-            } catch {
-                isEngineStarted = false
-            }
+    /// Starts the engine when it is not running.
+    ///
+    /// Every sound effect, and every brush update of a stage (once a frame), asks for the engine
+    /// this way. Starting it talks to the system's audio service on the calling thread, which is
+    /// the main one. So an engine that cannot start (a route change gone wrong, the system's
+    /// media services restarting) must not be tried again on each call: the main thread would
+    /// spend every frame waiting, and the game would go on drawing but stop answering touches.
+    /// After a try, the next one waits (`engineRetryWaitSec` after a failure).
+    ///
+    /// - Parameter urgent: a moment that deserves a try whatever the wait: launch, back on
+    ///   screen, an interruption over, a new audio route, sound switched back on.
+    public func startEngineIfNeeded(urgent: Bool = false) {
+        guard !isInterrupted, !engine.isRunning else { return }
+        let began = ProcessInfo.processInfo.systemUptime
+        guard urgent || began >= engineRetryNotBefore else { return }
+        do {
+            configureAudioSessionIfNeeded()
+            try engine.start()
+            isEngineStarted = true
+            let finished = ProcessInfo.processInfo.systemUptime
+            engineRetryNotBefore = finished + Self.engineRestartGapSec
+            crumb("sound: engine started in \(Int((finished - began) * 1000)) ms")
+        } catch {
+            isEngineStarted = false
+            let finished = ProcessInfo.processInfo.systemUptime
+            engineRetryNotBefore = finished + Self.engineRetryWaitSec
+            let e = error as NSError
+            crumb("sound: engine did not start after \(Int((finished - began) * 1000)) ms (\(e.domain) \(e.code)); next try in \(Int(Self.engineRetryWaitSec)) s")
         }
     }
 
@@ -2038,7 +2063,7 @@ public final class NativeSoundEngine {
         isInterrupted = false
         configureAudioSessionIfNeeded()
         if !isMuted {
-            startEngineIfNeeded()
+            startEngineIfNeeded(urgent: true)
         }
         pushMixStateToKernel()
     }
@@ -2064,8 +2089,9 @@ public final class NativeSoundEngine {
     @objc private func handleEngineConfigurationChange(_ notification: Notification) {
         // AirPods / Bluetooth route switch: cleanly reconnect if sample rate changed & resume
         guard !isInterrupted, !isMuted else { return }
+        crumb("sound: audio route or format changed (engine \(engine.isRunning ? "running" : "stopped"))")
         if !engine.isRunning {
-            startEngineIfNeeded()
+            startEngineIfNeeded(urgent: true)
         }
         pushMixStateToKernel()
     }
@@ -2078,15 +2104,17 @@ public final class NativeSoundEngine {
 
         switch type {
         case .began:
+            crumb("sound: interrupted by the system")
             isInterrupted = true
             stopScrub()
             stopVoiceCoach()
             pushMixStateToKernel()
         case .ended:
+            crumb("sound: interruption over")
             isInterrupted = false
             configureAudioSessionIfNeeded()
             if !isMuted {
-                startEngineIfNeeded()
+                startEngineIfNeeded(urgent: true)
                 pushMixStateToKernel()
                 resumeFinaleTrackInStep()
             }
@@ -2108,7 +2136,7 @@ public final class NativeSoundEngine {
             stopScrub()
             stopVoiceCoach()
         } else {
-            startEngineIfNeeded()
+            startEngineIfNeeded(urgent: true)
         }
         pushMixStateToKernel()
         if !muted {

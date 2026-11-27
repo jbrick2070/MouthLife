@@ -15,6 +15,7 @@
 		7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A11000000000000000002 /* PhoneWatchBridge.swift */; };
 		7C0A13000000000000000001 /* BrushReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A13000000000000000002 /* BrushReminderScheduler.swift */; };
 		7C0A16000000000000000001 /* HealthBrushLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A16000000000000000002 /* HealthBrushLog.swift */; };
+		7C0A17000000000000000001 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A17000000000000000002 /* AppDiagnostics.swift */; };
 		7C0A12000000000000000011 /* MouthLifeWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000001 /* MouthLifeWatchApp.swift */; };
 		7C0A12000000000000000012 /* WatchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A12000000000000000002 /* WatchController.swift */; };
 		7C0A120000000000000000B1 /* WatchMusic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A120000000000000000A1 /* WatchMusic.swift */; };
@@ -113,6 +114,7 @@
 		7C0A15000000000000000006 /* MouthLifeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MouthLifeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C0A11000000000000000002 /* PhoneWatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhoneWatchBridge.swift; path = MouthLifeApp/Sync/PhoneWatchBridge.swift; sourceTree = "<group>"; };
 		7C0A16000000000000000002 /* HealthBrushLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthBrushLog.swift; path = MouthLifeApp/Sync/HealthBrushLog.swift; sourceTree = "<group>"; };
+		7C0A17000000000000000002 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDiagnostics.swift; path = MouthLifeApp/Sync/AppDiagnostics.swift; sourceTree = "<group>"; };
 		7C0A16000000000000000003 /* MouthLifeApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = MouthLifeApp.entitlements; path = MouthLifeApp/MouthLifeApp.entitlements; sourceTree = "<group>"; };
 		7C0A13000000000000000002 /* BrushReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrushReminderScheduler.swift; path = MouthLifeApp/Sync/BrushReminderScheduler.swift; sourceTree = "<group>"; };
 		7C0A12000000000000000001 /* MouthLifeWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MouthLifeWatchApp.swift; path = MouthLifeWatch/MouthLifeWatchApp.swift; sourceTree = "<group>"; };
@@ -236,6 +238,7 @@
 				7C0A11000000000000000002 /* PhoneWatchBridge.swift */,
 				7C0A13000000000000000002 /* BrushReminderScheduler.swift */,
 				7C0A16000000000000000002 /* HealthBrushLog.swift */,
+				7C0A17000000000000000002 /* AppDiagnostics.swift */,
 				8738225AC4938AA2222183FA /* Assets.xcassets */,
 				59C4D8B12E7A3094C61B8E23 /* Music */,
 				7A11C0DE5EED4B1DA5E2F005 /* guide */,
@@ -468,6 +471,7 @@
 				7C0A11000000000000000001 /* PhoneWatchBridge.swift in Sources */,
 				7C0A13000000000000000001 /* BrushReminderScheduler.swift in Sources */,
 				7C0A16000000000000000001 /* HealthBrushLog.swift in Sources */,
+				7C0A17000000000000000001 /* AppDiagnostics.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -541,7 +545,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_APP_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLifeApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
@@ -572,7 +576,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_APP_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLifeApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
@@ -627,7 +631,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
@@ -653,7 +657,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
@@ -681,7 +685,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLife.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWidgets/Info.plist;
@@ -711,7 +715,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLife.entitlements;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWidgets/Info.plist;

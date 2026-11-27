@@ -63,11 +63,18 @@ Welcome! This repository contains **MouthLife**, with active development focused
     - "Zoomed" is judged by how much of the page is visible (`visualViewport.width` against the page's width), never by `visualViewport.scale` alone: Safari's own text-size setting changes that figure while nothing is zoomed.
     - To try the way back on a phone, open the development server with `?zoomTest`: zooming is then not held off (never in a published build).
 
+12. **Two Threads Share the Stage: Keep Them Apart (first outside beta test, November 2026):**
+    - SceneKit calls `renderer(_:updateAtTime:)` on its render thread; touches, the HUD's buttons and the coordinator run on the main thread. What both use goes through `stageInput` (one lock, taken and cleared once per step) or waits for `stageLock`, which the main thread holds for the whole of `mountStage` and the render thread only ever *tries*. Never make the render thread wait for a lock the main thread can hold while it calls SceneKit, and never read the live session from the main thread.
+    - The sound engine is asked for on every sound effect and every stage frame. A start that failed waits before the next try (`startEngineIfNeeded(urgent:)`): restarting it talks to the system's audio service on the main thread, and doing that every frame makes the game draw but stop answering touches.
+    - A freeze is found with the test diary, not by guessing (`AppDiagnostics`, `TestDiary`; TestFlight and development builds only, "Share test diary" in Settings). Add a `crumb("...")` where the app changes what it is doing, never per frame and never on the render or audio thread. The App Store build must keep collecting nothing: the privacy policy says so.
+
 ## 3. Verification Checklist Before Committing
 
 ```bash
 # 1. Pure Swift engine, 8-language coach, 3-stage timeline & 120Hz gyro slosh tests
 cd native-apple && swift test
+# ("unable to resolve module dependency: 'XCTest'" means xcode-select points at the Command Line
+# Tools: prefix the commands with DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer)
 
 # 2. iOS Release compile & Metal shader verification (0 warnings, 0 errors)
 xcodebuild -project MouthLife.xcodeproj -scheme MouthLife -configuration Release \

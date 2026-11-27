@@ -139,7 +139,11 @@ public struct RootContentView: View {
     private func modes(viewport: EdgeInsets, split: DuoSplit?) -> some View {
         ZStack {
             // Full-screen 120Hz Native Metal SceneKit 3D Viewport
-            MouthLife3DViewport(controller: coordinator.sceneController, paused: coordinator.finale != nil)
+            MouthLife3DViewport(
+                controller: coordinator.sceneController,
+                paused: coordinator.finale != nil,
+                quality: coordinator.pictureQuality
+            )
                 .padding(viewport)
                 .ignoresSafeArea()
 
