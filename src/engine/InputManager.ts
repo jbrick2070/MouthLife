@@ -231,6 +231,11 @@ export class InputManager {
     return this.steerPointerId !== null;
   }
 
+  /** True while a finger or mouse is down turning the 3D view (an orbit drag). */
+  isOrbitDragging(): boolean {
+    return this.orbitPointerId !== null;
+  }
+
   private toNdc(clientX: number, clientY: number): { x: number; y: number } {
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);

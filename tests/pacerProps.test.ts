@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GlowPass } from '../src/engine/render/GlowPass';
-import { flossContactTeeth, quadrantToothRange, sweep01 } from '../src/engine/render/PacerPropRig';
+import { PacerPropRig, flossContactTeeth, quadrantToothRange, sweep01 } from '../src/engine/render/PacerPropRig';
 
 describe('Brush-Along 3D props follow the mirror convention', () => {
   it('sends the brush to the screen-right teeth for the patient-right quadrants', () => {
@@ -41,5 +41,33 @@ describe('glow buffer stays small', () => {
     expect(big.w).toBe(480);
     expect(big.h).toBe(270);
     expect(GlowPass.bufferSize(40, 40)).toEqual({ w: 32, h: 32 });
+  });
+});
+
+describe('the brush rig holds the camera still while paused or on a Start card', () => {
+  const state = (paused: boolean) =>
+    ({
+      stage: 'brushing',
+      quadrant: 0,
+      surface: 0,
+      flossIsUpper: true,
+      flossContactIndex: 0,
+      flossStepIndex: 0,
+      mouthwashProgress01: 0,
+      paused,
+      phaseElapsedSec: 5,
+      phaseDurationSec: 10,
+    }) as const;
+
+  it('its camera clock runs, stops while paused, and goes on from where it stopped', () => {
+    const rig = new PacerPropRig();
+    for (let i = 0; i < 30; i++) rig.update(1 / 60, state(false), []);
+    const before = rig.cameraClockSec;
+    expect(before).toBeCloseTo(0.5, 9);
+    for (let i = 0; i < 90; i++) rig.update(1 / 60, state(true), []);
+    expect(rig.cameraClockSec).toBe(before);
+    rig.update(0.05, state(false), []);
+    expect(rig.cameraClockSec).toBeCloseTo(before + 0.05, 9);
+    rig.dispose();
   });
 });

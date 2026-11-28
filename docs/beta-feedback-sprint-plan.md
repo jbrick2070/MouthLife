@@ -1,7 +1,7 @@
 # MouthLife: after the first outside beta test, for every edition (plan, 2026-11-28)
 
-**Status (28 November):** Sprints 1 and 2 are done. Sprint 3 is built and being merged; Sprint 4
-is designed; Sprint 6's brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
+**Status (28 November):** Sprints 1, 2 and 3 are done. Sprint 4 is designed and next; Sprint 6's
+brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
 iPhone, iPad, Watch, widgets and Mac apps, 166 native tests, 701 web tests, CI green). The owner
 asked for one plan that carries what the first outside tester found to the Mac app, the browser
 edition and the Android (Google Play) app, and that checks the camera moves and angles are alike
@@ -201,7 +201,7 @@ Checked on the Pixel 8a (28 November, with Sprint 1): killed 35 seconds into a b
 paid as a "good try"; the uninstall dialog offers "Keep app data"; a finger held while leaving the
 app leaves nothing held after Resume, and a new touch steers.
 
-### Sprint 3: the camera, alike in every edition
+### Sprint 3: the camera, alike in every edition: done
 
 Every camera, on every screen, and above all the whole of brushing and flossing: that is where
 the camera moves most and where the two editions were last changed separately.
@@ -236,6 +236,21 @@ the camera moves most and where the two editions were last changed separately.
 
 *Done when:* the table has no difference nobody chose, the shared cases pass on both sides, and
 the picture pairs match.
+
+*Built (28 November):* `BrushCamera.swift` in `MouthLifeCore` and its twin `brushCamera.ts` hold
+every camera's numbers (brushing, floss, rinse, Home, arrival, stage, score, field of view, follow
+speeds, finger limits), with the same test cases on both sides, including the mirror rule. The
+browser follows the app everywhere except the extras kept (the dive into a city, the stage's
+shake, double-tap to recentre, its own framing around its panels); the app follows the browser
+under Reduce Motion (straight on, slow) and stands still on Pause and Start cards. The score
+screen in the browser now shows the city, as the app does, so its line about rubbing the teeth
+is gone. Reviewed by Sonnet; fixed: the dive now ends exactly on the stage camera, the native
+camera holds the moment Pause or a Start card comes up, and two tests that compared a value with
+itself now test the hold. 199 native tests, 781 web tests, both Release builds. Not done: the
+picture pairs. The camera numbers are checked by tests and, in the browser, by reading them back
+from the running page; how the new framing looks (the score screen, Home further back, a
+foldable at aspect 0.9) still wants a look on real screens. Left for the owner: the floss camera
+swings back and forth at the middle three stops, in both editions.
 
 ### Sprint 4: see what a test build was doing, on every platform
 

@@ -1476,6 +1476,7 @@ public final class AppCoordinator {
         sceneController.pacerStage = .brushing
         sceneController.pacerFlossToolStyle = flossToolStyle
         sceneController.pacerMouthwashDurationSec = mouthwashDurationStyle.durationSec
+        sceneController.pacerCameraHeld = false
         NativeSoundEngine.shared.setPaused(false)
         transition(to: .brushAlong)
         NativeSoundEngine.shared.setPacerState(quadrantIdx: 0, inFlossBonus: false)
@@ -1568,6 +1569,7 @@ public final class AppCoordinator {
         guard pacerAwaitingStage == nil else { return }
         pacerIsPaused.toggle()
         pacerPausedByUser = pacerIsPaused
+        syncPacerCameraHold()
         pacerSuspendedBySystem = false
         // Paused, then the app closed from the switcher: the note has the seconds up to the pause.
         if pacerIsPaused { checkpointBrushing(force: true) }
@@ -1609,6 +1611,7 @@ public final class AppCoordinator {
             pacerAwaitingSince = Date()
         }
         pacerAwaitingStage = next
+        syncPacerCameraHold()
         crumb(#"brush: \#(pacerStage.rawValue) ended, Start card for \#(next.rawValue)"#)
         storePendingBrush()
         // Back from a lock that outlasted the wait as well: finish now, without a card or a chime.
@@ -1823,8 +1826,15 @@ public final class AppCoordinator {
         lastPacerTickUptime = nil
     }
 
+    /// Paused or on a Start card, the camera stands still (its own clock and tilt hold). Said the
+    /// moment either changes, and again on every tick in case a path sets them without saying so.
+    private func syncPacerCameraHold() {
+        sceneController.pacerCameraHeld = mode == .brushAlong && (pacerIsPaused || pacerAwaitingStage != nil)
+    }
+
     private func tickPacer() {
         guard mode == .brushAlong else { return }
+        syncPacerCameraHold()
         if pacerAwaitingStage != nil {
             // A Start card: the clock waits. One left up too long finishes the brush with what was
             // done, so a brush walked away from is still saved.

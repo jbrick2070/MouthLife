@@ -116,6 +116,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     public var pacerStage: PacerStage = .brushing
     public var pacerFlossToolStyle: FlossToolStyle = .flossPick
     public var pacerMouthwashDurationSec: Double = GameConfig.brushAlongMouthwashBonusSec
+    /// True while the brush is paused or a Start card is up (the coordinator keeps it in step): the
+    /// Brush-Along camera's clock and the rinse tilt it reads hold still, so the picture stands still
+    /// (the brush and the floss pick keep their own motion). Web twin: `PacerVisualState.paused`.
+    public var pacerCameraHeld: Bool = false
     public var highlightedCrownIndex: Int? {
         didSet {
             companionEnamelController.setHighlightedCrown(index: highlightedCrownIndex, pulse01: 1.0)
@@ -123,12 +127,21 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
     }
 
     // Input State (120Hz Direct Touch Steering + Thumbstick + Orbit)
-    private var hubOrbitYaw: Float = 0.0
-    private var hubOrbitPitch: Float = 0.34
+    // The camera's numbers (limits, gains, framing, follow rates) are `BrushCamera`'s, shared with
+    // the web's brushCamera.ts.
+    private var hubOrbitYaw = Float(BrushCamera.hubRestYaw)
+    private var hubOrbitPitch = Float(BrushCamera.hubRestPitch)
     private var cosmicOrbitYaw: Float = 0.0
     private var brushOrbitOffsetYaw: Float = 0.0
     private var brushOrbitOffsetPitch: Float = 0.0
     private var brushUserDragging: Bool = false
+    /// The Brush-Along camera's own clock and its copy of the rinse tilt (see `pacerCameraHeld`). The
+    /// clock is the frame's (`sceneNowSec`) less `brushCameraHeldSec`, the time spent held, so it
+    /// keeps step with the brush's own motion until the first pause and stands exactly still while held.
+    private var brushCameraClockSec: Double = 0
+    private var brushCameraHeldSec: Double = 0
+    private var brushCameraSlosh: Float = 0
+    private var brushCameraHandheld01: Float = 0
     private var latestPacerCoachState: PacerCoachVisualState?
     private var hasRenderedFirstFrame: Bool = false
     /// The stick, the finger on the tooth and the queued floss, Surge and Scan (see `StageInput`).
@@ -444,7 +457,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                     flossToolStyle: pacerFlossToolStyle,
                     mouthwashDurationSec: pacerMouthwashDurationSec,
                     nowSec: sceneNowSec,
-                    reducedMotion: reducedMotion
+                    reducedMotion: reducedMotion,
+                    cameraClockSec: brushCameraClockSec,
+                    cameraRinseSlosh: brushCameraSlosh,
+                    cameraRinseHandheld01: brushCameraHandheld01
                 )
             }
         }
@@ -597,9 +613,7 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         guard size.width > 1, size.height > 1 else { return }
         viewportAspect = Float(size.width / size.height)
         // Automatically widen vertical FOV in portrait on iPhone so the full 14-crown arch stays lushly framed
-        let baseFov = Float(GameConfig.cameraBaseFovDeg)
-        let portraitBoost = viewportAspect < 0.85 ? (0.85 - viewportAspect) * 46.0 : 0.0
-        camera.fieldOfView = CGFloat(min(64.5, baseFov + portraitBoost))
+        camera.fieldOfView = CGFloat(BrushCamera.fovDeg(aspect: Double(viewportAspect)))
         if !hasRenderedFirstFrame {
             snapCameraToTarget()
         }
@@ -654,15 +668,27 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         } else if appMode == .hub {
             if !tryRubCompanionCrown(at: point, in: scnView, phase: .move) {
                 // Smoothly orbit the 14-crown arch & 3D Earth sky when dragging open space
-                hubOrbitYaw = max(-0.85, min(0.85, hubOrbitYaw - Float(delta.width) * 0.0055))
-                hubOrbitPitch = max(0.18, min(0.82, hubOrbitPitch + Float(delta.height) * 0.0035))
+                let turned = BrushCamera.hubOrbitDrag(
+                    yaw: Double(hubOrbitYaw),
+                    pitch: Double(hubOrbitPitch),
+                    dxPoints: Double(delta.width),
+                    dyPoints: Double(delta.height)
+                )
+                hubOrbitYaw = Float(turned.yaw)
+                hubOrbitPitch = Float(turned.pitch)
             }
         } else if appMode == .cosmicIntro {
-            cosmicOrbitYaw = max(-0.75, min(0.75, cosmicOrbitYaw - Float(delta.width) * 0.005))
+            cosmicOrbitYaw = Float(BrushCamera.arrivalOrbitDrag(yaw: Double(cosmicOrbitYaw), dxPoints: Double(delta.width)))
         } else if appMode == .brushAlong {
             brushUserDragging = true
-            brushOrbitOffsetYaw = max(-0.85, min(0.85, brushOrbitOffsetYaw - Float(delta.width) * 0.0055))
-            brushOrbitOffsetPitch = max(-0.45, min(0.45, brushOrbitOffsetPitch + Float(delta.height) * 0.0035))
+            let turned = BrushCamera.brushOrbitDrag(
+                yaw: Double(brushOrbitOffsetYaw),
+                pitch: Double(brushOrbitOffsetPitch),
+                dxPoints: Double(delta.width),
+                dyPoints: Double(delta.height)
+            )
+            brushOrbitOffsetYaw = Float(turned.yaw)
+            brushOrbitOffsetPitch = Float(turned.pitch)
         }
     }
 
@@ -743,6 +769,13 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         let dtFloat = Float(rawDt)
         sceneNowSec += dtFloat
         let motionTime = reducedMotion ? Float(0) : sceneNowSec
+        // The Brush-Along camera's clock stands still while the brush is paused or a Start card is
+        // up, and runs on from where it stopped afterwards.
+        if appMode == .brushAlong && pacerCameraHeld {
+            brushCameraHeldSec = Double(sceneNowSec) - brushCameraClockSec
+        } else {
+            brushCameraClockSec = Double(sceneNowSec) - brushCameraHeldSec
+        }
 
         // 120Hz asymmetric smoothing over 3-band Suno + Synth/SFX audio levels (auto-zeroed for Reduce Motion)
         if reducedMotion {
@@ -838,9 +871,14 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
         if appMode == .brushAlong {
             touchSystem.fadeSplatsForPacer(elapsedSec: pacerElapsedSec)
             if !brushUserDragging {
-                let relax = exp(-2.2 * max(0.001, dt))
-                brushOrbitOffsetYaw *= relax
-                brushOrbitOffsetPitch *= relax
+                // Let go, a finger's turn eases back to the guided view.
+                brushOrbitOffsetYaw = Float(BrushCamera.easeBackOffset(Double(brushOrbitOffsetYaw), dt: Double(dt)))
+                brushOrbitOffsetPitch = Float(BrushCamera.easeBackOffset(Double(brushOrbitOffsetPitch), dt: Double(dt)))
+            }
+            // The camera keeps the tilt it last read while held, so a paused rinse stands still.
+            if !pacerCameraHeld {
+                brushCameraSlosh = gyro.sloshPosition
+                brushCameraHandheld01 = gyro.handheldBlend01
             }
             let coach = companionNodes.updatePacerCoaching(
                 elapsedSec: pacerElapsedSec,
@@ -852,7 +890,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 gyroPump01: gyro.pumpPulse01,
                 gyroHandheld01: gyro.handheldBlend01,
                 nowSec: sceneNowSec,
-                reducedMotion: reducedMotion
+                reducedMotion: reducedMotion,
+                cameraClockSec: brushCameraClockSec,
+                cameraRinseSlosh: brushCameraSlosh,
+                cameraRinseHandheld01: brushCameraHandheld01
             )
             latestPacerCoachState = coach
             activeQuad = coach.activeQuadrant
@@ -1283,64 +1324,33 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     // MARK: - Bounded Powers-of-Ten Smooth 120Hz Camera Rig
 
+    /// Where the camera wants to be on this screen. The numbers are `BrushCamera`'s (MouthLifeCore),
+    /// which the web's brushCamera.ts shares.
     private func computeCameraTargets() -> (pos: SIMD3<Float>, look: SIMD3<Float>) {
-        let isPortrait = viewportAspect < 0.85
+        let isPortrait = BrushCamera.isPortrait(aspect: Double(viewportAspect))
 
         switch appMode {
         case .cosmicIntro:
-            let earthCenter = SIMD3<Float>(
-                Float(GameConfig.earthBackdropPos.x),
-                Float(GameConfig.earthBackdropPos.y),
-                Float(GameConfig.earthBackdropPos.z)
+            // The crystal, the hardness line-up, fluorapatite, then the Earth; a held phone's tilt
+            // turns and lifts it a little.
+            let pose = BrushCamera.arrivalCamera(
+                beat: cosmicBeatIndex,
+                yaw: Double(cosmicOrbitYaw),
+                portrait: isPortrait,
+                parallaxX: Double(latestGyroSnapshot.parallaxX),
+                parallaxY: Double(latestGyroSnapshot.parallaxY)
             )
-            let showcaseCenter = earthCenter + SIMD3<Float>(0, 38.0, 0)
-            let gyroYaw = latestGyroSnapshot.parallaxX * 0.085
-            let gyroLift = latestGyroSnapshot.parallaxY * 0.85
-            let sinYaw = sin(cosmicOrbitYaw + gyroYaw)
-            let cosYaw = cos(cosmicOrbitYaw + gyroYaw)
-            switch cosmicBeatIndex {
-            case 0:
-                // Beat 0: Stellar Forge & Hydroxyapatite Lattice centered at ~25% from top (top 1/3 hero!)
-                let dist: Float = isPortrait ? 20.0 : 15.5
-                return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -4.2 : 0.4) + gyroLift, cosYaw * dist),
-                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -6.2 : -1.8, 0)
-                )
-            case 1:
-                // Beat 1: Lattice + 5 Mohs Specimens spanning ~13%..36% from top above the story card
-                let dist: Float = isPortrait ? 21.5 : 15.0
-                return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist * 0.45, (isPortrait ? -6.4 : -2.6) + gyroLift, 2.2 + cosYaw * dist),
-                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -8.4 : -4.8, 2.2)
-                )
-            case 2:
-                // Beat 2: Fluorapatite 9F Crystal Lock closeup in upper hero third (~14%..37% from top)
-                let dist: Float = isPortrait ? 17.5 : 13.5
-                return (
-                    showcaseCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -3.6 : 0.2) + gyroLift, cosYaw * dist),
-                    showcaseCenter + SIMD3<Float>(0, isPortrait ? -5.4 : -1.5, 0)
-                )
-            default:
-                // Beat 3: Full 3D Orbital Earth, Polar Aurora & LEO Station Aurora filling ~10%..51% from top
-                let dist: Float = isPortrait ? 74.0 : 48.0
-                return (
-                    earthCenter + SIMD3<Float>(sinYaw * dist, (isPortrait ? -11.5 : -1.0) + gyroLift * 2.0, cosYaw * dist),
-                    earthCenter + SIMD3<Float>(0, isPortrait ? -18.5 : -6.5, 0)
-                )
-            }
+            return (SIMD3<Float>(pose.pos), SIMD3<Float>(pose.look))
 
         case .hub:
-            let archCenter = SIMD3<Float>(32.0, 1.4, 15.6)
-            let dist: Float = isPortrait ? 36.5 : 22.0
-            let effYaw = hubOrbitYaw + latestGyroSnapshot.parallaxX * 0.085
-            let effPitch = max(0.08, min(0.88, hubOrbitPitch - latestGyroSnapshot.parallaxY * 0.048))
-            let x = archCenter.x + sin(effYaw) * cos(effPitch) * dist
-            let y = archCenter.y + sin(effPitch) * dist
-            let z = archCenter.z + cos(effYaw) * cos(effPitch) * dist
-            return (
-                SIMD3<Float>(x, y, z),
-                archCenter + SIMD3<Float>(0, isPortrait ? 1.8 : 0.9, -1.0)
+            let pose = BrushCamera.hubCamera(
+                yaw: Double(hubOrbitYaw),
+                pitch: Double(hubOrbitPitch),
+                portrait: isPortrait,
+                parallaxX: Double(latestGyroSnapshot.parallaxX),
+                parallaxY: Double(latestGyroSnapshot.parallaxY)
             )
+            return (SIMD3<Float>(pose.pos), SIMD3<Float>(pose.look))
 
         case .brushAlong:
             let coach = latestPacerCoachState ?? companionNodes.updatePacerCoaching(
@@ -1348,39 +1358,41 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
                 inFlossBonus: pacerInFlossBonus,
                 flossToolStyle: pacerFlossToolStyle,
                 nowSec: sceneNowSec,
-                reducedMotion: reducedMotion
+                reducedMotion: reducedMotion,
+                cameraClockSec: brushCameraClockSec,
+                cameraRinseSlosh: brushCameraSlosh,
+                cameraRinseHandheld01: brushCameraHandheld01
             )
             let dist = isPortrait ? coach.camDistPortrait : coach.camDistLandscape
             let yaw = coach.camYaw + brushOrbitOffsetYaw
-            let pitch = max(-0.92, min(0.92, coach.camPitch + brushOrbitOffsetPitch))
+            let pitchClamp = Float(BrushCamera.brushPitchClamp)
+            let pitch = max(-pitchClamp, min(pitchClamp, coach.camPitch + brushOrbitOffsetPitch))
             let focus = coach.focusWorldPos
-            let pos = focus + SIMD3<Float>(
-                sin(yaw) * cos(pitch) * dist,
-                sin(pitch) * dist,
-                cos(yaw) * cos(pitch) * dist
+            let pos = BrushCamera.orbitPosition(
+                look: SIMD3<Double>(focus),
+                yaw: Double(yaw),
+                pitch: Double(pitch),
+                dist: Double(dist)
             )
-            return (pos, focus)
+            return (SIMD3<Float>(pos), focus)
 
         case .arcade, .pulpRescue:
             let px = currProbePos.x
             let pz = currProbePos.z
-            let camHeight: Float = isPortrait ? 24.0 : 18.0
-            let camBackZ: Float = isPortrait ? 16.0 : 12.2
             let probeX = probeRig.rootNode.isHidden ? Float(px) : probeRig.rootNode.simdPosition.x
             let probeZ = probeRig.rootNode.isHidden ? Float(pz) : probeRig.rootNode.simdPosition.z
-            return (
-                SIMD3<Float>(probeX, camHeight, probeZ + camBackZ),
-                SIMD3<Float>(probeX, 0.6, probeZ - 1.0)
-            )
+            let pose = BrushCamera.stageCamera(probeX: Double(probeX), probeZ: Double(probeZ), portrait: isPortrait)
+            return (SIMD3<Float>(pose.pos), SIMD3<Float>(pose.look))
 
         case .report:
-            let cx = Float((activeSession?.cartridge.worldWidth ?? 64.0) * 0.5)
-            let cz = Float((activeSession?.cartridge.worldDepth ?? 32.0) * 0.5)
-            let orbit = reducedMotion ? Float(0.2) : sceneNowSec * 0.22
-            return (
-                SIMD3<Float>(cx + sin(orbit) * 22.0, 24.0, cz + cos(orbit) * 22.0),
-                SIMD3<Float>(cx, 0.5, cz)
+            // Circles the city stage just played (held at one angle under Reduce Motion).
+            let pose = BrushCamera.reportCamera(
+                stageWidth: activeSession?.cartridge.worldWidth ?? 64.0,
+                stageDepth: activeSession?.cartridge.worldDepth ?? 32.0,
+                clockSec: Double(sceneNowSec),
+                reducedMotion: reducedMotion
             )
+            return (SIMD3<Float>(pose.pos), SIMD3<Float>(pose.look))
         }
     }
 
@@ -1398,8 +1410,10 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     private func updateCameraRig(dt: Float) {
         let targets = computeCameraTargets()
-        let rate: Float = appMode == .brushAlong ? 6.8 : 7.5
-        let k = 1.0 - exp(-rate * max(0.001, dt))
+        // Brush-Along follows a little softer (and slowly under Reduce Motion); a change of screen
+        // never glides (`setMode` snaps).
+        let rate = BrushCamera.followRate(brushAlong: appMode == .brushAlong, reducedMotion: reducedMotion)
+        let k = Float(BrushCamera.followFactor(rate: rate, dt: Double(dt)))
         camCurrentPos += (targets.pos - camCurrentPos) * k
         camCurrentLookAt += (targets.look - camCurrentLookAt) * k
         cameraNode.simdPosition = camCurrentPos

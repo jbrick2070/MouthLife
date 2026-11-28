@@ -41,16 +41,6 @@ export function buildReportHeadline(r: MissionReportData): string {
   return `✨ ${r.worldTitle ?? 'Plaque City'} is clean${place}! Smooth Bask is back!`;
 }
 
-/** Floating 3D arch status pill above the Mission Report card (pure, unit-testable). */
-export function buildReportArchBanner(r: Pick<MissionReportData, 'mode' | 'won'>): string {
-  if (!r.won) {
-    return r.mode === 'PULP_RESCUE'
-      ? '🛡️ Pulp held at 50% — Replay or Brush-Along to shine!'
-      : '🌱 Enamel is steady — Replay or Brush-Along to shine!';
-  }
-  return 'Drag the teeth to see them shine!';
-}
-
 /** Which report button should receive keyboard focus first (pure, unit-testable). */
 export function pickReportPrimaryButtonId(
   r: Pick<MissionReportData, 'won' | 'mode' | 'nextWorldId' | 'nextWorldTitle'>
@@ -186,12 +176,6 @@ export class MissionReportOverlay implements OverlayView {
             aria-pressed="${muted ? 'true' : 'false'}"
             title="Mute / Unmute (M)"
           >${muted ? '🔇' : '🔊'}</button>
-        </div>
-      </div>
-
-      <div class="hub-center-callout">
-        <div class="bask-floating-pill">
-          ${esc(buildReportArchBanner(this.report))}
         </div>
       </div>
 

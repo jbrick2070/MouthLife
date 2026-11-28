@@ -288,8 +288,8 @@ function bootstrapMouthLife(): void {
       return false; // allow drag-to-orbit around the 3D brushing model
     }
 
-    const companionMode =
-      (currentMode === 'HUB' && sceneMgr.getHubFocus() === 'companion') || currentMode === 'REPORT';
+    // Home's teeth only: the score screen shows the city stage, as in the app (no teeth to rub).
+    const companionMode = currentMode === 'HUB' && sceneMgr.getHubFocus() === 'companion';
     if (!companionMode) return false;
 
     if (phase === 'up') {
@@ -300,7 +300,7 @@ function bootstrapMouthLife(): void {
     if (!hit) {
       if (phase === 'down') {
         // Double-tap the gum / empty space to smoothly recenter the 3D view
-        if (lastEmptyTapMs > 0 && performance.now() - lastEmptyTapMs < 350 && currentMode === 'HUB') {
+        if (lastEmptyTapMs > 0 && performance.now() - lastEmptyTapMs < 350) {
           sceneMgr.resetCompanionOrbit();
           activeHub?.setViewOffCenter(false);
           lastEmptyTapMs = 0;
@@ -313,18 +313,11 @@ function bootstrapMouthLife(): void {
       return true;
     }
 
-    if (currentMode === 'HUB') {
-      activeHub?.notifyToothTouched(hit.toothIndex);
-      sceneMgr.highlightCompanionTooth(hit.toothIndex);
-    }
+    activeHub?.notifyToothTouched(hit.toothIndex);
+    sceneMgr.highlightCompanionTooth(hit.toothIndex);
 
     const save = saveSys.getSave();
-    const smoothness =
-      currentMode === 'REPORT'
-        ? lastReport?.won === false
-          ? save.companion.smoothnessIndex
-          : Math.max(98, save.companion.smoothnessIndex)
-        : save.companion.smoothnessIndex;
+    const smoothness = save.companion.smoothnessIndex;
     const fb = touch.registerTouch(
       { x: hit.point.x, y: hit.point.y, z: hit.point.z },
       phase,
@@ -378,16 +371,22 @@ function bootstrapMouthLife(): void {
     // Action presses on the Pause card never fire after Resume (M12).
     isGameplayPaused: () => Boolean(activeTelemetryHud?.isPaused()),
     onOrbitDrag: (dYaw, dPitch) => {
+      // The drag arrives as -0.007 rad per pixel across and 0.005 per pixel down. Turned back into
+      // pixels (a CSS pixel stands for the app's point), the camera's shared gains and limits apply
+      // (brushCamera.ts).
+      const dx = -dYaw / 0.007;
+      const dy = dPitch / 0.005;
       if (currentMode === 'COSMIC_INTRO') {
-        // the native app turns 0.005 rad per point; the drag arrives at 0.007 per pixel
-        sceneMgr.nudgeCosmicOrbit(dYaw * (0.005 / 0.007));
+        sceneMgr.nudgeCosmicOrbit(dx);
         return;
       }
       if (currentMode === 'BRUSH_ALONG') {
-        sceneMgr.nudgeBrushOrbit(dYaw, dPitch);
+        sceneMgr.nudgeBrushOrbit(dx, dy);
         return;
       }
-      sceneMgr.nudgeCompanionOrbit(dYaw, dPitch);
+      // The score screen circles the city stage on its own, as in the app: a finger does not turn it.
+      if (currentMode === 'REPORT') return;
+      sceneMgr.nudgeCompanionOrbit(dx, dy);
       activeHub?.setViewOffCenter(sceneMgr.isCompanionOrbitOffCenter());
     },
     getMode: () => currentMode,
@@ -1025,6 +1024,10 @@ function bootstrapMouthLife(): void {
 
       if (sceneHidden) return;
       session.beginRenderInterpolation(simAlpha);
+      // A finger turning the brush view holds it; let go, the view eases back (as in the app).
+      sceneMgr.setBrushOrbitHeld(input.isOrbitDragging());
+      // The rinse's tilt (phones held in a hand) swings the camera too, as in the app.
+      const rinseTilt = activeBrushAlong?.getGyroSnapshot();
       sceneMgr.renderFrame({
         frameDt,
         nowSec,
@@ -1040,9 +1043,12 @@ function bootstrapMouthLife(): void {
                   clock.getPacerStage(),
                   clock.getPacerMouthwashDurationSec()
                 ),
-                // Between stages the brush or floss pick rests, as when paused.
+                // Between stages the brush or floss pick rests, as when paused, and the camera
+                // stands still.
                 paused: clock.isPacerPaused() || clock.isPacerWaiting(),
                 reducedMotion: sceneMgr.isReducedMotion(),
+                rinseSlosh: rinseTilt?.sloshPosition ?? 0,
+                rinseHandheld01: rinseTilt?.handheldBlend01 ?? 0,
               }
             : null,
       });

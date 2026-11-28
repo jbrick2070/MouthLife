@@ -13,6 +13,7 @@ import { ZOOM_TRANSITION_SEC } from '../src/config/gameConfig';
 import { SoundEngine } from '../src/engine/audio/SoundEngine';
 import { FinaleStage3D } from '../src/engine/render/FinaleStage3D';
 import { SceneManager, cameraGlide01, diveProgress01 } from '../src/engine/render/SceneManager';
+import { isPortrait, stageCamera } from '../src/engine/render/brushCamera';
 import { FinaleSoundtrack, finaleScore, holdModalFocus } from '../src/ui/CityFinaleOverlay';
 
 const plans = FINALE_HOST_IDS.map((h) => cityArtForHost(h)!.finale!);
@@ -286,7 +287,7 @@ describe('M10: Reduce Motion follows the system, live', () => {
   });
 });
 
-describe('Reduce Motion: the camera cuts to a new screen instead of flying there', () => {
+describe('The camera cuts to a new screen (as in the app); the dive into a city flies, except under Reduce Motion', () => {
   type Rig = {
     updateCameraRig(this: unknown, dt: number, nowSec: number, session: unknown, quadrant: number): void;
     syncStageVisibility(this: unknown): void;
@@ -348,9 +349,11 @@ describe('Reduce Motion: the camera cuts to a new screen instead of flying there
     expect(scene.cartridgeStage.group.visible).toBe(true);
     expect(scene.earthBackdrop.rootGroup.visible).toBe(false);
     expect(scene.companionArch.group.visible).toBe(false);
-    // the camera stands where the flight would have ended, over the start of the stage
-    expect(scene.camera.position.distanceTo(new THREE.Vector3(10, 18.5, 24.5))).toBeLessThan(1e-9);
-    expect(scene.currentLookAt.distanceTo(new THREE.Vector3(10, 1.2, 10.8))).toBeLessThan(1e-9);
+    // the camera stands where the flight would have ended: the stage camera over the start of the
+    // stage (the same pose a normal dive ends on, so nothing glides afterwards)
+    const end = stageCamera(10, 12, isPortrait(scene.camera.aspect));
+    expect(scene.camera.position.distanceTo(new THREE.Vector3(end.pos.x, end.pos.y, end.pos.z))).toBeLessThan(1e-9);
+    expect(scene.currentLookAt.distanceTo(new THREE.Vector3(end.look.x, end.look.y, end.look.z))).toBeLessThan(1e-9);
   });
 
   it('a frame of no length still cuts (the cut does not depend on the clock)', () => {
@@ -386,19 +389,21 @@ describe('Reduce Motion: the camera cuts to a new screen instead of flying there
     expect(scene.earthBackdrop.rootGroup.visible).toBe(false);
   });
 
-  it('a change of screen is a cut under Reduce Motion; inside a screen the camera still glides', () => {
-    // another mode or the other Home tab, Reduce Motion on: all the way in one frame
+  it('a change of screen is a cut, as in the app; inside a screen the camera follows at the app rates', () => {
+    // another mode or the other Home tab: all the way in one frame, with or without Reduce Motion
     expect(cameraGlide01(FRAME, false, true, true)).toBe(1);
     expect(cameraGlide01(FRAME, true, true, true)).toBe(1);
-    // same screen: the gentle follow stays, also under Reduce Motion (brushCamera.ts keeps "the
-    // gentle slide toward the active teeth")
-    const follow = 1 - Math.exp(-6.5 * FRAME);
-    const brushing = 1 - Math.exp(-2.4 * FRAME);
+    expect(cameraGlide01(FRAME, false, false, true)).toBe(1);
+    expect(cameraGlide01(FRAME, true, false, true)).toBe(1);
+    // same screen: the follow (brushCamera.ts), softer in Brush-Along and slow there under Reduce Motion
+    const follow = 1 - Math.exp(-7.5 * FRAME);
+    const brushing = 1 - Math.exp(-6.8 * FRAME);
+    const brushingCalm = 1 - Math.exp(-2.4 * FRAME);
+    expect(cameraGlide01(FRAME, false, false, false)).toBeCloseTo(follow, 12);
     expect(cameraGlide01(FRAME, false, true, false)).toBeCloseTo(follow, 12);
-    expect(cameraGlide01(FRAME, true, true, false)).toBeCloseTo(brushing, 12);
-    // Reduce Motion off: the glide between screens is unchanged
-    expect(cameraGlide01(FRAME, false, false, true)).toBeCloseTo(follow, 12);
-    expect(cameraGlide01(FRAME, true, false, true)).toBeCloseTo(brushing, 12);
+    expect(cameraGlide01(FRAME, true, false, false)).toBeCloseTo(brushing, 12);
+    expect(cameraGlide01(FRAME, true, true, false)).toBeCloseTo(brushingCalm, 12);
+    expect(brushingCalm).toBeLessThan(brushing);
     expect(brushing).toBeLessThan(follow);
   });
 
@@ -444,15 +449,20 @@ describe('Reduce Motion: the camera cuts to a new screen instead of flying there
     expect(scene.camera.position.distanceTo(new THREE.Vector3(32, 115.5, 65))).toBeLessThan(1e-9);
     expect(scene.screenChanged).toBe(false);
 
-    // the same jump without Reduce Motion is a glide: one frame covers about a tenth of it
-    const gliding = { ...scene, reducedMotion: false, screenChanged: true };
-    gliding.rigPos = new THREE.Vector3(32, 15, 36);
-    gliding.currentLookAt = new THREE.Vector3(32, 1.05, 18.2);
-    gliding.camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.5, 320);
-    rig.updateCameraRig.call(gliding, FRAME, 0, null, -1);
-    expect(gliding.camera.position.y).toBeGreaterThan(15);
-    expect(gliding.camera.position.y).toBeLessThan(30);
-    expect(gliding.screenChanged).toBe(false);
+    // the same jump without Reduce Motion is a cut too, as the app makes it
+    const cutting = { ...scene, reducedMotion: false, screenChanged: true };
+    cutting.rigPos = new THREE.Vector3(32, 15, 36);
+    cutting.currentLookAt = new THREE.Vector3(32, 1.05, 18.2);
+    cutting.camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.5, 320);
+    rig.updateCameraRig.call(cutting, FRAME, 0, null, -1);
+    expect(cutting.camera.position.distanceTo(new THREE.Vector3(32, 115.5, 65))).toBeLessThan(1e-9);
+    expect(cutting.screenChanged).toBe(false);
+
+    // within the screen it follows again: one frame covers about a tenth of the way
+    cutting.rigPos.set(32, 15, 36);
+    rig.updateCameraRig.call(cutting, FRAME, 0, null, -1);
+    expect(cutting.camera.position.y).toBeGreaterThan(15);
+    expect(cutting.camera.position.y).toBeLessThan(30);
   });
 });
 

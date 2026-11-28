@@ -257,6 +257,14 @@ export class BrushAlongOverlay implements OverlayView {
     return this.voice.getLanguage();
   }
 
+  /**
+   * The rinse's tilt model as it stands (idle off the rinse, without motion sensors, and frozen
+   * while paused): the Brush-Along camera swings toward the cheek the rinse went to, as in the app.
+   */
+  getGyroSnapshot(): Readonly<GyroSloshSnapshot> {
+    return this.gyro;
+  }
+
   /** The game's Reduce Motion (the in-app switch, which follows the system's), as SceneManager sets it (M11). */
   private prefersReducedMotion(): boolean {
     if (document.documentElement.classList.contains('reduced-motion')) return true;

@@ -33,7 +33,29 @@ import { GlowPass } from './GlowPass';
 import { NO_SUN_SHADOW, SunShadowPass } from './SunShadowPass';
 import { ContextLossWatchdog } from './contextLossWatchdog';
 import { PacerPropRig, type PacerVisualState } from './PacerPropRig';
-import { computeDetailedBrushCamera, type DetailedBrushCameraTarget } from './brushCamera';
+import {
+  arrivalCamera,
+  arrivalOrbitDrag,
+  BRUSH_PITCH_CLAMP,
+  brushCameraTarget,
+  brushOrbitDrag,
+  easeBackOffset,
+  followFactor,
+  followRate,
+  fovDeg,
+  HUB_REST_PITCH,
+  HUB_REST_YAW,
+  hubCamera,
+  hubOrbitDrag,
+  idleBrushCameraTarget,
+  isPortrait,
+  orbitPosition,
+  reportCamera,
+  stageCamera,
+  type BrushCameraTarget,
+  type CameraPose,
+} from './brushCamera';
+import { evaluateBrushPhase } from '../../config/brushCoach';
 import { CitySkylineBackdrop } from './CitySkylineBackdrop';
 import { OrbitalEarthBackdrop } from './OrbitalEarthBackdrop';
 import { createQualityGovernor, governQuality } from './qualityGovernor';
@@ -87,11 +109,10 @@ export function diveProgress01(elapsedSec: number, reducedMotion: boolean): numb
 }
 
 /**
- * How much of the way to its new place the camera moves in one frame (1 is all of it: a cut).
- * Normally it glides, and slowly in Brush-Along, so a change of view reads as calm. Under Reduce
- * Motion a change of screen (another mode, the other Home tab) is a cut, as the native app makes
- * it; inside a screen the camera still follows gently, as brushCamera.ts asks for the brushing
- * views.
+ * How much of the way to its new place the camera moves in one frame (1 is all of it: a cut). A
+ * change of screen (another mode, the other Home tab) is a cut, as the native app makes it; inside
+ * a screen the camera follows at the app's rates (brushCamera.ts: softer in Brush-Along, and slow
+ * there under Reduce Motion).
  */
 export function cameraGlide01(
   dt: number,
@@ -99,8 +120,25 @@ export function cameraGlide01(
   reducedMotion: boolean,
   screenChanged: boolean
 ): number {
-  if (reducedMotion && screenChanged) return 1;
-  return 1 - Math.exp(-(brushAlong ? 2.4 : 6.5) * dt);
+  if (screenChanged) return 1;
+  return followFactor(followRate(brushAlong, reducedMotion), dt);
+}
+
+/**
+ * The browser's side column on the hardness line-up (arrival beat 1) needs the camera further back
+ * than the app's landscape framing, to fit the five specimens beside the card: the ratio the browser
+ * used there (21 against 16.5), applied over the app's distance.
+ */
+const ARRIVAL_SIDE_COLUMN_DOLLY = 21 / 16.5;
+
+/** Where the camera stands and looks from the target `pose`, backed off `dolly` times along the same line. */
+function dollyPose(pose: CameraPose, dolly: number, outPos: THREE.Vector3, outLook: THREE.Vector3): void {
+  outLook.set(pose.look.x, pose.look.y, pose.look.z);
+  outPos.set(
+    pose.look.x + (pose.pos.x - pose.look.x) * dolly,
+    pose.look.y + (pose.pos.y - pose.look.y) * dolly,
+    pose.look.z + (pose.pos.z - pose.look.z) * dolly
+  );
 }
 
 export class SceneManager {
@@ -133,8 +171,6 @@ export class SceneManager {
   private readonly sunFocus = new THREE.Vector3();
   private readonly pacerRig = new PacerPropRig();
   private rinseWash01 = 0;
-  private readonly brushCloseFocus = new THREE.Vector3();
-  private readonly brushOverviewFocus = new THREE.Vector3();
   private cartridgeStage: {
     group: THREE.Group;
     dispose: () => void;
@@ -165,14 +201,16 @@ export class SceneManager {
   private screenChanged = false;
   private cosmicBeat = 0;
 
-  // Companion & Brush-Along orbit angles (draggable by touch/mouse!)
-  private orbitYaw = 0;
+  // Companion & Brush-Along orbit angles (draggable by touch/mouse!). Limits, gains and the
+  // resting angles are the native app's (brushCamera.ts).
+  private orbitYaw = HUB_REST_YAW;
   private cosmicYaw = 0;
-  private orbitPitch = 0.42;
+  private orbitPitch = HUB_REST_PITCH;
   private orbitResetActive = false;
   private brushOrbitYaw = 0;
   private brushOrbitPitch = 0;
-  private lastBrushStageKey = '';
+  /** A finger is turning the Brush-Along view: its turn holds; let go, it eases back. */
+  private brushOrbitHeld = false;
   // Pixels the Companion image is lifted so the arch sits in the gap between hub chrome.
   private hubViewShiftPx = 0;
   private hubViewShiftTarget = 0;
@@ -456,13 +494,9 @@ export class SceneManager {
     const aspect = w / h;
     this.camera.aspect = aspect;
 
-    // Portrait-smart FOV adaptation so narrow 9:19.5 mobile screens frame the full arch & HUD!
-    if (aspect < 1.0) {
-      const widen = Math.min(22, (1.0 - aspect) * 38);
-      this.baseFov = CAMERA_BASE_FOV_DEG + widen;
-    } else {
-      this.baseFov = CAMERA_BASE_FOV_DEG;
-    }
+    // Portrait-smart FOV adaptation so narrow 9:19.5 mobile screens frame the full arch & HUD
+    // (the native app's widening; the stage's FOV punch rides on top).
+    this.baseFov = fovDeg(aspect);
     this.camera.fov = this.baseFov + this.fovPunch;
     this.viewOffsetApplied = Number.NaN; // force the hub view shift to re-apply at the new size
     this.camera.updateProjectionMatrix();
@@ -522,11 +556,18 @@ export class SceneManager {
     // The skyline is a far-off painted backdrop; it must not throw shadows across the gum.
     this.citySkyline.group.userData[NO_SUN_SHADOW] = true;
     this.cartridgeStage.group.add(this.citySkyline.group);
-    this.cartridgeStage.group.visible =
-      this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
+    this.cartridgeStage.group.visible = SceneManager.showsStage(this.currentMode);
     this.scene.add(this.cartridgeStage.group);
     this.canvas.style.setProperty('--oral-sky', new THREE.Color(cartridge.palette.skyTopHex).getStyle());
     this.prewarmShaders();
+  }
+
+  /**
+   * Whether a screen shows the city stage: while playing it, and on the score screen, which circles
+   * the stage just played (as the native app does).
+   */
+  static showsStage(mode: AppMode): boolean {
+    return mode === 'ARCADE' || mode === 'PULP_RESCUE' || mode === 'REPORT';
   }
 
   setMode(mode: AppMode): void {
@@ -534,12 +575,12 @@ export class SceneManager {
     if (mode === 'BRUSH_ALONG' && this.currentMode !== 'BRUSH_ALONG') {
       this.brushOrbitYaw = 0;
       this.brushOrbitPitch = 0;
-      this.lastBrushStageKey = '';
+      this.brushOrbitHeld = false;
     }
     if (mode !== this.currentMode) this.screenChanged = true;
     this.currentMode = mode;
     this.hubInsetTimer = 0;
-    this.canvas.classList.toggle('arcade-backdrop', mode === 'ARCADE' || mode === 'PULP_RESCUE');
+    this.canvas.classList.toggle('arcade-backdrop', SceneManager.showsStage(mode));
     this.syncStageVisibility();
   }
 
@@ -568,7 +609,7 @@ export class SceneManager {
 
   /** True when the player has orbited the Companion Arch well away from the default view. */
   isCompanionOrbitOffCenter(): boolean {
-    return Math.abs(this.orbitYaw) > 0.35 || Math.abs(this.orbitPitch - 0.42) > 0.3;
+    return Math.abs(this.orbitYaw - HUB_REST_YAW) > 0.35 || Math.abs(this.orbitPitch - HUB_REST_PITCH) > 0.3;
   }
 
   resetCompanionOrbit(): void {
@@ -577,22 +618,30 @@ export class SceneManager {
 
   /**
    * The Prologue's own turn round the crystal (kept apart from the home screen's view), held where
-   * it is let go. Same range and rate as the native app's `cosmicOrbitYaw`.
+   * it is let go, after a drag of `dxPoints` (CSS px). Same range and rate as the native app.
    */
-  nudgeCosmicOrbit(deltaYaw: number): void {
-    this.cosmicYaw = Math.max(-0.75, Math.min(0.75, this.cosmicYaw + deltaYaw));
+  nudgeCosmicOrbit(dxPoints: number): void {
+    this.cosmicYaw = arrivalOrbitDrag(this.cosmicYaw, dxPoints);
   }
 
-  nudgeCompanionOrbit(deltaYaw: number, deltaPitch: number): void {
+  /** Home: turns and tilts the arch after a drag of (dx, dy) CSS px across open space, within the app's limits. */
+  nudgeCompanionOrbit(dxPoints: number, dyPoints: number): void {
     this.orbitResetActive = false;
-    this.orbitYaw += deltaYaw;
-    this.orbitPitch = Math.max(0.18, Math.min(1.05, this.orbitPitch + deltaPitch));
+    const turned = hubOrbitDrag(this.orbitYaw, this.orbitPitch, dxPoints, dyPoints);
+    this.orbitYaw = turned.yaw;
+    this.orbitPitch = turned.pitch;
   }
 
-  /** Lets the player orbit around the active teeth at any moment during Brush-Along. */
-  nudgeBrushOrbit(deltaYaw: number, deltaPitch: number): void {
-    this.brushOrbitYaw = Math.max(-1.25, Math.min(1.25, this.brushOrbitYaw + deltaYaw));
-    this.brushOrbitPitch = Math.max(-0.85, Math.min(0.85, this.brushOrbitPitch + deltaPitch));
+  /** Lets the player orbit around the active teeth at any moment during Brush-Along (CSS px). */
+  nudgeBrushOrbit(dxPoints: number, dyPoints: number): void {
+    const turned = brushOrbitDrag(this.brushOrbitYaw, this.brushOrbitPitch, dxPoints, dyPoints);
+    this.brushOrbitYaw = turned.yaw;
+    this.brushOrbitPitch = turned.pitch;
+  }
+
+  /** A finger is down turning the Brush-Along view (held), or has let go (eases back to the guided view). */
+  setBrushOrbitHeld(held: boolean): void {
+    this.brushOrbitHeld = held;
   }
 
   resetBrushOrbit(): void {
@@ -626,8 +675,12 @@ export class SceneManager {
       EARTH_BACKDROP_POS.z
     );
 
-    this.diveEndPos.set(targetProbeX, 18.5, targetProbeZ + 12.5);
-    this.diveEndLook.set(targetProbeX, 1.2, targetProbeZ - 1.2);
+    // The dive ends exactly where the stage camera stands, so there is nothing to glide afterwards.
+    {
+      const endCam = stageCamera(targetProbeX, targetProbeZ, isPortrait(this.camera.aspect));
+      this.diveEndPos.set(endCam.pos.x, endCam.pos.y, endCam.pos.z);
+      this.diveEndLook.set(endCam.look.x, endCam.look.y, endCam.look.z);
+    }
 
     this.companionArch.group.visible = false;
     if (this.cartridgeStage) this.cartridgeStage.group.visible = false;
@@ -638,12 +691,11 @@ export class SceneManager {
     if (this.diveActive) return;
 
     const isCosmic = this.currentMode === 'COSMIC_INTRO';
-    const isArcade =
-      this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
+    // The score screen shows the city stage just played, not the companion arch.
+    const stageOnScreen = SceneManager.showsStage(this.currentMode);
     const isCompanion =
       (this.currentMode === 'HUB' && this.hubFocus === 'companion') ||
-      this.currentMode === 'BRUSH_ALONG' ||
-      this.currentMode === 'REPORT';
+      this.currentMode === 'BRUSH_ALONG';
 
     this.earthBackdrop.setCosmicIntroState(isCosmic, this.cosmicBeat);
     // Modest-GPU: the orbital backdrop only renders where it can actually be seen
@@ -670,7 +722,7 @@ export class SceneManager {
       }
     }
     if (this.cartridgeStage) {
-      this.cartridgeStage.group.visible = isArcade;
+      this.cartridgeStage.group.visible = stageOnScreen;
     }
   }
 
@@ -695,8 +747,10 @@ export class SceneManager {
     // Update EnamelBiophysicsMaterial mode & DataTexture upload
     const isArcade =
       this.currentMode === 'ARCADE' || this.currentMode === 'PULP_RESCUE';
+    // The stage is drawn while playing and on the score screen (which circles it).
+    const stageShown = SceneManager.showsStage(this.currentMode) && !!this.cartridgeStage;
 
-    if (isArcade && session.cartridge) {
+    if (stageShown && session.cartridge) {
       this.citySkyline?.update(frameDt, nowSec, session, this.reducedMotion);
       this.enamelMat.setCompanionOverride({ active: false });
       this.enamelMat.setHighlightedTooth(null);
@@ -751,10 +805,10 @@ export class SceneManager {
       });
       this.syncDistrictSeals(nowSec, session);
     } else {
-      // Companion Smooth Bask / Brush-Along / Report shader override
+      // Companion Smooth Bask / Brush-Along shader override
       this.enamelMat.setDistrictSeals([], []);
       const smooth01 =
-        this.currentMode === 'REPORT' || this.currentMode === 'BRUSH_ALONG'
+        this.currentMode === 'BRUSH_ALONG'
           ? 0.98
           : companion.smoothnessIndex / 100;
       const shieldAvg =
@@ -831,7 +885,7 @@ export class SceneManager {
     );
     this.applyHubViewShift(frameDt);
     this.applyCameraJuice(frameDt, nowSec);
-    this.updateOralLighting(nowSec, isArcade, session);
+    this.updateOralLighting(nowSec, stageShown, session);
 
     // The orbital leg of a dive never needs to render the arcade batches.
     this.entityBatch.arcadeEntitiesGroup.visible = isArcade && !!this.cartridgeStage?.group.visible;
@@ -839,7 +893,7 @@ export class SceneManager {
     const washTarget = pacer?.stage === 'mouthwashBonus' ? 1 : 0;
     this.rinseWash01 += (washTarget - this.rinseWash01) * (1 - Math.exp(-4 * frameDt));
     this.enamelMat.setRinseWash(this.rinseWash01, pacer?.mouthwashProgress01 ?? 0);
-    this.updateSunShadow(isArcade);
+    this.updateSunShadow(stageShown);
     // Glow is skipped on the low tier, where every draw counts.
     this.glow.strength = this.activeTier === 'low' ? 0 : this.activeTier === 'medium' ? 0.42 : 0.55;
     this.glow.prepare(this.renderer, this.scene, this.camera);
@@ -1008,7 +1062,7 @@ export class SceneManager {
    * Positions, shows/hides, and dims the true 3D lower and upper dental arches for Brush-Along
    * cutaway views (and resets them cleanly in every other mode).
    */
-  private syncCompanionJaws(target: DetailedBrushCameraTarget | null): void {
+  private syncCompanionJaws(target: BrushCameraTarget | null): void {
     const ox = COMPANION_ARCH_ORIGIN.x;
     const oy = COMPANION_ARCH_ORIGIN.y;
     const oz = COMPANION_ARCH_ORIGIN.z;
@@ -1023,14 +1077,48 @@ export class SceneManager {
       return;
     }
 
-    this.companionArch.group.visible = target.showLowerJaw;
-    this.companionArch.group.position.set(ox, oy + target.lowerJawOffsetY, oz + target.lowerJawOffsetZ);
-    this.companionArch.upperGroup.visible = target.showUpperJaw;
-    this.companionArch.upperGroup.position.set(ox, oy + target.upperJawOffsetY, oz + target.upperJawOffsetZ);
-    this.enamelMat.setJawDim(target.lowerJawDim);
-    this.companionArch.gingivaMaterial.uniforms.uJawDim.value = target.lowerJawDim;
-    this.companionArch.upperEnamelMaterial.uniforms.uJawDim.value = target.upperJawDim;
-    this.companionArch.upperGingivaMaterial.uniforms.uJawDim.value = target.upperJawDim;
+    // The jaws as the shared camera places them; the browser shows "how solid" as a dimming.
+    const lower = target.lowerJaw;
+    const upper = target.upperJaw;
+    this.companionArch.group.visible = lower.visible;
+    this.companionArch.group.position.set(ox + lower.offset.x, oy + lower.offset.y, oz + lower.offset.z);
+    this.companionArch.upperGroup.visible = upper.visible;
+    this.companionArch.upperGroup.position.set(ox + upper.offset.x, oy + upper.offset.y, oz + upper.offset.z);
+    this.enamelMat.setJawDim(lower.opacity);
+    this.companionArch.gingivaMaterial.uniforms.uJawDim.value = lower.opacity;
+    this.companionArch.upperEnamelMaterial.uniforms.uJawDim.value = upper.opacity;
+    this.companionArch.upperGingivaMaterial.uniforms.uJawDim.value = upper.opacity;
+  }
+
+  /**
+   * The Brush-Along camera for this frame: brushCamera.ts, the app's numbers, following the point
+   * the app follows (`PacerPropRig.cameraContactLocal`) on a clock that stands still while paused or
+   * on a Start card. Before any stage runs the browser keeps its own idle frame; with a quadrant
+   * but no running pacer it holds that quadrant's outside step, close up.
+   */
+  private brushAlongTarget(pacer: PacerVisualState | null, activeQuadrant: number): BrushCameraTarget {
+    if (!pacer && activeQuadrant < 0) return idleBrushCameraTarget(this.companionArch.incisorClearanceY);
+    const phase = pacer
+      ? {
+          stage: pacer.stage,
+          quadrant: pacer.quadrant,
+          surface: pacer.surface,
+          phaseElapsedSec: pacer.phaseElapsedSec ?? 4,
+          phaseDurationSec: pacer.phaseDurationSec ?? 10,
+          flossIsUpper: pacer.flossIsUpper,
+          flossContactIndex: pacer.flossContactIndex,
+        }
+      : evaluateBrushPhase(activeQuadrant * 30 + 4, 'brushing');
+    const rig = this.pacerRig;
+    return brushCameraTarget({
+      phase,
+      reducedMotion: this.reducedMotion,
+      clockSec: rig.cameraClockSec,
+      contactLocal: rig.hasContact ? rig.cameraContactLocal : null,
+      flossOutwardXZ: rig.hasContact ? { x: rig.activeOutwardX, z: rig.activeOutwardZ } : null,
+      rinseHandheld01: pacer?.rinseHandheld01 ?? 0,
+      rinseSlosh: pacer?.rinseSlosh ?? 0,
+    });
   }
 
   private updateCameraRig(
@@ -1062,6 +1150,9 @@ export class SceneManager {
       if (u >= 1) {
         this.diveActive = false;
         this.syncStageVisibility();
+        // The flight hands over to the stage's camera with the usual follow (the flight itself
+        // was the way in); under Reduce Motion the next frame cuts to it, as a change of screen.
+        if (!this.reducedMotion) this.screenChanged = false;
         const cb = this.diveOnComplete;
         this.diveOnComplete = null;
         cb?.();
@@ -1069,49 +1160,19 @@ export class SceneManager {
       return;
     }
 
-    const motionTime = this.reducedMotion ? 0 : nowSec;
     const desiredPos = new THREE.Vector3();
     const desiredLook = new THREE.Vector3();
+    // Portrait framing below the app's cut-off (a foldable's near-square inner screen is landscape).
+    const portraitView = isPortrait(this.camera.aspect);
 
     if (this.currentMode === 'COSMIC_INTRO') {
       this.measureHubBand(dt);
-      if (this.cosmicBeat <= 2) {
-        // Frame the 3D Hexagonal Hydroxyapatite Crystal & Mohs Lineup at (32, 148, 16)
-        const cx = EARTH_BACKDROP_POS.x;
-        const cy = EARTH_BACKDROP_POS.y + 38;
-        const cz = EARTH_BACKDROP_POS.z;
-        const swayX = Math.sin(motionTime * 0.35 + this.orbitYaw) * 3.2;
-        const mohsBeat = this.cosmicBeat === 1;
-        const portrait = this.camera.aspect < 1.0;
-        const mohsSide = mohsBeat && this.hubSideFrac > 0;
-        const distance = mohsSide ? 21 : portrait ? 23.5 : 16.5;
-        const lookDown = mohsSide ? 1.5 : portrait ? 5.6 : 4.6;
-        desiredPos.set(cx + swayX * (mohsBeat ? 0.4 : 1), cy + (mohsBeat ? -0.6 : 1.2), cz + (mohsBeat ? distance : 14.5));
-        desiredLook.set(cx, cy - (mohsBeat ? lookDown : 0), cz);
-      } else {
-        // Beat 3: Majestic Earthrise zoom framing the 3D Globe!
-        desiredPos.set(
-          EARTH_BACKDROP_POS.x + 4,
-          EARTH_BACKDROP_POS.y + 7,
-          EARTH_BACKDROP_POS.z + 50
-        );
-        desiredLook.set(
-          EARTH_BACKDROP_POS.x,
-          EARTH_BACKDROP_POS.y - 1,
-          EARTH_BACKDROP_POS.z
-        );
-      }
-      // Dragging turns the camera round the crystal (or the Earth), as in the native app; the
-      // hardness line-up only turns a little so all five specimens stay in view.
-      const yaw = this.cosmicYaw * (this.cosmicBeat === 1 ? 0.45 : 1);
-      if (yaw !== 0) {
-        const ox = desiredPos.x - desiredLook.x;
-        const oz = desiredPos.z - desiredLook.z;
-        const c = Math.cos(yaw);
-        const sn = Math.sin(yaw);
-        desiredPos.x = desiredLook.x + ox * c + oz * sn;
-        desiredPos.z = desiredLook.z - ox * sn + oz * c;
-      }
+      // The app's framing per beat (the crystal, the hardness line-up, fluorapatite, the Earth).
+      // Dragging turns it as in the app; there is no gyroscope on the browser's camera, so no tilt.
+      const pose = arrivalCamera(this.cosmicBeat, this.cosmicYaw, portraitView);
+      // The browser's side column beside the hardness line-up: back off to fit (its own panels).
+      const dolly = this.cosmicBeat === 1 && this.hubSideFrac > 0 ? ARRIVAL_SIDE_COLUMN_DOLLY : 1;
+      dollyPose(pose, dolly, desiredPos, desiredLook);
     } else if (this.currentMode === 'HUB') {
       if (this.hubFocus === 'globe') {
         this.measureHubBand(dt);
@@ -1132,38 +1193,33 @@ export class SceneManager {
           EARTH_BACKDROP_POS.z
         );
       } else {
-        // Pocket Tamagotchi Smooth Bask Companion Arch 3D Showcase!
+        // Pocket Tamagotchi Smooth Bask Companion Arch 3D Showcase! The app's framing and resting
+        // angle; double-tap eases back to rest (browser only), and nothing else moves it (the app's
+        // idle motion is a held phone's tilt, which the browser's camera does not read).
         if (this.orbitResetActive) {
           // Same easing at any refresh rate (these used to run once per frame, so 144 Hz snapped back faster).
           const keep = Math.pow(0.9, dt * 60);
-          this.orbitYaw *= keep;
-          this.orbitPitch += (0.42 - this.orbitPitch) * (1 - keep);
-          if (Math.abs(this.orbitYaw) < 0.01 && Math.abs(this.orbitPitch - 0.42) < 0.01) {
-            this.orbitYaw = 0;
-            this.orbitPitch = 0.42;
+          this.orbitYaw += (HUB_REST_YAW - this.orbitYaw) * (1 - keep);
+          this.orbitPitch += (HUB_REST_PITCH - this.orbitPitch) * (1 - keep);
+          if (Math.abs(this.orbitYaw - HUB_REST_YAW) < 0.01 && Math.abs(this.orbitPitch - HUB_REST_PITCH) < 0.01) {
+            this.orbitYaw = HUB_REST_YAW;
+            this.orbitPitch = HUB_REST_PITCH;
             this.orbitResetActive = false;
           }
         }
-        const gentleBob = Math.sin(motionTime * 0.45) * 0.08;
-        const yaw = this.orbitYaw + gentleBob;
         this.measureHubBand(dt);
-        // Landscape has spare width, so back off further to fit the arch height inside the band.
-        const portraitView = this.camera.aspect < 1.0;
+        // The browser's own fit round its panels, on top of the app's distance: landscape has spare
+        // width, so back off further to fit the arch height inside the band.
         const bandDolly =
           1 + Math.min(portraitView ? 0.24 : 0.72, Math.max(0, 0.58 - this.hubBandFrac) * (portraitView ? 0.65 : 1.85));
         const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.52 / (this.hubSideFrac * 0.92)) : 1;
-        const radius = (this.camera.aspect < 1.0 ? 31.0 : 21.5) * bandDolly * sideDolly;
-        const pitch = Math.max(0.48, this.orbitPitch);
-        desiredPos.set(
-          32 + Math.sin(yaw) * Math.cos(pitch) * radius,
-          2.2 + Math.sin(pitch) * radius,
-          16 + Math.cos(yaw) * Math.cos(pitch) * radius
-        );
-        desiredLook.set(32, 1.05, 18.2);
+        const pose = hubCamera(this.orbitYaw, this.orbitPitch, portraitView, 0, 0, bandDolly * sideDolly);
+        desiredPos.set(pose.pos.x, pose.pos.y, pose.pos.z);
+        desiredLook.set(pose.look.x, pose.look.y, pose.look.z);
       }
     } else if (this.currentMode === 'BRUSH_ALONG') {
       this.measureHubBand(dt);
-      const portraitView = this.camera.aspect < 1.0;
+      // The browser's own fit round its panels, on top of the app's distances.
       const bandDolly =
         1 +
         Math.min(
@@ -1172,93 +1228,47 @@ export class SceneManager {
         );
       const sideDolly = this.hubSideFrac > 0 ? Math.max(1, 0.54 / (this.hubSideFrac * 0.92)) : 1;
 
-      const effectivePacer: PacerVisualState | null =
-        pacer ??
-        (activeQuadrant < 0
-          ? null
-          : {
-              stage: 'brushing',
-              quadrant: activeQuadrant,
-              surface: 0,
-              flossIsUpper: true,
-              flossContactIndex: 0,
-              flossStepIndex: 0,
-              mouthwashProgress01: 0,
-              paused: true,
-            });
-
-      // Reset manual drag-to-orbit smoothly whenever the quadrant, surface, or stage advances.
-      const stageKey = effectivePacer
-        ? `${effectivePacer.stage}:${effectivePacer.stage === 'flossBonus' ? (effectivePacer.flossIsUpper ? 'U' : 'L') : `${effectivePacer.quadrant}:${effectivePacer.surface}`}`
-        : 'idle';
-      if (stageKey !== this.lastBrushStageKey) {
-        this.lastBrushStageKey = stageKey;
-        this.brushOrbitYaw = 0;
-        this.brushOrbitPitch = 0;
+      // Let go, a finger's turn eases back to the guided view (it is kept across steps, as in the app).
+      if (!this.brushOrbitHeld) {
+        this.brushOrbitYaw = easeBackOffset(this.brushOrbitYaw, dt);
+        this.brushOrbitPitch = easeBackOffset(this.brushOrbitPitch, dt);
       }
 
-      const detail = computeDetailedBrushCamera(effectivePacer, nowSec, this.reducedMotion, {
-        outwardX: this.pacerRig.hasContact ? this.pacerRig.activeOutwardX : undefined,
-        outwardZ: this.pacerRig.hasContact ? this.pacerRig.activeOutwardZ : undefined,
-        incisorClearanceY: this.companionArch.incisorClearanceY,
-      });
-      this.syncCompanionJaws(detail);
+      const target = this.brushAlongTarget(pacer, activeQuadrant);
+      this.syncCompanionJaws(target);
 
-      const dist = (portraitView ? detail.distPortrait : detail.distLandscape) * bandDolly * sideDolly;
-      const yaw = detail.yaw + this.brushOrbitYaw;
-      const pitch = Math.max(-0.92, Math.min(0.92, detail.pitch + this.brushOrbitPitch));
-
-      this.brushOverviewFocus.set(
-        COMPANION_ARCH_ORIGIN.x + detail.overviewOffsetX,
-        COMPANION_ARCH_ORIGIN.y + detail.overviewOffsetY,
-        COMPANION_ARCH_ORIGIN.z + detail.overviewOffsetZ
+      const dist = (portraitView ? target.distPortrait : target.distLandscape) * bandDolly * sideDolly;
+      const yaw = target.yaw + this.brushOrbitYaw;
+      const pitch = Math.max(-BRUSH_PITCH_CLAMP, Math.min(BRUSH_PITCH_CLAMP, target.pitch + this.brushOrbitPitch));
+      desiredLook.set(
+        COMPANION_ARCH_ORIGIN.x + target.lookLocal.x,
+        COMPANION_ARCH_ORIGIN.y + target.lookLocal.y,
+        COMPANION_ARCH_ORIGIN.z + target.lookLocal.z
       );
-
-      if (this.pacerRig.hasContact && detail.focusBiasToContact > 0) {
-        this.brushCloseFocus
-          .set(
-            COMPANION_ARCH_ORIGIN.x,
-            COMPANION_ARCH_ORIGIN.y + (detail.isUpper ? 1.9 : 1.3),
-            COMPANION_ARCH_ORIGIN.z + 0.9
-          )
-          .lerp(this.pacerRig.contactWorldPos, detail.focusBiasToContact);
-        desiredLook.lerpVectors(this.brushCloseFocus, this.brushOverviewFocus, detail.introBlend01);
-      } else {
-        desiredLook.copy(this.brushOverviewFocus);
-      }
-
-      desiredPos.set(
-        desiredLook.x + Math.sin(yaw) * Math.cos(pitch) * dist,
-        desiredLook.y + Math.sin(pitch) * dist,
-        desiredLook.z + Math.cos(yaw) * Math.cos(pitch) * dist
-      );
+      const pos = orbitPosition(desiredLook, yaw, pitch, dist);
+      desiredPos.set(pos.x, pos.y, pos.z);
     } else if (this.currentMode === 'REPORT') {
-      const celebYaw = motionTime * 0.42 + this.orbitYaw;
+      // Circles the city stage just played, as the app does (one fixed angle under Reduce Motion),
+      // backed off along the same line to fit the browser's side column (its own panels).
       this.measureHubBand(dt);
       const reportSide = this.hubSideFrac > 0 ? Math.max(1, 0.55 / (this.hubSideFrac * 0.92)) : 1;
-      desiredPos.set(
-        32 + Math.sin(celebYaw) * 19.5 * reportSide,
-        10.5,
-        16 + Math.cos(celebYaw) * 19.5 * reportSide
+      const pose = reportCamera(
+        session.cartridge?.worldWidth ?? 64,
+        session.cartridge?.worldDepth ?? 32,
+        nowSec,
+        this.reducedMotion
       );
-      desiredLook.set(32, 1.9, 16);
+      dollyPose(pose, reportSide, desiredPos, desiredLook);
     } else {
-      // ARCADE & PULP_RESCUE Top-Down Action Follow Camera
-      const px = session.probePos.x;
-      const pz = session.probePos.z;
-      const leadX = Math.cos(session.probeFacingRad) * 1.3;
-      const leadZ = Math.sin(session.probeFacingRad) * 1.1;
-      desiredPos.set(px + leadX * 0.5, 18.2, pz + 12.6);
-      desiredLook.set(px + leadX, session.probeY + 0.4, pz + leadZ - 0.8);
+      // ARCADE & PULP_RESCUE: south of the ship, looking down a little ahead of it; never turns.
+      const pose = stageCamera(session.probePos.x, session.probePos.z, portraitView);
+      desiredPos.set(pose.pos.x, pose.pos.y, pose.pos.z);
+      desiredLook.set(pose.look.x, pose.look.y, pose.look.z);
     }
 
-    // Brush-Along uses responsive tracking (matching native's 6.8 feel) so quadrant zoom-out ->
-    // zoom-in and surface cutaways glide smoothly; Reduce Motion keeps cameraGlide01's calm pace.
+    // A change of screen cuts; inside a screen the camera follows at the app's rates.
     const brushAlong = this.currentMode === 'BRUSH_ALONG';
-    const damp =
-      brushAlong && !this.reducedMotion
-        ? 1 - Math.exp(-5.6 * dt)
-        : cameraGlide01(dt, brushAlong, this.reducedMotion, this.screenChanged);
+    const damp = cameraGlide01(dt, brushAlong, this.reducedMotion, this.screenChanged);
     this.screenChanged = false;
     this.rigPos.lerp(desiredPos, damp);
     this.currentLookAt.lerp(desiredLook, damp);

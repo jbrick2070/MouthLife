@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildReportArchBanner,
   pickReportPrimaryButtonId,
   sampleScoreReveal,
 } from '../src/ui/MissionReportOverlay';
@@ -25,9 +24,4 @@ describe('Mission report keyboard start & score celebration', () => {
     expect(sampleScoreReveal(2450, 0.3, true)).toBe(2450);
   });
 
-  it('shows emergency stabilization banner on Pulp Rescue timeout instead of glassy-enamel win copy', () => {
-    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: false })).toContain('50%');
-    expect(buildReportArchBanner({ mode: 'PULP_RESCUE', won: true })).toContain('see them shine');
-    expect(buildReportArchBanner({ mode: 'ARCADE', won: true })).toContain('see them shine');
-  });
 });

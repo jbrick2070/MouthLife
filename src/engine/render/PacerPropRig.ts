@@ -4,6 +4,14 @@ import {
   COMPANION_UPPER_MIRROR_Y,
   type CompanionToothFrame,
 } from './CartridgeMeshBuilder';
+import {
+  advanceCameraClock,
+  brushContactLocal,
+  flossContactLocal,
+  flossGapFrac,
+  flossGapMotion,
+  type Vec3,
+} from './brushCamera';
 
 /** What the Brush-Along timeline is doing right now (a slice of BrushPhaseState). */
 export interface PacerVisualState {
@@ -25,6 +33,10 @@ export interface PacerVisualState {
   phaseDurationSec?: number;
   /** Reduce Motion preference: quiets micro-scrub vibration while keeping tooth progression clear. */
   reducedMotion?: boolean;
+  /** Rinse: where the swish is, -1 left cheek .. +1 right cheek (the brush screen's tilt model). */
+  rinseSlosh?: number;
+  /** Rinse: how far the phone is in a hand, 0..1 (0 without motion sensors). */
+  rinseHandheld01?: number;
 }
 
 const PROP_VERT = /* glsl */ `
@@ -115,6 +127,12 @@ export class PacerPropRig {
   /** Outward lip/cheek normal XZ at the active contact point (for floss oblique framing). */
   activeOutwardX = 0;
   activeOutwardZ = 1;
+  /**
+   * The point the Brush-Along camera follows, arch-local, worked out as the native app does
+   * (brushCamera.ts: `brushContactLocal`, `flossContactLocal`). The brush and pick drawn here keep
+   * their own pose; only the camera follows this one. Valid while `hasContact`.
+   */
+  cameraContactLocal: Vec3 = { x: 0, y: 1.5, z: 0 };
 
   private readonly brush = new THREE.Group();
   private readonly floss = new THREE.Group();
@@ -183,12 +201,14 @@ export class PacerPropRig {
     state: PacerVisualState | null,
     teeth: readonly CompanionToothFrame[]
   ): void {
+    // The scrub's clock, which the camera reads too (the rinse's sway as well): it stops while
+    // paused or on a Start card, so the picture stands still.
+    if (state) this.clockSec = advanceCameraClock(this.clockSec, dt, state.paused);
     if (!state || state.stage === 'mouthwashBonus' || teeth.length < 14) {
       this.group.visible = false;
       this.hasContact = false;
       return;
     }
-    if (!state.paused) this.clockSec += dt;
     this.group.visible = true;
 
     const brushing = state.stage === 'brushing';
@@ -198,6 +218,11 @@ export class PacerPropRig {
     if (brushing) this.poseBrush(state, teeth);
     else this.poseFloss(state, teeth);
     this.hasContact = true;
+  }
+
+  /** The camera's clock (see `update`): seconds the Brush-Along has run, less any pause or Start card. */
+  get cameraClockSec(): number {
+    return this.clockSec;
   }
 
   private frameAt(teeth: readonly CompanionToothFrame[], index: number): CompanionToothFrame {
@@ -257,6 +282,23 @@ export class PacerPropRig {
     this.pos.lerp(this.tmpPosB, f);
     const halfD = a.halfD + (b.halfD - a.halfD) * f;
     const halfH = a.halfH + (b.halfH - a.halfH) * f;
+
+    // The camera follows the app's contact on this tooth, not this brush's own (slightly different) one.
+    this.cameraContactLocal = brushContactLocal(
+      {
+        x: this.pos.x - COMPANION_ARCH_ORIGIN.x,
+        y: this.pos.y - COMPANION_ARCH_ORIGIN.y,
+        z: this.pos.z - COMPANION_ARCH_ORIGIN.z,
+      },
+      { x: this.outward.x, z: this.outward.z },
+      halfD,
+      halfH,
+      state.surface,
+      isUpper,
+      distFromBack,
+      this.clockSec,
+      rm
+    );
 
     const microSweep = rm ? 0 : Math.sin(this.clockSec * 9.0) * 0.24;
     const microVert = rm ? 0 : Math.cos(this.clockSec * 9.0) * 0.07;
@@ -325,6 +367,32 @@ export class PacerPropRig {
     this.crownWorldPos(b, isUpper, this.tmpPosB);
     this.pos.lerp(this.tmpPosB, 0.5);
     const halfH = (a.halfH + b.halfH) * 0.5;
+
+    // The camera follows the app's continuous motion through the gap (slide in, lean right, lean
+    // left and lift), not this pick's three steps. Along the arch is toward the right-hand tooth (b).
+    const alongX = this.tmpPosB.x - this.pos.x;
+    const alongZ = this.tmpPosB.z - this.pos.z;
+    const alongLen = Math.hypot(alongX, alongZ);
+    const archDir =
+      4 * alongLen * alongLen > 1e-5
+        ? { x: alongX / alongLen, z: alongZ / alongLen }
+        : { x: this.outward.z, z: -this.outward.x };
+    const gapMotion = flossGapMotion(
+      flossGapFrac({ phaseElapsedSec: state.phaseElapsedSec ?? 0, phaseDurationSec: state.phaseDurationSec ?? 22.5 }),
+      halfH,
+      rm
+    );
+    this.cameraContactLocal = flossContactLocal(
+      {
+        x: this.pos.x - COMPANION_ARCH_ORIGIN.x,
+        y: this.pos.y - COMPANION_ARCH_ORIGIN.y,
+        z: this.pos.z - COMPANION_ARCH_ORIGIN.z,
+      },
+      { x: this.outward.x, z: this.outward.z },
+      archDir,
+      isUpper,
+      gapMotion
+    );
 
     // Gentle saw into the tight contact, then C-shape lean onto one wall and the other.
     const lean = state.flossStepIndex === 1 ? -0.16 : state.flossStepIndex === 2 ? 0.16 : 0;
