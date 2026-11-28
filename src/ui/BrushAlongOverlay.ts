@@ -31,6 +31,7 @@ import {
 } from '../config/gameConfig';
 import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
+import * as diary from '../engine/diagnostics/testDiary';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import {
   brushAlongMultiplier,
@@ -326,11 +327,13 @@ export class BrushAlongOverlay implements OverlayView {
 
     this.clock.setPacerMouthwashDurationSec(mouthwashDurationSec(this.mouthwashStyle));
     this.clock.startPacer();
+    diary.brushStarted();
     this.callbacks.onActiveQuadrantChanged(0);
 
     this.disposers.add(this.bus.on('audio:changed', () => this.syncMuteUi()));
     this.disposers.add(
       this.bus.on('pacer:paused', ({ paused }) => {
+        diary.brushPaused(paused, this.clock.getPacerElapsedSec());
         this.callbacks.onPauseChanged?.(paused);
         if (paused) this.voice.pause();
         else this.voice.resume();
@@ -385,6 +388,7 @@ export class BrushAlongOverlay implements OverlayView {
       // judged by the same grace rule as the early "Floss ›"
       if (stoppedBrushing) this.fullBrush = brushedSec >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
       if (brushingDone || stoppedBrushing) {
+        diary.brushLeftForHome(brushedSec);
         this.completeSession(this.completedFloss, false, true);
         this.voice.stop();
         this.callbacks.onExitToHub(this.hubNoteForSavedBrush());
@@ -534,6 +538,7 @@ export class BrushAlongOverlay implements OverlayView {
    * one short earcon when the time ran out, since nobody may be looking; nothing is spoken.
    */
   private holdAfterStage(next: StageWait, chime = true): void {
+    diary.brushStageEnded(this.clock.getPacerStage(), next);
     if (this.clock.getPacerStage() === 'brushing') {
       this.fullBrush = this.clock.getPacerElapsedSec() >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
     }
@@ -679,6 +684,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.announcedFlossLowerHalf = false;
     this.lastPipKey = '';
     this.clock.enterFlossBonus();
+    diary.brushStage('floss');
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onPlayCue('quadrant');
     this.voice.speak(BrushCoachCopy.spokenStageWord('floss', this.lang));
@@ -694,6 +700,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.gyro = GYRO_SLOSH_IDLE;
     this.clock.setPacerMouthwashDurationSec(mouthwashDurationSec(this.mouthwashStyle));
     this.clock.enterMouthwashBonus();
+    diary.brushStage('rinse');
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
     this.callbacks.onPlayCue('quadrant');
@@ -710,6 +717,7 @@ export class BrushAlongOverlay implements OverlayView {
   private completeSession(withFlossBonus: boolean, withMouthwashBonus: boolean, exiting = false): void {
     // Paid once: a Done or Skip let go as the timer ends the brush does not pay it again.
     if (this.view !== 'running') return;
+    diary.brushFinished(this.fullBrush, withFlossBonus, withMouthwashBonus);
     const nowMs = Date.now();
     // When the last stage that ran really ended. Normally just now, but the session clock keeps
     // going behind a hidden page or a locked phone (H04), so a brush left overnight ended hours ago;

@@ -3,10 +3,15 @@ import Foundation
 import MouthLifeCore
 import os
 import UniformTypeIdentifiers
+#if os(iOS) || os(macOS)
+import MetricKit
+#endif
 #if os(iOS)
 import AVFAudio
-import MetricKit
 import UIKit
+#elseif os(macOS)
+import AppKit
+import Security
 #endif
 
 /// Adds a line to the test diary (`TestDiary`): what the app is doing right now, in a few words.
@@ -68,27 +73,59 @@ final class AppDiagnostics: NSObject, @unchecked Sendable {
             "=== launch • MouthLife \(version) (\(Self.buildNumber)) • \(Self.deviceModel()) • \(info.operatingSystemVersionString)"
                 + " • heat \(Self.name(info.thermalState)) • low power \(info.isLowPowerModeEnabled ? "on" : "off")"
         )
-        #if os(iOS)
         // Set while the app is on screen, taken away when it leaves: still there now means the
-        // last run never got to leave. (Not on the Mac: quitting there does not pass through the
-        // background.)
+        // last run never got to leave. On the iPhone and iPad it follows the scene (active, then
+        // inactive or background); on the Mac, where quitting does not pass through the
+        // background, it follows the app being frontmost, quitting and the window closing
+        // (`observeMacApp`).
         if let previous = UserDefaults.standard.string(forKey: Self.foregroundBuildKey) {
             UserDefaults.standard.removeObject(forKey: Self.foregroundBuildKey)
             diary.note("the last run (build \(previous)) ended while it was on screen: a crash, or closed while frozen")
         }
-        #endif
     }
 
     /// TestFlight and development builds: the only ones that show "Share test diary".
+    /// Decided once, straight away and offline, when the first diary line asks.
     static let isTestBuild: Bool = {
         #if DEBUG
         return true
         #elseif os(iOS)
         return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #elseif os(macOS)
+        return isSignedForTestFlight()
         #else
         return false
         #endif
     }()
+
+    #if os(macOS)
+    /// The Mac has no sandbox receipt to look at, so the app reads its own code signature. Apple
+    /// signs a TestFlight build and an App Store build again before either reaches a Mac. The
+    /// certificate it signs a TestFlight build with is said to carry one field the App Store's
+    /// lacks: 1.2.840.113635.100.6.1.25.1, a mark in Apple's own branch of code-signing
+    /// certificate fields (1.2.840.113635.100.6.1), the "TestFlight distribution" mark.
+    /// `anchor apple generic` asks that the certificate chain end at Apple's root, so only a
+    /// certificate Apple issued can carry it.
+    ///
+    /// Not yet seen working: unverified until a TestFlight Mac build shows "Share test diary" and
+    /// an App Store build does not. Every error, and a missing field, counts as not a test build,
+    /// the safe way round (no diary). Fully offline: only the signature inside the app is read
+    /// (`kSecCSNoNetworkAccess`), and the files it covers are not hashed again
+    /// (`kSecCSBasicValidateOnly`), which would take long for a bundle full of music.
+    /// `AppTransaction.shared` would also tell, but it may need the network and can put up an
+    /// Apple Account sign-in, so it is not used.
+    private static func isSignedForTestFlight() -> Bool {
+        let requirementText = "anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.25.1] exists"
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(Bundle.main.bundleURL as CFURL, [], &code) == errSecSuccess,
+              let code else { return false }
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(requirementText as CFString, [], &requirement) == errSecSuccess,
+              let requirement else { return false }
+        let flags = SecCSFlags(rawValue: kSecCSBasicValidateOnly).union(.noNetworkAccess)
+        return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
+    }
+    #endif
 
     private static var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
@@ -101,8 +138,11 @@ final class AppDiagnostics: NSObject, @unchecked Sendable {
         guard Self.isTestBuild, !started else { return }
         started = true
         observeSystem()
-        #if os(iOS)
+        #if os(iOS) || os(macOS)
         MXMetricManager.shared.add(self)
+        #endif
+        #if os(macOS)
+        observeMacApp()
         #endif
         startWatch()
     }
@@ -136,6 +176,41 @@ final class AppDiagnostics: NSObject, @unchecked Sendable {
         #endif
         watch.withLock { $0.setArmed(false) }
     }
+
+    #if os(macOS)
+    /// The Mac's mark of a run that ended on screen. Quitting there does not pass through the
+    /// background, so the mark follows the app: set while it is the frontmost app, taken away when
+    /// another app comes to the front, when the window closes (which quits the game) and when it
+    /// quits. A Mac has no memory warnings to listen for. Main thread, once, from `start`.
+    private func observeMacApp() {
+        let nc = NotificationCenter.default
+        let key = Self.foregroundBuildKey
+        let build = Self.buildNumber
+        let markOnScreen: @Sendable () -> Void = { UserDefaults.standard.set(build, forKey: key) }
+        let clearMark: @Sendable () -> Void = { UserDefaults.standard.removeObject(forKey: key) }
+        _ = nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            markOnScreen()
+        }
+        _ = nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
+            clearMark()
+        }
+        _ = nc.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+            clearMark()
+        }
+        _ = nc.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
+            // The game's own window, not a sheet or a panel closing over it.
+            let isGameWindow = MainActor.assumeIsolated {
+                guard let window = note.object as? NSWindow else { return false }
+                return window.sheetParent == nil && window.canBecomeMain
+            }
+            if isGameWindow { clearMark() }
+        }
+        // Started before the app came to the front, as a rule; if it is in front already, the
+        // notification above has been missed. (`NSApp` is still nil when this runs that early.)
+        let alreadyInFront = MainActor.assumeIsolated { NSApp?.isActive == true }
+        if alreadyInFront { markOnScreen() }
+    }
+    #endif
 
     // MARK: - Frame rate
 
@@ -226,6 +301,10 @@ final class AppDiagnostics: NSObject, @unchecked Sendable {
     /// mark of the last run. Main thread.
     func eraseEverything() {
         UserDefaults.standard.removeObject(forKey: Self.foregroundBuildKey)
+        // Erased while the game is on screen: the mark of this run comes straight back.
+        if Self.isTestBuild, watch.withLock({ $0.armed }) {
+            UserDefaults.standard.set(Self.buildNumber, forKey: Self.foregroundBuildKey)
+        }
         diary.clear()
         // A copy made for the share sheet may still lie in the temporary folder.
         try? FileManager.default.removeItem(at: Self.exportFileURL)
@@ -306,7 +385,7 @@ final class AppDiagnostics: NSObject, @unchecked Sendable {
     }
 }
 
-#if os(iOS)
+#if os(iOS) || os(macOS)
 extension AppDiagnostics: MXMetricManagerSubscriber {
     /// The system's crash and hang reports for earlier runs. Called on a background thread.
     func didReceive(_ payloads: [MXDiagnosticPayload]) {

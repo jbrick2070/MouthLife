@@ -14,6 +14,7 @@ import {
 import { uiTranslator } from '../i18n/uiTranslator';
 import { DISTRICT_SEAL_CLEAN_RATIO, GUM_TENDER_THRESHOLD, SURGE_MAX } from '../config/gameConfig';
 import { findNearestZipMouth, sampleTerrainHeight } from '../engine/physics/CollisionSystem';
+import * as diary from '../engine/diagnostics/testDiary';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import type { InputManager } from '../engine/InputManager';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
@@ -267,6 +268,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
   setPaused(p: boolean): void {
     if (p === this.paused) return;
+    diary.stagePause(p);
     if (p) {
       this.lastFocusedBeforePause =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;

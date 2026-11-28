@@ -9,6 +9,7 @@ import { sampleTerrainHeight } from './engine/physics/CollisionSystem';
 import { SAVE_GENERATION_KEY, SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
 import { markHasSeenBrushIntro, readHasSeenBrushIntro, readIncludeRinse } from './engine/persistence/pacerPrefs';
 import { recoverPendingBrush } from './engine/persistence/pendingBrush';
+import * as diary from './engine/diagnostics/testDiary';
 import { closeBrushIntroCard, isBrushIntroCardOpen, showBrushIntroCard } from './ui/brushIntroCard';
 import { requestMotionPermissionIfNeeded } from './engine/motionPermission';
 import { SceneManager } from './engine/render/SceneManager';
@@ -206,6 +207,7 @@ function bootstrapMouthLife(): void {
       touch.endTouch();
       uiRoot!.innerHTML = '';
     }
+    diary.finaleStarts(kind, worldIndex);
     finaleActive = true;
     // Nothing to touch for up to 90 seconds: keep the phone from dimming and locking mid-show.
     clock.setShowAwake(true);
@@ -226,6 +228,7 @@ function bootstrapMouthLife(): void {
         else sound.playFinaleTrack(part === 'ending' ? -1 : worldIndex, offsetSec);
       },
       onDone: () => {
+        diary.finaleOver();
         overlay.dispose();
         if (finaleOverlay === overlay) finaleOverlay = null;
         finaleActive = false;
@@ -741,6 +744,7 @@ function bootstrapMouthLife(): void {
   function switchMode(next: AppMode): void {
     const prev = currentMode;
     currentMode = next;
+    diary.screen(prev, next, lastPlayedWorldId);
     if (finaleOverlay) {
       finaleOverlay.dispose();
       finaleOverlay = null;
@@ -1193,6 +1197,9 @@ function bootstrapMouthLife(): void {
   };
 }
 
+// A test build's diary opens this launch's part first (`npm run build:test`; nothing in any other
+// build): it notes screens, brush stages, page events and script errors from here on.
+diary.startTestDiary();
 // Outside links (charity pages, donations) wait for a grown-up.
 installParentGate();
 bootstrapMouthLife();

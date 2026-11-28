@@ -16,6 +16,7 @@ interface MouthLifeAndroidPlugin {
   setBackInterceptEnabled(options: { enabled: boolean }): Promise<void>;
   moveTaskToBack(): Promise<void>;
   hapticImpact(options: { strength01: number; durationMs: number }): Promise<void>;
+  shareText(options: { text: string; title: string }): Promise<void>;
   addListener(
     eventName: 'backPressed',
     listenerFunc: () => void
@@ -91,6 +92,20 @@ export function triggerNativeHaptic(strength01: number, durationMs: number): voi
  */
 export function setNativeBackIntercept(enabled: boolean): void {
   void getNativeBridge()?.setBackInterceptEnabled({ enabled }).catch(() => {});
+}
+
+/**
+ * Opens Android's share sheet with plain text (ACTION_SEND through the system chooser): a test
+ * build's diary, which the tester then sends where they choose. `title` heads the sheet and is the
+ * subject an email app takes. False outside the Android app or when no sheet opened.
+ */
+export function shareNativeText(text: string, title: string): Promise<boolean> {
+  const bridge = getNativeBridge();
+  if (!bridge) return Promise.resolve(false);
+  return bridge
+    .shareText({ text, title })
+    .then(() => true)
+    .catch(() => false);
 }
 
 /** Moves the Android app to the background when Back is pressed on Home with nothing left to close. */

@@ -1,7 +1,7 @@
 # MouthLife: after the first outside beta test, for every edition (plan, 2026-11-28)
 
-**Status (28 November):** Sprints 1, 2 and 3 are done. Sprint 4 is designed and next; Sprint 6's
-brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
+**Status (28 November):** Sprints 1 to 4 are done. Sprint 5 (shipping) is next; Sprint 6's brief
+is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
 iPhone, iPad, Watch, widgets and Mac apps, 166 native tests, 701 web tests, CI green). The owner
 asked for one plan that carries what the first outside tester found to the Mac app, the browser
 edition and the Android (Google Play) app, and that checks the camera moves and angles are alike
@@ -252,7 +252,7 @@ from the running page; how the new framing looks (the score screen, Home further
 foldable at aspect 0.9) still wants a look on real screens. Left for the owner: the floss camera
 swings back and forth at the middle three stops, in both editions.
 
-### Sprint 4: see what a test build was doing, on every platform
+### Sprint 4: see what a test build was doing, on every platform: done
 
 The owner wants the editions alike here too (decision 2). Test builds only, everywhere: that is
 the usual practice and what the privacy page promises. (Apple Health is the one thing only the
@@ -267,12 +267,31 @@ iPhone, iPad and Mac have; a diary line about it means nothing elsewhere.)
 *Done when:* a test build on each platform can hand over its diary, and a release build of each
 has no diary code path that runs.
 
+*Built (28 November):* designed with Antigravity's review. The Mac decides "test build" from its own
+code signature, offline and at once (asking the App Store at launch can show a sign-in sheet); the
+TestFlight marker it looks for is unverified until a TestFlight Mac build shows "Share test diary"
+and an App Store one does not. MetricKit and the "ended on screen" mark now run on the Mac too.
+The browser and Android keep the same diary (`src/engine/diagnostics/testDiary.ts`) only in a
+build made with `npm run build:test`; the public page and a Play release carry no diary code (the
+release bundle holds only the key prefix Erase Save uses to remove a diary an earlier test build
+left on the same device). Android shares it through its own share sheet (a new `shareText` on the
+app's plugin), falling back to the clipboard; a browser uses its share sheet, the clipboard or a
+download. `npm run android:sync` refuses to copy a test build into the Android app (and
+`android:sync:test` a release), since both builds write `dist/`. Reviewed by Sonnet; fixed: the
+Android share can no longer crash the app or leave its button stuck, quoted text in error
+messages is left out, a long session still notes a new error after its first twenty, and Erase
+Save on screen marks the run again. 199 native tests, 799 web tests, both Release builds, the
+Android code compiles. Known limit: in a browser with two tabs of the game open, the "ended on
+screen" mark can be wrong (one key for the whole site); the Android app has one page.
+
 ### Sprint 5: put it on every edition
 
 1. **Apple:** build 5 for the app, the watch app and the widgets; archive and upload the iPhone
    and Mac builds; add the iPhone build to "Friends and Family" with its "What to Test" note.
 2. **Browser:** `mouthlife-shell-v4` in `public/sw.js`, then the push to `master` publishes it.
-3. **Android:** `npm run build && npx cap sync android`, `versionCode 2`, the name left at "1.0"
+3. **Android:** `npm run build:test && npm run android:sync:test` for the Play closed test (it keeps
+   the test diary), `npm run build && npm run android:sync` for a release (the sync refuses a test
+   build), `versionCode 2`, the name left at "1.0"
    (decision 3), a signed bundle from Android Studio. The owner uploads it: the upload key, the listing forms
    and the 12 testers for 14 days are theirs (`docs/android-plan.md`).
 

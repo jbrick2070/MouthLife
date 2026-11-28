@@ -14,6 +14,7 @@
  * when a tab closes or crashes, which is what lets a crashed brush be paid. Without Web Locks (old
  * browsers) the note is paid without asking.
  */
+import * as diary from '../diagnostics/testDiary';
 import type { EventBus } from '../EventBus';
 import { HabitBank, brushRewardDay } from './HabitBank';
 import type { SaveSystem } from './SaveSystem';
@@ -267,7 +268,7 @@ function payNote(saveSys: SaveSystem, bus: EventBus, nowMs = Date.now()): BrushS
     clearPendingBrush();
     return null;
   }
-  return settleBrush(
+  const paid = settleBrush(
     saveSys,
     bus,
     {
@@ -280,6 +281,8 @@ function payNote(saveSys: SaveSystem, bus: EventBus, nowMs = Date.now()): BrushS
     },
     nowMs
   );
+  if (paid) diary.unfinishedBrushPaid(note.brushedSec, note.fullBrush);
+  return paid;
 }
 
 /**

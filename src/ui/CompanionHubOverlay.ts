@@ -25,6 +25,7 @@ import {
 } from '../config/hostsAndHistory';
 import { UPGRADE_CATALOG } from '../config/upgrades';
 import { CompanionArchSim } from '../engine/companion/CompanionArchSim';
+import * as diary from '../engine/diagnostics/testDiary';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import { isNativeApp } from '../engine/nativePlatform';
 import {
@@ -1308,6 +1309,7 @@ export class CompanionHubOverlay implements OverlayView {
               <button type="button" id="btn-reset-save" class="btn btn-sm" style="${this.confirmResetPending ? 'border-color:#fb7185;color:#fecdd3;' : ''}">
                 ${this.confirmResetPending ? '⚠️ Tap Again to Erase' : '🔄 Erase Save'}
               </button>
+              ${diary.shareButtonHtml()}
             </div>
             <div class="row-wrap" style="gap:6px;">
               <button type="button" id="btn-paste-sync" class="btn btn-sm">📋 Paste</button>

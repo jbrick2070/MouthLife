@@ -83,9 +83,15 @@ function bundledMusic(): Plugin {
   };
 }
 
+/** The version in package.json, for the test diary's launch line (src/engine/diagnostics/testDiary.ts). */
+const APP_VERSION: string = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+
 export default defineConfig({
   base: './',
   plugins: [bundledMusic()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
+  },
   server: {
     port: 5173,
     host: true,

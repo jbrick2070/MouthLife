@@ -55,8 +55,9 @@ SDK 36, the Pixel 8a over USB, and emulators for a phone (Pixel), foldables (Pix
 Fold, open flat and half open) and a tablet.
 
 1. `npm i @capacitor/core @capacitor/android` and `npm i -D @capacitor/cli`; `npx cap init MouthLife
-   org.mouthlife.plaque --web-dir dist`; `npx cap add android`. Each build: `npm run build && npx cap
-   sync android`, then build and run from Android Studio. Commit the `android/` project.
+   org.mouthlife.plaque --web-dir dist`; `npx cap add android`. Each build: `npm run build && npm run
+   android:sync` (a release; `npm run build:test && npm run android:sync:test` for a test build with
+   the test diary, for the closed test), then build and run from Android Studio. Commit the `android/` project.
 2. **Settings:** `targetSdk 36`; edge to edge, with `viewport-fit=cover` so the existing
    `env(safe-area-inset-*)` CSS works; dark system bars; any orientation, as in
    `manifest.webmanifest`.

@@ -7,6 +7,7 @@ import {
 } from '../../config/hostsAndHistory';
 import { UPGRADE_CATALOG, UPGRADE_IDS } from '../../config/upgrades';
 import { CompanionArchSim, createInitialCompanionState } from '../companion/CompanionArchSim';
+import { clearDiary } from '../diagnostics/testDiary';
 import type { EventBus } from '../EventBus';
 import { formatLocalDateKey } from './HabitBank';
 import { clearBrushNotes } from './pendingBrush';
@@ -700,6 +701,8 @@ export class SaveSystem {
    */
   resetToFreshSave(nowEpochMs = Date.now()): MouthLifeSaveV2 {
     clearBrushNotes();
+    // A test build's diary goes too (native `AppDiagnostics.eraseEverything`); nothing in a release.
+    clearDiary();
     const revisionBefore = Math.max(this.currentSave.saveRevision, this.lastSeenSave?.saveRevision ?? 0);
     this.persistenceSuspended = false;
     this.generation = newGenerationId();

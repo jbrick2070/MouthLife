@@ -33,6 +33,7 @@ import java.util.Set;
  * - FLAG_KEEP_SCREEN_ON during brushing and city finales
  * - Outbound ACTION_VIEW intents for charity links (only after the grown-up gate passes)
  * - Subtle tactile haptics and app background/foreground lifecycle notifications
+ * - The system share sheet for a test build's diary (plain text, sent only where the tester picks)
  */
 @CapacitorPlugin(name = "MouthLifeAndroid")
 public class MouthLifePlugin extends Plugin {
@@ -285,6 +286,40 @@ public class MouthLifePlugin extends Plugin {
                 call.resolve();
             } catch (ActivityNotFoundException ex) {
                 call.reject("No browser installed to open external link");
+            }
+        });
+    }
+
+    /**
+     * Hands plain text to the system share sheet (ACTION_SEND through the chooser): a test build's
+     * diary, called only from "Share test diary". The tester picks where it goes; the app itself
+     * sends nothing and has no network permission.
+     */
+    @PluginMethod
+    public void shareText(PluginCall call) {
+        String text = call.getString("text", "");
+        String title = call.getString("title", "");
+        getBridge().executeOnMainThread(() -> {
+            try {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_TEXT, text != null ? text : "");
+                if (title != null && !title.isEmpty()) {
+                    send.putExtra(Intent.EXTRA_SUBJECT, title);
+                }
+                Intent chooser = Intent.createChooser(send, title);
+                if (getActivity() == null) {
+                    call.reject("The game is not on screen");
+                    return;
+                }
+                getActivity().startActivity(chooser);
+                call.resolve();
+            } catch (ActivityNotFoundException ex) {
+                call.reject("Nothing can share text on this device");
+            } catch (RuntimeException ex) {
+                // Anything else (a diary too large to hand over, say) must not stop the game, and the
+                // page must hear back so its button comes back: it falls back to the clipboard.
+                call.reject("Could not share the diary");
             }
         });
     }

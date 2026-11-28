@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:test": "tsc --noEmit && VITE_TEST_BUILD=1 vite build",
+    "android:sync": "node scripts/android-sync.mjs",
+    "android:sync:test": "node scripts/android-sync.mjs --test",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
