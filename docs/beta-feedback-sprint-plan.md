@@ -300,7 +300,8 @@ and the Pixel 8a runs versionCode 2.
 
 *Done (28 November):* build 5 committed and pushed (`9ffe73d`), which published the browser edition
 with the cache renamed `mouthlife-shell-v4`. iPhone build 5 archived and uploaded to App Store
-Connect; the Mac build 5 archived (its upload is retried after a dropped connection). The Android
+Connect and, the same day, added to "Friends and Family" with its "What to Test" note (status
+Testing); the Mac build 5 uploaded too, on a second try after a dropped connection. The Android
 test build (`npm run build:test && npm run android:sync:test`, versionCode 2) runs on the Pixel
 8a, where "Share test diary" opens Android's share sheet with the diary.
 
@@ -351,9 +352,8 @@ checks, and where each edition keeps its test diary. The round itself waits for 
 
 ## What is left (the owner's steps, 28 November)
 
-1. **TestFlight:** add iPhone build 5 to "Friends and Family" with its "What to Test" note (needs
-   App Store Connect signed in; Claude can do it once it is). Decide whether Mac testers get the
-   Mac build (it is in the internal "Team" group only).
+1. **TestFlight:** iPhone build 5 is with "Friends and Family" (done 28 November). Decide whether
+   Mac testers get Mac build 5 (it is in the internal "Team" group only).
 2. **Google Play:** sign the Android bundle with the upload key in Android Studio, set up the
    closed test (12 testers, 14 days), and upload the test build (`android/` holds it now). For a
    release later: `npm run build && npm run android:sync`, a fresh versionCode, a new signed
