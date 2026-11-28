@@ -797,6 +797,17 @@ public struct BrushAlongView: View {
             }
             .buttonStyle(MLGlassPillButtonStyle(tint: MLTheme.cyanAccent))
         }
+        if isFloss && !includeRinse {
+            // Skip goes Home while the rinse is off; this says where it is turned on (the owner's
+            // decision, 28 November). The same words as the web card.
+            Text(L10n.t("A grown-up can turn on the rinse in Settings."))
+                .font(.system(.caption2, design: .rounded, weight: .semibold))
+                .foregroundStyle(MLTheme.textMuted)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
     }
 
     private var flossToolPicker: some View {

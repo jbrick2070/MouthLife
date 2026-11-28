@@ -1,7 +1,7 @@
 # MouthLife: after the first outside beta test, for every edition (plan, 2026-11-28)
 
-**Status (28 November):** Sprint 1 is done. Sprints 2 and 3 are being built; Sprint 6's brief
-is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
+**Status (28 November):** Sprints 1 and 2 are done. Sprint 3 is built and being merged; Sprint 4
+is designed; Sprint 6's brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
 iPhone, iPad, Watch, widgets and Mac apps, 166 native tests, 701 web tests, CI green). The owner
 asked for one plan that carries what the first outside tester found to the Mac app, the browser
 edition and the Android (Google Play) app, and that checks the camera moves and angles are alike
@@ -156,14 +156,14 @@ closes every door found open and makes the next freeze say what it was.
 lines by mistake, the Pixel check passes, and both editions still play the same.
 
 *Built (28 November):* all six steps; 177 native tests, 730 web tests, both Release builds.
+The Pixel 8a check passed the same day (see Sprint 2).
 Reviewed by Sonnet; its six findings fixed (the refused-touch line is now once per stage; a HUD
 built anew says "not paused"; letting go tells the scene only when something was held; no new
-owner under a finale on iPhone). Not done here: the Pixel 8a check (needs the phone), and the
-paused-then-new-stage check is a reading of the code, not a running test (the coordinator has
-no test target). Found, not fixed: the browser's first city trips its own development warning,
+owner under a finale on iPhone). The paused-then-new-stage check is a reading of the code, not a
+running test (the coordinator has no test target). Found, not fixed: the browser's first city trips its own development warning,
 33 draw calls against a budget of 25 (`SceneManager.ts:850`); it predates this sprint.
 
-### Sprint 2: an interrupted brush is kept, in the browser and on Android
+### Sprint 2: an interrupted brush is kept, in the browser and on Android: done
 
 1. `src/config/brushCheckpoint.ts`, the twin of `BrushCheckpoint.swift`: the same 20 s and 10 s,
    the same "full only within the grace" rule, the same test cases on both sides.
@@ -183,8 +183,23 @@ no test target). Found, not fixed: the browser's first city trips its own develo
    on in Settings. New text: all eight languages, through `npm run i18n:extract` and
    `scripts/i18n-native.mjs`.
 
+7. **Uninstalling asks before it deletes the save** (the owner, 28 November: follow Android's
+   standards and what the person means). Backups stay off, so the save never leaves the phone;
+   the manifest's `hasFragileUserData` makes Android's own uninstall dialog offer "Keep app
+   data" (Android 10 and later). Check on the Pixel: uninstall from Settings, the dialog asks.
+
 *Done when:* the shared test cases pass on both sides, no path pays a brush twice, and the two
 checks on the phone pass.
+
+*Built (28 November):* steps 1 to 7, with Codex's design review folded in: one settlement path,
+a browser lock held for the length of a brush (so a second tab never pays a brush that is still
+running), and a list of paid brushes so none is paid twice. The watch's End under 20 seconds now
+keeps nothing, like Home on the phone. 178 native tests, 766 web tests, both Release builds.
+Reviewed by Sonnet; fixed: starting a brush or leaving under 20 seconds no longer erases another
+tab's note, and a brush finished on an older copy of the page that cannot save keeps its note.
+Checked on the Pixel 8a (28 November, with Sprint 1): killed 35 seconds into a brush, reopened,
+paid as a "good try"; the uninstall dialog offers "Keep app data"; a finger held while leaving the
+app leaves nothing held after Resume, and a new touch steers.
 
 ### Sprint 3: the camera, alike in every edition
 

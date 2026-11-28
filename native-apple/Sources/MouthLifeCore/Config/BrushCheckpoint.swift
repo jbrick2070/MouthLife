@@ -10,8 +10,11 @@ import Foundation
 /// gone on: at the next launch nothing tells a swipe-away from the system ending the app, and
 /// counting the time since the start would turn a swipe and a 2-minute wait into a full brush.
 ///
-/// Phone only, on purpose. The watch keeps its own note and offers to resume instead
-/// (`WatchController`), and the web keeps nothing mid-brush.
+/// The watch keeps its own note and offers to resume instead (`WatchController`); its End keeps
+/// nothing under `minBrushedSec` either (`WatchRitual.endKeepsNothing`).
+///
+/// Web twin: `src/config/brushCheckpoint.ts`, the same numbers and rules (the browser and Android
+/// keep the same note); `tests/brushCheckpoint.test.ts` matches the cases in `BetaFeedbackTests`.
 public enum BrushCheckpoint {
     /// Under this, no note is written: a brush that only got this far and was never finished
     /// earns nothing (a start by mistake). A tap on "Floss ›" is the player's own choice and is

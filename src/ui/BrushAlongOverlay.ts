@@ -20,6 +20,7 @@ import {
   type MouthwashDurationStyle,
   type PacerStage,
 } from '../config/brushCoach';
+import { BrushCheckpoint } from '../config/brushCheckpoint';
 import { SMILE_ON_U_CHARITY } from '../config/charityInfo';
 import {
   BRUSH_ALONG_FLOSS_BONUS_SEC,
@@ -32,13 +33,19 @@ import type { VoiceCoach } from '../engine/audio/VoiceCoach';
 import type { ClockController } from '../engine/ClockController';
 import { DisposerBag, type EventBus } from '../engine/EventBus';
 import {
-  HabitBank,
   brushAlongMultiplier,
   brushAlongRinseCredit,
   brushRewardDay,
   formatLocalDateKey,
 } from '../engine/persistence/HabitBank';
 import { readIncludeRinse } from '../engine/persistence/pacerPrefs';
+import {
+  clearPendingBrush,
+  holdBrushLock,
+  newBrushSessionId,
+  settleBrush,
+  writePendingBrush,
+} from '../engine/persistence/pendingBrush';
 import type { SaveSystem } from '../engine/persistence/SaveSystem';
 import type { OverlayView } from '../engine/types';
 import { uiTranslator } from '../i18n/uiTranslator';
@@ -145,6 +152,16 @@ export class BrushAlongOverlay implements OverlayView {
   private skipToFlossArmedAtMs: number | null = null;
   private skipToFlossTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** This brush's id on its note and in the list of paid brushes (native `pacerSessionId`). */
+  private sessionId = '';
+  /** Wall-clock seconds of the last note written mid-brush (`BrushCheckpoint.isDue`); null until the first. */
+  private lastCheckpointWallSec: number | null = null;
+  /** Seconds brushed and when brushing ended, kept once brushing is over (time ran out, or "Floss ›"). */
+  private brushedSec = 0;
+  private brushingEndedAtMs = 0;
+  /** Lets go of the `mouthlife-brush` lock this tab holds while its brush is unpaid. */
+  private releaseBrushLock: (() => void) | null = null;
+
   private lastAnnouncedQuadrant = -1;
   private lastAnnouncedSurface = -1;
   private announcedFlossLowerHalf = false;
@@ -186,7 +203,10 @@ export class BrushAlongOverlay implements OverlayView {
     }
   };
 
-  /** Back in view: a waiting card that has been up long enough finishes the brush (wall clock). */
+  /**
+   * Back in view: a waiting card that has been up long enough finishes the brush (wall clock). Going
+   * out of view, the brush is noted by main.ts's own page-hide hooks (`checkpointNow`).
+   */
   private readonly visibilityHandler = (): void => {
     if (document.visibilityState !== 'hidden') this.checkStageWait();
   };
@@ -270,6 +290,16 @@ export class BrushAlongOverlay implements OverlayView {
     this.disarmSkipToFloss();
     this.lastStageEndedAtMs = 0;
     this.stageWaitSinceMs = 0;
+    // A new brush. This tab holds the brush lock until the brush is paid or left, so another tab
+    // never pays its note meanwhile. An older note is not cleared here (the native app can, having
+    // one process): it may be another tab's brush still running, or one waiting to be paid at the
+    // next start, and this brush's own first note replaces it once 20 s are brushed.
+    this.sessionId = newBrushSessionId();
+    this.lastCheckpointWallSec = null;
+    this.brushedSec = 0;
+    this.brushingEndedAtMs = 0;
+    this.letGoOfBrushLock();
+    this.releaseBrushLock = holdBrushLock();
     this.lastAnnouncedQuadrant = -1;
     this.lastAnnouncedSurface = -1;
     this.announcedFlossLowerHalf = false;
@@ -296,6 +326,8 @@ export class BrushAlongOverlay implements OverlayView {
         this.callbacks.onPauseChanged?.(paused);
         if (paused) this.voice.pause();
         else this.voice.resume();
+        // Paused, then the tab closed: the note has the seconds up to the pause.
+        if (paused) this.checkpointNow();
         this.syncPauseUi();
       })
     );
@@ -320,6 +352,7 @@ export class BrushAlongOverlay implements OverlayView {
     this.stopStageWait();
     this.disarmSkipToFloss();
     this.unbindMotion();
+    this.letGoOfBrushLock();
     this.voice.stop();
     this.clock.stopPacer();
     this.callbacks.onPauseChanged?.(false);
@@ -333,13 +366,26 @@ export class BrushAlongOverlay implements OverlayView {
     // Once the 2 minutes of brushing are done, leaving keeps the brush: from a card between stages,
     // or during floss or the rinse, it is saved with what was finished (floss only if it ran to its
     // end or was marked done, never the rinse; from a card, dated from when the last stage that ran
-    // ended), then the hub opens as it does from the summary. Leaving while brushing saves nothing.
-    const brushingDone = this.stageWait !== null || this.clock.getPacerStage() !== 'brushing';
-    if (brushingDone && this.view === 'running') {
-      this.completeSession(this.completedFloss, false, true);
-      this.voice.stop();
-      this.callbacks.onExitToHub(this.hubNoteForSavedBrush());
-      return;
+    // ended), then the hub opens as it does from the summary. Leaving while brushing, once
+    // BrushCheckpoint.minBrushedSec (20 s) were brushed, keeps a "good try" with the kind words the
+    // early "Floss ›" earns (the owner's decision, 28 November; native `returnToHub`). Under that,
+    // leaving saves nothing.
+    if (this.view === 'running') {
+      const brushingDone = this.brushingIsOver();
+      const brushedSec = this.clock.getPacerElapsedSec();
+      const stoppedBrushing = !brushingDone && BrushCheckpoint.isWorthKeeping(brushedSec);
+      // judged by the same grace rule as the early "Floss ›"
+      if (stoppedBrushing) this.fullBrush = brushedSec >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
+      if (brushingDone || stoppedBrushing) {
+        this.completeSession(this.completedFloss, false, true);
+        this.voice.stop();
+        this.callbacks.onExitToHub(this.hubNoteForSavedBrush());
+        return;
+      }
+      // Nothing worth keeping, and this brush leaves no note behind (native `returnToHub`); a note
+      // that belongs to another tab's brush stays.
+      clearPendingBrush(this.sessionId);
+      this.letGoOfBrushLock();
     }
     this.stopStageWait();
     this.voice.stop();
@@ -420,6 +466,7 @@ export class BrushAlongOverlay implements OverlayView {
         this.holdAfterStage('floss');
         return;
       }
+      this.checkpointBrushing();
       const nearEnd = elapsedSec >= BRUSH_ALONG_TOTAL_SEC - 0.2;
       if (phase.quadrant !== this.lastAnnouncedQuadrant && !nearEnd) {
         this.lastAnnouncedQuadrant = phase.quadrant;
@@ -485,6 +532,11 @@ export class BrushAlongOverlay implements OverlayView {
     // When the stage really ended: now, or earlier if the page was hidden past its end (H04). The
     // time past it is dropped by the hold, so the next stage always starts at its own 0:00.
     this.lastStageEndedAtMs = Date.now() - this.clock.getPacerOverflowSec() * 1000;
+    if (this.clock.getPacerStage() === 'brushing') this.latchBrushingEnd();
+    // Kept on the device from the first Start card until the brush is paid (the screen may sleep on
+    // a card, and the system may end the app meanwhile); written before the card's own wait is
+    // checked, so a brush finished at once is paid from the same facts.
+    this.storePendingBrush();
     // Floss skipped while paused: the hold ends the pause (a card has nothing to resume), so the
     // music comes back up and speech left paused is let go.
     const wasPaused = this.clock.isPacerPaused();
@@ -556,6 +608,7 @@ export class BrushAlongOverlay implements OverlayView {
     if (this.stageWait === 'floss') {
       this.includeRinse = readIncludeRinse();
       if (this.includeRinse) {
+        this.storePendingBrush();
         this.showStageWait('rinse', Date.now(), false);
         return;
       }
@@ -583,6 +636,10 @@ export class BrushAlongOverlay implements OverlayView {
     this.fullBrush = this.clock.getPacerElapsedSec() >= BRUSH_ALONG_TOTAL_SEC - BRUSH_ALONG_FULL_BRUSH_GRACE_SEC;
     // Brushing ends here, as any stage does (now, less any time it ran on behind a hidden page).
     this.lastStageEndedAtMs = nowMs - this.clock.getPacerOverflowSec() * 1000;
+    // Read before floss starts (which moves the clock on to 2:00). Kept like a Start card's brush,
+    // whatever the seconds: an early Floss is the player's own choice (native `skipToFlossNow`).
+    this.latchBrushingEnd();
+    this.storePendingBrush();
     this.enterFlossBonus();
   }
 
@@ -638,11 +695,13 @@ export class BrushAlongOverlay implements OverlayView {
   }
 
   /**
-   * Saves the brush and shows the summary. `exiting`: Exit to Hub after the 2 minutes of brushing;
-   * the hub opens straight away, so the summary is not drawn and "Done" (which leaving would cut
-   * off) is not spoken.
+   * Saves the brush and shows the summary. `exiting`: Exit to Hub with a brush worth keeping (see
+   * `exitToHub`); the hub opens straight away, so the summary is not drawn and "Done" (which
+   * leaving would cut off) is not spoken.
    */
   private completeSession(withFlossBonus: boolean, withMouthwashBonus: boolean, exiting = false): void {
+    // Paid once: a Done or Skip let go as the timer ends the brush does not pay it again.
+    if (this.view !== 'running') return;
     const nowMs = Date.now();
     // When the last stage that ran really ended. Normally just now, but the session clock keeps
     // going behind a hidden page or a locked phone (H04), so a brush left overnight ended hours ago;
@@ -656,34 +715,29 @@ export class BrushAlongOverlay implements OverlayView {
     this.callbacks.onPauseChanged?.(false);
     this.callbacks.onActiveQuadrantChanged(-1);
 
-    const save = this.saveSys.getSave();
     const rewardOptions = {
       withFlossBonus,
       withMouthwashBonus,
       fullBrush: this.fullBrush,
       rinseStepOff: !this.includeRinse,
     };
-    // Paid on the day it really ended, so a brush found finished the next morning does not use up
-    // one of today's two full rewards.
-    const now = new Date(nowMs);
-    const endedAt = new Date(endedAtMs);
-    const outcome = HabitBank.completeBrushAlong(save, {
-      ...rewardOptions,
-      date: now,
-      rewardDay: brushRewardDay(endedAt, now),
-    });
-    this.saveSys.save(save);
-    this.rewardResult = {
-      ...outcome,
-      withMouthwashBonus,
-      multiplier: brushAlongMultiplier(withFlossBonus, brushAlongRinseCredit(rewardOptions)),
-    };
-    this.bus.emit('pacer:complete', {
-      withFlossBonus,
-      withMouthwashBonus,
-      ionsAwarded: outcome.ionsAwarded,
-      stampAwarded: outcome.stampAwarded,
-    });
+    // The one way a brush is paid (as a note left from an earlier visit is): on the day it really
+    // ended, so a brush found finished the next morning does not use up one of today's two full
+    // rewards; then its note is cleared and 'pacer:complete' goes out.
+    const outcome = settleBrush(
+      this.saveSys,
+      this.bus,
+      { sessionId: this.sessionId, ...rewardOptions, stageEndedAtMs: endedAtMs },
+      nowMs
+    );
+    this.letGoOfBrushLock();
+    this.rewardResult = outcome
+      ? {
+          ...outcome,
+          withMouthwashBonus,
+          multiplier: brushAlongMultiplier(withFlossBonus, brushAlongRinseCredit(rewardOptions)),
+        }
+      : null;
 
     // Saved all the same, but silent from a hidden page (the safety finish can run in a background
     // tab): no chime or "Done" from nowhere.
@@ -694,10 +748,77 @@ export class BrushAlongOverlay implements OverlayView {
     if (!exiting) this.render();
   }
 
+  // ------------------------------------------------------------- the note of an unpaid brush
+
+  /** Brushing is over (time ran out, or "Floss ›"): a Start card, floss or the rinse. */
+  private brushingIsOver(): boolean {
+    return this.stageWait !== null || this.clock.getPacerStage() !== 'brushing';
+  }
+
+  /** How long brushing lasted and when it ended, as brushing ends (before the clock moves on). */
+  private latchBrushingEnd(): void {
+    this.brushedSec = Math.min(this.clock.getPacerElapsedSec(), BRUSH_ALONG_TOTAL_SEC);
+    this.brushingEndedAtMs = this.lastStageEndedAtMs;
+  }
+
+  /**
+   * Notes this brush on the device now: on Pause, and from main.ts when the page is hidden or closed
+   * or the Android app goes to the background, so a brush the page never finishes is paid at the
+   * next start (`recoverPendingBrush`). Mid-brush only after BrushCheckpoint.minBrushedSec.
+   */
+  checkpointNow(): void {
+    if (this.view !== 'running') return;
+    if (this.brushingIsOver()) this.storePendingBrush();
+    else this.checkpointBrushing(true);
+  }
+
+  /**
+   * A brush still inside its 2 minutes, noted every BrushCheckpoint.intervalSec on the wall clock
+   * once worth keeping; `force` writes at once. Its brushing counts as ending now, as a "good try",
+   * or full when within the grace of the 2 minutes (native `checkpointBrushing`). Only the note is
+   * written: the brush's own end stays open, so the stage's end replaces it.
+   */
+  private checkpointBrushing(force = false): void {
+    if (this.view !== 'running' || this.brushingIsOver()) return;
+    const brushedSec = Math.min(this.clock.getPacerElapsedSec(), BRUSH_ALONG_TOTAL_SEC);
+    if (!BrushCheckpoint.isWorthKeeping(brushedSec)) return;
+    const nowMs = Date.now();
+    if (!force && !BrushCheckpoint.isDue(this.lastCheckpointWallSec, nowMs / 1000)) return;
+    this.lastCheckpointWallSec = nowMs / 1000;
+    writePendingBrush({
+      sessionId: this.sessionId,
+      brushedSec,
+      brushingEndedAtMs: nowMs,
+      stageEndedAtMs: nowMs,
+      fullBrush: BrushCheckpoint.countsAsFull(brushedSec),
+      flossDone: false,
+      rinseStepOff: !this.includeRinse,
+    });
+  }
+
+  /** The brush with its brushing done, as it would be paid now (native `storePendingBrush`). */
+  private storePendingBrush(): void {
+    writePendingBrush({
+      sessionId: this.sessionId,
+      brushedSec: this.brushedSec,
+      brushingEndedAtMs: this.brushingEndedAtMs,
+      stageEndedAtMs: this.lastStageEndedAtMs,
+      fullBrush: this.fullBrush,
+      flossDone: this.completedFloss,
+      rinseStepOff: !this.includeRinse,
+    });
+  }
+
+  /** The brush was paid or left: another tab's next start may pay a note again. */
+  private letGoOfBrushLock(): void {
+    this.releaseBrushLock?.();
+    this.releaseBrushLock = null;
+  }
+
   /**
    * The hub's banner after Exit to Hub saved the brush, as the native app words its toast. Leaving
-   * saves only once brushing is over (its 2 minutes, or skipped ahead to floss: a good try), and
-   * never counts the rinse.
+   * saves once brushing is over (its 2 minutes, or skipped ahead to floss: a good try) or after
+   * 20 s of brushing (a good try), and never counts the rinse.
    */
   private hubNoteForSavedBrush(): string | undefined {
     const r = this.rewardResult;
@@ -1015,6 +1136,7 @@ export class BrushAlongOverlay implements OverlayView {
           <button type="button" id="${floss ? 'btn-pacer-start-floss' : 'btn-pacer-start-rinse'}" class="btn btn-primary"></button>
           <button type="button" id="btn-pacer-skip-wait" class="btn"></button>
         </div>
+        ${floss && !readIncludeRinse() ? '<p id="pacer-rinse-hint" class="pacer-hint">A grown-up can turn on the rinse in Settings.</p>' : ''}
         <template id="tpl-labels" data-start="${encodeURIComponent(floss ? start.startFloss : start.startRinse)}" data-skip="${encodeURIComponent(amount(skip))}"></template>`;
     }
     if (stage === 'mouthwashBonus') {

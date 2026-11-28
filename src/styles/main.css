@@ -2784,6 +2784,15 @@ textarea:focus-visible {
 .pacer-card[data-wait] #pacer-clock {
   cursor: default;
 }
+/* Under Skip on "READY TO FLOSS?" while the rinse is off: Skip goes Home, and this says where the
+   rinse is turned on. Small and quiet, as on the native card. */
+.pacer-hint {
+  margin: -4px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--text-muted);
+  text-align: right;
+}
 
 .pacer-level {
   display: flex;

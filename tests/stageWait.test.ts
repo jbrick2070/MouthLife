@@ -567,14 +567,27 @@ describe('Exit to Hub', () => {
     expect(s.exits()).toBe(1);
   });
 
-  it('during brushing, saves nothing, as before', () => {
+  it('in the first 20 s of brushing, saves nothing, as before', () => {
     const s = brushScreen({ rinse: true });
-    s.frames(60);
+    s.frames(19.5);
     s.tap('btn-pacer-exit');
     expect(s.paid).toEqual([]);
     expect(s.clock.isPacerActive()).toBe(false);
     expect(s.exits()).toBe(1);
     expect(s.hubNote()).toBeUndefined();
+  });
+
+  it('later in brushing, saves a good try, quietly, with the kind words the early "Floss ›" earns', () => {
+    const s = brushScreen({ rinse: true });
+    s.frames(60);
+    s.hush();
+    s.tap('btn-pacer-exit');
+    expect(s.paid).toEqual([{ withFlossBonus: false, withMouthwashBonus: false, ionsAwarded: 5, stampAwarded: false }]);
+    expect(s.clock.isPacerActive()).toBe(false);
+    expect(s.exits()).toBe(1);
+    expect(s.hubNote()).toBe('🌱 Good try! +5 F⁻ • Brush the whole 2 minutes to earn a Habit Stamp.');
+    expect(s.el('btn-done-pacer')).toBeNull();
+    expect(s.spoken).toEqual([]);
   });
 
   it('during floss, saves the brush alone, quietly, and the hub says so', () => {

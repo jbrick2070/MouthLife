@@ -9,6 +9,7 @@ import { UPGRADE_CATALOG, UPGRADE_IDS } from '../../config/upgrades';
 import { CompanionArchSim, createInitialCompanionState } from '../companion/CompanionArchSim';
 import type { EventBus } from '../EventBus';
 import { formatLocalDateKey } from './HabitBank';
+import { clearBrushNotes } from './pendingBrush';
 import type {
   MasteryGrade,
   MouthLifeSaveV2,
@@ -694,8 +695,11 @@ export class SaveSystem {
   /**
    * Resets local progress to a brand-new Day-1 save (for beta testing or fresh-start requests).
    * A new generation tells every other open tab to take the fresh save rather than merge into it.
+   * An unfinished brush's note and the list of paid brushes go first, before any tab can see the
+   * fresh save, so no tab pays an erased brush into it.
    */
   resetToFreshSave(nowEpochMs = Date.now()): MouthLifeSaveV2 {
+    clearBrushNotes();
     const revisionBefore = Math.max(this.currentSave.saveRevision, this.lastSeenSave?.saveRevision ?? 0);
     this.persistenceSuspended = false;
     this.generation = newGenerationId();

@@ -126,7 +126,8 @@ public final class AppCoordinator {
     @ObservationIgnored private var pacerAwaitingSince: Date?
     /// A brush whose brushing is done, kept on the device from the first Start card until the
     /// session finishes, so one the system closes meanwhile (the screen may sleep on a Start card)
-    /// is still paid at the next launch, with what was finished.
+    /// is still paid at the next launch, with what was finished. The web and Android keep the same
+    /// note under the same key (`src/engine/persistence/pendingBrush.ts`).
     private struct PendingBrush: Codable {
         var sessionId: String
         var brushedSec: Double
@@ -358,8 +359,9 @@ public final class AppCoordinator {
     /// or a full brush if it was within the grace of the 2 minutes, as for a finished stage
     /// (`BrushCheckpoint`). Every few seconds from the pacer's tick; `force` writes at once (the
     /// app going away, Pause). It only writes the note: the session's own record of when brushing
-    /// ended (`pacerBrushing`, `pacerStageEndedAt`) stays empty until brushing really ends, so
-    /// Home mid-brush still leaves without a reward and the stage's end overwrites the note.
+    /// ended (`pacerBrushing`, `pacerStageEndedAt`) stays empty until brushing really ends, so the
+    /// stage's end overwrites the note (Home mid-brush ends brushing itself: `returnToHub`).
+    /// Web twin: `BrushAlongOverlay.checkpointBrushing`.
     private func checkpointBrushing(force: Bool = false) {
         guard mode == .brushAlong, pacerStage == .brushing, pacerAwaitingStage == nil, pacerBrushing == nil else { return }
         guard BrushCheckpoint.isWorthKeeping(brushedSec: pacerElapsedSec) else { return }
@@ -1231,6 +1233,19 @@ public final class AppCoordinator {
         // Home itself, without the spoken "Done").
         if mode == .brushAlong, pacerAwaitingStage != nil || pacerBrushing != nil {
             completeBrushAlongSession(withFlossBonus: pacerCompletedFlossStage, withMouthwashBonus: false, announce: false)
+            return
+        }
+        // Home while brushing, once `BrushCheckpoint.minBrushedSec` were brushed: kept as a "good
+        // try" with its kind words, judged by the early "Floss ›" rule (`enterFlossBonusNow`), the
+        // owner's decision of 28 November (web twin: `BrushAlongOverlay.exitToHub`). Completing
+        // stops the timer, clears the note and gives Health the seconds really brushed
+        // (`noteBrushingStageEnded`). Under that, nothing is kept, as before.
+        if mode == .brushAlong, pacerStage == .brushing, BrushCheckpoint.isWorthKeeping(brushedSec: pacerElapsedSec) {
+            pacerBrushedFullTime = pacerElapsedSec >= GameConfig.brushAlongTotalSec - GameConfig.brushAlongFullBrushGraceSec
+            crumb(#"brush left for Home at \#(Int(pacerElapsedSec)) s: kept"#)
+            // A quadrant number half spoken must not finish over Home (as on the old way Home).
+            NativeSoundEngine.shared.stopVoiceCoach()
+            completeBrushAlongSession(withFlossBonus: false, withMouthwashBonus: false, announce: false)
             return
         }
         stopPacerTimer()

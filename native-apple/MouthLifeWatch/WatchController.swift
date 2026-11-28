@@ -151,7 +151,17 @@ final class WatchController: NSObject {
     /// Floss early, while brushing (asks for a second tap like the others).
     func tapFloss() { confirm("floss") { r in r.skipToFloss() } }
     func tapSkip() { confirm("skip") { r in r.skip() } }
-    func tapEnd() { confirm("end") { r in r.end() } }
+    func tapEnd() {
+        // In the first 20 s of brushing there is nothing to keep (`endKeepsNothing`): the second tap
+        // drops the brush, as Home does on the phone. Later, End keeps a "good try".
+        if armed == "end", engine?.endKeepsNothing == true {
+            armed = nil
+            armTask?.cancel()
+            drop()
+            return
+        }
+        confirm("end") { r in r.end() }
+    }
 
     func openControls() {
         armed = nil
@@ -283,6 +293,20 @@ final class WatchController: NSObject {
         // let go a moment later, so the tap on the wrist and the song's fade finish (Start cancels it)
         endRuntimeSoon()
         checkpoint(force: true)
+    }
+
+    /// A brush ended with nothing worth keeping: back to the start screen with one tap on the wrist,
+    /// no record for the iPhone and no checkpoint to resume.
+    private func drop() {
+        WatchLog.note("end under 20 s: nothing kept")
+        stopClock()
+        voice.stop()
+        endRuntimeSoon()
+        clearCheckpoint()
+        set(nil)
+        ack = nil
+        showControls = false
+        WKInterfaceDevice.current().play(.stop)
     }
 
     private func finish() {

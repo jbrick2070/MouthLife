@@ -289,6 +289,30 @@ final class WatchRitualTests: XCTestCase {
         XCTAssertTrue(inputs.fullBrush)
     }
 
+    /// End in the first 20 s of brushing keeps nothing (the phone's Home and the web do the same);
+    /// from 20 s, or once brushing is over, End keeps what was done.
+    func testEndKeepsNothingInTheFirstTwentySecondsOfBrushing() {
+        var r = WatchRitual(startedAt: t0, includeRinse: false)
+        XCTAssertTrue(r.endKeepsNothing)
+        _ = run(&r, seconds: 19.5)
+        XCTAssertTrue(r.endKeepsNothing)
+        _ = run(&r, seconds: 1)
+        XCTAssertFalse(r.endKeepsNothing)
+        XCTAssertEqual(r.end(now: t0), .done(fullBrush: false))
+        XCTAssertEqual(r.record?.rewardInputs.fullBrush, false)
+
+        // "Floss" tapped early is kept whatever the seconds: End from floss keeps the brush.
+        var early = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&early, seconds: 5)
+        _ = early.skipToFloss(now: t0)
+        XCTAssertFalse(early.endKeepsNothing)
+        // Paused under 20 s, it still keeps nothing; Resume is for interruptions.
+        var paused = WatchRitual(startedAt: t0, includeRinse: false)
+        _ = run(&paused, seconds: 10)
+        _ = paused.setPaused(true)
+        XCTAssertTrue(paused.endKeepsNothing)
+    }
+
     /// A watch brush counts as full from 118 s (the same 2 s grace as the phone); the phone's
     /// widget uses this to decide the tooth's face.
     func testAWatchBrushIsFullFromTheSameGraceAsThePhone() {

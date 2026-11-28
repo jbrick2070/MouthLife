@@ -254,6 +254,14 @@ public struct WatchRitual: Codable, Equatable, Sendable {
         return finishStage(.skipped, now: now)
     }
 
+    /// Whether "End" now would keep nothing: brushing has not yet reached
+    /// `BrushCheckpoint.minBrushedSec` (a start by mistake). The watch then drops the ritual instead
+    /// of ending it, as the phone's Home does; from that point End keeps a "good try". Only End:
+    /// an interruption keeps its checkpoint and offers Resume, and "Floss" is kept at any time.
+    public var endKeepsNothing: Bool {
+        stage == .brushing && !BrushCheckpoint.isWorthKeeping(brushedSec: brushedSec)
+    }
+
     /// "End": stop here; whatever is finished counts, the rest is skipped.
     public mutating func end(now: Date = Date()) -> WatchCue? {
         guard stage != .done else { return nil }

@@ -6,6 +6,7 @@ import XCTest
 final class BetaFeedbackTests: XCTestCase {
 
     // MARK: - BrushCheckpoint
+    // Twin: tests/brushCheckpoint.test.ts has these cases one for one (src/config/brushCheckpoint.ts).
 
     func testABrushUnderTwentySecondsIsNotKept() {
         XCTAssertFalse(BrushCheckpoint.isWorthKeeping(brushedSec: 0))

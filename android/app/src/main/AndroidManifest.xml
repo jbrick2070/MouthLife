@@ -17,8 +17,12 @@
         </intent>
     </queries>
 
+    <!-- hasFragileUserData: the save lives only on this phone (backups stay off, above), so
+         Android's own uninstall dialog offers to keep it (Android 10 and later) instead of
+         deleting it without asking. Reinstalling then finds the save where it was. -->
     <application
         android:allowBackup="false"
+        android:hasFragileUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:enableOnBackInvokedCallback="true"

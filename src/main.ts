@@ -8,6 +8,7 @@ import { type CanvasPointerPhase, InputManager } from './engine/InputManager';
 import { sampleTerrainHeight } from './engine/physics/CollisionSystem';
 import { SAVE_GENERATION_KEY, SAVE_STORAGE_KEY, SaveSystem } from './engine/persistence/SaveSystem';
 import { markHasSeenBrushIntro, readHasSeenBrushIntro, readIncludeRinse } from './engine/persistence/pacerPrefs';
+import { recoverPendingBrush } from './engine/persistence/pendingBrush';
 import { closeBrushIntroCard, isBrushIntroCardOpen, showBrushIntroCard } from './ui/brushIntroCard';
 import { requestMotionPermissionIfNeeded } from './engine/motionPermission';
 import { SceneManager } from './engine/render/SceneManager';
@@ -1050,12 +1051,20 @@ function bootstrapMouthLife(): void {
   );
 
   // Step 7: Mount Initial Mode & Expose Clean DevTools Diagnostics Hook
+  // A brush the last visit never finished (the tab closed, or the Android app ended by the system,
+  // mid-brush or on a Start card) is paid now, quietly, as Home comes up (native
+  // `finishPendingBrush`). Unless another tab is still brushing it: then its note is left alone.
+  // When the browser has to be asked for the brush lock first, the answer comes a moment later and
+  // Home redraws itself with the brush paid ('save:updated').
+  void recoverPendingBrush(saveSys, bus);
   switchMode(currentMode);
   clock.start();
 
   // Flush save state on iOS/mobile backgrounding or page hide. Only changes this tab holds are
   // written, after merging what other tabs stored, so an old tab never undoes an erase (H01).
+  // A brush in progress is noted on the device first: the page may never come back to finish it.
   const flushSaveOnLifecycleExit = () => {
+    activeBrushAlong?.checkpointNow();
     saveSys.flushIfChanged(Date.now());
   };
   window.addEventListener('pagehide', flushSaveOnLifecycleExit);
