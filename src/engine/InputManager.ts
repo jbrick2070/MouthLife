@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { triggerNativeHaptic } from './nativePlatform';
+import { ScenePointerOwner } from './pointerOwner';
 import type { SessionInputCommand } from './sim/WorldSession';
 import type { AppMode, Vec2 } from './types';
 
@@ -77,6 +78,12 @@ export function isModalDialogOpen(
 }
 
 const STEER_PREF_KEY = 'mouthlife.pointerSteer';
+/**
+ * The steering pointer's input epoch (see `ScenePointerOwner`). It never moves here: the page lets
+ * go by dropping the owner itself (`releaseAllPointers`), where the native view is left behind by
+ * its controller's `pointerEpoch`.
+ */
+const STEER_EPOCH = 0;
 
 /**
  * The browser's controllers, or none. A page whose Permissions Policy disallows gamepads gets an
@@ -142,7 +149,16 @@ export class InputManager {
   // Optional drag/click-to-steer on the 3D tooth surface (ARCADE / PULP_RESCUE)
   // Defaults to 'auto': ON for touch/pen, OFF for desktop mouse unless explicitly toggled.
   private steerPref: PointerSteerPref = 'auto';
-  private steerPointerId: number | null = null;
+  /**
+   * The pointer that steers and scrubs (the rule and its tests: `ScenePointerOwner`, the same in
+   * the native app). A second finger neither takes over nor double-taps while it is really down.
+   */
+  private readonly steerOwner = new ScenePointerOwner();
+  /**
+   * The pointers that went down and have not lifted: the touches on the screen, as far as a page
+   * is told. A hidden page may never be told of a lift, so `releaseAllPointers` empties it.
+   */
+  private readonly livePointers = new Set<number>();
   private steerNdc = new THREE.Vector2(0, 0);
   private steerSmooth = { moveX: 0, moveZ: 0 };
   private steerTarget: Vec2 | null = null;
@@ -157,6 +173,10 @@ export class InputManager {
       /* storage unavailable — keep 'auto' default */
     }
     this.bindEvents();
+  }
+
+  private get steerPointerId(): number | null {
+    return this.steerOwner.key;
   }
 
   setHooks(params: {
@@ -193,7 +213,7 @@ export class InputManager {
 
   setPointerSteerEnabled(enabled: boolean): void {
     this.steerPref = enabled ? 'on' : 'off';
-    if (!enabled) this.steerPointerId = null;
+    if (!enabled) this.steerOwner.releaseAll();
     try {
       window.localStorage.setItem(STEER_PREF_KEY, enabled ? '1' : '0');
     } catch {
@@ -251,20 +271,23 @@ export class InputManager {
       'pointerdown',
       (e) => {
         if (e.pointerType === 'touch') this.touchSeen = true;
+        this.livePointers.add(e.pointerId);
       },
       { capture: true, passive: true }
     );
 
-    window.addEventListener('blur', () => {
+    // The window lost focus, or the page was hidden (which may come with no loss of focus and no
+    // "finger lifted"): a key-up or a pointer-up from now on may never arrive.
+    const leavePage = (): void => {
       this.keysDown.clear();
-      this.mouseLeftHeld = false;
-      this.mouseButtons = 0;
-      this.steerPointerId = null;
-      this.touchPointerId = null;
-      this.virtualMoveX = 0;
-      this.virtualMoveZ = 0;
-      this.virtualScrubHeld = false;
-    });
+      this.releaseAllPointers();
+    };
+    window.addEventListener('blur', leavePage);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') leavePage();
+      });
+    }
 
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     // Double-click with a mouse flosses, as How to Play teaches and as in the Mac app. Touch has its
@@ -283,7 +306,7 @@ export class InputManager {
       this.updateCursorNdc(e.clientX, e.clientY);
 
       if (mode === 'ARCADE' || mode === 'PULP_RESCUE') {
-        if (e.pointerType !== 'mouse' && this.steerPointerId !== null) return;
+        if (e.pointerType !== 'mouse' && this.steerOwner.holds(e.pointerId, this.livePointers, STEER_EPOCH)) return;
         // Double-tap anywhere on the tooth: auto-aimed Floss (snaps to the nearest alley mouth).
         // A mouse double-click does the same through the browser's own dblclick (below), so it
         // follows the player's double-click speed.
@@ -303,7 +326,7 @@ export class InputManager {
           if (e.button === 0) {
             this.mouseLeftHeld = true;
             if (shouldSteer) {
-              this.steerPointerId = e.pointerId;
+              this.steerOwner.take(e.pointerId, STEER_EPOCH);
               this.steerNdc.copy(this.cursorNdc);
             }
           } else if (e.button === 2) {
@@ -311,7 +334,7 @@ export class InputManager {
           }
         } else if (shouldSteer) {
           // One-thumb touch / pen: touch the tooth surface to sweep HYDRA-1 there while scrubbing
-          this.steerPointerId = e.pointerId;
+          this.steerOwner.take(e.pointerId, STEER_EPOCH);
           this.steerNdc.copy(this.cursorNdc);
           try {
             this.canvas.setPointerCapture(e.pointerId);
@@ -364,7 +387,7 @@ export class InputManager {
         }
         if ((e.buttons & 1) === 0 && this.mouseLeftHeld) {
           this.mouseLeftHeld = false; // left released while right is still down
-          if (this.steerPointerId === e.pointerId) this.steerPointerId = null;
+          this.steerOwner.ended([e.pointerId]);
         }
       }
       if (this.steerPointerId === e.pointerId) {
@@ -385,11 +408,13 @@ export class InputManager {
     });
 
     const endPointer = (e: PointerEvent) => {
+      // A lost capture is not a lifted finger: only an up or a cancel takes it off the screen.
+      if (e.type !== 'lostpointercapture') this.livePointers.delete(e.pointerId);
       if (e.pointerType === 'mouse') {
         this.mouseButtons = e.buttons;
         if ((e.buttons & 1) === 0) this.mouseLeftHeld = false;
       }
-      if (this.steerPointerId === e.pointerId) this.steerPointerId = null;
+      this.steerOwner.ended([e.pointerId]);
       if (this.touchPointerId === e.pointerId) {
         this.touchPointerId = null;
         const ndc = this.toNdc(e.clientX, e.clientY);
@@ -402,6 +427,37 @@ export class InputManager {
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointercancel', endPointer);
     this.canvas.addEventListener('lostpointercapture', endPointer);
+  }
+
+  /**
+   * Lets go of everything a finger or the mouse was holding: steering, the touch on the tooth, the
+   * finger that turns the view, the mouse buttons, the stick, and a floss, Surge or Scan still
+   * waiting for the next step. Called when the page is hidden, the window loses focus, a stage is
+   * paused, the screen changes and the Android app goes to the background: after none of those is
+   * the page sure to be told that a finger lifted, and a finger it still believes is down would
+   * keep scrubbing and keep every new touch out. A finger really still down does nothing more
+   * until it lifts and lands again, as in the native app (`resetStageInput`, the 3D view's `letGo`).
+   */
+  releaseAllPointers(): void {
+    this.mouseLeftHeld = false;
+    this.mouseButtons = 0;
+    this.steerOwner.releaseAll();
+    this.livePointers.clear();
+    this.orbitPointerId = null;
+    if (this.touchPointerId !== null) {
+      this.touchPointerId = null;
+      // The rub ends as if the finger had lifted; where it was does not matter for that.
+      this.onCanvasPointer?.('up', 0, 0, 0, 0);
+    }
+    this.virtualMoveX = 0;
+    this.virtualMoveZ = 0;
+    this.virtualScrubHeld = false;
+    this.pendingFloss = false;
+    this.pendingRinse = false;
+    this.pendingDisclose = false;
+    this.virtualFlossAim = null;
+    this.virtualFlossSmartAim = false;
+    this.lastTap = null;
   }
 
   private updateCursorNdc(clientX: number, clientY: number): void {

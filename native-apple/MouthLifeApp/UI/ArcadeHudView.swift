@@ -187,8 +187,6 @@ public struct ArcadeHudView: View {
 
             if isPausedSheet {
                 Color.black.opacity(0.55)
-                    .onAppear { onPauseChanged(true) }
-                    .onDisappear { onPauseChanged(false) }
                     .ignoresSafeArea()
                     .onTapGesture { isPausedSheet = false }
 
@@ -227,6 +225,15 @@ public struct ArcadeHudView: View {
                 .placed(inOptional: split?.firstRect)
             }
         }
+        // The game hears of the pause from the one value that puts the card on screen. It used to
+        // hear from the dimming appearing and going away, and a "going away" that never came
+        // would have left the next stage paused with no card to resume it.
+        .onChange(of: isPausedSheet) { _, paused in
+            onPauseChanged(paused)
+        }
+        // A HUD built anew starts with its card closed, so the stage must not be paused under it
+        // (the coordinator ignores this when nothing is paused).
+        .onAppear { onPauseChanged(false) }
         .onChange(of: stickTranslation) { _, now in
             // A lifted (or cancelled) thumb clears the latch for the next touch.
             if now == nil { stickLatched = false }

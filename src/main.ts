@@ -757,6 +757,8 @@ function bootstrapMouthLife(): void {
     activeCosmicIntro = null;
     activeMissionReport = null;
     activeHub = null;
+    // A finger or button held on the way out of a screen never carries into the next one.
+    input.releaseAllPointers();
     touch.endTouch();
     uiRoot!.innerHTML = '';
 
@@ -1115,6 +1117,9 @@ function bootstrapMouthLife(): void {
     onNativeBackPressed(handleNativeBack);
     onNativeLifecycleChanged((active) => {
       if (!active) {
+        // The app left the screen: a finger that was down will not be reported as lifted.
+        input.releaseAllPointers();
+        activeTelemetryHud?.releaseHeldControls();
         flushSaveOnLifecycleExit();
         voiceCoach.stop();
         sound.setAppBackgrounded(true);

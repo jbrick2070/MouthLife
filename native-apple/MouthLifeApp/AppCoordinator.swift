@@ -1077,6 +1077,8 @@ public final class AppCoordinator {
 
     private func playFinale(_ kind: CityFinaleRequest.Kind, worldIndex: Int, thenReport: Bool, finishes: [MolarFinish]? = nil) {
         NativeSoundEngine.shared.stopScrub()
+        // The finale takes the pause card's place: its music must not play dulled as if paused.
+        setStagePause(false, by: #"a finale"#)
         sceneController.resetStageInput()
         NativeSoundEngine.shared.setFinaleDucked(true)
         reportAfterFinale = thenReport
@@ -1154,6 +1156,8 @@ public final class AppCoordinator {
         self.lastCellsCleanedTotal = initialSnap.cellsCleanedTotal
         self.arcadeToastClearTask?.cancel()
         self.arcadeToast = nil
+        // A stage never starts paused (see `setStagePause`).
+        setStagePause(false, by: #"a new stage"#)
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         transition(to: .arcade)
@@ -1185,6 +1189,8 @@ public final class AppCoordinator {
         self.lastCellsCleanedTotal = initialSnap.cellsCleanedTotal
         self.arcadeToastClearTask?.cancel()
         self.arcadeToast = nil
+        // A stage never starts paused (see `setStagePause`).
+        setStagePause(false, by: #"a new stage"#)
         sceneController.mountStage(for: session)
         NativeSoundEngine.shared.playOrbitalDive()
         coach = nil
@@ -1196,11 +1202,27 @@ public final class AppCoordinator {
     /// The stage's pause card: stepping stops, so the brush must be silenced here (no further
     /// snapshot will arrive to turn it off).
     public func setArcadePaused(_ paused: Bool) {
+        setStagePause(paused, by: #"the pause card"#)
+    }
+
+    /// The one place the stage's pause is written. The pause card turns it on and off; starting a
+    /// stage, leaving one and a finale covering one always turn it off, whatever the card managed
+    /// to say on its way out. A stage left paused would draw and play its music but never move or
+    /// take a touch, with no card on screen to resume it.
+    private func setStagePause(_ paused: Bool, by who: String) {
+        guard paused != sceneController.arcadePaused else { return }
+        // Only a stage that is on screen can be paused: a card that asks while the score or a
+        // finale is already taking its place is not listened to.
+        if paused, !(mode == .arcade || mode == .pulpRescue) || finale != nil {
+            crumb(#"stage pause refused: no stage on screen (\#(mode.rawValue), asked by \#(who))"#)
+            return
+        }
         sceneController.arcadePaused = paused
         // Music sinks and dulls behind the pause card, as on the web (`sound.setPaused`); this also
         // silences the brush. A held stick or a queued floss never carries past the card.
         NativeSoundEngine.shared.setPaused(paused)
         if paused { sceneController.resetStageInput() }
+        crumb(#"stage pause \#(paused ? "on" : "off") (\#(who))"#)
     }
 
     public func returnToHub() {
@@ -1218,6 +1240,8 @@ public final class AppCoordinator {
         pacerPausedByUser = false
         pacerSuspendedBySystem = false
         NativeSoundEngine.shared.stopVoiceCoach()
+        // A stage left from its pause card is not left paused.
+        setStagePause(false, by: #"going Home"#)
         NativeSoundEngine.shared.setPaused(false)
         NativeSoundEngine.shared.stopScrub()
         // What belonged to the stage goes with it: its toast, and a coach that had not finished
@@ -1230,6 +1254,9 @@ public final class AppCoordinator {
 
     private func transition(to next: AppMode) {
         let prev = mode
+        // No change of screen leaves a stage paused behind it (the score after a stage that
+        // ended under its pause card, for one).
+        setStagePause(false, by: #"a change of screen"#)
         mode = next
         let stageId = next == .arcade || next == .pulpRescue ? activeCartridge.id : ""
         crumb(#"screen \#(prev.rawValue) -> \#(next.rawValue) \#(stageId)"#)

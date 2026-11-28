@@ -23,6 +23,7 @@ import type { OverlayView, QualityTier, Vec2 } from '../engine/types';
 import { PAGE_ZOOMED_CLASS } from '../engine/zoomGuard';
 import {
   bindBottomSheetSwipeClose,
+  bindFlossRing,
   buildTimerPill,
   clampToScreen,
   compactToastText,
@@ -179,12 +180,15 @@ export class TelemetryHudOverlay implements OverlayView {
     }
   };
   private visibilityHandler = (): void => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && !this.paused) {
-      this.setPaused(true);
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      // A hidden page may never be told that a finger lifted (already paused or not).
+      this.releaseHeldControls();
+      if (!this.paused) this.setPaused(true);
     }
   };
   /** Alt-tab or clicking another window: pause so timers and hazards never run unattended. */
   private blurHandler = (): void => {
+    this.releaseHeldControls();
     if (!this.paused) this.setPaused(true);
   };
   /**
@@ -216,6 +220,7 @@ export class TelemetryHudOverlay implements OverlayView {
   }
 
   private releaseThumbPad: (() => void) | null = null;
+  private releaseFlossRing: (() => void) | null = null;
   private touchPadSynced = false;
   /** What the round Scan / Surge buttons last showed (the page translator rewrites their text). */
   private scanHtmlShown = '';
@@ -249,6 +254,17 @@ export class TelemetryHudOverlay implements OverlayView {
     return this.paused;
   }
 
+  /**
+   * A thumb on the stick and a finger on the Floss ring let go, without steering or flossing any
+   * more. Called on pause, when the page is hidden, when the window loses focus, when the Android
+   * app goes to the background and when the HUD goes away: after none of those is the page sure
+   * to be told that the finger lifted.
+   */
+  releaseHeldControls(): void {
+    this.releaseThumbPad?.();
+    this.releaseFlossRing?.();
+  }
+
   setPaused(p: boolean): void {
     if (p === this.paused) return;
     if (p) {
@@ -260,7 +276,9 @@ export class TelemetryHudOverlay implements OverlayView {
     this.pauseBtnEl?.setAttribute('aria-expanded', p ? 'true' : 'false');
     if (this.pauseSheetEl) this.pauseSheetEl.style.display = p ? '' : 'none';
     if (p) {
-      this.releaseThumbPad?.();
+      this.releaseHeldControls();
+      // A finger on the tooth lets go too: after Resume it takes a new touch, as in the native app.
+      this.input.releaseAllPointers();
       this.input.setVirtualMove(0, 0, false);
       this.input.setVirtualScrubHeld(false);
       if (this.audio && this.pauseSheetEl) {
@@ -863,39 +881,7 @@ export class TelemetryHudOverlay implements OverlayView {
     // Right Polymer Floss Vector Slingshot Ring (tap = smart auto-aim; drag = directional filament!)
     const ring = this.container.querySelector<HTMLButtonElement>('#ring-floss');
     if (ring) {
-      let flossPid: number | null = null;
-      let startX = 0;
-      let startY = 0;
-
-      ring.addEventListener('pointerdown', (e) => {
-        if (flossPid !== null || e.button !== 0) return;
-        flossPid = e.pointerId;
-        startX = e.clientX;
-        startY = e.clientY;
-        ring.setPointerCapture(e.pointerId);
-        ring.style.borderColor = '#2dd4bf';
-      });
-
-      const clearRing = (e: PointerEvent): boolean => {
-        if (e.pointerId !== flossPid) return false;
-        flossPid = null;
-        ring.style.removeProperty('border-color');
-        return true;
-      };
-
-      ring.addEventListener('pointerup', (e) => {
-        if (!clearRing(e)) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 14) {
-          this.input.triggerVirtualFloss({ x: dx / dist, z: dy / dist });
-        } else {
-          this.input.triggerVirtualFloss(null);
-        }
-      });
-      ring.addEventListener('pointercancel', clearRing);
-      ring.addEventListener('lostpointercapture', clearRing);
+      this.releaseFlossRing = bindFlossRing(ring, (aim) => this.input.triggerVirtualFloss(aim));
       ring.addEventListener('click', (e) => {
         // Pointer releases already carry an aim vector. Keyboard and assistive activation use smart aim.
         if (e.detail === 0) this.input.triggerVirtualFloss(null);
@@ -1657,7 +1643,7 @@ export class TelemetryHudOverlay implements OverlayView {
 
   dispose(): void {
     // A thumb still on the stick must not carry movement into the next screen or dive.
-    this.releaseThumbPad?.();
+    this.releaseHeldControls();
     window.removeEventListener('keydown', this.keyHandler);
     window.removeEventListener('resize', this.resizeHandler);
     document.removeEventListener('visibilitychange', this.visibilityHandler);

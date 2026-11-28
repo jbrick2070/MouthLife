@@ -565,8 +565,8 @@ public final class MouthLifeSceneController: NSObject, SCNSceneRendererDelegate 
 
     /// Lets go of everything a stage was being told: the stick, a finger on the tooth and any floss,
     /// Surge or Scan still waiting for the next step. Called on pause, on leaving a stage, when a
-    /// finale starts and when a new stage mounts (web twin: `releaseThumbPad` + `setVirtualMove(0, 0,
-    /// false)` in `TelemetryHudOverlay.setPaused`).
+    /// finale starts and when a new stage mounts (web twin: `InputManager.releaseAllPointers`, with
+    /// `releaseHeldControls` in `TelemetryHudOverlay.setPaused`).
     public func resetStageInput() {
         stageInput.withLock { $0 = StageInput() }
         lastTapTimeSec = nil

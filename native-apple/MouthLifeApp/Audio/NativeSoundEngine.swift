@@ -2041,6 +2041,9 @@ public final class NativeSoundEngine {
         guard !isInterrupted, !engine.isRunning else { return }
         let began = ProcessInfo.processInfo.systemUptime
         guard urgent || began >= engineRetryNotBefore else { return }
+        // Noted before the try, not only after it: if starting the engine is what holds the main
+        // thread, the watchdog's HANG line then names it as the last thing the app was doing.
+        crumb("sound: starting the engine\(urgent ? " (asked for now)" : "")")
         do {
             configureAudioSessionIfNeeded()
             try engine.start()

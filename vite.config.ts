@@ -1,7 +1,9 @@
+/// <reference types="vitest/config" />
 import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
+import { configDefaults } from 'vitest/config';
 
 /**
  * The web edition plays the same recordings the native app bundles, straight from the native
@@ -87,6 +89,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+  },
+  test: {
+    // Agents work in copies of the repository under .claude/worktrees; their tests are not ours.
+    exclude: [...configDefaults.exclude, '**/.claude/**'],
   },
   build: {
     target: 'es2022',

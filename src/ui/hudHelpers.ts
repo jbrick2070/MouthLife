@@ -614,3 +614,54 @@ export function bindBottomSheetSwipeClose(
   headerEl.addEventListener('pointerup', (e) => finish(e, false));
   headerEl.addEventListener('pointercancel', (e) => finish(e, true));
 }
+
+/**
+ * The Floss ring: a tap flosses with automatic aim (`null`), a drag flosses the way it was
+ * dragged. One finger at a time holds the ring. Returns `release`, which lets go of that finger
+ * without flossing (pause, a hidden page, a lost window, the HUD going away): the ring would
+ * otherwise wait for a "lifted" that may never come and take no other finger meanwhile, and a
+ * finger lifted after the pause card opened must not floss on Resume.
+ */
+export function bindFlossRing(
+  ring: HTMLElement,
+  onFloss: (aim: { x: number; z: number } | null) => void
+): () => void {
+  let flossPid: number | null = null;
+  let startX = 0;
+  let startY = 0;
+
+  const release = (): void => {
+    flossPid = null;
+    ring.style.removeProperty('border-color');
+  };
+
+  ring.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (flossPid !== null || e.button !== 0) return;
+    flossPid = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    try {
+      ring.setPointerCapture(e.pointerId);
+    } catch {
+      /* the ring works without it; a throw here must not leave the finger half taken */
+    }
+    ring.style.borderColor = '#2dd4bf';
+  });
+
+  const clearRing = (e: PointerEvent): boolean => {
+    if (e.pointerId !== flossPid) return false;
+    release();
+    return true;
+  };
+
+  ring.addEventListener('pointerup', (e: PointerEvent) => {
+    if (!clearRing(e)) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const dist = Math.hypot(dx, dy);
+    onFloss(dist > 14 ? { x: dx / dist, z: dy / dist } : null);
+  });
+  ring.addEventListener('pointercancel', clearRing);
+  ring.addEventListener('lostpointercapture', clearRing);
+  return release;
+}
