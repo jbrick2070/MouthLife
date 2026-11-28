@@ -545,7 +545,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_APP_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLifeApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
@@ -576,7 +576,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_APP_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLifeApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readonly;
@@ -631,7 +631,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
@@ -657,7 +657,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWatch/Info.plist;
@@ -685,7 +685,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLife.entitlements;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWidgets/Info.plist;
@@ -715,7 +715,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = "$(MOUTHLIFE_DEVICE_ENTITLEMENTS)";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = MouthLifeApp/MouthLife.entitlements;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = C2QJ3SGZST;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MouthLifeWidgets/Info.plist;

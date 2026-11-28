@@ -1,6 +1,6 @@
 // MouthLife Offline PWA Service Worker
 // Network-first for HTML/shell (instant updates when online) + cache-first for immutable hashed Vite bundles.
-const CACHE_NAME = 'mouthlife-shell-v3';
+const CACHE_NAME = 'mouthlife-shell-v4';
 const SHELL_URLS = [
   './',
   './index.html',

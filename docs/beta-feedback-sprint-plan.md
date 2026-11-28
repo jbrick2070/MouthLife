@@ -1,7 +1,7 @@
 # MouthLife: after the first outside beta test, for every edition (plan, 2026-11-28)
 
-**Status (28 November):** Sprints 1 to 4 are done. Sprint 5 (shipping) is next; Sprint 6's brief
-is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
+**Status (28 November):** Sprints 1 to 4 are done. Sprint 5 (shipping) is under way: build 5 is
+committed; Sprint 6's brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
 iPhone, iPad, Watch, widgets and Mac apps, 166 native tests, 701 web tests, CI green). The owner
 asked for one plan that carries what the first outside tester found to the Mac app, the browser
 edition and the Android (Google Play) app, and that checks the camera moves and angles are alike
