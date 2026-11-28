@@ -33,17 +33,20 @@ number (in TestFlight it shows beside the version, for example "1.0.0 (5)").
 
 ## New in this build (please try each)
 
-1. **A brush that was interrupted is kept.** Start the 2-Minute Brush, wait at least 30 seconds,
-   then close the app completely (from the app switcher, or close the browser tab). Open it
-   again: you should get a "good try" for the seconds you brushed. On iPhone and Mac, the seconds
-   also appear in Health, Browse, Other Data, Toothbrushing.
+1. **A brush that was interrupted is kept.** Note the ✦ number at the top of Home. Start the
+   2-Minute Brush, wait at least 30 seconds, then close the app completely (from the app
+   switcher, or close the browser tab). Open it again: it is counted quietly as a "good try",
+   so the ✦ number has gone up a little (there is no message). On iPhone, iPad and Mac, the
+   seconds also appear in Health, Browse, Other Data, Toothbrushing.
 2. **Leaving early is a "good try".** Start the 2-Minute Brush, wait at least 20 seconds, then tap
    the white Home button: you should see a few kind words, not nothing.
 3. **The rinse hint.** With the rinse turned off (it starts off), finish brushing: the floss card
    should say the rinse can be turned on in Settings.
-4. **If the app ever stops answering:** wait a moment, then close it and open it again, open
-   Settings and tap "Share test diary" near the bottom (under Erase Save), and send us that file.
-   It says which screen the app was on and holds no personal details.
+4. **If the app ever stops answering:** wait a moment, then close it and open it again, and send
+   us its test diary. On iPhone, iPad and Mac: Settings, "Share test diary" near the bottom (under
+   Erase Save). In the Android test app: More, Sync, "Share test diary" (beside Erase Save, marked
+   TEST BUILD). It says which screen the app was on and holds no personal details. The public
+   browser page keeps no diary: there, tell us what you were doing and on which screen.
 
 ## What to test (about 2 hours in all)
 

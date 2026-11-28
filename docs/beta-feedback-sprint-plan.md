@@ -1,7 +1,7 @@
 # MouthLife: after the first outside beta test, for every edition (plan, 2026-11-28)
 
-**Status (28 November):** Sprints 1 to 4 are done. Sprint 5 (shipping) is under way: build 5 is
-committed; Sprint 6's brief is drafted (`docs/tester-brief.md`). Written on top of `master` at `ff5c540` (build 4: the
+**Status (28 November):** Sprints 1 to 4 and 6 are done; Sprint 5 is done except the steps only
+the owner can take (see "What is left" at the end). Written on top of `master` at `ff5c540` (build 4: the
 iPhone, iPad, Watch, widgets and Mac apps, 166 native tests, 701 web tests, CI green). The owner
 asked for one plan that carries what the first outside tester found to the Mac app, the browser
 edition and the Android (Google Play) app, and that checks the camera moves and angles are alike
@@ -284,7 +284,7 @@ Save on screen marks the run again. 199 native tests, 799 web tests, both Releas
 Android code compiles. Known limit: in a browser with two tabs of the game open, the "ended on
 screen" mark can be wrong (one key for the whole site); the Android app has one page.
 
-### Sprint 5: put it on every edition
+### Sprint 5: put it on every edition: done, except the owner's steps
 
 1. **Apple:** build 5 for the app, the watch app and the widgets; archive and upload the iPhone
    and Mac builds; add the iPhone build to "Friends and Family" with its "What to Test" note.
@@ -298,7 +298,13 @@ screen" mark can be wrong (one key for the whole site); the Android app has one 
 *Done when:* TestFlight shows build 5 as Testing, the published page reports the new cache name,
 and the Pixel 8a runs versionCode 2.
 
-### Sprint 6: the next test round
+*Done (28 November):* build 5 committed and pushed (`9ffe73d`), which published the browser edition
+with the cache renamed `mouthlife-shell-v4`. iPhone build 5 archived and uploaded to App Store
+Connect; the Mac build 5 archived (its upload is retried after a dropped connection). The Android
+test build (`npm run build:test && npm run android:sync:test`, versionCode 2) runs on the Pixel
+8a, where "Share test diary" opens Android's share sheet with the diary.
+
+### Sprint 6: the next test round: brief done
 
 1. `docs/tester-brief.md`: the checks the first tester never reached, each with how to do it
    (adding the widget step by step, the rinse switch in Settings, Hub on the floss card, the
@@ -306,6 +312,11 @@ and the Pixel 8a runs versionCode 2.
 2. One tester each for the iPhone again, a Mac, a browser on a phone, and an Android phone.
 
 *Done when:* every line of the brief has a pass, a fail or a "could not try" beside it.
+
+*Written (28 November):* `docs/tester-brief.md`, checked against what was built: every edition,
+how to get each, the checks the first tester never reached (the widgets step by step, the rinse,
+Hub on the floss card, the voice coach, reminders, How to Play, the watch), the new build-5
+checks, and where each edition keeps its test diary. The round itself waits for testers.
 
 ## How we work
 
@@ -337,3 +348,19 @@ and the Pixel 8a runs versionCode 2.
    in both editions.
 6. **After the sprints:** one more short test round before any store release. Android needs its
    12 testers for 14 days in any case. The browser edition publishes itself on every push.
+
+## What is left (the owner's steps, 28 November)
+
+1. **TestFlight:** add iPhone build 5 to "Friends and Family" with its "What to Test" note (needs
+   App Store Connect signed in; Claude can do it once it is). Decide whether Mac testers get the
+   Mac build (it is in the internal "Team" group only).
+2. **Google Play:** sign the Android bundle with the upload key in Android Studio, set up the
+   closed test (12 testers, 14 days), and upload the test build (`android/` holds it now). For a
+   release later: `npm run build && npm run android:sync`, a fresh versionCode, a new signed
+   bundle.
+3. **Look at the new camera** on real screens: the browser's score screen and Home, and a
+   foldable at about aspect 0.9.
+4. **Decide the floss camera's back-and-forth** at the middle three stops (both editions).
+5. **The Mac test diary's TestFlight check:** once a Mac TestFlight build is installed, "Share test
+   diary" should show in its Settings (and not in an App Store build).
+6. **Find testers** for the next round (`docs/tester-brief.md`).
